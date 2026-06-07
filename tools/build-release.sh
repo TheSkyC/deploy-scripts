@@ -47,8 +47,13 @@ build_one() {
     exit 1
   }
   output="${DIST_DIR}/install_${app}.sh"
-  commit="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-  built_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  commit="${DEPLOY_BUILD_COMMIT:-$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)}"
+  built_at="${SOURCE_DATE_EPOCH:-}"
+  if [[ -n "$built_at" ]]; then
+    built_at="$(date -u -d "@${built_at}" '+%Y-%m-%dT%H:%M:%SZ')"
+  else
+    built_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  fi
 
   mkdir -p "$DIST_DIR"
   {
