@@ -63,7 +63,7 @@ get_latest_release() {
   local json tag
   json=$(curl -fsSL --max-time 15 \
     "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null) \
-    || { warn "无法访问 GitHub API"; echo ""; return; }
+    || { warn "$(t app.sub2api.warn.github_api)"; echo ""; return; }
   if echo "test" | grep -qP 'test' 2>/dev/null; then
     tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
   fi
@@ -94,7 +94,7 @@ verify_checksum() {
   local checksum_url; checksum_url=$(get_checksum_url "$tag")
   local tmp_sum; tmp_sum=$(mktemp)
   if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
-    warn "无法下载 checksums.txt，跳过 SHA256 校验（建议手动核验）"
+    warn "$(t app.sub2api.warn.checksum_download)"
     rm -f "$tmp_sum"
     return 0
   fi
@@ -102,7 +102,7 @@ verify_checksum() {
   expected_hash=$(grep " ${expected_name}$" "$tmp_sum" 2>/dev/null | awk '{print $1}' || true)
   rm -f "$tmp_sum"
   if [[ -z "$expected_hash" ]]; then
-    warn "checksums.txt 中未找到 ${expected_name} 的校验值，跳过校验"
+    warn "$(t app.sub2api.warn.checksum_missing "$expected_name")"
     return 0
   fi
   local actual_hash
@@ -111,42 +111,42 @@ verify_checksum() {
   elif command -v shasum &>/dev/null; then
     actual_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
   else
-    warn "未找到 sha256sum / shasum，跳过 SHA256 校验"
+    warn "$(t app.sub2api.warn.sha_tool_missing)"
     return 0
   fi
   if [[ "$actual_hash" != "$expected_hash" ]]; then
-    error "SHA256 校验失败！\n  期望：${expected_hash}\n  实际：${actual_hash}"
+    error "$(t app.sub2api.error.sha_failed "$expected_hash" "$actual_hash")"
   fi
-  success "SHA256 校验通过（${actual_hash:0:16}...）"
+  success "$(t app.sub2api.success.sha_ok "${actual_hash:0:16}")"
 }
 extract_and_verify() {
   local archive="$1" dest_dir="$2"
   local tmp_extract; tmp_extract=$(mktemp -d "${dest_dir}/sub2api-extract.XXXXXX")
   if ! tar -xzf "$archive" -C "$tmp_extract" 2>&1; then
     rm -rf "$tmp_extract"
-    error "tar 解压失败，归档文件可能已损坏"
+    error "$(t app.sub2api.error.tar_extract)"
   fi
   local bin_path
   bin_path=$(find "$tmp_extract" -maxdepth 2 -name "sub2api" -type f 2>/dev/null | head -1 || true)
   if [[ -z "$bin_path" ]]; then
     rm -rf "$tmp_extract"
-    error "tar.gz 中未找到 sub2api 二进制文件，请确认下载 URL 是否正确"
+    error "$(t app.sub2api.error.archive_missing_binary)"
   fi
   local magic
   magic=$(dd if="$bin_path" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$magic" != "7f454c46" ]]; then
     rm -rf "$tmp_extract"
-    error "二进制不是有效的 ELF 格式（magic: ${magic:-读取失败}）"
+    error "$(t app.sub2api.error.not_elf "${magic:-read failed}")"
   fi
   local emachine
   emachine=$(dd if="$bin_path" bs=1 skip=18 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$emachine" != "$ELF_MACHINE" ]]; then
     rm -rf "$tmp_extract"
-    error "ELF 架构不匹配（e_machine=${emachine}，期望=${ELF_MACHINE}，当前平台=${BIN_ARCH}）"
+    error "$(t app.sub2api.error.elf_machine "$emachine" "$ELF_MACHINE" "$BIN_ARCH")"
   fi
   local size; size=$(wc -c < "$bin_path")
   local size_mb=$(( size / 1024 / 1024 ))
-  success "ELF 校验通过（架构 ${BIN_ARCH}，${size_mb} MB）"
+  success "$(t app.sub2api.success.elf_ok "$BIN_ARCH" "$size_mb")"
   local tmp_bin; tmp_bin=$(mktemp "${dest_dir}/sub2api.tmp.XXXXXX")
   mv "$bin_path" "$tmp_bin"
   rm -rf "$tmp_extract"
@@ -161,15 +161,15 @@ _health_check() {
     [[ $elapsed -ge 20 ]] && break
   done
   if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
-    success "HTTP 健康检查通过（状态码 ${HTTP_CODE}）"
+    success "$(t app.sub2api.success.http_health "$HTTP_CODE")"
   else
-    warn "健康检查返回 ${HTTP_CODE}，服务可能仍在初始化"
-    warn "调试命令：journalctl -u ${SERVICE_NAME} -n 30 --no-pager"
-    warn "完成数据库/Redis 配置后，请在浏览器访问 Setup Wizard：http://<IP>:${PORT}/"
+    warn "$(t app.sub2api.warn.http_health "$HTTP_CODE")"
+    warn "$(t app.sub2api.warn.debug_command "$SERVICE_NAME")"
+    warn "$(t app.sub2api.warn.setup_wizard "$PORT")"
   fi
 }
 _install_base_deps() {
-  info "安装基础依赖..."
+  info "$(t app.sub2api.info.install_base_deps)"
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
@@ -179,29 +179,29 @@ _install_base_deps() {
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
     yum install -y -q curl ca-certificates
   fi
-  success "基础依赖安装完成"
+  success "$(t app.sub2api.success.base_deps)"
 }
 _install_postgres() {
   if command -v psql &>/dev/null; then
     local pg_ver
     pg_ver=$(psql --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo "0")
     if [[ "$pg_ver" -ge 15 ]]; then
-      success "PostgreSQL ${pg_ver} 已安装，跳过安装"
+      success "$(t app.sub2api.success.postgres_exists "$pg_ver")"
       systemctl enable postgresql 2>/dev/null || \
         systemctl enable "postgresql-${pg_ver}" 2>/dev/null || true
       systemctl start  postgresql 2>/dev/null || \
         systemctl start  "postgresql-${pg_ver}" 2>/dev/null || true
       return 0
     fi
-    warn "检测到 PostgreSQL ${pg_ver}（< 15），将从 PGDG 官方源安装 PostgreSQL 15"
+    warn "$(t app.sub2api.warn.postgres_old "$pg_ver")"
   fi
   if [[ "$PKG_MANAGER" == "apt" ]]; then
-    info "添加 PostgreSQL PGDG 官方 apt 源..."
+    info "$(t app.sub2api.info.postgres_apt_source)"
     install -d /usr/share/postgresql-common/pgdg
     if ! curl -fsSL --max-time 30 \
         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
         "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
-      error "无法下载 PostgreSQL 签名密钥，请检查网络后重试"
+      error "$(t app.sub2api.error.postgres_key)"
     fi
     local codename
     codename=$(lsb_release -cs 2>/dev/null || . /etc/os-release && echo "$VERSION_CODENAME")
@@ -212,9 +212,9 @@ https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
     systemctl enable --now postgresql
-    success "PostgreSQL 15 安装完成"
+    success "$(t app.sub2api.success.postgres15)"
   elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
-    info "添加 PostgreSQL PGDG RPM 源..."
+    info "$(t app.sub2api.info.postgres_rpm_source)"
     local el_ver
     el_ver=$(rpm -E '%{rhel}' 2>/dev/null || echo "8")
     local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm"
@@ -228,7 +228,7 @@ https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
     fi
     /usr/pgsql-15/bin/postgresql-15-setup initdb 2>/dev/null || true
     systemctl enable --now postgresql-15
-    success "PostgreSQL 15 安装完成"
+    success "$(t app.sub2api.success.postgres15)"
   fi
 }
 _install_redis() {
@@ -237,15 +237,15 @@ _install_redis() {
     redis_ver=$(redis-server --version 2>/dev/null \
       | grep -oE 'v=[0-9]+' | grep -oE '[0-9]+' || echo "0")
     if [[ "$redis_ver" -ge 7 ]]; then
-      success "Redis ${redis_ver} 已安装，跳过安装"
+      success "$(t app.sub2api.success.redis_exists "$redis_ver")"
       systemctl enable --now redis-server 2>/dev/null || \
         systemctl enable --now redis 2>/dev/null || true
       return 0
     fi
-    warn "检测到 Redis ${redis_ver}（< 7），将从官方源安装 Redis 7"
+    warn "$(t app.sub2api.warn.redis_old "$redis_ver")"
   fi
   if [[ "$PKG_MANAGER" == "apt" ]]; then
-    info "添加 Redis 官方 apt 源..."
+    info "$(t app.sub2api.info.redis_apt_source)"
     curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
       | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
     chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
@@ -258,62 +258,62 @@ https://packages.redis.io/deb ${codename} main" \
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y redis
     systemctl enable --now redis-server
-    success "Redis 7 安装完成"
+    success "$(t app.sub2api.success.redis7)"
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
     dnf install -y redis
     systemctl enable --now redis
-    success "Redis 安装完成"
+    success "$(t app.sub2api.success.redis)"
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
     yum install -y redis
     systemctl enable --now redis
-    success "Redis 安装完成"
+    success "$(t app.sub2api.success.redis)"
   fi
 }
 _setup_postgres() {
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
-    warn "PostgreSQL 服务未运行，尝试启动..."
+    warn "$(t app.sub2api.warn.postgres_not_running)"
     systemctl start postgresql 2>/dev/null || \
       systemctl start postgresql-15 2>/dev/null || \
-      error "无法启动 PostgreSQL 服务，请检查：journalctl -u postgresql -n 30"
+      error "$(t app.sub2api.error.postgres_start)"
   fi
   if [[ -z "${PG_PASS:-}" ]]; then
     PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24)
-    info "已生成随机 PostgreSQL 密码（24 位）"
+    info "$(t app.sub2api.info.pg_password_generated)"
   else
-    info "复用已有 PostgreSQL 密码"
+    info "$(t app.sub2api.info.pg_password_reused)"
   fi
-  info "配置 PostgreSQL 用户和数据库..."
+  info "$(t app.sub2api.info.pg_setup)"
   local user_exists
   user_exists=$(sudo -u postgres psql -tAc \
     "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" 2>/dev/null || echo "")
   if [[ "$user_exists" == "1" ]]; then
-    info "PostgreSQL 用户 '${PG_USER}' 已存在，同步密码..."
+    info "$(t app.sub2api.info.pg_user_exists "$PG_USER")"
     sudo -u postgres psql -c \
       "ALTER USER ${PG_USER} WITH PASSWORD '${PG_PASS}';" > /dev/null
   else
     sudo -u postgres psql -c \
       "CREATE USER ${PG_USER} WITH PASSWORD '${PG_PASS}';" > /dev/null
-    success "PostgreSQL 用户 '${PG_USER}' 已创建"
+    success "$(t app.sub2api.success.pg_user_created "$PG_USER")"
   fi
   local db_exists
   db_exists=$(sudo -u postgres psql -tAc \
     "SELECT 1 FROM pg_database WHERE datname='${PG_DB}'" 2>/dev/null || echo "")
   if [[ "$db_exists" == "1" ]]; then
-    info "PostgreSQL 数据库 '${PG_DB}' 已存在，跳过创建"
+    info "$(t app.sub2api.info.pg_db_exists "$PG_DB")"
   else
     sudo -u postgres psql -c \
       "CREATE DATABASE ${PG_DB} OWNER ${PG_USER};" > /dev/null
-    success "PostgreSQL 数据库 '${PG_DB}' 已创建，属主：${PG_USER}"
+    success "$(t app.sub2api.success.pg_db_created "$PG_DB" "$PG_USER")"
   fi
   PG_DSN="postgresql://${PG_USER}:${PG_PASS}@localhost:5432/${PG_DB}?sslmode=disable"
-  success "PostgreSQL DSN 已生成"
+  success "$(t app.sub2api.success.pg_dsn)"
 }
 _install_nginx() {
   if command -v nginx &>/dev/null; then
-    info "Nginx 已安装，跳过安装"
+    info "$(t app.sub2api.info.nginx_exists)"
   else
-    info "安装 Nginx..."
+    info "$(t app.sub2api.info.install_nginx)"
     if [[ "$PKG_MANAGER" == "apt" ]]; then
       DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
     elif [[ "$PKG_MANAGER" == "dnf" ]]; then
@@ -321,7 +321,7 @@ _install_nginx() {
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
       yum install -y nginx
     fi
-    success "Nginx 安装完成"
+    success "$(t app.sub2api.success.nginx_installed)"
   fi
   systemctl enable nginx
   systemctl start nginx 2>/dev/null || true
@@ -374,18 +374,18 @@ NGINX
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
       sed -i '/^http[[:space:]]*{/a\    include /etc/nginx/sites-enabled/*;' \
         /etc/nginx/nginx.conf 2>/dev/null || \
-        warn "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;"
+        warn "$(t app.sub2api.warn.nginx_include)"
     fi
   fi
   if nginx -t 2>/dev/null; then
     systemctl reload nginx
     if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
-      success "Nginx 反代配置已生效（域名：${SUB2API_DOMAIN} → :${PORT}）"
+      success "$(t app.sub2api.success.nginx_domain "$SUB2API_DOMAIN" "$PORT")"
     else
-      success "Nginx 反代配置已生效（兜底 server_name _ → :${PORT}）"
+      success "$(t app.sub2api.success.nginx_fallback "$PORT")"
     fi
   else
-    warn "Nginx 配置校验失败（nginx -t），请检查配置文件后手动执行：nginx -t && systemctl reload nginx"
+    warn "$(t app.sub2api.warn.nginx_test_failed)"
     nginx -t >&2 2>/dev/null || true
   fi
 }
@@ -441,14 +441,14 @@ _configure_firewall() {
   local FW_DONE=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "${PORT}/tcp" comment "Sub2API" > /dev/null
-    success "ufw 已放行端口 ${PORT}"
+    success "$(t app.sub2api.success.ufw_port "$PORT")"
     FW_DONE=true
   fi
   if ! $FW_DONE && command -v firewall-cmd &>/dev/null && \
       firewall-cmd --state &>/dev/null; then
     firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1 || true
     firewall-cmd --reload >/dev/null 2>&1 || true
-    success "firewalld 已放行端口 ${PORT}"
+    success "$(t app.sub2api.success.firewalld_port "$PORT")"
     FW_DONE=true
   fi
   if ! $FW_DONE && command -v iptables &>/dev/null; then
@@ -457,19 +457,19 @@ _configure_firewall() {
     fi
     if command -v netfilter-persistent &>/dev/null; then
       netfilter-persistent save 2>/dev/null && \
-        success "iptables 规则已持久化（netfilter-persistent）" || true
+        success "$(t app.sub2api.success.iptables_saved)" || true
     elif command -v iptables-save &>/dev/null; then
       mkdir -p /etc/iptables
       iptables-save > /etc/iptables/rules.v4 2>/dev/null && \
-        info "iptables 规则已写入 /etc/iptables/rules.v4" || \
-        warn "iptables 规则写入失败，重启后规则可能丢失"
+        info "$(t app.sub2api.info.iptables_written)" || \
+        warn "$(t app.sub2api.warn.iptables_write_failed)"
     else
-      warn "iptables 规则未持久化，重启后失效。建议安装 iptables-persistent"
+      warn "$(t app.sub2api.warn.iptables_not_persisted)"
     fi
-    success "iptables 已放行端口 ${PORT}"
+    success "$(t app.sub2api.success.iptables_port "$PORT")"
     FW_DONE=true
   fi
-  $FW_DONE || warn "未检测到活跃防火墙，如有云安全组（AWS/阿里云/腾讯云）请手动放行端口 ${PORT}"
+  $FW_DONE || warn "$(t app.sub2api.warn.no_firewall "$PORT")"
 }
 _write_logrotate() {
   cat > /etc/logrotate.d/sub2api << LOGR
@@ -483,10 +483,24 @@ ${LOG_DIR}/*.log {
     copytruncate
 }
 LOGR
-  success "日志轮转已配置（每日轮转，保留 14 天，自动压缩）"
+  success "$(t app.sub2api.success.logrotate)"
 }
 _write_backup_script() {
   mkdir -p "$BACKUP_DIR"
+  local msg_start msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
+  local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_done
+  msg_start="$(t app.sub2api.backup.log.start)"
+  msg_pg_dump_start="$(t app.sub2api.backup.log.pg_dump_start)"
+  msg_pg_dump_ok="$(t app.sub2api.backup.log.pg_dump_ok '%s' '%s')"
+  msg_pg_dump_failed="$(t app.sub2api.backup.log.pg_dump_failed)"
+  msg_pg_dsn_missing="$(t app.sub2api.backup.log.pg_dsn_missing)"
+  msg_pg_dump_missing="$(t app.sub2api.backup.log.pg_dump_missing)"
+  msg_config_ok="$(t app.sub2api.backup.log.config_ok '%s')"
+  msg_config_failed="$(t app.sub2api.backup.log.config_failed)"
+  msg_data_ok="$(t app.sub2api.backup.log.data_ok '%s' '%s')"
+  msg_data_failed="$(t app.sub2api.backup.log.data_failed)"
+  msg_removed_old="$(t app.sub2api.backup.log.removed_old '%s' '%s')"
+  msg_done="$(t app.sub2api.backup.log.done)"
   cat > /usr/local/bin/sub2api-backup << BKSH_HEADER
 #!/bin/bash
 # Auto-generated Sub2API backup script. Do not edit this file manually.
@@ -500,6 +514,18 @@ CONFIG_DIR="${CONFIG_DIR}"
 SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 PG_DSN="${PG_DSN}"
+MSG_START="${msg_start}"
+MSG_PG_DUMP_START="${msg_pg_dump_start}"
+MSG_PG_DUMP_OK="${msg_pg_dump_ok}"
+MSG_PG_DUMP_FAILED="${msg_pg_dump_failed}"
+MSG_PG_DSN_MISSING="${msg_pg_dsn_missing}"
+MSG_PG_DUMP_MISSING="${msg_pg_dump_missing}"
+MSG_CONFIG_OK="${msg_config_ok}"
+MSG_CONFIG_FAILED="${msg_config_failed}"
+MSG_DATA_OK="${msg_data_ok}"
+MSG_DATA_FAILED="${msg_data_failed}"
+MSG_REMOVED_OLD="${msg_removed_old}"
+MSG_DONE="${msg_done}"
 BKSH_HEADER
   cat >> /usr/local/bin/sub2api-backup << 'BKSH_BODY'
 
@@ -511,26 +537,26 @@ PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
 PG_DUMP_TMP="${PG_DUMP_FILE}.tmp"
 
 _log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
-_log "── 开始备份 ────────────────────────────────────"
+_log "── ${MSG_START} ────────────────────────────────────"
 
 mkdir -p "${BACKUP_DIR}"
 
 # ── 1. PostgreSQL database backup ─────────────────────────────
 if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
-  _log "[DB] 开始 pg_dump..."
+  _log "${MSG_PG_DUMP_START}"
   if pg_dump "${PG_DSN}" 2>&1 | gzip > "${PG_DUMP_TMP}"; then
     mv "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"
     DB_SIZE=$(du -sh "${PG_DUMP_FILE}" 2>/dev/null | awk '{print $1}')
-    _log "[DB] pg_dump 成功：${PG_DUMP_FILE}（${DB_SIZE}）"
+    _log "$(printf "$MSG_PG_DUMP_OK" "$PG_DUMP_FILE" "$DB_SIZE")"
   else
     rm -f "${PG_DUMP_TMP}"
-    _log "[WARN] pg_dump 失败，跳过数据库备份（继续备份配置文件）"
+    _log "${MSG_PG_DUMP_FAILED}"
   fi
 else
   if [[ -z "${PG_DSN}" ]]; then
-    _log "[WARN] PG_DSN 未配置，跳过数据库备份"
+    _log "${MSG_PG_DSN_MISSING}"
   else
-    _log "[WARN] pg_dump 命令不存在，跳过数据库备份"
+    _log "${MSG_PG_DUMP_MISSING}"
   fi
 fi
 
@@ -547,10 +573,10 @@ if [[ -d "${CONFIG_DIR}" ]]; then
       -C "$(dirname "${CONFIG_DIR}")" "$(basename "${CONFIG_DIR}")" 2>&1 | \
       while IFS= read -r line; do _log "[TAR-CONF] ${line}"; done; then
     mv "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"
-    _log "[OK] 配置目录备份：${EXTRA_CONF_ARCHIVE}"
+    _log "$(printf "$MSG_CONFIG_OK" "$EXTRA_CONF_ARCHIVE")"
   else
     rm -f "${EXTRA_CONF_TMP}"
-    _log "[WARN] 配置目录备份失败"
+    _log "${MSG_CONFIG_FAILED}"
   fi
 fi
 
@@ -561,10 +587,10 @@ if [[ ${#TAR_ARGS[@]} -gt 0 ]]; then
       while IFS= read -r line; do _log "[TAR] ${line}"; done; then
     mv "${ARCHIVE_TMP}" "${ARCHIVE}"
     SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
-    _log "[OK] 数据目录备份：${ARCHIVE}（${SIZE}）"
+    _log "$(printf "$MSG_DATA_OK" "$ARCHIVE" "$SIZE")"
   else
     rm -f "${ARCHIVE_TMP}"
-    _log "[ERROR] 数据目录 tar 失败，临时文件已清理"
+    _log "${MSG_DATA_FAILED}"
   fi
 fi
 
@@ -577,13 +603,13 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
     \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
     -o -name "sub2api_conf_*.tar.gz" \) \
     -mtime "+${KEEP_DAYS}" 2>/dev/null)
-  [[ $REMOVED -gt 0 ]] && _log "[OK] 已清理 ${REMOVED} 个超过 ${KEEP_DAYS} 天的旧备份"
+  [[ $REMOVED -gt 0 ]] && _log "$(printf "$MSG_REMOVED_OLD" "$REMOVED" "$KEEP_DAYS")"
 fi
 
-_log "── 备份完成 ────────────────────────────────────"
+_log "── ${MSG_DONE} ────────────────────────────────────"
 BKSH_BODY
   chmod 750 /usr/local/bin/sub2api-backup
-  success "备份脚本已写入：/usr/local/bin/sub2api-backup"
+  success "$(t app.sub2api.success.backup_script)"
 }
 _backup_silent() {
   local label="${1:-manual}"
@@ -594,13 +620,13 @@ _backup_silent() {
     if pg_dump "${PG_DSN}" 2>/dev/null | gzip > "$pg_tmp"; then
       mv "$pg_tmp" "$pg_archive"
       local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
-      success "静默 pg_dump 备份：${pg_archive}（${sz}）"
+      success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
     else
       rm -f "$pg_tmp"
-      warn "pg_dump 失败，继续执行（可能影响数据恢复能力）"
+      warn "$(t app.sub2api.warn.pg_dump_failed)"
     fi
   else
-    warn "PG_DSN 未配置或 pg_dump 不存在，跳过数据库快照"
+    warn "$(t app.sub2api.warn.pg_snapshot_skip)"
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
     local conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
@@ -609,10 +635,10 @@ _backup_silent() {
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" 2>&1 >&2; then
       mv "$conf_tmp" "$conf_archive"
       local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
-      success "配置目录备份：${conf_archive}（${sz}）"
+      success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
     else
       rm -f "$conf_tmp"
-      warn "配置目录备份失败（tar 报错）"
+      warn "$(t app.sub2api.warn.config_backup_failed)"
     fi
   fi
 }

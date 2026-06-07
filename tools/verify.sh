@@ -100,6 +100,8 @@ check_app_localized_descriptions() {
   expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"
   expect_app_description newapi en "Binary deployment with systemd, backups, and operational checks."
   expect_app_description newapi zh "使用 systemd、备份和运维检查的二进制部署脚本。"
+  expect_app_description sub2api en "API gateway deployment with database, cache, systemd, and backups."
+  expect_app_description sub2api zh "包含数据库、缓存、systemd 和备份的 API 网关部署脚本。"
 }
 
 check_no_release_temp_files() {
