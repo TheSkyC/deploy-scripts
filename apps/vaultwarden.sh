@@ -431,7 +431,85 @@ i18n_register_many \
   "[重要]" \
   app.vaultwarden.summary.token_cleanup \
   "Delete the Admin Token temporary file immediately after viewing it to avoid leaving it on disk!" \
-  "Admin Token 临时文件查看后请立即删除，避免遗留在磁盘！"
+  "Admin Token 临时文件查看后请立即删除，避免遗留在磁盘！" \
+  app.vaultwarden.step.update \
+  "Update Vaultwarden binary and Web Vault" \
+  "更新 Vaultwarden 二进制与 Web Vault" \
+  app.vaultwarden.error.not_installed_update \
+  "Vaultwarden is not installed. Run install first." \
+  "未检测到已安装的 Vaultwarden，请先执行 install。" \
+  app.vaultwarden.info.current_version \
+  "Current version: %s" \
+  "当前版本：%s" \
+  app.vaultwarden.info.pre_update_backup \
+  "Creating automatic backup before update..." \
+  "更新前自动备份数据..." \
+  app.vaultwarden.warn.pre_update_failed_state \
+  "vaultwarden service was already failed before update; this update will also reset that failed state." \
+  "注意：更新前 vaultwarden 服务处于 failed 状态，本次更新将同时重置该故障状态。" \
+  app.vaultwarden.warn.pre_update_existing_error \
+  "If the service still has issues after update, inspect the pre-existing error: journalctl -u vaultwarden -n 50 --no-pager" \
+  "如果更新后仍有问题，请检查更新前已存在的错误：journalctl -u vaultwarden -n 50 --no-pager。" \
+  app.vaultwarden.info.stop_service \
+  "Stopping Vaultwarden service..." \
+  "停止 Vaultwarden 服务..." \
+  app.vaultwarden.step.extract_update_binary \
+  "Extract new version binary" \
+  "提取新版本二进制" \
+  app.vaultwarden.success.binary_updated \
+  "Binary updated." \
+  "二进制已更新。" \
+  app.vaultwarden.step.update_web_vault \
+  "Update Web Vault" \
+  "更新 Web Vault" \
+  app.vaultwarden.success.web_vault_updated_image \
+  "Web Vault updated from the Alpine image." \
+  "Web Vault 已更新（来自 Alpine 镜像）。" \
+  app.vaultwarden.success.web_vault_updated_version \
+  "Web Vault v%s updated." \
+  "Web Vault v%s 已更新。" \
+  app.vaultwarden.warn.web_vault_extract \
+  "Web Vault extraction failed; trying to restore the old version..." \
+  "Web Vault 解压失败，尝试恢复旧版本..." \
+  app.vaultwarden.warn.web_vault_update_download \
+  "Web Vault download failed; skipping Web Vault update." \
+  "Web Vault 下载失败，跳过 Web Vault 更新。" \
+  app.vaultwarden.warn.web_vault_update_version \
+  "Cannot get Web Vault version; skipping Web Vault update." \
+  "无法获取 Web Vault 版本，跳过 Web Vault 更新。" \
+  app.vaultwarden.warn.update_port_used \
+  "Port %s is still in use (%s); the service may not be able to bind to it." \
+  "端口 %s 仍被占用（%s），服务可能无法绑定端口。" \
+  app.vaultwarden.success.restart \
+  "Vaultwarden service restarted successfully." \
+  "Vaultwarden 服务重启成功。" \
+  app.vaultwarden.success.version_updated \
+  "Version updated: %s -> %s" \
+  "版本已更新：%s  →  %s" \
+  app.vaultwarden.success.already_latest \
+  "Already on the latest version (%s); no update needed." \
+  "已是最新版本（%s），无需更新。" \
+  app.vaultwarden.warn.restart_failed_rollback \
+  "Service restart failed. Rolling back binary..." \
+  "服务重启失败！正在回滚二进制..." \
+  app.vaultwarden.warn.web_vault_rolled_back \
+  "Web Vault rolled back." \
+  "Web Vault 已回滚。" \
+  app.vaultwarden.success.rollback \
+  "Rollback complete; service restored to previous version (%s)." \
+  "回滚完成，服务已恢复至旧版本（%s）。" \
+  app.vaultwarden.error.update_rolled_back \
+  "Update failed and was rolled back to previous version %s.\n  To inspect the new-version issue: journalctl -u vaultwarden -n 50 --no-pager\n  New binary backup kept at: %s" \
+  "更新失败，已回滚至旧版本 %s。\n  如需排查新版本问题：journalctl -u vaultwarden -n 50 --no-pager\n  新版本二进制备份保留在：%s" \
+  app.vaultwarden.error.rollback_start_failed \
+  "Service still cannot start after rollback. Inspect manually: journalctl -u vaultwarden -n 30 --no-pager" \
+  "回滚后服务仍无法启动，请手动检查：journalctl -u vaultwarden -n 30 --no-pager。" \
+  app.vaultwarden.error.no_backup_binary \
+  "Backup binary was not found, so rollback failed. Inspect manually: journalctl -u vaultwarden -n 30 --no-pager" \
+  "未找到备份二进制，回滚失败！请手动检查：journalctl -u vaultwarden -n 30 --no-pager。" \
+  app.vaultwarden.info.cleaned_webvault_backups \
+  "Removed %s old web-vault backup directories (keeping the latest 3)." \
+  "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。"
 
 APP_DESCRIPTION="$(t app.vaultwarden.description)"
 APP_IMPL_SCRIPT="impl/install_vaultwarden.sh"
