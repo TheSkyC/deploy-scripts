@@ -28,6 +28,7 @@ __deploy_i18n_message() {
     error.config_owner) echo "Refusing to load config not owned by root: %s|拒绝加载非 root 拥有的配置文件：%s" ;;
     error.lock_failed) echo "Another deployment process is running: %s|已有部署进程正在运行：%s" ;;
     error.root_required) echo "Please run as root: sudo bash %s %s|请使用 root 权限运行：sudo bash %s %s" ;;
+    error.unsupported_action) echo "%s does not support %s yet.|%s 暂不支持 %s。" ;;
     error.unsafe_path) echo "Unsafe path for %s: %s|%s 的路径不安全：%s" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
