@@ -224,6 +224,37 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_config_crlf_handling() {
+  local tmp_dir conf
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/deploy.conf"
+  printf 'FOO="bar"\r\nBAZ=qux\r\n' > "$conf"
+
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+
+  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    FOO=""
+    BAZ=""
+    load_config_file "$1" FOO BAZ
+    [[ "$FOO" == "bar" ]] || { printf "FOO contained unexpected bytes: " >&2; printf "%s" "$FOO" | od -An -tx1 >&2; exit 1; }
+    [[ "$BAZ" == "qux" ]] || { printf "BAZ contained unexpected bytes: " >&2; printf "%s" "$BAZ" | od -An -tx1 >&2; exit 1; }
+    sanitized="$(sanitize_conf_val $'"'"'one\ntwo'"'"')"
+    [[ "$sanitized" == "one" ]] || { printf "sanitize_conf_val returned unexpected bytes: " >&2; printf "%s" "$sanitized" | od -An -tx1 >&2; exit 1; }
+  ' _ "$conf"
+
+  rm -rf "$tmp_dir"
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -238,6 +269,7 @@ main() {
   check_bundled_impl_cleanup
   check_safe_path_guard
   check_service_status_label
+  check_config_crlf_handling
   echo "Verification passed"
 }
 

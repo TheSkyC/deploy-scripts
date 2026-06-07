@@ -194,7 +194,10 @@ release_lock() {
 # ----- lib/config.sh -----
 
 sanitize_conf_val() {
-  local value="${1%%$'\n'*}"
+  local newline=$'\n'
+  local carriage_return=$'\r'
+  local value="${1%%${newline}*}"
+  value="${value%%${carriage_return}*}"
   value="${value//\"/}"
   echo "$value"
 }
@@ -222,6 +225,7 @@ load_config_file() {
 
   local line key value allowed
   while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
     [[ "$line" =~ ^[[:space:]]*(#|$) || "$line" != *=* ]] && continue
     key="${line%%=*}"
     key="${key// /}"
