@@ -108,10 +108,6 @@ acquire_lock() {
   fi
   trap 'flock -u 9 2>/dev/null || true; exec 9>&- 2>/dev/null || true' EXIT
 }
-release_lock() {
-  flock -u 9 2>/dev/null || true
-  exec 9>&- 2>/dev/null || true
-}
 check_connectivity() {
   local targets=(
     "https://api.github.com"
@@ -484,18 +480,6 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 30 3 * * * root ${BACKUP_SCRIPT} >> ${LOG_DIR}/backup.log 2>&1
 CRON
   chmod 644 "$CRON_FILE"
-}
-wait_for_service() {
-  local svc="$1" timeout="${2:-30}" elapsed=0
-  while ! systemctl is-active --quiet "$svc"; do
-    if systemctl is-failed --quiet "$svc" 2>/dev/null; then
-      return 1
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-    [[ "$elapsed" -ge "$timeout" ]] && return 1
-  done
-  return 0
 }
 check_port_conflict() {
   local port="$1"

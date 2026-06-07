@@ -421,7 +421,6 @@ acquire_lock() {
   fi
   trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
 }
-release_lock() { flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null; }
 check_connectivity() {
   local targets=(
     "https://api.github.com"
@@ -434,18 +433,6 @@ check_connectivity() {
     fi
   done
   error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
-}
-wait_for_service() {
-  local svc="$1" timeout="${2:-20}" elapsed=0
-  while ! systemctl is-active --quiet "$svc"; do
-    if systemctl is-failed --quiet "$svc" 2>/dev/null; then
-      return 1
-    fi
-    sleep 1
-    elapsed=$(( elapsed + 1 ))
-    [[ $elapsed -ge $timeout ]] && return 1
-  done
-  return 0
 }
 _sanitize_conf_val() {
   local _v="${1%%$'\n'*}"

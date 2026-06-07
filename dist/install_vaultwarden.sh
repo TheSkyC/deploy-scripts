@@ -432,7 +432,6 @@ acquire_lock() {
   fi
   trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
 }
-release_lock() { flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null; }
 check_connectivity() {
   local targets=(
     "https://auth.docker.io/token"
@@ -443,17 +442,6 @@ check_connectivity() {
     if curl -fsSL --max-time 8 -o /dev/null "$t" 2>/dev/null; then return 0; fi
   done
   error "网络不通，无法访问 Docker Registry / GitHub，请检查网络或代理后重试"
-}
-wait_for_service() {
-  local svc="$1" timeout="${2:-20}" elapsed=0
-  while ! systemctl is-active --quiet "$svc"; do
-    if systemctl is-failed --quiet "$svc" 2>/dev/null; then
-      return 1
-    fi
-    sleep 1; elapsed=$(( elapsed + 1 ))
-    [[ $elapsed -ge $timeout ]] && return 1
-  done
-  return 0
 }
 load_config() {
   if [[ -f "$CONF_FILE" ]]; then
