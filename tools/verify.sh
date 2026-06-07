@@ -54,6 +54,29 @@ check_localized_dispatch() {
   expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
 }
 
+expect_blog_defaults() {
+  local lang="$1"
+  local expected_title="$2"
+  local expected_lang="$3"
+  local output
+
+  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" -c '
+    source lib/core.sh
+    source apps/blog.sh
+    printf "%s|%s\n" "$BLOG_TITLE" "$BLOG_LANG"
+  ')"
+
+  [[ "$output" == "${expected_title}|${expected_lang}" ]] || {
+    echo "Unexpected blog defaults for ${lang}: ${output}" >&2
+    return 1
+  }
+}
+
+check_blog_localized_defaults() {
+  expect_blog_defaults en "Abyte's Blog" "en-us"
+  expect_blog_defaults zh "Abyte 的个人博客" "zh-cn"
+}
+
 check_no_release_temp_files() {
   if find dist -maxdepth 1 -name '*_impl.sh' -type f | grep -q .; then
     echo "Unexpected bundled implementation file in dist/" >&2
@@ -67,6 +90,7 @@ main() {
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
   check_release_syntax
   check_localized_dispatch
+  check_blog_localized_defaults
   check_no_release_temp_files
   echo "Verification passed"
 }
