@@ -429,18 +429,436 @@ main() {
 
 APP_ID="vaultwarden"
 APP_NAME="Vaultwarden"
-i18n_register app.vaultwarden.description \
+i18n_register_many \
+  app.vaultwarden.description \
   "Vaultwarden deployment with Web Vault, Nginx, TLS, and backups." \
-  "包含 Web Vault、Nginx、TLS 和备份的 Vaultwarden 部署脚本。"
-i18n_register app.vaultwarden.error.apt_only \
+  "包含 Web Vault、Nginx、TLS 和备份的 Vaultwarden 部署脚本。" \
+  app.vaultwarden.error.apt_only \
   "This script only supports Debian / Ubuntu because apt-get was not found." \
-  "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）。"
-i18n_register app.vaultwarden.error.arch \
+  "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）。" \
+  app.vaultwarden.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64 / armv7l." \
-  "不支持的架构：%s（支持 x86_64 / aarch64 / armv7l）。"
-i18n_register app.vaultwarden.error.registry_unreachable \
+  "不支持的架构：%s（支持 x86_64 / aarch64 / armv7l）。" \
+  app.vaultwarden.error.registry_unreachable \
   "Cannot reach Docker Registry or GitHub. Check network/proxy settings and retry." \
-  "网络不通，无法访问 Docker Registry / GitHub，请检查网络或代理后重试。"
+  "网络不通，无法访问 Docker Registry / GitHub，请检查网络或代理后重试。" \
+  app.vaultwarden.status.not_installed \
+  "not installed" \
+  "未安装" \
+  app.vaultwarden.info.download_extract_tool \
+  "Downloading docker-image-extract..." \
+  "下载 docker-image-extract 工具..." \
+  app.vaultwarden.error.extract_tool_download \
+  "Cannot download docker-image-extract. Check network connectivity." \
+  "无法下载 docker-image-extract，请检查网络连接。" \
+  app.vaultwarden.error.extract_tool_empty \
+  "docker-image-extract was downloaded as an empty file." \
+  "docker-image-extract 下载后为空文件。" \
+  app.vaultwarden.error.extract_tool_shebang \
+  "docker-image-extract is not a valid shell script (missing shebang); the download may be corrupted." \
+  "docker-image-extract 不是合法的 shell 脚本（shebang 缺失），可能下载损坏。" \
+  app.vaultwarden.error.extract_tool_small \
+  "docker-image-extract is too small (%s bytes); the download may be incomplete or tampered with." \
+  "docker-image-extract 文件过小（%s 字节），疑似下载不完整或被篡改。" \
+  app.vaultwarden.error.extract_tool_content \
+  "docker-image-extract content is unexpected (missing registry keyword); aborting because it may be tampered with." \
+  "docker-image-extract 内容异常（缺少 registry 关键字），疑似被篡改，已中止。" \
+  app.vaultwarden.error.extract_tool_sha \
+  "docker-image-extract SHA256 verification failed!\n  expected: %s\n  actual: %s\n  Update EXTRACT_TOOL_SHA256 in the script or check network security." \
+  "docker-image-extract SHA256 校验失败！\n  期望：%s\n  实际：%s\n  请更新脚本中的 EXTRACT_TOOL_SHA256 或检查网络安全性。" \
+  app.vaultwarden.success.extract_tool_sha \
+  "docker-image-extract SHA256 verification passed." \
+  "docker-image-extract SHA256 校验通过。" \
+  app.vaultwarden.warn.extract_tool_sha_missing \
+  "EXTRACT_TOOL_SHA256 is not configured; skipping checksum verification. Configure it for production." \
+  "未配置 EXTRACT_TOOL_SHA256，跳过 checksum 校验（建议为生产环境配置此项）。" \
+  app.vaultwarden.info.extract_image \
+  "Extracting %s:%s from the image registry (platform: %s)..." \
+  "从镜像仓库提取 %s:%s（平台：%s）..." \
+  app.vaultwarden.info.first_download_wait \
+  "The first download can take a few minutes. Please wait..." \
+  "首次下载需要几分钟，请耐心等待..." \
+  app.vaultwarden.error.image_extract \
+  "Image extraction failed. Check the network and retry later." \
+  "镜像提取失败，请检查网络或稍后重试。" \
+  app.vaultwarden.error.binary_missing_image \
+  "vaultwarden binary was not found in the image." \
+  "未在镜像中找到 vaultwarden 二进制。" \
+  app.vaultwarden.error.binary_too_small \
+  "Extracted vaultwarden binary is too small (%s bytes); it may be incomplete or tampered with." \
+  "提取的 vaultwarden 二进制过小（%s 字节），疑似不完整或被篡改。" \
+  app.vaultwarden.error.binary_not_elf \
+  "Extracted file is not a valid ELF binary (magic bytes mismatch); the download may be corrupted." \
+  "提取的文件不是合法的 ELF 二进制（magic bytes 不匹配），疑似下载损坏。" \
+  app.vaultwarden.error.elf_machine \
+  "ELF e_machine mismatch. Expected %s (%s), actual %s.\n  The image platform argument may be wrong, or the image manifest parsing failed. Retry." \
+  "ELF e_machine 不匹配！期望 %s（%s），实际 %s。\n  镜像平台参数可能有误，或镜像 manifest 解析异常，请重试。" \
+  app.vaultwarden.warn.installed \
+  "Vaultwarden is already installed (%s), version: %s" \
+  "检测到 Vaultwarden 已安装（%s），版本：%s。" \
+  app.vaultwarden.warn.reinstall \
+  "Reinstalling will overwrite the existing binary and config; the data directory will be kept." \
+  "重新安装会覆盖现有二进制和配置（数据目录保留）。" \
+  app.vaultwarden.prompt.force_reinstall \
+  "Force reinstall? (y/N):" \
+  "是否强制重新安装？（y/N）：" \
+  app.vaultwarden.info.install_cancelled_update \
+  "Cancelled. Use the update command if you want to update." \
+  "已取消，如需更新请使用 update 命令。" \
+  app.vaultwarden.step.wizard \
+  "Configuration wizard" \
+  "配置向导" \
+  app.vaultwarden.prompt.domain \
+  "Enter your domain (for example vault.yourdomain.com):" \
+  "请输入你的域名（如 vault.yourdomain.com）：" \
+  app.vaultwarden.warn.domain_empty \
+  "Domain cannot be empty. Try again." \
+  "域名不能为空，请重新输入。" \
+  app.vaultwarden.warn.domain_invalid \
+  "Domain is invalid (%s). Try again." \
+  "域名格式无效（%s），请重新输入。" \
+  app.vaultwarden.prompt.email \
+  "Enter the Let's Encrypt notification email:" \
+  "请输入 Let's Encrypt 通知邮箱：" \
+  app.vaultwarden.warn.email_empty \
+  "Email cannot be empty. Try again." \
+  "邮箱不能为空，请重新输入。" \
+  app.vaultwarden.warn.email_invalid \
+  "Email is invalid (%s). Try again." \
+  "邮箱格式无效（%s），请重新输入。" \
+  app.vaultwarden.error.port_invalid \
+  "VW_PORT is invalid: '%s'. Set a port between 1 and 65535 at the top of the script." \
+  "VW_PORT 无效：'%s'，请在脚本顶部设置 1-65535 之间的端口号。" \
+  app.vaultwarden.info.domain \
+  "Domain     : %s" \
+  "域名     : %s" \
+  app.vaultwarden.info.listen_port \
+  "Listen port: %s (local only, behind Nginx reverse proxy)" \
+  "监听端口 : %s（仅本机，经 Nginx 反代）" \
+  app.vaultwarden.info.binary \
+  "Binary     : %s" \
+  "二进制   : %s" \
+  app.vaultwarden.info.data_dir \
+  "Data dir   : %s" \
+  "数据目录 : %s" \
+  app.vaultwarden.info.run_user \
+  "Run user   : %s" \
+  "运行用户 : %s" \
+  app.vaultwarden.prompt.confirm_config \
+  "Is this configuration correct? (y/N):" \
+  "配置是否正确？（y/N）：" \
+  app.vaultwarden.info.config_cancelled \
+  "Cancelled. Update the configuration at the top of the script and retry." \
+  "已取消，请修改脚本顶部配置项后重试。" \
+  app.vaultwarden.step.deps \
+  "Step 1  Install system dependencies" \
+  "Step 1  安装系统依赖" \
+  app.vaultwarden.warn.apt_update \
+  "apt-get update partially failed. Continuing install, but package versions may be affected." \
+  "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。" \
+  app.vaultwarden.success.deps \
+  "System dependencies installed." \
+  "系统依赖安装完成。" \
+  app.vaultwarden.step.user_dirs \
+  "Step 2  Create system user and directories" \
+  "Step 2  创建系统用户与目录" \
+  app.vaultwarden.success.user_created \
+  "System user %s created." \
+  "系统用户 %s 已创建。" \
+  app.vaultwarden.warn.user_exists \
+  "User %s already exists; skipping." \
+  "用户 %s 已存在，跳过。" \
+  app.vaultwarden.success.dirs \
+  "Directories created and permissions set." \
+  "目录已创建并设置权限。" \
+  app.vaultwarden.step.extract_binary \
+  "Step 3  Extract Vaultwarden static binary" \
+  "Step 3  提取 Vaultwarden 静态二进制" \
+  app.vaultwarden.success.binary_extracted \
+  "Binary extracted successfully: %s" \
+  "二进制提取成功：%s。" \
+  app.vaultwarden.success.binary_installed \
+  "Binary installed: %s" \
+  "二进制已安装：%s。" \
+  app.vaultwarden.info.version \
+  "Vaultwarden version: %s" \
+  "Vaultwarden 版本：%s" \
+  app.vaultwarden.step.web_vault \
+  "Step 4  Install Web Vault" \
+  "Step 4  安装 Web Vault" \
+  app.vaultwarden.info.web_vault_image \
+  "Using Web Vault extracted from the image (matching the binary version)..." \
+  "使用镜像中提取的 Web Vault（与二进制版本一致）..." \
+  app.vaultwarden.success.web_vault_image \
+  "Web Vault installed from the Alpine image." \
+  "Web Vault 已安装（来自 Alpine 镜像）。" \
+  app.vaultwarden.info.web_vault_github \
+  "Downloading the latest Web Vault from GitHub..." \
+  "从 GitHub 下载最新 Web Vault..." \
+  app.vaultwarden.error.web_vault_version \
+  "Cannot get Web Vault version. Check the network." \
+  "无法获取 Web Vault 版本，请检查网络。" \
+  app.vaultwarden.info.web_vault_version \
+  "Web Vault version: v%s" \
+  "Web Vault 版本：v%s" \
+  app.vaultwarden.info.download \
+  "Download: %s" \
+  "下载：%s" \
+  app.vaultwarden.error.web_vault_download \
+  "Web Vault download failed." \
+  "Web Vault 下载失败。" \
+  app.vaultwarden.success.web_vault_version \
+  "Web Vault v%s installed." \
+  "Web Vault v%s 已安装。" \
+  app.vaultwarden.info.web_vault_path \
+  "Web Vault path: %s" \
+  "Web Vault 位置：%s" \
+  app.vaultwarden.step.admin_token \
+  "Step 5  Generate Admin Token (Argon2id hash)" \
+  "Step 5  生成 Admin Token（Argon2id 哈希）" \
+  app.vaultwarden.info.hash_token \
+  "Generating hash with vaultwarden hash --preset owasp..." \
+  "使用 vaultwarden hash --preset owasp 生成哈希..." \
+  app.vaultwarden.warn.hash_parse \
+  "Failed to parse vaultwarden hash output; falling back to argon2 CLI (OWASP preset)..." \
+  "vaultwarden hash 输出解析失败，回退至 argon2 CLI（OWASP preset）..." \
+  app.vaultwarden.error.admin_token_hash \
+  "argon2 CLI also failed, so a secure Admin Token cannot be generated.\n  Confirm argon2 is installed: apt-get install -y argon2\n  Fix the issue and rerun install. Plaintext tokens are deprecated and unsafe in newer Vaultwarden versions, so installation is refused." \
+  "argon2 CLI 也失败，无法生成安全的 Admin Token。\n  请确认已安装 argon2：apt-get install -y argon2\n  修复后重新运行 install。（使用明文 Token 在新版 Vaultwarden 中已废弃且不安全，拒绝继续）。" \
+  app.vaultwarden.success.admin_token \
+  "Admin Token generated." \
+  "Admin Token 生成完成。" \
+  app.vaultwarden.step.env_file \
+  "Step 6  Write %s" \
+  "Step 6  写入 %s" \
+  app.vaultwarden.success.env_file \
+  "Environment config file written: %s (mode 600)." \
+  "环境配置文件已写入：%s（权限 600）。" \
+  app.vaultwarden.step.systemd \
+  "Step 7  Create systemd service" \
+  "Step 7  创建 systemd 服务" \
+  app.vaultwarden.success.systemd \
+  "systemd service created and enabled at boot." \
+  "systemd 服务已创建并设为开机自启。" \
+  app.vaultwarden.step.start_service \
+  "Step 8  Start Vaultwarden service" \
+  "Step 8  启动 Vaultwarden 服务" \
+  app.vaultwarden.status.unknown_process \
+  "unknown process" \
+  "未知进程" \
+  app.vaultwarden.warn.port_used \
+  "Port %s is already in use (%s)." \
+  "端口 %s 已被占用（%s）。" \
+  app.vaultwarden.warn.port_hint \
+  "If this is not an old vaultwarden process, release the port before installing or the service cannot start." \
+  "若不是旧的 vaultwarden 进程，请先释放端口再安装，否则服务将无法启动。" \
+  app.vaultwarden.success.service_started \
+  "Vaultwarden service started successfully." \
+  "Vaultwarden 服务启动成功。" \
+  app.vaultwarden.warn.service_cleanup \
+  "The service did not start within 20 seconds. Cleaning installed files..." \
+  "服务在 20 秒内未能正常启动，正在清理已安装文件..." \
+  app.vaultwarden.error.install_failed_start \
+  "Installation failed because the service could not start. The binary and systemd unit were rolled back.\n  Debug: journalctl -u vaultwarden -n 30 --no-pager\n  Data directory, env file, and Nginx config were kept. Fix the cause and rerun install." \
+  "安装失败：服务无法启动，已回滚二进制与 systemd 单元。\n  调试命令：journalctl -u vaultwarden -n 30 --no-pager\n  数据目录、env 文件、Nginx 配置已保留，修复原因后重新 install。" \
+  app.vaultwarden.step.nginx_http \
+  "Step 9  Configure Nginx reverse proxy (HTTP-only; Step 10 certbot completes HTTPS)" \
+  "Step 9  配置 Nginx 反向代理（HTTP-only，HTTPS 由 Step 10 certbot 补全）" \
+  app.vaultwarden.warn.default_site_removed \
+  "Removed the default Nginx site (/etc/nginx/sites-enabled/default). Restore it manually if another site depends on it." \
+  "已移除 Nginx 默认站点（/etc/nginx/sites-enabled/default）。如有其他站点依赖它，请手动恢复。" \
+  app.vaultwarden.error.nginx_http_test \
+  "Nginx config validation failed (HTTP phase)." \
+  "Nginx 配置验证失败（HTTP 阶段）。" \
+  app.vaultwarden.success.nginx_http \
+  "Nginx HTTP config complete." \
+  "Nginx HTTP 配置完成。" \
+  app.vaultwarden.step.certbot \
+  "Step 10  Request HTTPS certificate" \
+  "Step 10  申请 HTTPS 证书" \
+  app.vaultwarden.error.nginx_start \
+  "Nginx did not start within 10 seconds. Check config: nginx -t\n  journalctl -u nginx -n 20 --no-pager" \
+  "Nginx 未能在 10 秒内成功启动，请检查配置：nginx -t\n  journalctl -u nginx -n 20 --no-pager" \
+  app.vaultwarden.success.nginx_ready \
+  "Nginx is ready; continuing certificate request." \
+  "Nginx 已就绪，继续申请证书。" \
+  app.vaultwarden.info.request_cert \
+  "Requesting certificate (%s / %s)..." \
+  "申请证书（%s / %s）..." \
+  app.vaultwarden.success.certbot \
+  "Let's Encrypt certificate issued successfully." \
+  "Let's Encrypt 证书申请成功。" \
+  app.vaultwarden.warn.certbot_failed \
+  "Certbot certificate request failed (see output above)." \
+  "Certbot 证书申请失败（见上方输出）。" \
+  app.vaultwarden.warn.certbot_manual \
+  "After fixing DNS/firewall issues, run manually: certbot certonly --webroot -w /var/www/certbot -d %s --email %s --agree-tos --non-interactive" \
+  "请解决 DNS/防火墙问题后手动运行：certbot certonly --webroot -w /var/www/certbot -d %s --email %s --agree-tos --non-interactive" \
+  app.vaultwarden.success.certbot_timer \
+  "Certbot auto-renew timer is ready." \
+  "Certbot 自动续签定时器已就绪。" \
+  app.vaultwarden.success.certbot_cron_exists \
+  "Certbot auto-renew cron entry already exists; skipping." \
+  "Certbot 自动续签 cron 条目已存在，跳过。" \
+  app.vaultwarden.success.certbot_cron \
+  "Certbot auto-renew cron entry added (daily 02:30)." \
+  "Certbot 自动续签（每天 02:30）已加入 crontab。" \
+  app.vaultwarden.warn.nginx_version \
+  "Cannot detect Nginx version; using legacy http2 syntax (attached to listen lines)." \
+  "无法检测 Nginx 版本，默认使用旧版 http2 语法（listen 行附加）。" \
+  app.vaultwarden.success.nginx_https \
+  "Nginx HTTPS config is active." \
+  "Nginx HTTPS 完整配置已生效。" \
+  app.vaultwarden.warn.nginx_https_test \
+  "Nginx HTTPS config test failed. Check: nginx -t" \
+  "Nginx HTTPS 配置测试失败，请检查：nginx -t。" \
+  app.vaultwarden.warn.cert_missing \
+  "Certificate files were not found. Skipping HTTPS config; current mode is still HTTP." \
+  "证书文件未找到，跳过 HTTPS 配置写入，当前仍使用 HTTP 模式。" \
+  app.vaultwarden.warn.https_skipped \
+  "Skipping HTTPS config. Vaultwarden Web Crypto API requires HTTPS!" \
+  "跳过 HTTPS 配置（Vaultwarden Web Crypto API 需要 HTTPS！）。" \
+  app.vaultwarden.step.fail2ban \
+  "Step 11  Configure Fail2Ban brute-force protection" \
+  "Step 11  配置 Fail2Ban 防暴力破解" \
+  app.vaultwarden.success.fail2ban \
+  "Fail2Ban configured (login: 5 failures/hour -> 1h ban, admin: 3 failures/day -> 24h ban)." \
+  "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）。" \
+  app.vaultwarden.step.logrotate \
+  "Step 12  Configure log rotation" \
+  "Step 12  配置日志轮转" \
+  app.vaultwarden.success.logrotate \
+  "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
+  "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.vaultwarden.step.firewall \
+  "Step 13  Configure firewall" \
+  "Step 13  配置防火墙" \
+  app.vaultwarden.success.ufw \
+  "ufw allows HTTP/HTTPS." \
+  "ufw 已放行 HTTP/HTTPS。" \
+  app.vaultwarden.success.iptables \
+  "iptables allows 80/443." \
+  "iptables 已放行 80/443。" \
+  app.vaultwarden.success.iptables_saved \
+  "iptables rules persisted with netfilter-persistent." \
+  "iptables 规则已持久化（netfilter-persistent）。" \
+  app.vaultwarden.warn.iptables_not_persisted \
+  "iptables rules are not persisted and may be lost after reboot. Recommended: apt-get install -y iptables-persistent && netfilter-persistent save" \
+  "iptables 规则未持久化（重启后失效）。建议：apt-get install -y iptables-persistent && netfilter-persistent save。" \
+  app.vaultwarden.warn.no_firewall \
+  "No active firewall detected. Allow ports 80/443 manually." \
+  "未检测到活跃防火墙，请手动放行 80/443 端口。" \
+  app.vaultwarden.step.auto_backup \
+  "Step 14  Configure automatic backup (daily 03:30)" \
+  "Step 14  配置自动备份（每日 03:30）" \
+  app.vaultwarden.success.auto_backup \
+  "Automatic backup configured (daily 03:30, retaining %s days)." \
+  "自动备份已配置（每日 03:30，保留 %s 天）。" \
+  app.vaultwarden.step.health \
+  "Step 15  Health check" \
+  "Step 15  健康检查" \
+  app.vaultwarden.success.local_health \
+  "Vaultwarden local endpoint responded normally (HTTP %s)." \
+  "Vaultwarden 本地接口响应正常（HTTP %s）。" \
+  app.vaultwarden.warn.local_health \
+  "Local health check returned %s. The service may still be initializing; try again later." \
+  "本地健康检查返回 %s，服务可能仍在初始化，稍后再试。" \
+  app.vaultwarden.warn.debug \
+  "Debug command: journalctl -u vaultwarden -n 30 --no-pager" \
+  "调试命令：journalctl -u vaultwarden -n 30 --no-pager" \
+  app.vaultwarden.summary.title \
+  "Vaultwarden deployment complete! (binary edition)" \
+  "Vaultwarden 部署完成！（二进制版）" \
+  app.vaultwarden.summary.url \
+  "Access URL" \
+  "访问地址" \
+  app.vaultwarden.summary.admin \
+  "Admin panel" \
+  "Admin 面板" \
+  app.vaultwarden.summary.lan \
+  "LAN test" \
+  "内网测试" \
+  app.vaultwarden.summary.version \
+  "Version" \
+  "版本" \
+  app.vaultwarden.summary.binary \
+  "Binary" \
+  "二进制" \
+  app.vaultwarden.summary.data \
+  "Data dir" \
+  "数据目录" \
+  app.vaultwarden.summary.env \
+  "Env file" \
+  "环境配置" \
+  app.vaultwarden.summary.mode600 \
+  "mode 600" \
+  "600 权限" \
+  app.vaultwarden.summary.log \
+  "Log" \
+  "日志" \
+  app.vaultwarden.summary.backup \
+  "Backup dir" \
+  "备份目录" \
+  app.vaultwarden.summary.token_warning \
+  "Admin plaintext token was written to a temporary file (root-readable only)" \
+  "Admin 明文 Token 已写入临时文件（仅 root 可读）" \
+  app.vaultwarden.summary.view_command \
+  "View command:" \
+  "查看命令：" \
+  app.vaultwarden.summary.remove_command \
+  "Remove it immediately after viewing:" \
+  "查看后请立即运行：" \
+  app.vaultwarden.summary.first_steps \
+  "First-use steps:" \
+  "首次使用步骤：" \
+  app.vaultwarden.summary.step0 \
+  "0. View and save the Admin Token (delete the temporary file immediately after viewing!)" \
+  "0. 查看并保存 Admin Token（查看后立即删除临时文件！）" \
+  app.vaultwarden.summary.step1 \
+  "1. Open in a browser and create your account" \
+  "1. 用浏览器访问，创建你的账号" \
+  app.vaultwarden.summary.create_account \
+  "%s  ->  click Create account" \
+  "%s  →  点击「创建账号」" \
+  app.vaultwarden.summary.step2 \
+  "2. After setup, disable public registration (choose one method)" \
+  "2. 完成后关闭公开注册（两种方式二选一）" \
+  app.vaultwarden.summary.method_admin \
+  "Method A - Admin panel: %s/admin -> General settings" \
+  "方式 A - Admin 面板：%s/admin → General settings" \
+  app.vaultwarden.summary.method_config \
+  "Method B - Edit config file: sed -i 's/SIGNUPS_ALLOWED=true/SIGNUPS_ALLOWED=false/' %s" \
+  "方式 B - 编辑配置文件：sed -i 's/SIGNUPS_ALLOWED=true/SIGNUPS_ALLOWED=false/' %s" \
+  app.vaultwarden.summary.then_restart \
+  "Then: systemctl restart vaultwarden" \
+  "然后：systemctl restart vaultwarden" \
+  app.vaultwarden.summary.step3 \
+  "3. Configure Bitwarden clients (browser extension / app) for self-hosting" \
+  "3. 配置 Bitwarden 客户端（浏览器扩展 / App）连接自托管" \
+  app.vaultwarden.summary.self_hosted \
+  "Login page -> choose Self-hosted -> server URL: %s" \
+  "登录页 → 选择「自托管」→ 服务器地址填：%s" \
+  app.vaultwarden.summary.step4 \
+  "4. Common management commands" \
+  "4. 常用管理命令" \
+  app.vaultwarden.summary.cmd_status \
+  "show service status" \
+  "查看服务状态" \
+  app.vaultwarden.summary.cmd_logs \
+  "follow logs" \
+  "实时日志" \
+  app.vaultwarden.summary.cmd_restart \
+  "restart service" \
+  "重启服务" \
+  app.vaultwarden.summary.cmd_backup \
+  "create a backup now" \
+  "立即备份" \
+  app.vaultwarden.summary.important \
+  "[important]" \
+  "[重要]" \
+  app.vaultwarden.summary.token_cleanup \
+  "Delete the Admin Token temporary file immediately after viewing it to avoid leaving it on disk!" \
+  "Admin Token 临时文件查看后请立即删除，避免遗留在磁盘！"
 
 APP_DESCRIPTION="$(t app.vaultwarden.description)"
 APP_IMPL_SCRIPT="impl/install_vaultwarden.sh"
@@ -517,7 +935,7 @@ save_config() {
   write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
 }
 get_installed_version() {
-  [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || echo "未安装"
+  [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed
 }
 get_latest_webvault_ver() {
   local json tag
@@ -540,50 +958,50 @@ get_latest_webvault_ver() {
 extract_binary() {
   local workdir="$1"
   local platform="$2"
-  info "下载 docker-image-extract 工具..."
+  info "$(t app.vaultwarden.info.download_extract_tool)"
   curl -fsSL --max-time 30 -o "${workdir}/docker-image-extract" "$EXTRACT_TOOL_URL" \
-    || error "无法下载 docker-image-extract，请检查网络连接"
-  [[ -s "${workdir}/docker-image-extract" ]] || error "docker-image-extract 下载后为空文件"
+    || error "$(t app.vaultwarden.error.extract_tool_download)"
+  [[ -s "${workdir}/docker-image-extract" ]] || error "$(t app.vaultwarden.error.extract_tool_empty)"
   head -1 "${workdir}/docker-image-extract" | grep -q '^#!' \
-    || error "docker-image-extract 不是合法的 shell 脚本（shebang 缺失），可能下载损坏"
+    || error "$(t app.vaultwarden.error.extract_tool_shebang)"
   local _die_size
   _die_size=$(wc -c < "${workdir}/docker-image-extract")
   [[ "$_die_size" -lt 4096 ]] \
-    && error "docker-image-extract 文件过小（${_die_size} 字节），疑似下载不完整或被篡改"
+    && error "$(t app.vaultwarden.error.extract_tool_small "$_die_size")"
   grep -q 'registry' "${workdir}/docker-image-extract" \
-    || error "docker-image-extract 内容异常（缺少 registry 关键字），疑似被篡改，已中止"
+    || error "$(t app.vaultwarden.error.extract_tool_content)"
   if [[ -n "${EXTRACT_TOOL_SHA256:-}" ]]; then
     local _actual_sha256
     _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}')
     if [[ "$_actual_sha256" != "$EXTRACT_TOOL_SHA256" ]]; then
-      error "docker-image-extract SHA256 校验失败！\n  期望: ${EXTRACT_TOOL_SHA256}\n  实际: ${_actual_sha256}\n  请更新脚本中的 EXTRACT_TOOL_SHA256 或检查网络安全性"
+      error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "$_actual_sha256")"
     fi
-    success "docker-image-extract SHA256 校验通过"
+    success "$(t app.vaultwarden.success.extract_tool_sha)"
   else
-    warn "未配置 EXTRACT_TOOL_SHA256，跳过 checksum 校验（建议为生产环境配置此项）"
+    warn "$(t app.vaultwarden.warn.extract_tool_sha_missing)"
   fi
   chmod +x "${workdir}/docker-image-extract"
-  info "从镜像仓库提取 ${VW_IMAGE_REPO}:${VW_IMAGE_TAG}（平台：${platform}）..."
-  info "（首次下载需要几分钟，请耐心等待）"
+  info "$(t app.vaultwarden.info.extract_image "$VW_IMAGE_REPO" "$VW_IMAGE_TAG" "$platform")"
+  info "$(t app.vaultwarden.info.first_download_wait)"
   local out_dir="${workdir}/image_output"
   mkdir -p "$out_dir"
   bash "${workdir}/docker-image-extract" \
     -p "$platform" \
     -o "$out_dir" \
     "${VW_IMAGE_REPO}:${VW_IMAGE_TAG}" >&2 \
-    || error "镜像提取失败，请检查网络或稍后重试"
+    || error "$(t app.vaultwarden.error.image_extract)"
   local bin_path
   bin_path=$(find "$out_dir" -type f -name "vaultwarden" | head -1)
-  [[ -z "$bin_path" ]] && error "未在镜像中找到 vaultwarden 二进制"
+  [[ -z "$bin_path" ]] && error "$(t app.vaultwarden.error.binary_missing_image)"
   local _bin_size
   _bin_size=$(wc -c < "$bin_path")
   [[ "$_bin_size" -lt 1048576 ]] \
-    && error "提取的 vaultwarden 二进制过小（${_bin_size} 字节），疑似不完整或被篡改"
+    && error "$(t app.vaultwarden.error.binary_too_small "$_bin_size")"
   if ! head -c 4 "$bin_path" | grep -qP '^\x7fELF' 2>/dev/null; then
     local _magic
     _magic=$(od -A n -t x1 -N 4 "$bin_path" 2>/dev/null | tr -d ' \n' || true)
     [[ "$_magic" != "7f454c46" ]] \
-      && error "提取的文件不是合法的 ELF 二进制（magic bytes 不匹配），疑似下载损坏"
+      && error "$(t app.vaultwarden.error.binary_not_elf)"
   fi
   local _expected_em _actual_em
   case "$platform" in
@@ -595,7 +1013,7 @@ extract_binary() {
   if [[ -n "$_expected_em" ]]; then
     _actual_em=$(od -A n -t x1 -j 18 -N 2 "$bin_path" 2>/dev/null | tr -d ' \n' || true)
     if [[ "$_actual_em" != "$_expected_em" ]]; then
-      error "ELF e_machine 不匹配！期望 ${_expected_em}（${platform}），实际 ${_actual_em}。\n  镜像平台参数可能有误，或镜像 manifest 解析异常，请重试"
+      error "$(t app.vaultwarden.error.elf_machine "$_expected_em" "$platform" "$_actual_em")"
     fi
   fi
   chmod +x "$bin_path"
@@ -611,19 +1029,19 @@ do_install() {
   check_connectivity
   local _c
   if [[ -x "$VW_BIN" ]]; then
-    warn "检测到 Vaultwarden 已安装（${VW_BIN}），版本：$(get_installed_version)"
-    warn "重新安装会覆盖现有二进制和配置（数据目录保留）。"
-    prompt "是否强制重新安装？（y/N）："
-    read -r _c; [[ "${_c,,}" != "y" ]] && { info "已取消，如需更新请使用 update 命令"; exit 0; }
+    warn "$(t app.vaultwarden.warn.installed "$VW_BIN" "$(get_installed_version)")"
+    warn "$(t app.vaultwarden.warn.reinstall)"
+    prompt "$(t app.vaultwarden.prompt.force_reinstall)"
+    read -r _c; [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
   fi
-  step "配置向导"
+  step "$(t app.vaultwarden.step.wizard)"
   if [[ "$VW_DOMAIN" == "vault.example.com" ]]; then
     while true; do
-      prompt "请输入你的域名（如 vault.yourdomain.com）："
+      prompt "$(t app.vaultwarden.prompt.domain)"
       local _input; read -r _input
-      [[ -z "$_input" ]] && { warn "域名不能为空，请重新输入"; continue; }
+      [[ -z "$_input" ]] && { warn "$(t app.vaultwarden.warn.domain_empty)"; continue; }
       if [[ ! "$_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
-        warn "域名格式无效（${_input}），请重新输入"
+        warn "$(t app.vaultwarden.warn.domain_invalid "$_input")"
         continue
       fi
       VW_DOMAIN="$_input"
@@ -632,11 +1050,11 @@ do_install() {
   fi
   if [[ "$ENABLE_HTTPS" == "true" ]] && [[ -z "$CERTBOT_EMAIL" ]]; then
     while true; do
-      prompt "请输入 Let's Encrypt 通知邮箱："
+      prompt "$(t app.vaultwarden.prompt.email)"
       local _email; read -r _email
-      [[ -z "$_email" ]] && { warn "邮箱不能为空，请重新输入"; continue; }
+      [[ -z "$_email" ]] && { warn "$(t app.vaultwarden.warn.email_empty)"; continue; }
       if [[ ! "$_email" =~ ^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$ ]]; then
-        warn "邮箱格式无效（${_email}），请重新输入"
+        warn "$(t app.vaultwarden.warn.email_invalid "$_email")"
         continue
       fi
       CERTBOT_EMAIL="$_email"
@@ -645,43 +1063,43 @@ do_install() {
   fi
   echo ""
   if ! [[ "$VW_PORT" =~ ^[0-9]+$ ]] || [[ "$VW_PORT" -lt 1 || "$VW_PORT" -gt 65535 ]]; then
-    error "VW_PORT 无效：'${VW_PORT}'，请在脚本顶部设置 1-65535 之间的端口号"
+    error "$(t app.vaultwarden.error.port_invalid "$VW_PORT")"
   fi
-  info "域名     : ${VW_DOMAIN}"
-  info "监听端口 : ${VW_PORT}（仅本机，经 Nginx 反代）"
-  info "二进制   : ${VW_BIN}"
-  info "数据目录 : ${VW_DATA_DIR}"
+  info "$(t app.vaultwarden.info.domain "$VW_DOMAIN")"
+  info "$(t app.vaultwarden.info.listen_port "$VW_PORT")"
+  info "$(t app.vaultwarden.info.binary "$VW_BIN")"
+  info "$(t app.vaultwarden.info.data_dir "$VW_DATA_DIR")"
   info "Web Vault: ${VW_WEB_DIR}"
-  info "运行用户 : ${VW_USER}"
+  info "$(t app.vaultwarden.info.run_user "$VW_USER")"
   info "HTTPS    : ${ENABLE_HTTPS}"
   echo ""
-  prompt "配置是否正确？（y/N）："
-  read -r _c; [[ "${_c,,}" != "y" ]] && { info "已取消，请修改脚本顶部配置项后重试"; exit 0; }
-  step "Step 1  安装系统依赖"
+  prompt "$(t app.vaultwarden.prompt.confirm_config)"
+  read -r _c; [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
+  step "$(t app.vaultwarden.step.deps)"
   DEBIAN_FRONTEND=noninteractive apt-get update -qq \
-    || warn "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）"
+    || warn "$(t app.vaultwarden.warn.apt_update)"
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \
     sqlite3 argon2 openssl fail2ban \
     logrotate
-  success "系统依赖安装完成"
-  step "Step 2  创建系统用户与目录"
+  success "$(t app.vaultwarden.success.deps)"
+  step "$(t app.vaultwarden.step.user_dirs)"
   if ! id "$VW_USER" &>/dev/null; then
     useradd --system --no-create-home \
       --home-dir "$VW_DATA_DIR" \
       --shell /usr/sbin/nologin \
       --comment "Vaultwarden Service Account" \
       "$VW_USER"
-    success "系统用户 ${VW_USER} 已创建"
+    success "$(t app.vaultwarden.success.user_created "$VW_USER")"
   else
-    warn "用户 ${VW_USER} 已存在，跳过"
+    warn "$(t app.vaultwarden.warn.user_exists "$VW_USER")"
   fi
   mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"
   chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"
   chmod 750 "$VW_DATA_DIR"
-  success "目录已创建并设置权限"
-  step "Step 3  提取 Vaultwarden 静态二进制"
+  success "$(t app.vaultwarden.success.dirs)"
+  step "$(t app.vaultwarden.step.extract_binary)"
   local PLATFORM
   case $ARCH in
     x86_64)  PLATFORM="linux/amd64"  ;;
@@ -698,53 +1116,53 @@ do_install() {
   local BIN_PATH EXTRACTED_WEBVAULT_PATH VW_VER
   BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
-  success "二进制提取成功：${BIN_PATH}"
+  success "$(t app.vaultwarden.success.binary_extracted "$BIN_PATH")"
   mkdir -p "$VW_BIN_DIR"
   install -m 755 -o root -g root "$BIN_PATH" "$VW_BIN"
-  success "二进制已安装：${VW_BIN}"
+  success "$(t app.vaultwarden.success.binary_installed "$VW_BIN")"
   VW_VER=$("$VW_BIN" --version 2>/dev/null || echo "unknown")
-  info "Vaultwarden 版本：${VW_VER}"
-  step "Step 4  安装 Web Vault"
+  info "$(t app.vaultwarden.info.version "$VW_VER")"
+  step "$(t app.vaultwarden.step.web_vault)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
-    info "使用镜像中提取的 Web Vault（与二进制版本一致）..."
+    info "$(t app.vaultwarden.info.web_vault_image)"
     rm -rf "$VW_WEB_DIR"
     cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR"
-    success "Web Vault 已安装（来自 Alpine 镜像）"
+    success "$(t app.vaultwarden.success.web_vault_image)"
   else
-    info "从 GitHub 下载最新 Web Vault..."
+    info "$(t app.vaultwarden.info.web_vault_github)"
     local _wv_ver="${WEB_VAULT_VER:-}"
     if [[ -z "$_wv_ver" ]]; then
       _wv_ver=$(get_latest_webvault_ver)
-      [[ -z "$_wv_ver" ]] && error "无法获取 Web Vault 版本，请检查网络"
+      [[ -z "$_wv_ver" ]] && error "$(t app.vaultwarden.error.web_vault_version)"
     fi
-    info "Web Vault 版本：v${_wv_ver}"
+    info "$(t app.vaultwarden.info.web_vault_version "$_wv_ver")"
     local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_wv_ver}/bw_web_v${_wv_ver}.tar.gz"
-    info "下载：${WV_URL}"
+    info "$(t app.vaultwarden.info.download "$WV_URL")"
     wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
-      || error "Web Vault 下载失败"
+      || error "$(t app.vaultwarden.error.web_vault_download)"
     rm -rf "$VW_WEB_DIR"
     mkdir -p "$(dirname "$VW_WEB_DIR")"
     tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")"
-    success "Web Vault v${_wv_ver} 已安装"
+    success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
   fi
   chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"
   chmod -R 750 "$VW_WEB_DIR"
-  info "Web Vault 位置：${VW_WEB_DIR}"
-  step "Step 5  生成 Admin Token（Argon2id 哈希）"
+  info "$(t app.vaultwarden.info.web_vault_path "$VW_WEB_DIR")"
+  step "$(t app.vaultwarden.step.admin_token)"
   local ADMIN_PLAIN ADMIN_HASH SALT
   ADMIN_PLAIN=$(openssl rand -hex 24)
-  info "使用 vaultwarden hash --preset owasp 生成哈希..."
+  info "$(t app.vaultwarden.info.hash_token)"
   ADMIN_HASH=$(printf '%s' "$ADMIN_PLAIN" | "$VW_BIN" hash --preset owasp 2>/dev/null \
     | grep '^\$argon2' | head -1 || true)
   if [[ -z "$ADMIN_HASH" ]]; then
-    warn "vaultwarden hash 输出解析失败，回退至 argon2 CLI（OWASP preset）..."
+    warn "$(t app.vaultwarden.warn.hash_parse)"
     SALT=$(openssl rand -base64 32)
     ADMIN_HASH=$(printf '%s' "$ADMIN_PLAIN" | \
       argon2 "$SALT" -e -id -k 19456 -t 2 -p 1 -l 32 2>/dev/null || true)
-    [[ -z "$ADMIN_HASH" ]] && error "argon2 CLI 也失败，无法生成安全的 Admin Token。\n  请确认已安装 argon2：apt-get install -y argon2\n  修复后重新运行 install。（使用明文 Token 在新版 Vaultwarden 中已废弃且不安全，拒绝继续）"
+    [[ -z "$ADMIN_HASH" ]] && error "$(t app.vaultwarden.error.admin_token_hash)"
   fi
-  success "Admin Token 生成完成"
-  step "Step 6  写入 ${VW_ENV_FILE}"
+  success "$(t app.vaultwarden.success.admin_token)"
+  step "$(t app.vaultwarden.step.env_file "$VW_ENV_FILE")"
   cat > "$VW_ENV_FILE" << ENV
 # Vaultwarden environment file.
 # This file contains secrets; keep mode 600 and do not commit it.
@@ -807,8 +1225,8 @@ USER_ATTACHMENT_LIMIT=102400
 ENV
   chmod 600 "$VW_ENV_FILE"
   chown root:root "$VW_ENV_FILE"
-  success "环境配置文件已写入：${VW_ENV_FILE}（权限 600）"
-  step "Step 7  创建 systemd 服务"
+  success "$(t app.vaultwarden.success.env_file "$VW_ENV_FILE")"
+  step "$(t app.vaultwarden.step.systemd)"
   cat > /etc/systemd/system/vaultwarden.service << UNIT
 [Unit]
 Description=Vaultwarden Password Manager (Bitwarden-compatible)
@@ -858,28 +1276,28 @@ WantedBy=multi-user.target
 UNIT
   systemctl daemon-reload
   systemctl enable vaultwarden --quiet
-  success "systemd 服务已创建并设为开机自启"
-  step "Step 8  启动 Vaultwarden 服务"
+  success "$(t app.vaultwarden.success.systemd)"
+  step "$(t app.vaultwarden.step.start_service)"
   if ss -ltn 2>/dev/null | grep -qE ":${VW_PORT}[[:space:]]"; then
     local _port_owner
-    _port_owner=$(ss -ltnp 2>/dev/null | grep ":${VW_PORT}" | awk '{print $NF}' | head -1 || echo "未知进程")
-    warn "端口 ${VW_PORT} 已被占用（${_port_owner}）"
-    warn "若不是旧的 vaultwarden 进程，请先释放端口再安装，否则服务将无法启动"
+    _port_owner=$(ss -ltnp 2>/dev/null | grep ":${VW_PORT}" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
+    warn "$(t app.vaultwarden.warn.port_used "$VW_PORT" "$_port_owner")"
+    warn "$(t app.vaultwarden.warn.port_hint)"
   fi
   systemctl start vaultwarden
   if wait_for_service vaultwarden 20; then
-    success "Vaultwarden 服务启动成功"
+    success "$(t app.vaultwarden.success.service_started)"
     systemctl status vaultwarden --no-pager -l | head -12 | sed 's/^/  /'
   else
-    warn "服务在 20 秒内未能正常启动，正在清理已安装文件..."
+    warn "$(t app.vaultwarden.warn.service_cleanup)"
     systemctl stop    vaultwarden 2>/dev/null || true
     systemctl disable vaultwarden 2>/dev/null || true
     rm -f /etc/systemd/system/vaultwarden.service
     systemctl daemon-reload 2>/dev/null || true
     rm -f "$VW_BIN"
-    error "安装失败：服务无法启动，已回滚二进制与 systemd 单元。\n  调试命令：journalctl -u vaultwarden -n 30 --no-pager\n  （数据目录、env 文件、Nginx 配置已保留，修复原因后重新 install）"
+    error "$(t app.vaultwarden.error.install_failed_start)"
   fi
-  step "Step 9  配置 Nginx 反向代理（HTTP-only，HTTPS 由 Step 10 certbot 补全）"
+  step "$(t app.vaultwarden.step.nginx_http)"
   local NGINX_CONF="/etc/nginx/sites-available/vaultwarden"
   mkdir -p /var/www/certbot
   cat > "$NGINX_CONF" << NGINX
@@ -910,39 +1328,39 @@ server {
 NGINX
   ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden
   if [[ -L /etc/nginx/sites-enabled/default ]]; then
-    warn "已移除 Nginx 默认站点（/etc/nginx/sites-enabled/default）。如有其他站点依赖它，请手动恢复。"
+    warn "$(t app.vaultwarden.warn.default_site_removed)"
     rm -f /etc/nginx/sites-enabled/default
   fi
-  nginx -t || error "Nginx 配置验证失败（HTTP 阶段）"
-  success "Nginx HTTP 配置完成"
-  step "Step 10  申请 HTTPS 证书"
+  nginx -t || error "$(t app.vaultwarden.error.nginx_http_test)"
+  success "$(t app.vaultwarden.success.nginx_http)"
+  step "$(t app.vaultwarden.step.certbot)"
   systemctl enable nginx --quiet
   systemctl restart nginx
   if ! wait_for_service nginx 10; then
-    error "Nginx 未能在 10 秒内成功启动，请检查配置：nginx -t\n  journalctl -u nginx -n 20 --no-pager"
+    error "$(t app.vaultwarden.error.nginx_start)"
   fi
-  success "Nginx 已就绪，继续申请证书"
+  success "$(t app.vaultwarden.success.nginx_ready)"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then
-    info "申请证书（${VW_DOMAIN} / ${CERTBOT_EMAIL}）..."
+    info "$(t app.vaultwarden.info.request_cert "$VW_DOMAIN" "$CERTBOT_EMAIL")"
     if certbot certonly --webroot \
       -w /var/www/certbot \
       -d "$VW_DOMAIN" \
       --email "$CERTBOT_EMAIL" \
       --agree-tos \
       --non-interactive 2>&1; then
-      success "Let's Encrypt 证书申请成功"
+      success "$(t app.vaultwarden.success.certbot)"
     else
-      warn "Certbot 证书申请失败（见上方输出）"
-      warn "请解决 DNS/防火墙问题后手动运行：certbot certonly --webroot -w /var/www/certbot -d ${VW_DOMAIN} --email ${CERTBOT_EMAIL} --agree-tos --non-interactive"
+      warn "$(t app.vaultwarden.warn.certbot_failed)"
+      warn "$(t app.vaultwarden.warn.certbot_manual "$VW_DOMAIN" "$CERTBOT_EMAIL")"
     fi
     if systemctl list-timers certbot* 2>/dev/null | grep -q certbot; then
-      success "Certbot 自动续签定时器已就绪"
+      success "$(t app.vaultwarden.success.certbot_timer)"
     else
       if crontab -l 2>/dev/null | grep -q "certbot renew"; then
-        success "Certbot 自动续签 cron 条目已存在，跳过"
+        success "$(t app.vaultwarden.success.certbot_cron_exists)"
       else
         (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -
-        success "Certbot 自动续签（每天 02:30）已加入 crontab"
+        success "$(t app.vaultwarden.success.certbot_cron)"
       fi
     fi
     local CERT_PATH_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
@@ -951,7 +1369,7 @@ NGINX
       local _nginx_ver _http2_directive _listen_https
       _nginx_ver=$(nginx -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "0.0.0")
       if [[ "$_nginx_ver" == "0.0.0" ]]; then
-        warn "无法检测 Nginx 版本，默认使用旧版 http2 语法（listen 行附加）"
+        warn "$(t app.vaultwarden.warn.nginx_version)"
       fi
       if awk -v v="$_nginx_ver" 'BEGIN{
           n=split(v,a,".");
@@ -1071,15 +1489,15 @@ NGINX2
 NGINX2BODY
       } >> "$NGINX_CONF"
       nginx -t && systemctl reload nginx \
-        && success "Nginx HTTPS 完整配置已生效" \
-        || warn "Nginx HTTPS 配置测试失败，请检查：nginx -t"
+        && success "$(t app.vaultwarden.success.nginx_https)" \
+        || warn "$(t app.vaultwarden.warn.nginx_https_test)"
     else
-      warn "证书文件未找到，跳过 HTTPS 配置写入，当前仍使用 HTTP 模式"
+      warn "$(t app.vaultwarden.warn.cert_missing)"
     fi
   else
-    warn "跳过 HTTPS 配置（Vaultwarden Web Crypto API 需要 HTTPS！）"
+    warn "$(t app.vaultwarden.warn.https_skipped)"
   fi
-  step "Step 11  配置 Fail2Ban 防暴力破解"
+  step "$(t app.vaultwarden.step.fail2ban)"
   cat > /etc/fail2ban/filter.d/vaultwarden.conf << F2B
 [INCLUDES]
 before = common.conf
@@ -1118,8 +1536,8 @@ findtime = 86400
 JAIL
   systemctl enable fail2ban --quiet
   systemctl restart fail2ban
-  success "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）"
-  step "Step 12  配置日志轮转"
+  success "$(t app.vaultwarden.success.fail2ban)"
+  step "$(t app.vaultwarden.step.logrotate)"
   cat > /etc/logrotate.d/vaultwarden << LOGR
 ${VW_LOG_FILE} {
     daily
@@ -1133,32 +1551,32 @@ ${VW_LOG_FILE} {
     copytruncate
 }
 LOGR
-  success "日志轮转已配置（每日轮转，保留 14 天，自动压缩）"
-  step "Step 13  配置防火墙"
+  success "$(t app.vaultwarden.success.logrotate)"
+  step "$(t app.vaultwarden.step.firewall)"
   local FW_DONE=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    ufw allow "Nginx Full" >/dev/null 2>&1 && success "ufw 已放行 HTTP/HTTPS" && FW_DONE=true
+    ufw allow "Nginx Full" >/dev/null 2>&1 && success "$(t app.vaultwarden.success.ufw)" && FW_DONE=true
   fi
   if ! $FW_DONE && command -v iptables &>/dev/null; then
     for P in 80 443; do
       iptables -C INPUT -p tcp --dport "$P" -j ACCEPT 2>/dev/null \
         || iptables -A INPUT -p tcp --dport "$P" -j ACCEPT
     done
-    success "iptables 已放行 80/443" && FW_DONE=true
+    success "$(t app.vaultwarden.success.iptables)" && FW_DONE=true
     if command -v netfilter-persistent &>/dev/null; then
-      netfilter-persistent save 2>/dev/null && success "iptables 规则已持久化（netfilter-persistent）" || true
+      netfilter-persistent save 2>/dev/null && success "$(t app.vaultwarden.success.iptables_saved)" || true
     else
-      warn "iptables 规则未持久化（重启后失效）。建议：apt-get install -y iptables-persistent && netfilter-persistent save"
+      warn "$(t app.vaultwarden.warn.iptables_not_persisted)"
     fi
   fi
-  $FW_DONE || warn "未检测到活跃防火墙，请手动放行 80/443 端口"
-  step "Step 14  配置自动备份（每日 03:30）"
+  $FW_DONE || warn "$(t app.vaultwarden.warn.no_firewall)"
+  step "$(t app.vaultwarden.step.auto_backup)"
   _write_backup_script
   echo "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" \
     > /etc/cron.d/vaultwarden-backup
   chmod 644 /etc/cron.d/vaultwarden-backup
-  success "自动备份已配置（每日 03:30，保留 ${BACKUP_KEEP_DAYS} 天）"
-  step "Step 15  健康检查"
+  success "$(t app.vaultwarden.success.auto_backup "$BACKUP_KEEP_DAYS")"
+  step "$(t app.vaultwarden.step.health)"
   save_config
   local _hc_elapsed=0
   local HTTP_CODE
@@ -1168,10 +1586,10 @@ LOGR
     [[ $_hc_elapsed -ge 10 ]] && break
   done
   if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "302" ]]; then
-    success "Vaultwarden 本地接口响应正常（HTTP ${HTTP_CODE}）"
+    success "$(t app.vaultwarden.success.local_health "$HTTP_CODE")"
   else
-    warn "本地健康检查返回 ${HTTP_CODE}，服务可能仍在初始化，稍后再试"
-    warn "调试命令：journalctl -u vaultwarden -n 30 --no-pager"
+    warn "$(t app.vaultwarden.warn.local_health "$HTTP_CODE")"
+    warn "$(t app.vaultwarden.warn.debug)"
   fi
   local INTERNAL_IP PROTO INSTALLED_VER
   INTERNAL_IP=$(hostname -I | awk '{print $1}')
@@ -1184,49 +1602,49 @@ LOGR
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔═══════════════════════════════════════════════════════════════╗"
-  echo "  ║             🎉  Vaultwarden 部署完成！（二进制版）            ║"
+  echo "  ║             $(t app.vaultwarden.summary.title)            ║"
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  访问地址    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
-  echo -e "  ║  Admin 面板  ${CYAN}${PROTO}://${VW_DOMAIN}/admin${GREEN}"
-  echo -e "  ║  内网测试    ${CYAN}http://${INTERNAL_IP}:${VW_PORT}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.url)    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.admin)  ${CYAN}${PROTO}://${VW_DOMAIN}/admin${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.lan)    ${CYAN}http://${INTERNAL_IP}:${VW_PORT}${GREEN}"
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  版本        ${YELLOW}${INSTALLED_VER}${GREEN}"
-  echo -e "  ║  二进制      ${YELLOW}${VW_BIN}${GREEN}"
-  echo -e "  ║  数据目录    ${YELLOW}${VW_DATA_DIR}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.version)        ${YELLOW}${INSTALLED_VER}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.binary)      ${YELLOW}${VW_BIN}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.data)    ${YELLOW}${VW_DATA_DIR}${GREEN}"
   echo -e "  ║  Web Vault   ${YELLOW}${VW_WEB_DIR}${GREEN}"
-  echo -e "  ║  环境配置    ${YELLOW}${VW_ENV_FILE}${GREEN}  (600 权限)"
-  echo -e "  ║  日志        ${YELLOW}${VW_LOG_FILE}${GREEN}"
-  echo -e "  ║  备份目录    ${YELLOW}${VW_BACKUP_DIR}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.env)    ${YELLOW}${VW_ENV_FILE}${GREEN}  ($(t app.vaultwarden.summary.mode600))"
+  echo -e "  ║  $(t app.vaultwarden.summary.log)        ${YELLOW}${VW_LOG_FILE}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.backup)    ${YELLOW}${VW_BACKUP_DIR}${GREEN}"
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${RED}${BOLD}⚠  Admin 明文 Token 已写入临时文件（仅 root 可读）${GREEN}         ║"
-  echo -e "  ║  查看命令：${YELLOW}cat ${_token_tmp}${GREEN}"
-  echo -e "  ║  查看后请立即运行：${YELLOW}rm -f ${_token_tmp}${GREEN}"
+  echo -e "  ║  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning)${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.view_command) ${YELLOW}cat ${_token_tmp}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.remove_command) ${YELLOW}rm -f ${_token_tmp}${GREEN}"
   echo "  ╚═══════════════════════════════════════════════════════════════╝"
   echo -e "${NC}"
-  echo -e "  ${BOLD}⚡  首次使用步骤：${NC}"
+  echo -e "  ${BOLD}$(t app.vaultwarden.summary.first_steps)${NC}"
   echo ""
-  echo -e "  ${CYAN}# 0. 查看并保存 Admin Token（查看后立即删除临时文件！）${NC}"
+  echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step0)${NC}"
   echo -e "     cat ${_token_tmp}"
   echo -e "     rm -f ${_token_tmp}"
   echo ""
-  echo -e "  ${CYAN}# 1. 用浏览器访问，创建你的账号${NC}"
-  echo -e "     ${PROTO}://${VW_DOMAIN}  →  点击「创建账号」"
+  echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step1)${NC}"
+  echo -e "     $(t app.vaultwarden.summary.create_account "${PROTO}://${VW_DOMAIN}")"
   echo ""
-  echo -e "  ${CYAN}# 2. 完成后关闭公开注册（两种方式二选一）${NC}"
-  echo -e "     方式 A - Admin 面板：${PROTO}://${VW_DOMAIN}/admin → General settings"
-  echo -e "     方式 B - 编辑配置文件：sed -i 's/SIGNUPS_ALLOWED=true/SIGNUPS_ALLOWED=false/' ${VW_ENV_FILE}"
-  echo -e "              然后：systemctl restart vaultwarden"
+  echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step2)${NC}"
+  echo -e "     $(t app.vaultwarden.summary.method_admin "${PROTO}://${VW_DOMAIN}")"
+  echo -e "     $(t app.vaultwarden.summary.method_config "$VW_ENV_FILE")"
+  echo -e "              $(t app.vaultwarden.summary.then_restart)"
   echo ""
-  echo -e "  ${CYAN}# 3. 配置 Bitwarden 客户端（浏览器扩展 / App）连接自托管${NC}"
-  echo -e "     登录页 → 选择「自托管」→ 服务器地址填：${PROTO}://${VW_DOMAIN}"
+  echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step3)${NC}"
+  echo -e "     $(t app.vaultwarden.summary.self_hosted "${PROTO}://${VW_DOMAIN}")"
   echo ""
-  echo -e "  ${CYAN}# 4. 常用管理命令${NC}"
-  echo -e "     systemctl status vaultwarden          # 查看服务状态"
-  echo -e "     journalctl -u vaultwarden -f          # 实时日志"
-  echo -e "     systemctl restart vaultwarden         # 重启服务"
-  echo -e "     vaultwarden-backup                    # 立即备份"
+  echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step4)${NC}"
+  echo -e "     systemctl status vaultwarden          # $(t app.vaultwarden.summary.cmd_status)"
+  echo -e "     journalctl -u vaultwarden -f          # $(t app.vaultwarden.summary.cmd_logs)"
+  echo -e "     systemctl restart vaultwarden         # $(t app.vaultwarden.summary.cmd_restart)"
+  echo -e "     vaultwarden-backup                    # $(t app.vaultwarden.summary.cmd_backup)"
   echo ""
-  echo -e "  ${YELLOW}${BOLD}[重要]${NC} Admin Token 临时文件查看后请立即删除，避免遗留在磁盘！"
+  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup)"
   echo ""
 }
 do_update() {
