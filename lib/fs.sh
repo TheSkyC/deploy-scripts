@@ -12,7 +12,22 @@ require_command() {
 
 is_safe_path() {
   local path="${1:-}"
-  [[ -n "$path" && "$path" != "/" && "$path" != "." ]]
+  [[ -n "$path" ]] || return 1
+  [[ "$path" = /* ]] || return 1
+
+  while [[ "$path" != "/" && "$path" == */ ]]; do
+    path="${path%/}"
+  done
+
+  case "$path" in
+    /|.|..|*'/../'*|*'/..'|*'/./'*|*'/.')
+      return 1
+      ;;
+    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var|/var/lib|/var/log|/usr/local|/usr/local/bin)
+      return 1
+      ;;
+  esac
+  return 0
 }
 
 require_safe_path() {
@@ -24,6 +39,9 @@ require_safe_path() {
 safe_rm_dir() {
   local path="$1"
   local name="${2:-path}"
+  while [[ "$path" != "/" && "$path" == */ ]]; do
+    path="${path%/}"
+  done
   require_safe_path "$name" "$path"
-  [[ -d "$path" ]] && rm -rf "$path"
+  [[ -d "$path" ]] && rm -rf -- "$path"
 }

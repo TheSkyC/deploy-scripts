@@ -164,6 +164,29 @@ check_bundled_impl_cleanup() {
   rm -rf "$tmp_root"
 }
 
+check_safe_path_guard() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+
+    unsafe_paths=("" "/" "." ".." "relative/path" "/tmp" "/opt" "/var" "/var/log" "/var/lib" "/usr/local/bin" "/opt/app/../other")
+    for path in "${unsafe_paths[@]}"; do
+      if is_safe_path "$path"; then
+        echo "Expected unsafe path to be rejected: ${path:-empty}" >&2
+        exit 1
+      fi
+    done
+
+    safe_paths=("/opt/new-api" "/opt/new-api/data" "/var/lib/vaultwarden" "/var/log/vaultwarden" "/tmp/deploy-scripts.newapi.abc123")
+    for path in "${safe_paths[@]}"; do
+      if ! is_safe_path "$path"; then
+        echo "Expected safe path to be accepted: ${path}" >&2
+        exit 1
+      fi
+    done
+  '
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -176,6 +199,7 @@ main() {
   check_no_chinese_comments
   check_no_release_temp_files
   check_bundled_impl_cleanup
+  check_safe_path_guard
   echo "Verification passed"
 }
 
