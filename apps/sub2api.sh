@@ -230,7 +230,574 @@ i18n_register_many \
   "配置目录备份：%s（%s）。" \
   app.sub2api.warn.config_backup_failed \
   "Config directory backup failed (tar error)." \
-  "配置目录备份失败（tar 报错）。"
+  "配置目录备份失败（tar 报错）。" \
+  app.sub2api.summary.title \
+  "Sub2API deployment complete!" \
+  "Sub2API 部署完成！" \
+  app.sub2api.summary.version \
+  "Version" \
+  "版本" \
+  app.sub2api.summary.postgres_title \
+  "PostgreSQL account (Setup Wizard -> Database)" \
+  "PostgreSQL 账号（Setup Wizard → 数据库配置）" \
+  app.sub2api.summary.redis_title \
+  "Redis config (Setup Wizard -> Redis)" \
+  "Redis 配置（Setup Wizard → Redis）" \
+  app.sub2api.summary.host \
+  "Host" \
+  "主机" \
+  app.sub2api.summary.port \
+  "Port" \
+  "端口" \
+  app.sub2api.summary.username \
+  "Username" \
+  "用户名" \
+  app.sub2api.summary.password \
+  "Password" \
+  "密码" \
+  app.sub2api.summary.password_written \
+  "written to %s" \
+  "已写入 %s" \
+  app.sub2api.summary.database \
+  "Database" \
+  "数据库名" \
+  app.sub2api.summary.ssl_mode \
+  "SSL mode" \
+  "SSL 模式" \
+  app.sub2api.summary.ssl_disable \
+  "disable" \
+  "禁用" \
+  app.sub2api.summary.empty \
+  "(empty)" \
+  "（留空）" \
+  app.sub2api.summary.install_dir \
+  "Install dir" \
+  "安装目录" \
+  app.sub2api.summary.data_dir \
+  "Data dir" \
+  "数据目录" \
+  app.sub2api.summary.config_dir \
+  "Config dir" \
+  "配置目录" \
+  app.sub2api.summary.log_dir \
+  "Log dir" \
+  "日志目录" \
+  app.sub2api.summary.backup_dir \
+  "Backup dir" \
+  "备份目录" \
+  app.sub2api.summary.next_steps \
+  "Next steps:" \
+  "后续步骤：" \
+  app.sub2api.summary.next1 \
+  "Open the Setup Wizard and fill database / Redis settings from the table above." \
+  "打开 Setup Wizard，按上表填写数据库 / Redis 配置。" \
+  app.sub2api.summary.next2 \
+  "After the wizard is complete, the service will be ready and can be reached through Nginx." \
+  "完成向导后服务自动就绪，可通过 Nginx 域名访问。" \
+  app.sub2api.summary.next3 \
+  "The PostgreSQL password is saved to %s (chmod 600)." \
+  "PostgreSQL 密码已保存至 %s（chmod 600）。" \
+  app.sub2api.summary.management \
+  "Management commands:" \
+  "管理命令：" \
+  app.sub2api.summary.cmd_status \
+  "show runtime status" \
+  "查看运行状态" \
+  app.sub2api.summary.cmd_update \
+  "update to the latest version" \
+  "更新到最新版" \
+  app.sub2api.summary.cmd_backup \
+  "create a backup now" \
+  "立即备份数据" \
+  app.sub2api.summary.cmd_uninstall \
+  "uninstall the service" \
+  "卸载服务" \
+  app.sub2api.summary.systemd \
+  "systemd commands:" \
+  "systemd 命令：" \
+  app.sub2api.summary.systemd_status \
+  "show status" \
+  "查看状态" \
+  app.sub2api.summary.systemd_logs \
+  "follow logs" \
+  "实时日志" \
+  app.sub2api.summary.systemd_restart \
+  "restart service" \
+  "重启服务" \
+  app.sub2api.step.latest \
+  "Step 1  Get latest version" \
+  "Step 1  获取最新版本" \
+  app.sub2api.info.query_release \
+  "Querying the latest GitHub release..." \
+  "查询 GitHub 最新 Release..." \
+  app.sub2api.error.version_lookup \
+  "Failed to get the version. Check network connectivity and retry." \
+  "获取版本号失败，请检查网络后重试。" \
+  app.sub2api.success.latest_version \
+  "Latest version: %s" \
+  "最新版本：%s" \
+  app.sub2api.info.download_url \
+  "Download URL: %s" \
+  "下载地址：%s" \
+  app.sub2api.step.base_deps \
+  "Step 2  Install base dependencies (curl / gnupg / lsb-release)" \
+  "Step 2  安装基础依赖（curl / gnupg / lsb-release）" \
+  app.sub2api.step.postgres \
+  "Step 3  Install PostgreSQL 15+" \
+  "Step 3  安装 PostgreSQL 15+" \
+  app.sub2api.step.redis \
+  "Step 4  Install Redis 7+" \
+  "Step 4  安装 Redis 7+" \
+  app.sub2api.step.pg_account \
+  "Step 6  Configure PostgreSQL account" \
+  "Step 6  配置 PostgreSQL 账号" \
+  app.sub2api.step.user_dirs \
+  "Step 7  Create user and directories" \
+  "Step 7  创建用户与目录" \
+  app.sub2api.success.user_created \
+  "System user %s created (low privilege, no login shell)." \
+  "系统用户 %s 已创建（低权限，无登录 shell）。" \
+  app.sub2api.info.user_exists \
+  "User %s already exists; skipping creation." \
+  "用户 %s 已存在，跳过创建。" \
+  app.sub2api.success.dirs_created \
+  "Directories created." \
+  "目录创建完成。" \
+  app.sub2api.step.download_binary \
+  "Step 8  Download and verify Sub2API binary (arch: %s)" \
+  "Step 8  下载并校验 Sub2API 二进制（架构：%s）" \
+  app.sub2api.error.download_failed \
+  "Download failed. Check the network or confirm the release exists: https://github.com/%s/releases" \
+  "下载失败，请检查网络或前往 https://github.com/%s/releases 确认版本存在。" \
+  app.sub2api.warn.old_binary_backup \
+  "Old binary backed up -> %s" \
+  "已备份旧二进制 → %s" \
+  app.sub2api.success.binary_installed \
+  "Binary installed: %s" \
+  "二进制安装完成：%s" \
+  app.sub2api.step.systemd \
+  "Step 9  Configure systemd service" \
+  "Step 9  配置 systemd 服务" \
+  app.sub2api.success.systemd_unit \
+  "systemd service file written: /etc/systemd/system/%s.service" \
+  "systemd 服务文件已写入：/etc/systemd/system/%s.service" \
+  app.sub2api.step.nginx \
+  "Step 10  Install and configure Nginx reverse proxy" \
+  "Step 10  安装并配置 Nginx 反向代理" \
+  app.sub2api.step.firewall \
+  "Step 11  Configure firewall" \
+  "Step 11  配置防火墙" \
+  app.sub2api.step.logrotate \
+  "Step 12  Configure log rotation" \
+  "Step 12  配置日志轮转" \
+  app.sub2api.step.cron_backup \
+  "Step 13  Configure scheduled backup (daily 03:30)" \
+  "Step 13  配置定时备份（每日 03:30）" \
+  app.sub2api.success.cron_backup \
+  "Scheduled backup configured (daily 03:30, retaining %s days)." \
+  "定时备份已配置（每日 03:30，保留 %s 天）。" \
+  app.sub2api.step.start_service \
+  "Step 14  Start service" \
+  "Step 14  启动服务" \
+  app.sub2api.warn.port_used \
+  "Port %s is already in use (%s)." \
+  "端口 %s 已被占用（%s）。" \
+  app.sub2api.warn.port_hint \
+  "If this is not an old sub2api process, release the port first or the service cannot bind to it." \
+  "若不是旧的 sub2api 进程，请先释放端口，否则服务将无法绑定。" \
+  app.sub2api.status.unknown_process \
+  "unknown process" \
+  "未知进程" \
+  app.sub2api.success.service_started \
+  "Service started successfully." \
+  "服务启动成功。" \
+  app.sub2api.warn.service_failed_rollback \
+  "Service failed; rolling back installed files..." \
+  "服务已 failed，正在回滚已安装文件..." \
+  app.sub2api.error.install_failed_rollback \
+  "Installation failed because the service entered failed state. The binary and systemd unit were rolled back.\n  Debug: journalctl -u %s -n 30 --no-pager" \
+  "安装失败：服务进入 failed 状态，已回滚二进制与 systemd unit。\n  调试：journalctl -u %s -n 30 --no-pager" \
+  app.sub2api.warn.waiting_deps \
+  "The service may be waiting for database/Redis connectivity; continuing the install flow." \
+  "服务可能正在等待数据库/Redis 连接（属正常情况），继续安装流程。" \
+  app.sub2api.warn.setup_status_later \
+  "Verify service status again after completing the Setup Wizard." \
+  "请在 Setup Wizard 完成配置后再验证服务状态。" \
+  app.sub2api.step.health_save \
+  "Step 15  Health check and save config" \
+  "Step 15  健康检查 & 保存配置" \
+  app.sub2api.error.binary_missing_install \
+  "Sub2API binary is not installed (%s). Run install first." \
+  "未检测到已安装的 Sub2API 二进制（%s），请先执行 install。" \
+  app.sub2api.step.check_update \
+  "Check for updates" \
+  "检查更新" \
+  app.sub2api.error.latest_lookup \
+  "Failed to get the latest version. Check network connectivity and retry." \
+  "获取最新版本失败，请检查网络后重试。" \
+  app.sub2api.info.current_version \
+  "Current version (recorded): %s" \
+  "当前版本（记录）：%s" \
+  app.sub2api.info.github_latest \
+  "Latest GitHub version: %s" \
+  "GitHub 最新版本：%s" \
+  app.sub2api.success.already_latest \
+  "Already on the latest version (%s); no update needed." \
+  "已是最新版本（%s），无需更新。" \
+  app.sub2api.warn.update_failed_state \
+  "The service was already failed before update; this update will also reset the failed marker." \
+  "更新前服务处于 failed 状态，本次更新将同时重置故障标记。" \
+  app.sub2api.step.pre_update_backup \
+  "Back up data before update" \
+  "更新前备份数据" \
+  app.sub2api.warn.pre_update_backup \
+  "Pre-update backup failed; continuing the update." \
+  "更新前备份失败，继续执行更新。" \
+  app.sub2api.step.download_update \
+  "Download new version (%s -> %s)" \
+  "下载新版本（%s → %s）" \
+  app.sub2api.error.update_download \
+  "Download failed; update aborted and the current version is unchanged." \
+  "下载失败，更新中止（当前版本未受影响）。" \
+  app.sub2api.step.replace_restart \
+  "Replace binary and restart service" \
+  "替换二进制并重启服务" \
+  app.sub2api.info.stopping_service \
+  "Stopping service..." \
+  "停止服务..." \
+  app.sub2api.info.old_binary_backup \
+  "Old binary backed up: %s" \
+  "旧二进制已备份：%s" \
+  app.sub2api.success.new_version_started \
+  "Service started successfully with the new version." \
+  "服务以新版本启动成功。" \
+  app.sub2api.info.cleaned_old_binaries \
+  "Removed %s old binary backups (keeping the latest 3)." \
+  "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
+  app.sub2api.success.update_done \
+  "Update complete: %s -> %s" \
+  "更新完成：%s → %s" \
+  app.sub2api.warn.new_version_failed \
+  "New version (%s) failed to start; automatically rolling back to %s..." \
+  "新版本（%s）启动失败，正在自动回滚到 %s..." \
+  app.sub2api.success.rollback \
+  "Rolled back to the previous version (%s); service recovered." \
+  "已成功回滚到旧版本（%s），服务已恢复。" \
+  app.sub2api.warn.rollback_start_failed \
+  "Service still did not start after rollback. Inspect: journalctl -u %s -n 30 --no-pager" \
+  "回滚后服务仍未正常启动，请手动检查：journalctl -u %s -n 30 --no-pager" \
+  app.sub2api.error.update_failed \
+  "Update failed and was rolled back to %s.\n  Diagnostics: journalctl -u %s -n 50 --no-pager" \
+  "更新失败，已自动回滚至 %s。\n  诊断：journalctl -u %s -n 50 --no-pager" \
+  app.sub2api.step.manual_backup \
+  "Manual Sub2API data backup" \
+  "手动备份 Sub2API 数据" \
+  app.sub2api.info.pg_dump \
+  "Running pg_dump..." \
+  "执行 pg_dump..." \
+  app.sub2api.success.db_backup \
+  "Database backup: %s (%s)." \
+  "数据库备份：%s（%s）。" \
+  app.sub2api.warn.pg_dump_check_dsn \
+  "pg_dump failed. Check PG_DSN and continuing with config files." \
+  "pg_dump 失败（请检查 PG_DSN 是否正确），继续备份配置文件。" \
+  app.sub2api.warn.pg_dump_missing \
+  "pg_dump command is missing; skipping database backup." \
+  "pg_dump 命令不存在，跳过数据库备份。" \
+  app.sub2api.warn.pg_dsn_missing \
+  "PG_DSN is not configured; skipping database backup." \
+  "PG_DSN 未配置，跳过数据库备份。" \
+  app.sub2api.warn.config_missing \
+  "Config directory does not exist (%s); skipping." \
+  "配置目录不存在（%s），跳过。" \
+  app.sub2api.success.data_backup \
+  "Data directory backup: %s (%s)." \
+  "数据目录备份：%s（%s）。" \
+  app.sub2api.warn.data_backup_failed \
+  "Data directory backup failed." \
+  "数据目录备份失败。" \
+  app.sub2api.success.backup_done \
+  "Backup flow complete. Archive directory: %s" \
+  "备份流程完成，归档目录：%s。" \
+  app.sub2api.step.status \
+  "Sub2API runtime status" \
+  "Sub2API 运行状态" \
+  app.sub2api.status.systemd \
+  "systemd service" \
+  "systemd 服务" \
+  app.sub2api.status.service_running \
+  "Service status: running" \
+  "服务状态：running" \
+  app.sub2api.status.service_failed \
+  "Service status: failed" \
+  "服务状态：failed" \
+  app.sub2api.status.service_inactive \
+  "Service status: inactive / unknown" \
+  "服务状态：inactive / unknown" \
+  app.sub2api.status.pid \
+  "PID" \
+  "PID" \
+  app.sub2api.status.memory \
+  "Memory (RSS)" \
+  "内存（RSS）" \
+  app.sub2api.status.cpu \
+  "CPU usage" \
+  "CPU 占用" \
+  app.sub2api.status.uptime \
+  "Uptime" \
+  "运行时长" \
+  app.sub2api.status.version_info \
+  "Version info" \
+  "版本信息" \
+  app.sub2api.status.installed_version \
+  "Installed version (recorded)" \
+  "已安装版本（记录）" \
+  app.sub2api.status.unknown \
+  "unknown" \
+  "未知" \
+  app.sub2api.status.binary_no_version \
+  "(binary does not support --version)" \
+  "（二进制不支持 --version）" \
+  app.sub2api.status.binary_version \
+  "Binary version output" \
+  "二进制版本输出" \
+  app.sub2api.status.nginx \
+  "Nginx status" \
+  "Nginx 状态" \
+  app.sub2api.status.nginx_running \
+  "nginx service is running" \
+  "nginx 服务运行中" \
+  app.sub2api.status.nginx_stopped \
+  "nginx service is not running (systemctl start nginx)" \
+  "nginx 服务未运行（systemctl start nginx）" \
+  app.sub2api.status.nginx_config_exists \
+  "Reverse proxy config exists: %s" \
+  "反代配置存在：%s" \
+  app.sub2api.status.proxy_target \
+  "Proxy target: %s" \
+  "代理目标：%s" \
+  app.sub2api.status.server_name \
+  "server_name: %s" \
+  "server_name：%s" \
+  app.sub2api.status.nginx_config_missing \
+  "Reverse proxy config was not found (%s)." \
+  "未找到反代配置（%s）。" \
+  app.sub2api.status.nginx_link_active \
+  "sites-enabled symlink is active" \
+  "sites-enabled 软链接已激活" \
+  app.sub2api.status.nginx_link_missing \
+  "sites-enabled symlink is missing (ln -s %s %s)" \
+  "sites-enabled 软链接不存在（ln -s %s %s）" \
+  app.sub2api.status.nginx_test_ok \
+  "nginx -t syntax check passed" \
+  "nginx -t 语法校验通过" \
+  app.sub2api.status.nginx_test_failed \
+  "nginx -t syntax check failed; check the config." \
+  "nginx -t 语法校验失败（请检查配置）。" \
+  app.sub2api.status.nginx_missing \
+  "nginx is not installed" \
+  "nginx 未安装" \
+  app.sub2api.status.dependencies \
+  "Dependency connectivity" \
+  "依赖服务连通性" \
+  app.sub2api.status.port_reachable \
+  "%s (:%s) is reachable" \
+  "%s（:%s）可达" \
+  app.sub2api.status.port_unreachable \
+  "%s (:%s) is unreachable" \
+  "%s（:%s）不可达" \
+  app.sub2api.status.pg_dsn_masked \
+  "PG_DSN (masked): %s" \
+  "PG_DSN（脱敏）：%s" \
+  app.sub2api.status.pg_dsn_missing \
+  "PG_DSN is not configured; pg_dump backup is unavailable." \
+  "PG_DSN 未配置，pg_dump 备份不可用。" \
+  app.sub2api.status.directories \
+  "Directory info" \
+  "目录信息" \
+  app.sub2api.status.dir_missing \
+  "%s (missing)" \
+  "%s（不存在）" \
+  app.sub2api.status.backup_info \
+  "Backup info" \
+  "备份信息" \
+  app.sub2api.status.backup_dir \
+  "Backup directory: %s (%s, %s files)" \
+  "备份目录：%s（%s，共 %s 个文件）" \
+  app.sub2api.status.no_backup_files \
+  "No backup files yet" \
+  "暂无备份文件" \
+  app.sub2api.status.backup_missing \
+  "Backup directory does not exist: %s" \
+  "备份目录不存在：%s" \
+  app.sub2api.status.disk \
+  "Disk space" \
+  "磁盘空间" \
+  app.sub2api.status.disk_usage \
+  "Mount: %-15s  Used: %s / %s (%s used)" \
+  "挂载点: %-15s  已用: %s / %s（%s 已用）" \
+  app.sub2api.status.http_health \
+  "HTTP health check (local 127.0.0.1:%s)" \
+  "HTTP 健康检查（本地 127.0.0.1:%s）" \
+  app.sub2api.status.local_ok \
+  "Local endpoint responded normally: HTTP %s" \
+  "本地接口响应正常：HTTP %s" \
+  app.sub2api.status.local_warn \
+  "Local endpoint response: HTTP %s (service not running / waiting for DB?)" \
+  "本地接口响应：HTTP %s（服务未运行 / 等待 DB 连接？）" \
+  app.sub2api.status.firewall \
+  "Firewall rules (port %s)" \
+  "防火墙规则（端口 %s）" \
+  app.sub2api.status.ufw_allowed \
+  "ufw allows port %s" \
+  "ufw 端口 %s 已放行" \
+  app.sub2api.status.ufw_missing \
+  "ufw port %s is not in the rules" \
+  "ufw 端口 %s 未在规则中" \
+  app.sub2api.status.iptables_allowed \
+  "iptables allows port %s" \
+  "iptables 端口 %s 已放行" \
+  app.sub2api.status.iptables_missing \
+  "iptables port %s is not allowed" \
+  "iptables 端口 %s 未放行" \
+  app.sub2api.status.no_firewall \
+  "No firewall detected; this may rely on a cloud security group." \
+  "未检测到防火墙（可能依赖云安全组）。" \
+  app.sub2api.error.install_dir_empty \
+  "INSTALL_DIR is not set; uninstall aborted (config file: %s)." \
+  "INSTALL_DIR 未设置，卸载中止（配置文件：%s）。" \
+  app.sub2api.error.data_dir_empty \
+  "DATA_DIR is not set; uninstall aborted." \
+  "DATA_DIR 未设置，卸载中止。" \
+  app.sub2api.error.backup_dir_empty \
+  "BACKUP_DIR is not set; uninstall aborted." \
+  "BACKUP_DIR 未设置，卸载中止。" \
+  app.sub2api.error.install_dir_root \
+  "INSTALL_DIR is root (/); refusing uninstall." \
+  "INSTALL_DIR 为根目录（/），拒绝执行卸载。" \
+  app.sub2api.error.data_dir_root \
+  "DATA_DIR is root (/); refusing uninstall." \
+  "DATA_DIR 为根目录（/），拒绝执行卸载。" \
+  app.sub2api.error.backup_dir_root \
+  "BACKUP_DIR is root (/); refusing uninstall." \
+  "BACKUP_DIR 为根目录（/），拒绝执行卸载。" \
+  app.sub2api.step.uninstall \
+  "Uninstall Sub2API" \
+  "卸载 Sub2API" \
+  app.sub2api.uninstall.removes \
+  "This will remove:" \
+  "此操作将删除：" \
+  app.sub2api.uninstall.binary \
+  "Sub2API binary and old backups (%s/sub2api*)" \
+  "Sub2API 二进制及旧版备份（%s/sub2api*）" \
+  app.sub2api.uninstall.systemd \
+  "systemd service unit (/etc/systemd/system/%s.service)" \
+  "systemd 服务单元（/etc/systemd/system/%s.service）" \
+  app.sub2api.uninstall.nginx_config \
+  "Nginx reverse proxy config (/etc/nginx/sites-available/sub2api)" \
+  "Nginx 反代配置（/etc/nginx/sites-available/sub2api）" \
+  app.sub2api.uninstall.nginx_link \
+  "Nginx sites-enabled symlink (/etc/nginx/sites-enabled/sub2api)" \
+  "Nginx sites-enabled 软链接（/etc/nginx/sites-enabled/sub2api）" \
+  app.sub2api.uninstall.logrotate \
+  "logrotate config (/etc/logrotate.d/sub2api)" \
+  "日志轮转配置（/etc/logrotate.d/sub2api）" \
+  app.sub2api.uninstall.cron \
+  "scheduled backup job (/etc/cron.d/sub2api-backup)" \
+  "定时备份任务（/etc/cron.d/sub2api-backup）" \
+  app.sub2api.uninstall.backup_script \
+  "backup script (/usr/local/bin/sub2api-backup)" \
+  "备份脚本（/usr/local/bin/sub2api-backup）" \
+  app.sub2api.uninstall.deploy_config \
+  "deployment config (%s)" \
+  "部署配置文件（%s）" \
+  app.sub2api.uninstall.keep_database \
+  "The PostgreSQL database will not be deleted; clean it manually if needed." \
+  "PostgreSQL 数据库不会被删除（需手动清理）。" \
+  app.sub2api.uninstall.keep_dirs \
+  "Data directory (%s) and config directory (%s) are kept by default; you can choose deletion." \
+  "数据目录（%s）和配置目录（%s）默认保留，可选是否删除。" \
+  app.sub2api.prompt.continue \
+  "Continue uninstall? Type YES to confirm:" \
+  "确认继续卸载？（输入 YES 确认）：" \
+  app.sub2api.info.cancelled \
+  "Uninstall cancelled." \
+  "已取消卸载。" \
+  app.sub2api.prompt.delete_data \
+  "Delete local data directory too (%s)? [y/N]:" \
+  "是否同时删除本地数据目录（%s）？[y/N]：" \
+  app.sub2api.prompt.delete_config \
+  "Delete config directory too (%s)? [y/N]:" \
+  "是否同时删除配置目录（%s）？[y/N]：" \
+  app.sub2api.prompt.delete_backup \
+  "Delete backup directory too (%s)? [y/N]:" \
+  "是否同时删除备份目录（%s）？[y/N]：" \
+  app.sub2api.info.stop_disable \
+  "Stopping and disabling %s service..." \
+  "停止并禁用 %s 服务..." \
+  app.sub2api.success.removed_systemd \
+  "systemd service removed." \
+  "systemd 服务已移除。" \
+  app.sub2api.success.removed_binary \
+  "Binary and related files removed." \
+  "二进制及相关文件已删除。" \
+  app.sub2api.success.removed_nginx_reload \
+  "Nginx reverse proxy config removed and service reloaded." \
+  "Nginx 反代配置已清除，服务已重载。" \
+  app.sub2api.success.removed_nginx \
+  "Nginx reverse proxy config removed." \
+  "Nginx 反代配置已清除。" \
+  app.sub2api.success.removed_scheduled \
+  "Scheduled job, backup script, and logrotate config removed." \
+  "定时任务、备份脚本、日志轮转配置已清除。" \
+  app.sub2api.success.removed_config \
+  "Deployment config removed." \
+  "部署配置文件已清除。" \
+  app.sub2api.success.deleted_log \
+  "Log directory deleted: %s" \
+  "日志目录已删除：%s。" \
+  app.sub2api.warn.log_path \
+  "Log directory path is unusual (%s); skipped deletion." \
+  "日志目录路径异常（%s），已跳过。" \
+  app.sub2api.status.unset \
+  "unset" \
+  "未设置" \
+  app.sub2api.success.deleted_data \
+  "Local data directory deleted: %s" \
+  "本地数据目录已删除：%s。" \
+  app.sub2api.success.cleaned_install \
+  "Install directory cleaned: %s" \
+  "安装目录已清理：%s。" \
+  app.sub2api.info.kept_data \
+  "Local data directory kept: %s" \
+  "本地数据目录已保留：%s。" \
+  app.sub2api.success.deleted_config \
+  "Config directory deleted: %s" \
+  "配置目录已删除：%s。" \
+  app.sub2api.info.kept_config \
+  "Config directory kept: %s" \
+  "配置目录已保留：%s。" \
+  app.sub2api.success.deleted_backup \
+  "Backup directory deleted: %s" \
+  "备份目录已删除：%s。" \
+  app.sub2api.info.kept_backup \
+  "Backup directory kept: %s" \
+  "备份目录已保留：%s。" \
+  app.sub2api.success.deleted_user \
+  "System user %s deleted." \
+  "系统用户 %s 已删除。" \
+  app.sub2api.warn.delete_user \
+  "Failed to delete system user %s; it may be referenced by another service." \
+  "系统用户 %s 删除失败，可能被其他服务引用。" \
+  app.sub2api.success.uninstalled \
+  "Sub2API fully uninstalled" \
+  "Sub2API 已完全卸载" \
+  app.sub2api.hint.database_kept \
+  "PostgreSQL database data was not deleted." \
+  "PostgreSQL 数据库数据未被删除。" \
+  app.sub2api.hint.clean_database \
+  "Manual database cleanup:" \
+  "手动清理数据库："
 
 APP_DESCRIPTION="$(t app.sub2api.description)"
 APP_IMPL_SCRIPT="impl/install_sub2api.sh"
