@@ -21,7 +21,9 @@ service_status_label() {
   local service_name="$1"
   if systemctl is-active --quiet "$service_name" 2>/dev/null; then
     t status.active
-  elif systemctl list-unit-files "$service_name.service" >/dev/null 2>&1; then
+  elif systemctl list-unit-files --no-legend --no-pager "$service_name.service" 2>/dev/null \
+      | awk '{print $1}' \
+      | grep -Fxq "$service_name.service"; then
     t status.inactive
   else
     t status.unknown

@@ -187,6 +187,43 @@ check_safe_path_guard() {
   '
 }
 
+check_service_status_label() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  cat > "${tmp_dir}/systemctl" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  is-active)
+    [[ "${3:-}" == "active-service" ]] && exit 0
+    exit 3
+    ;;
+  list-unit-files)
+    for arg in "$@"; do
+      if [[ "$arg" == "inactive-service.service" ]]; then
+        echo "inactive-service.service disabled"
+        exit 0
+      fi
+      if [[ "$arg" == "missing-service.service" ]]; then
+        exit 0
+      fi
+    done
+    exit 0
+    ;;
+esac
+exit 1
+STUB
+  chmod +x "${tmp_dir}/systemctl"
+
+  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    [[ "$(service_status_label active-service)" == "active" ]]
+    [[ "$(service_status_label inactive-service)" == "inactive" ]]
+    [[ "$(service_status_label missing-service)" == "unknown" ]]
+  '
+  rm -rf "$tmp_dir"
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -200,6 +237,7 @@ main() {
   check_no_release_temp_files
   check_bundled_impl_cleanup
   check_safe_path_guard
+  check_service_status_label
   echo "Verification passed"
 }
 
