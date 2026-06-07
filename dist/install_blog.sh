@@ -18,6 +18,17 @@ case "${deploy_lang,,}" in
   *) DEPLOY_LANG="en" ;;
 esac
 
+declare -gA __DEPLOY_I18N_EN=()
+declare -gA __DEPLOY_I18N_ZH=()
+
+i18n_register() {
+  local key="$1"
+  local en="$2"
+  local zh="${3:-$2}"
+  __DEPLOY_I18N_EN["$key"]="$en"
+  __DEPLOY_I18N_ZH["$key"]="$zh"
+}
+
 __deploy_i18n_message() {
   local key="$1"
   case "$key" in
@@ -61,6 +72,14 @@ t() {
   local key="$1"
   shift || true
   local pair text
+  if [[ "$DEPLOY_LANG" == "zh" && -v "__DEPLOY_I18N_ZH[$key]" ]]; then
+    printf "${__DEPLOY_I18N_ZH[$key]}" "$@"
+    return 0
+  fi
+  if [[ -v "__DEPLOY_I18N_EN[$key]" ]]; then
+    printf "${__DEPLOY_I18N_EN[$key]}" "$@"
+    return 0
+  fi
   pair="$(__deploy_i18n_message "$key")"
   if [[ "$DEPLOY_LANG" == "zh" ]]; then
     text="${pair#*|}"
@@ -398,7 +417,17 @@ main() {
 
 APP_ID="blog"
 APP_NAME="Hugo Blog"
-APP_DESCRIPTION="Hugo and Nginx blog deployment."
+i18n_register app.blog.description \
+  "Hugo and Nginx blog deployment." \
+  "Hugo 与 Nginx 博客部署脚本。"
+i18n_register app.blog.error.apt_only \
+  "Only Debian / Ubuntu is supported by this script." \
+  "此脚本仅支持 Debian / Ubuntu。"
+i18n_register app.blog.error.systemd_required \
+  "systemd is required by this script." \
+  "此脚本需要 systemd。"
+
+APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
 
 do_install() { app_impl_dispatch install; }

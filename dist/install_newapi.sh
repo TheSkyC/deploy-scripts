@@ -18,6 +18,17 @@ case "${deploy_lang,,}" in
   *) DEPLOY_LANG="en" ;;
 esac
 
+declare -gA __DEPLOY_I18N_EN=()
+declare -gA __DEPLOY_I18N_ZH=()
+
+i18n_register() {
+  local key="$1"
+  local en="$2"
+  local zh="${3:-$2}"
+  __DEPLOY_I18N_EN["$key"]="$en"
+  __DEPLOY_I18N_ZH["$key"]="$zh"
+}
+
 __deploy_i18n_message() {
   local key="$1"
   case "$key" in
@@ -61,6 +72,14 @@ t() {
   local key="$1"
   shift || true
   local pair text
+  if [[ "$DEPLOY_LANG" == "zh" && -v "__DEPLOY_I18N_ZH[$key]" ]]; then
+    printf "${__DEPLOY_I18N_ZH[$key]}" "$@"
+    return 0
+  fi
+  if [[ -v "__DEPLOY_I18N_EN[$key]" ]]; then
+    printf "${__DEPLOY_I18N_EN[$key]}" "$@"
+    return 0
+  fi
   pair="$(__deploy_i18n_message "$key")"
   if [[ "$DEPLOY_LANG" == "zh" ]]; then
     text="${pair#*|}"
@@ -398,7 +417,20 @@ main() {
 
 APP_ID="newapi"
 APP_NAME="New API"
-APP_DESCRIPTION="Binary deployment with systemd, backups, and operational checks."
+i18n_register app.newapi.description \
+  "Binary deployment with systemd, backups, and operational checks." \
+  "使用 systemd、备份和运维检查的二进制部署脚本。"
+i18n_register app.newapi.error.apt_only \
+  "This script only supports Debian / Ubuntu because apt-get was not found." \
+  "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）。"
+i18n_register app.newapi.error.arch \
+  "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
+  "不支持的架构：%s（支持 x86_64 / aarch64）。"
+i18n_register app.newapi.error.github_unreachable \
+  "Cannot reach GitHub. Check network/proxy settings and retry." \
+  "网络不通，无法访问 GitHub，请检查网络或代理后重试。"
+
+APP_DESCRIPTION="$(t app.newapi.description)"
 APP_IMPL_SCRIPT="impl/install_newapi.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
@@ -427,14 +459,14 @@ CONFIG_KEYS=(
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
 )
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
+  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get &>/dev/null \
-    || error "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）"
+    || error "$(t app.newapi.error.apt_only)"
   ARCH=$(uname -m)
   case $ARCH in
     x86_64)  BIN_ARCH="amd64" ;;
     aarch64) BIN_ARCH="arm64" ;;
-    *) error "不支持的架构：$ARCH（支持 x86_64 / aarch64）" ;;
+    *) error "$(t app.newapi.error.arch "$ARCH")" ;;
   esac
 }
 LOCK_FILE="/var/lock/new-api-deploy.lock"
@@ -443,7 +475,7 @@ check_connectivity() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com" && return 0
-  error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
+  error "$(t app.newapi.error.github_unreachable)"
 }
 save_config() {
   write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"

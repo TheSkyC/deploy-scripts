@@ -30,16 +30,16 @@ CONFIG_KEYS=(
   EXTRACT_TOOL_COMMIT EXTRACT_TOOL_SHA256
 )
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0"
+  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "")"
   if ! command -v apt-get &>/dev/null; then
-    error "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）"
+    error "$(t app.vaultwarden.error.apt_only)"
   fi
   ARCH=$(uname -m)
   case $ARCH in
     x86_64)  : ;;
     aarch64) : ;;
     armv7l)  : ;;
-    *) error "不支持的架构：$ARCH（支持 x86_64 / aarch64 / armv7l）" ;;
+    *) error "$(t app.vaultwarden.error.arch "$ARCH")" ;;
   esac
 }
 LOCK_FILE="/var/lock/vaultwarden-deploy.lock"
@@ -48,7 +48,7 @@ check_connectivity() {
     "https://auth.docker.io/token" \
     "https://registry-1.docker.io/v2/" \
     "https://api.github.com" && return 0
-  error "网络不通，无法访问 Docker Registry / GitHub，请检查网络或代理后重试"
+  error "$(t app.vaultwarden.error.registry_unreachable)"
 }
 load_config() {
   if [[ -f "$CONF_FILE" ]]; then

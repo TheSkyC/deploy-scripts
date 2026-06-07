@@ -19,14 +19,14 @@ CONFIG_KEYS=(
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
 )
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
+  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get &>/dev/null \
-    || error "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）"
+    || error "$(t app.newapi.error.apt_only)"
   ARCH=$(uname -m)
   case $ARCH in
     x86_64)  BIN_ARCH="amd64" ;;
     aarch64) BIN_ARCH="arm64" ;;
-    *) error "不支持的架构：$ARCH（支持 x86_64 / aarch64）" ;;
+    *) error "$(t app.newapi.error.arch "$ARCH")" ;;
   esac
 }
 LOCK_FILE="/var/lock/new-api-deploy.lock"
@@ -35,7 +35,7 @@ check_connectivity() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com" && return 0
-  error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
+  error "$(t app.newapi.error.github_unreachable)"
 }
 save_config() {
   write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"

@@ -18,6 +18,17 @@ case "${deploy_lang,,}" in
   *) DEPLOY_LANG="en" ;;
 esac
 
+declare -gA __DEPLOY_I18N_EN=()
+declare -gA __DEPLOY_I18N_ZH=()
+
+i18n_register() {
+  local key="$1"
+  local en="$2"
+  local zh="${3:-$2}"
+  __DEPLOY_I18N_EN["$key"]="$en"
+  __DEPLOY_I18N_ZH["$key"]="$zh"
+}
+
 __deploy_i18n_message() {
   local key="$1"
   case "$key" in
@@ -61,6 +72,14 @@ t() {
   local key="$1"
   shift || true
   local pair text
+  if [[ "$DEPLOY_LANG" == "zh" && -v "__DEPLOY_I18N_ZH[$key]" ]]; then
+    printf "${__DEPLOY_I18N_ZH[$key]}" "$@"
+    return 0
+  fi
+  if [[ -v "__DEPLOY_I18N_EN[$key]" ]]; then
+    printf "${__DEPLOY_I18N_EN[$key]}" "$@"
+    return 0
+  fi
   pair="$(__deploy_i18n_message "$key")"
   if [[ "$DEPLOY_LANG" == "zh" ]]; then
     text="${pair#*|}"
@@ -398,7 +417,23 @@ main() {
 
 APP_ID="cyberstrikeai"
 APP_NAME="CyberStrikeAI"
-APP_DESCRIPTION="Source build deployment with Go, Python, systemd, Nginx, and backups."
+i18n_register app.cyberstrikeai.description \
+  "Source build deployment with Go, Python, systemd, Nginx, and backups." \
+  "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"
+i18n_register app.cyberstrikeai.error.apt_only \
+  "Only Debian / Ubuntu is supported by this script." \
+  "此脚本仅支持 Debian / Ubuntu。"
+i18n_register app.cyberstrikeai.error.systemd_required \
+  "systemd is required by this script." \
+  "此脚本需要 systemd。"
+i18n_register app.cyberstrikeai.error.arch \
+  "Unsupported architecture: %s." \
+  "不支持的架构：%s。"
+i18n_register app.cyberstrikeai.error.github_unreachable \
+  "Cannot reach GitHub. Check network/proxy settings and retry." \
+  "无法访问 GitHub，请检查网络或代理后重试。"
+
+APP_DESCRIPTION="$(t app.cyberstrikeai.description)"
 APP_IMPL_SCRIPT="impl/install_cyberstrikeai.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
@@ -460,14 +495,14 @@ load_config() {
   LOG_DIR="${INSTALL_DIR}/logs"
 }
 preflight_check() {
-  [[ $EUID -eq 0 ]] || error "Please run as root: sudo bash $0 ${1:-}"
-  command -v apt-get >/dev/null 2>&1 || error "Only Debian / Ubuntu is supported by this script"
-  command -v systemctl >/dev/null 2>&1 || error "systemd is required"
+  [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
+  command -v apt-get >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.apt_only)"
+  command -v systemctl >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.systemd_required)"
   local arch
   arch=$(uname -m)
   case "$arch" in
     x86_64|aarch64|arm64) ;;
-    *) error "Unsupported architecture: $arch" ;;
+    *) error "$(t app.cyberstrikeai.error.arch "$arch")" ;;
   esac
 }
 check_connectivity() {
@@ -475,7 +510,7 @@ check_connectivity() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com" && return 0
-  error "Cannot reach GitHub. Check network/proxy and retry."
+  error "$(t app.cyberstrikeai.error.github_unreachable)"
 }
 apt_install_base() {
   step "Install system dependencies"

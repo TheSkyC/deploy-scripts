@@ -9,6 +9,17 @@ case "${deploy_lang,,}" in
   *) DEPLOY_LANG="en" ;;
 esac
 
+declare -gA __DEPLOY_I18N_EN=()
+declare -gA __DEPLOY_I18N_ZH=()
+
+i18n_register() {
+  local key="$1"
+  local en="$2"
+  local zh="${3:-$2}"
+  __DEPLOY_I18N_EN["$key"]="$en"
+  __DEPLOY_I18N_ZH["$key"]="$zh"
+}
+
 __deploy_i18n_message() {
   local key="$1"
   case "$key" in
@@ -52,6 +63,14 @@ t() {
   local key="$1"
   shift || true
   local pair text
+  if [[ "$DEPLOY_LANG" == "zh" && -v "__DEPLOY_I18N_ZH[$key]" ]]; then
+    printf "${__DEPLOY_I18N_ZH[$key]}" "$@"
+    return 0
+  fi
+  if [[ -v "__DEPLOY_I18N_EN[$key]" ]]; then
+    printf "${__DEPLOY_I18N_EN[$key]}" "$@"
+    return 0
+  fi
   pair="$(__deploy_i18n_message "$key")"
   if [[ "$DEPLOY_LANG" == "zh" ]]; then
     text="${pair#*|}"

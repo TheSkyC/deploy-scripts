@@ -18,6 +18,17 @@ case "${deploy_lang,,}" in
   *) DEPLOY_LANG="en" ;;
 esac
 
+declare -gA __DEPLOY_I18N_EN=()
+declare -gA __DEPLOY_I18N_ZH=()
+
+i18n_register() {
+  local key="$1"
+  local en="$2"
+  local zh="${3:-$2}"
+  __DEPLOY_I18N_EN["$key"]="$en"
+  __DEPLOY_I18N_ZH["$key"]="$zh"
+}
+
 __deploy_i18n_message() {
   local key="$1"
   case "$key" in
@@ -61,6 +72,14 @@ t() {
   local key="$1"
   shift || true
   local pair text
+  if [[ "$DEPLOY_LANG" == "zh" && -v "__DEPLOY_I18N_ZH[$key]" ]]; then
+    printf "${__DEPLOY_I18N_ZH[$key]}" "$@"
+    return 0
+  fi
+  if [[ -v "__DEPLOY_I18N_EN[$key]" ]]; then
+    printf "${__DEPLOY_I18N_EN[$key]}" "$@"
+    return 0
+  fi
   pair="$(__deploy_i18n_message "$key")"
   if [[ "$DEPLOY_LANG" == "zh" ]]; then
     text="${pair#*|}"
@@ -398,7 +417,20 @@ main() {
 
 APP_ID="sub2api"
 APP_NAME="Sub2API"
-APP_DESCRIPTION="API gateway deployment with database, cache, systemd, and backups."
+i18n_register app.sub2api.description \
+  "API gateway deployment with database, cache, systemd, and backups." \
+  "包含数据库、缓存、systemd 和备份的 API 网关部署脚本。"
+i18n_register app.sub2api.error.package_manager \
+  "No supported package manager was found. Install dependencies manually or use apt, dnf, or yum." \
+  "未找到支持的包管理器（apt / dnf / yum），请手动安装依赖。"
+i18n_register app.sub2api.error.arch \
+  "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
+  "不支持的架构：%s（支持 x86_64 / aarch64）。"
+i18n_register app.sub2api.error.github_unreachable \
+  "Cannot reach GitHub. Check network/proxy settings and retry." \
+  "网络不通，无法访问 GitHub，请检查网络或代理后重试。"
+
+APP_DESCRIPTION="$(t app.sub2api.description)"
 APP_IMPL_SCRIPT="impl/install_sub2api.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
@@ -432,7 +464,7 @@ CONFIG_KEYS=(
   SUB2API_DOMAIN INSTALLED_VERSION
 )
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
+  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt"
   elif command -v dnf &>/dev/null; then
@@ -440,13 +472,13 @@ preflight_check() {
   elif command -v yum &>/dev/null; then
     PKG_MANAGER="yum"
   else
-    error "未找到支持的包管理器（apt / dnf / yum），请手动安装依赖"
+    error "$(t app.sub2api.error.package_manager)"
   fi
   ARCH=$(uname -m)
   case "$ARCH" in
     x86_64)  BIN_ARCH="amd64" ; ELF_MACHINE="3e" ;;
     aarch64) BIN_ARCH="arm64" ; ELF_MACHINE="b7" ;;
-    *) error "不支持的架构：${ARCH}（支持 x86_64 / aarch64）" ;;
+    *) error "$(t app.sub2api.error.arch "$ARCH")" ;;
   esac
 }
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
@@ -455,7 +487,7 @@ check_connectivity() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com" && return 0
-  error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
+  error "$(t app.sub2api.error.github_unreachable)"
 }
 save_config() {
   write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"

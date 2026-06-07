@@ -52,14 +52,14 @@ load_config() {
   LOG_DIR="${INSTALL_DIR}/logs"
 }
 preflight_check() {
-  [[ $EUID -eq 0 ]] || error "Please run as root: sudo bash $0 ${1:-}"
-  command -v apt-get >/dev/null 2>&1 || error "Only Debian / Ubuntu is supported by this script"
-  command -v systemctl >/dev/null 2>&1 || error "systemd is required"
+  [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
+  command -v apt-get >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.apt_only)"
+  command -v systemctl >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.systemd_required)"
   local arch
   arch=$(uname -m)
   case "$arch" in
     x86_64|aarch64|arm64) ;;
-    *) error "Unsupported architecture: $arch" ;;
+    *) error "$(t app.cyberstrikeai.error.arch "$arch")" ;;
   esac
 }
 check_connectivity() {
@@ -67,7 +67,7 @@ check_connectivity() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com" && return 0
-  error "Cannot reach GitHub. Check network/proxy and retry."
+  error "$(t app.cyberstrikeai.error.github_unreachable)"
 }
 apt_install_base() {
   step "Install system dependencies"
