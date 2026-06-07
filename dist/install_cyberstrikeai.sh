@@ -218,7 +218,7 @@ service_status_label() {
 check_connectivity_urls() {
   local url
   for url in "$@"; do
-    if curl -fsI --connect-timeout 5 --max-time 10 "$url" >/dev/null 2>&1; then
+    if curl -fsSL --max-time 8 -o /dev/null "$url" 2>/dev/null; then
       return 0
     fi
   done
@@ -497,17 +497,10 @@ acquire_lock() {
   trap 'flock -u 9 2>/dev/null || true; exec 9>&- 2>/dev/null || true' EXIT
 }
 check_connectivity() {
-  local targets=(
-    "https://api.github.com"
-    "https://github.com"
-    "https://objects.githubusercontent.com"
-  )
-  local target
-  for target in "${targets[@]}"; do
-    if curl -fsSL --max-time 8 -o /dev/null "$target" 2>/dev/null; then
-      return 0
-    fi
-  done
+  check_connectivity_urls \
+    "https://api.github.com" \
+    "https://github.com" \
+    "https://objects.githubusercontent.com" && return 0
   error "Cannot reach GitHub. Check network/proxy and retry."
 }
 apt_install_base() {

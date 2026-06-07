@@ -218,7 +218,7 @@ service_status_label() {
 check_connectivity_urls() {
   local url
   for url in "$@"; do
-    if curl -fsI --connect-timeout 5 --max-time 10 "$url" >/dev/null 2>&1; then
+    if curl -fsSL --max-time 8 -o /dev/null "$url" 2>/dev/null; then
       return 0
     fi
   done
@@ -433,16 +433,10 @@ acquire_lock() {
   trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
 }
 check_connectivity() {
-  local targets=(
-    "https://api.github.com"
-    "https://github.com"
-    "https://objects.githubusercontent.com"
-  )
-  for t in "${targets[@]}"; do
-    if curl -fsSL --max-time 8 -o /dev/null "$t" 2>/dev/null; then
-      return 0
-    fi
-  done
+  check_connectivity_urls \
+    "https://api.github.com" \
+    "https://github.com" \
+    "https://objects.githubusercontent.com" && return 0
   error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
 }
 _sanitize_conf_val() {
