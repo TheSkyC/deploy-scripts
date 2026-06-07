@@ -28,7 +28,7 @@ sudo bash dist/install_newapi.sh install
 
 ## Localization
 
-English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework messages and localized application messages that have been migrated.
+English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework messages and localized application messages for the bundled scripts.
 
 ```bash
 sudo DEPLOY_LANG=zh bash install_newapi.sh install
@@ -39,9 +39,7 @@ Localization is intentionally layered:
 
 - Framework messages live in `lib/i18n.sh`.
 - Application metadata and app-specific messages live in `apps/*.sh`.
-- Implementation scripts call `t message.key` for localized text.
-
-Some long operational output is still application-specific and will be migrated incrementally.
+- Implementation scripts call `t message.key` for localized text and keep implementation comments in English.
 
 ## Repository Layout
 
@@ -116,4 +114,7 @@ The verification script checks:
 - Regenerated `dist/` scripts.
 - Bash syntax for generated releases.
 - English and Chinese dispatch behavior.
+- English and Chinese app descriptions.
+- No hardcoded Chinese text in implementation scripts.
+- No Chinese comments in source or generated release scripts.
 - No temporary bundled implementation files are left in `dist/`.

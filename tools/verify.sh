@@ -102,6 +102,22 @@ check_app_localized_descriptions() {
   expect_app_description newapi zh "使用 systemd、备份和运维检查的二进制部署脚本。"
   expect_app_description sub2api en "API gateway deployment with database, cache, systemd, and backups."
   expect_app_description sub2api zh "包含数据库、缓存、systemd 和备份的 API 网关部署脚本。"
+  expect_app_description vaultwarden en "Vaultwarden deployment with Web Vault, Nginx, TLS, and backups."
+  expect_app_description vaultwarden zh "包含 Web Vault、Nginx、TLS 和备份的 Vaultwarden 部署脚本。"
+}
+
+check_no_hardcoded_chinese_impl() {
+  if LC_ALL=C.UTF-8 grep -R -nP '[\p{Han}]' impl; then
+    echo "Implementation scripts must use i18n keys instead of hardcoded Chinese text." >&2
+    return 1
+  fi
+}
+
+check_no_chinese_comments() {
+  if LC_ALL=C.UTF-8 grep -R -nP '^\s*#.*[\p{Han}]' apps bin impl lib tools dist install_*.sh; then
+    echo "Comments must be written in English." >&2
+    return 1
+  fi
 }
 
 check_no_release_temp_files() {
@@ -119,6 +135,8 @@ main() {
   check_localized_dispatch
   check_blog_localized_defaults
   check_app_localized_descriptions
+  check_no_hardcoded_chinese_impl
+  check_no_chinese_comments
   check_no_release_temp_files
   echo "Verification passed"
 }
