@@ -1,47 +1,6 @@
 #!/bin/bash
-# ============================================================
-#  Sub2API 一键管理脚本（Debian / Ubuntu / RHEL / CentOS）
-#  功能：部署 · 更新 · 备份 · 卸载 · 状态查看
-#  原理：从 GitHub Releases 下载 tar.gz 压缩包（含 SHA256 校验）
-#        + systemd 托管，自动安装 PostgreSQL 15+、Redis 7+、Nginx
-#  用法：sudo bash install_sub2api.sh [install|update|backup|status|uninstall]
-#        不带参数则显示交互菜单
-#
-#  版本：v2
-#  v2 新增 / 修复：
-#    [依赖] 自动安装 PostgreSQL 15+（apt 从 PGDG 官方源，dnf/yum 从 PGDG RPM 源），
-#           安装后 enable --now 启动，不再仅提示用户手动安装。
-#    [依赖] 自动安装 Redis 7+（apt 从 packages.redis.io 官方源，dnf/yum 直接安装）
-#           安装后 enable --now 启动。
-#    [依赖] 新增 _setup_postgres()：自动创建数据库用户（sub2api）和数据库（sub2api），
-#           密码由 openssl rand 生成（24 位纯字母数字，避免 DSN 转义问题），
-#           写入 CONF_FILE（chmod 600），在安装摘要中明文展示一次。
-#           幂等：已存在的用户/数据库会跳过创建，密码保持不变。
-#    [Nginx] 自动安装 Nginx；写入 /etc/nginx/sites-available/sub2api
-#            反代配置（含 SSE 流式支持：proxy_buffering off / proxy_cache off /
-#            proxy_read_timeout 300s），ln -s 到 sites-enabled，
-#            nginx -t 校验通过后 reload。
-#    [Nginx] 域名在配置区 SUB2API_DOMAIN 填写；留空则生成 server_name _ 兜底配置
-#            （适合仅用 IP 直接访问或 Cloudflare CDN 代理）。
-#    [Nginx] status 子命令增加 Nginx 服务状态 + 反代配置检查。
-#    [Nginx] uninstall 子命令增加清理 Nginx 配置和 sites-enabled 软链接。
-#    [摘要] 安装摘要新增 PostgreSQL 账号信息（用户名 / 密码 / 数据库）和完整 DSN，
-#           并标注 Setup Wizard 对应填写字段。
-#    [配置] save_config / load_config 新增 PG_USER / PG_PASS / PG_DB /
-#           SUB2API_DOMAIN 字段，update 后自动复用已存在的数据库凭证。
-#
-#  v1 特性（保留）：
-#    [架构] 五个子命令：install / update / backup / status / uninstall
-#    [健壮] flock 文件锁 / wait_for_service / 失败回滚 / SHA256 校验 / ELF 校验
-#    [安全] umask 077 / load_config 手动解析 / save_config 值消毒
-#    [备份] pg_dump + 配置目录 tar / 定时 cron / 超期自动清理
-#    [运维] logrotate / status 全面检查 / 防火墙自动配置
-# ============================================================
-
 set -euo pipefail
 umask 077
-
-# ── 颜色与日志函数 ────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[·]${NC} $*" >&2; }
@@ -50,43 +9,23 @@ warn()    { echo -e "${YELLOW}[!]${NC} $*" >&2; }
 error()   { echo -e "${RED}[✗]${NC} $*" >&2; exit 1; }
 step()    { echo -e "\n${CYAN}${BOLD}── $* ──────────────────────────────${NC}" >&2; }
 prompt()  { echo -ne "${YELLOW}[?]${NC} $* " >&2; }
-
-# ════════════════════════════════════════════════════════════════
-#  用户配置（按需修改）
-# ════════════════════════════════════════════════════════════════
-PORT=8082                            # Sub2API 监听端口
-INSTALL_DIR="/opt/sub2api"           # 二进制安装目录
-DATA_DIR="/opt/sub2api/data"         # 本地数据目录（配置/上传文件）
-LOG_DIR="/opt/sub2api/logs"          # 日志目录
-CONFIG_DIR="/etc/sub2api"            # 配置文件目录（向导写入）
+PORT=8082
+INSTALL_DIR="/opt/sub2api"
+DATA_DIR="/opt/sub2api/data"
+LOG_DIR="/opt/sub2api/logs"
+CONFIG_DIR="/etc/sub2api"
 SERVICE_NAME="sub2api"
 SERVICE_USER="sub2api"
 GITHUB_REPO="Wei-Shaw/sub2api"
 BACKUP_DIR="/opt/sub2api-backups"
 BACKUP_KEEP_DAYS=30
-
-# ── Nginx 反向代理 ────────────────────────────────────────────
-# 留空则使用 server_name _（兜底，适合 IP 直接访问 / Cloudflare CDN 代理）
-# 有域名则填写（如 gateway.example.com），支持空格分隔多域名
 SUB2API_DOMAIN=""
-
-# ── PostgreSQL 配置 ───────────────────────────────────────────
-# 留空时由脚本自动生成随机密码（推荐）；重新安装时若已存在则保留原值
 PG_USER="sub2api"
-PG_PASS=""               # 自动生成，安装后写入 CONF_FILE 并在摘要中展示一次
+PG_PASS=""
 PG_DB="sub2api"
-
-# PostgreSQL DSN（save_config 自动更新，pg_dump 备份使用）
-# 格式：postgresql://user:pass@localhost:5432/dbname?sslmode=disable
 PG_DSN=""
-
-# ── 运行时路径（勿随意修改）────────────────────────────────────
 BIN_PATH="${INSTALL_DIR}/sub2api"
-CONF_FILE="/etc/sub2api-deploy.conf"   # 脚本自身的部署记录（非 Sub2API 业务配置）
-
-# ════════════════════════════════════════════════════════════════
-#  Banner
-# ════════════════════════════════════════════════════════════════
+CONF_FILE="/etc/sub2api-deploy.conf"
 show_banner() {
   echo -e "\n${BOLD}${CYAN}"
   cat << 'EOF'
@@ -100,14 +39,8 @@ EOF
   echo -e "${NC}"
   echo -e "  ${BOLD}AI API 网关平台 · 订阅配额分发 · 二进制直装 · systemd 托管${NC}\n"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  前置检查
-# ════════════════════════════════════════════════════════════════
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
-
-  # 包管理器检测
   if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt"
   elif command -v dnf &>/dev/null; then
@@ -117,8 +50,6 @@ preflight_check() {
   else
     error "未找到支持的包管理器（apt / dnf / yum），请手动安装依赖"
   fi
-
-  # 架构检测
   ARCH=$(uname -m)
   case "$ARCH" in
     x86_64)  BIN_ARCH="amd64" ; ELF_MACHINE="3e" ;;
@@ -126,12 +57,7 @@ preflight_check() {
     *) error "不支持的架构：${ARCH}（支持 x86_64 / aarch64）" ;;
   esac
 }
-
-# ════════════════════════════════════════════════════════════════
-#  并发锁
-# ════════════════════════════════════════════════════════════════
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
-
 acquire_lock() {
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
@@ -139,12 +65,7 @@ acquire_lock() {
   fi
   trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
 }
-
 release_lock() { flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null; }
-
-# ════════════════════════════════════════════════════════════════
-#  网络连通性检测
-# ════════════════════════════════════════════════════════════════
 check_connectivity() {
   local targets=(
     "https://api.github.com"
@@ -158,10 +79,6 @@ check_connectivity() {
   done
   error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  等待 systemd 服务启动（最多 N 秒）
-# ════════════════════════════════════════════════════════════════
 wait_for_service() {
   local svc="$1" timeout="${2:-20}" elapsed=0
   while ! systemctl is-active --quiet "$svc"; do
@@ -174,16 +91,11 @@ wait_for_service() {
   done
   return 0
 }
-
-# ════════════════════════════════════════════════════════════════
-#  配置持久化（load / save）
-# ════════════════════════════════════════════════════════════════
 _sanitize_conf_val() {
-  local _v="${1%%$'\n'*}"   # 截断到首个换行
-  _v="${_v//\"/}"           # 移除双引号
+  local _v="${1%%$'\n'*}"
+  _v="${_v//\"/}"
   echo "$_v"
 }
-
 save_config() {
   cat > "$CONF_FILE" << CONF
 PORT="$(_sanitize_conf_val "${PORT}")"
@@ -206,14 +118,11 @@ CONF
   chmod 600 "$CONF_FILE"
   success "部署配置已持久化：${CONF_FILE}"
 }
-
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return
-
   local _owner _perms
   _owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
   _perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
-
   if [[ "$_owner" != "root" ]]; then
     warn "配置文件 ${CONF_FILE} 属主非 root（当前：${_owner}），拒绝加载"
     return
@@ -222,7 +131,6 @@ load_config() {
     warn "配置文件权限过于宽松（${_perms}），拒绝加载（建议：chmod 600 ${CONF_FILE}）"
     return
   fi
-
   local _line _key _val
   while IFS= read -r _line || [[ -n "$_line" ]]; do
     [[ "$_line" =~ ^[[:space:]]*(#|$) ]] && continue
@@ -247,22 +155,14 @@ load_config() {
         ;;
     esac
   done < "$CONF_FILE"
-
-  # 重新计算派生路径
   BIN_PATH="${INSTALL_DIR}/sub2api"
   success "已加载部署记录：${CONF_FILE}"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  辅助函数（版本 / 下载 / 校验）
-# ════════════════════════════════════════════════════════════════
-
 get_latest_release() {
   local json tag
   json=$(curl -fsSL --max-time 15 \
     "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null) \
     || { warn "无法访问 GitHub API"; echo ""; return; }
-
   if echo "test" | grep -qP 'test' 2>/dev/null; then
     tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
   fi
@@ -270,49 +170,40 @@ get_latest_release() {
     tag=$(echo "$json" | grep '"tag_name"' | head -1 \
       | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
   fi
-
   if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
     echo "$tag"
   else
     echo ""
   fi
 }
-
 _tag_to_ver() { echo "${1#v}"; }
-
 get_download_url() {
   local tag="$1"
   local ver; ver=$(_tag_to_ver "$tag")
   echo "https://github.com/${GITHUB_REPO}/releases/download/${tag}/sub2api_${ver}_linux_${BIN_ARCH}.tar.gz"
 }
-
 get_checksum_url() {
   local tag="$1"
   echo "https://github.com/${GITHUB_REPO}/releases/download/${tag}/checksums.txt"
 }
-
 verify_checksum() {
   local archive="$1" tag="$2"
   local ver; ver=$(_tag_to_ver "$tag")
   local expected_name="sub2api_${ver}_linux_${BIN_ARCH}.tar.gz"
   local checksum_url; checksum_url=$(get_checksum_url "$tag")
   local tmp_sum; tmp_sum=$(mktemp)
-
   if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
     warn "无法下载 checksums.txt，跳过 SHA256 校验（建议手动核验）"
     rm -f "$tmp_sum"
     return 0
   fi
-
   local expected_hash
   expected_hash=$(grep " ${expected_name}$" "$tmp_sum" 2>/dev/null | awk '{print $1}' || true)
   rm -f "$tmp_sum"
-
   if [[ -z "$expected_hash" ]]; then
     warn "checksums.txt 中未找到 ${expected_name} 的校验值，跳过校验"
     return 0
   fi
-
   local actual_hash
   if command -v sha256sum &>/dev/null; then
     actual_hash=$(sha256sum "$archive" | awk '{print $1}')
@@ -322,54 +213,44 @@ verify_checksum() {
     warn "未找到 sha256sum / shasum，跳过 SHA256 校验"
     return 0
   fi
-
   if [[ "$actual_hash" != "$expected_hash" ]]; then
     error "SHA256 校验失败！\n  期望：${expected_hash}\n  实际：${actual_hash}"
   fi
   success "SHA256 校验通过（${actual_hash:0:16}...）"
 }
-
 extract_and_verify() {
   local archive="$1" dest_dir="$2"
   local tmp_extract; tmp_extract=$(mktemp -d "${dest_dir}/sub2api-extract.XXXXXX")
-
   if ! tar -xzf "$archive" -C "$tmp_extract" 2>&1; then
     rm -rf "$tmp_extract"
     error "tar 解压失败，归档文件可能已损坏"
   fi
-
   local bin_path
   bin_path=$(find "$tmp_extract" -maxdepth 2 -name "sub2api" -type f 2>/dev/null | head -1 || true)
-
   if [[ -z "$bin_path" ]]; then
     rm -rf "$tmp_extract"
     error "tar.gz 中未找到 sub2api 二进制文件，请确认下载 URL 是否正确"
   fi
-
   local magic
   magic=$(dd if="$bin_path" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$magic" != "7f454c46" ]]; then
     rm -rf "$tmp_extract"
     error "二进制不是有效的 ELF 格式（magic: ${magic:-读取失败}）"
   fi
-
   local emachine
   emachine=$(dd if="$bin_path" bs=1 skip=18 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$emachine" != "$ELF_MACHINE" ]]; then
     rm -rf "$tmp_extract"
     error "ELF 架构不匹配（e_machine=${emachine}，期望=${ELF_MACHINE}，当前平台=${BIN_ARCH}）"
   fi
-
   local size; size=$(wc -c < "$bin_path")
   local size_mb=$(( size / 1024 / 1024 ))
   success "ELF 校验通过（架构 ${BIN_ARCH}，${size_mb} MB）"
-
   local tmp_bin; tmp_bin=$(mktemp "${dest_dir}/sub2api.tmp.XXXXXX")
   mv "$bin_path" "$tmp_bin"
   rm -rf "$tmp_extract"
   echo "$tmp_bin"
 }
-
 _health_check() {
   local elapsed=0 HTTP_CODE
   until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
@@ -386,10 +267,6 @@ _health_check() {
     warn "完成数据库/Redis 配置后，请在浏览器访问 Setup Wizard：http://<IP>:${PORT}/"
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  系统依赖安装（curl / ca-certificates / lsb-release）
-# ════════════════════════════════════════════════════════════════
 _install_base_deps() {
   info "安装基础依赖..."
   if [[ "$PKG_MANAGER" == "apt" ]]; then
@@ -403,12 +280,7 @@ _install_base_deps() {
   fi
   success "基础依赖安装完成"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  自动安装 PostgreSQL 15+
-# ════════════════════════════════════════════════════════════════
 _install_postgres() {
-  # 检查是否已安装且版本 >= 15
   if command -v psql &>/dev/null; then
     local pg_ver
     pg_ver=$(psql --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo "0")
@@ -422,7 +294,6 @@ _install_postgres() {
     fi
     warn "检测到 PostgreSQL ${pg_ver}（< 15），将从 PGDG 官方源安装 PostgreSQL 15"
   fi
-
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "添加 PostgreSQL PGDG 官方 apt 源..."
     install -d /usr/share/postgresql-common/pgdg
@@ -441,7 +312,6 @@ https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
     DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
     systemctl enable --now postgresql
     success "PostgreSQL 15 安装完成"
-
   elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
     info "添加 PostgreSQL PGDG RPM 源..."
     local el_ver
@@ -460,12 +330,7 @@ https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
     success "PostgreSQL 15 安装完成"
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  自动安装 Redis 7+
-# ════════════════════════════════════════════════════════════════
 _install_redis() {
-  # 检查是否已安装且版本 >= 7
   if command -v redis-server &>/dev/null; then
     local redis_ver
     redis_ver=$(redis-server --version 2>/dev/null \
@@ -478,7 +343,6 @@ _install_redis() {
     fi
     warn "检测到 Redis ${redis_ver}（< 7），将从官方源安装 Redis 7"
   fi
-
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "添加 Redis 官方 apt 源..."
     curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
@@ -494,27 +358,17 @@ https://packages.redis.io/deb ${codename} main" \
     DEBIAN_FRONTEND=noninteractive apt-get install -y redis
     systemctl enable --now redis-server
     success "Redis 7 安装完成"
-
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
     dnf install -y redis
     systemctl enable --now redis
     success "Redis 安装完成"
-
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
     yum install -y redis
     systemctl enable --now redis
     success "Redis 安装完成"
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  自动创建 PostgreSQL 数据库用户和数据库
-#  - 幂等：已存在则跳过，密码保持不变
-#  - 随机密码：24 位字母数字，避免 DSN URL 转义问题
-#  - 结果写入全局 PG_USER / PG_PASS / PG_DB / PG_DSN
-# ════════════════════════════════════════════════════════════════
 _setup_postgres() {
-  # 确保 postgres 系统服务已启动
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
     warn "PostgreSQL 服务未运行，尝试启动..."
@@ -522,19 +376,13 @@ _setup_postgres() {
       systemctl start postgresql-15 2>/dev/null || \
       error "无法启动 PostgreSQL 服务，请检查：journalctl -u postgresql -n 30"
   fi
-
-  # 若已有旧密码（CONF_FILE 已存在），复用旧密码（幂等）
   if [[ -z "${PG_PASS:-}" ]]; then
-    # 生成随机密码（仅字母数字，URL 安全，无需转义）
     PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24)
     info "已生成随机 PostgreSQL 密码（24 位）"
   else
     info "复用已有 PostgreSQL 密码"
   fi
-
   info "配置 PostgreSQL 用户和数据库..."
-
-  # 创建用户（幂等：已存在则跳过创建，但始终更新密码确保与 PG_PASS 同步）
   local user_exists
   user_exists=$(sudo -u postgres psql -tAc \
     "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" 2>/dev/null || echo "")
@@ -547,8 +395,6 @@ _setup_postgres() {
       "CREATE USER ${PG_USER} WITH PASSWORD '${PG_PASS}';" > /dev/null
     success "PostgreSQL 用户 '${PG_USER}' 已创建"
   fi
-
-  # 创建数据库（幂等：已存在则跳过）
   local db_exists
   db_exists=$(sudo -u postgres psql -tAc \
     "SELECT 1 FROM pg_database WHERE datname='${PG_DB}'" 2>/dev/null || echo "")
@@ -559,15 +405,9 @@ _setup_postgres() {
       "CREATE DATABASE ${PG_DB} OWNER ${PG_USER};" > /dev/null
     success "PostgreSQL 数据库 '${PG_DB}' 已创建，属主：${PG_USER}"
   fi
-
-  # 构建 DSN
   PG_DSN="postgresql://${PG_USER}:${PG_PASS}@localhost:5432/${PG_DB}?sslmode=disable"
   success "PostgreSQL DSN 已生成"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  自动安装 Nginx 并写入反代配置
-# ════════════════════════════════════════════════════════════════
 _install_nginx() {
   if command -v nginx &>/dev/null; then
     info "Nginx 已安装，跳过安装"
@@ -585,20 +425,14 @@ _install_nginx() {
   systemctl enable nginx
   systemctl start nginx 2>/dev/null || true
 }
-
 _write_nginx_config() {
-  # 构建 server_name 指令
   local server_name_line
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
     server_name_line="    server_name ${SUB2API_DOMAIN};"
   else
     server_name_line="    server_name _;"
   fi
-
-  # 确保 sites-available / sites-enabled 目录存在（Debian/Ubuntu 默认有；RHEL 没有则创建）
   mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-
-  # 写入配置文件（需 644，nginx worker 进程才能读取）
   cat > /etc/nginx/sites-available/sub2api << NGINX
 server {
     listen 80;
@@ -633,23 +467,16 @@ ${server_name_line}
 }
 NGINX
   chmod 644 /etc/nginx/sites-available/sub2api
-
-  # 启用站点（创建软链接，幂等）
   if [[ ! -L /etc/nginx/sites-enabled/sub2api ]]; then
     ln -s /etc/nginx/sites-available/sub2api /etc/nginx/sites-enabled/sub2api
   fi
-
-  # RHEL 系：确保主配置 include sites-enabled（apt 版 Nginx 默认已包含）
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
-      # 在 http 块的末尾添加 include
       sed -i '/^http[[:space:]]*{/a\    include /etc/nginx/sites-enabled/*;' \
         /etc/nginx/nginx.conf 2>/dev/null || \
         warn "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;"
     fi
   fi
-
-  # 校验配置并重载
   if nginx -t 2>/dev/null; then
     systemctl reload nginx
     if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
@@ -662,10 +489,6 @@ NGINX
     nginx -t >&2 2>/dev/null || true
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  写 systemd 服务单元
-# ════════════════════════════════════════════════════════════════
 _write_systemd_unit() {
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
@@ -714,19 +537,13 @@ SyslogIdentifier=${SERVICE_NAME}
 WantedBy=multi-user.target
 EOF
 }
-
-# ════════════════════════════════════════════════════════════════
-#  防火墙配置
-# ════════════════════════════════════════════════════════════════
 _configure_firewall() {
   local FW_DONE=false
-
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "${PORT}/tcp" comment "Sub2API" > /dev/null
     success "ufw 已放行端口 ${PORT}"
     FW_DONE=true
   fi
-
   if ! $FW_DONE && command -v firewall-cmd &>/dev/null && \
       firewall-cmd --state &>/dev/null; then
     firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1 || true
@@ -734,7 +551,6 @@ _configure_firewall() {
     success "firewalld 已放行端口 ${PORT}"
     FW_DONE=true
   fi
-
   if ! $FW_DONE && command -v iptables &>/dev/null; then
     if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
       iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
@@ -753,13 +569,8 @@ _configure_firewall() {
     success "iptables 已放行端口 ${PORT}"
     FW_DONE=true
   fi
-
   $FW_DONE || warn "未检测到活跃防火墙，如有云安全组（AWS/阿里云/腾讯云）请手动放行端口 ${PORT}"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  日志轮转
-# ════════════════════════════════════════════════════════════════
 _write_logrotate() {
   cat > /etc/logrotate.d/sub2api << LOGR
 ${LOG_DIR}/*.log {
@@ -774,14 +585,8 @@ ${LOG_DIR}/*.log {
 LOGR
   success "日志轮转已配置（每日轮转，保留 14 天，自动压缩）"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  写备份脚本
-# ════════════════════════════════════════════════════════════════
 _write_backup_script() {
   mkdir -p "$BACKUP_DIR"
-
-  # 第一段：注入当前 shell 变量（展开）
   cat > /usr/local/bin/sub2api-backup << BKSH_HEADER
 #!/bin/bash
 # Sub2API 自动备份脚本（由 install_sub2api.sh 自动生成，请勿手动修改）
@@ -796,8 +601,6 @@ SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 PG_DSN="${PG_DSN}"
 BKSH_HEADER
-
-  # 第二段：业务逻辑（单引号 heredoc，不展开父 shell 变量）
   cat >> /usr/local/bin/sub2api-backup << 'BKSH_BODY'
 
 LOG="${BACKUP_DIR}/backup.log"
@@ -879,19 +682,12 @@ fi
 
 _log "── 备份完成 ────────────────────────────────────"
 BKSH_BODY
-
   chmod 750 /usr/local/bin/sub2api-backup
   success "备份脚本已写入：/usr/local/bin/sub2api-backup"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  静默备份（供 update 内部调用）
-# ════════════════════════════════════════════════════════════════
 _backup_silent() {
   local label="${1:-manual}"
-
   mkdir -p "$BACKUP_DIR"
-
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"
@@ -906,7 +702,6 @@ _backup_silent() {
   else
     warn "PG_DSN 未配置或 pg_dump 不存在，跳过数据库快照"
   fi
-
   if [[ -d "$CONFIG_DIR" ]]; then
     local conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
     local conf_tmp="${conf_archive}.tmp"
@@ -921,23 +716,16 @@ _backup_silent() {
     fi
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  安装完成摘要（含 PostgreSQL 账号信息）
-# ════════════════════════════════════════════════════════════════
 _print_install_summary() {
   local version="$1"
   local INTERNAL_IP
   INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP")
-
-  # 访问地址（优先展示域名）
   local access_url
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
     access_url="http://${SUB2API_DOMAIN}/"
   else
     access_url="http://${INTERNAL_IP}:${PORT}/"
   fi
-
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔════════════════════════════════════════════════════════════════╗"
@@ -983,49 +771,28 @@ _print_install_summary() {
   echo -e "    ${CYAN}systemctl restart ${SERVICE_NAME}${NC}     重启服务"
   echo ""
 }
-
-# ════════════════════════════════════════════════════════════════
-#  安装流程
-# ════════════════════════════════════════════════════════════════
 do_install() {
   show_banner
   preflight_check "install"
   acquire_lock
-
-  # ── Step 1: 获取最新版本 ──────────────────────────────────────
   step "Step 1  获取最新版本"
   check_connectivity
   info "查询 GitHub 最新 Release..."
-
   local LATEST
   LATEST=$(get_latest_release)
   [[ -z "$LATEST" ]] && error "获取版本号失败，请检查网络后重试"
   success "最新版本：${BOLD}${LATEST}${NC}"
-
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "下载地址：${DOWNLOAD_URL}"
-
-  # ── Step 2: 安装基础依赖 ──────────────────────────────────────
   step "Step 2  安装基础依赖（curl / gnupg / lsb-release）"
   _install_base_deps
-
-  # ── Step 3: 安装 PostgreSQL 15+ ──────────────────────────────
   step "Step 3  安装 PostgreSQL 15+"
   _install_postgres
-
-  # ── Step 4: 安装 Redis 7+ ─────────────────────────────────────
   step "Step 4  安装 Redis 7+"
   _install_redis
-
-  # ── Step 5: 加载已有配置（复用旧密码，如 reinstall）─────────
-  # 在生成密码前先尝试加载，保证 PG_PASS 被复用
   load_config
-
-  # ── Step 6: 创建 PostgreSQL 用户和数据库 ─────────────────────
   step "Step 6  配置 PostgreSQL 账号"
   _setup_postgres
-
-  # ── Step 7: 创建系统用户与目录 ───────────────────────────────
   step "Step 7  创建用户与目录"
   if ! id "$SERVICE_USER" &>/dev/null; then
     useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"
@@ -1033,79 +800,55 @@ do_install() {
   else
     info "用户 ${SERVICE_USER} 已存在，跳过创建"
   fi
-
   mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"
   chmod 750 "$CONFIG_DIR"
   success "目录创建完成"
-
-  # ── Step 8: 下载并校验 tar.gz ────────────────────────────────
   step "Step 8  下载并校验 Sub2API 二进制（架构：${BIN_ARCH}）"
-
   local TMP_ARCHIVE; TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz")
-
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
     rm -f "$TMP_ARCHIVE"
     error "下载失败，请检查网络或前往 https://github.com/${GITHUB_REPO}/releases 确认版本存在"
   fi
-
   verify_checksum "$TMP_ARCHIVE" "$LATEST"
-
   local TMP_BIN
   TMP_BIN=$(extract_and_verify "$TMP_ARCHIVE" "$INSTALL_DIR")
   rm -f "$TMP_ARCHIVE"
-
   if [[ -f "$BIN_PATH" ]]; then
     local OLD_TS; OLD_TS=$(date +%Y%m%d_%H%M%S)
     mv "$BIN_PATH" "${INSTALL_DIR}/sub2api.bak.${OLD_TS}"
     warn "已备份旧二进制 → sub2api.bak.${OLD_TS}"
   fi
-
   mv "$TMP_BIN" "$BIN_PATH"
   chmod +x "$BIN_PATH"
   chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
   success "二进制安装完成：${BIN_PATH}"
-
-  # ── Step 9: 写 systemd 服务单元 ──────────────────────────────
   step "Step 9  配置 systemd 服务"
   _write_systemd_unit
   success "systemd 服务文件已写入：/etc/systemd/system/${SERVICE_NAME}.service"
-
-  # ── Step 10: 安装并配置 Nginx ────────────────────────────────
   step "Step 10  安装并配置 Nginx 反向代理"
   _install_nginx
   _write_nginx_config
-
-  # ── Step 11: 配置防火墙 ───────────────────────────────────────
   step "Step 11  配置防火墙"
   _configure_firewall
-
-  # ── Step 12: 配置日志轮转 ─────────────────────────────────────
   step "Step 12  配置日志轮转"
   _write_logrotate
-
-  # ── Step 13: 配置定时备份 ─────────────────────────────────────
   step "Step 13  配置定时备份（每日 03:30）"
   _write_backup_script
   echo "30 3 * * * root /bin/bash /usr/local/bin/sub2api-backup" \
     > /etc/cron.d/sub2api-backup
   chmod 644 /etc/cron.d/sub2api-backup
   success "定时备份已配置（每日 03:30，保留 ${BACKUP_KEEP_DAYS} 天）"
-
-  # ── Step 14: 启动服务 ─────────────────────────────────────────
   step "Step 14  启动服务"
-
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
     local _port_owner
     _port_owner=$(ss -ltnp 2>/dev/null | grep ":${PORT}" | awk '{print $NF}' | head -1 || echo "未知进程")
     warn "端口 ${PORT} 已被占用（${_port_owner}）"
     warn "若不是旧的 sub2api 进程，请先释放端口，否则服务将无法绑定"
   fi
-
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" --quiet
   systemctl restart "$SERVICE_NAME"
-
   if wait_for_service "$SERVICE_NAME" 25; then
     success "服务启动成功"
     systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' >&2
@@ -1123,92 +866,66 @@ do_install() {
       warn "请在 Setup Wizard 完成配置后再验证服务状态"
     fi
   fi
-
-  # ── Step 15: 健康检查 & 保存配置 ─────────────────────────────
   step "Step 15  健康检查 & 保存配置"
   INSTALLED_VERSION="$LATEST"
   save_config
   _health_check
-
   _print_install_summary "$LATEST"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  更新流程
-# ════════════════════════════════════════════════════════════════
 do_update() {
   show_banner
   preflight_check "update"
   load_config
   acquire_lock
-
   [[ ! -x "$BIN_PATH" ]] \
     && error "未检测到已安装的 Sub2API 二进制（${BIN_PATH}），请先执行 install"
-
   step "检查更新"
   check_connectivity
   info "查询 GitHub 最新 Release..."
-
   local LATEST; LATEST=$(get_latest_release)
   [[ -z "$LATEST" ]] && error "获取最新版本失败，请检查网络后重试"
-
   local CURRENT="${INSTALLED_VERSION:-unknown}"
   info "当前版本（记录）：${YELLOW}${CURRENT}${NC}"
   info "GitHub 最新版本：${YELLOW}${LATEST}${NC}"
-
   if [[ "$CURRENT" == "$LATEST" ]]; then
     success "已是最新版本（${LATEST}），无需更新"
     exit 0
   fi
-
   local _pre_svc_state
   _pre_svc_state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
   if [[ "$_pre_svc_state" == "failed" ]]; then
     warn "更新前服务处于 failed 状态，本次更新将同时重置故障标记"
   fi
-
   step "更新前备份数据"
   _backup_silent "pre-update" || warn "更新前备份失败，继续执行更新"
-
   step "下载新版本（${CURRENT} → ${LATEST}）"
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "下载地址：${DOWNLOAD_URL}"
-
   local TMP_ARCHIVE; TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz")
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
     rm -f "$TMP_ARCHIVE"
     error "下载失败，更新中止（当前版本未受影响）"
   fi
-
   verify_checksum "$TMP_ARCHIVE" "$LATEST"
-
   local TMP_BIN
   TMP_BIN=$(extract_and_verify "$TMP_ARCHIVE" "$INSTALL_DIR")
   rm -f "$TMP_ARCHIVE"
-
   step "替换二进制并重启服务"
   local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
   local BAK_PATH="${INSTALL_DIR}/sub2api.bak.${BAK_TS}"
-
   info "停止服务..."
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-
   cp "$BIN_PATH" "$BAK_PATH"
   info "旧二进制已备份：${BAK_PATH}"
-
   mv "$TMP_BIN" "$BIN_PATH"
   chmod +x "$BIN_PATH"
   chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
-
   systemctl daemon-reload
   systemctl start "$SERVICE_NAME"
-
   if wait_for_service "$SERVICE_NAME" 25; then
     success "服务以新版本启动成功"
     INSTALLED_VERSION="$LATEST"
     save_config
-
-    # 保留最近 3 个旧二进制备份
     local -a _old_baks
     mapfile -t _old_baks < <(
       find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*" -type f \
@@ -1218,7 +935,6 @@ do_update() {
       rm -f "${_old_baks[@]}"
       info "已清理 ${#_old_baks[@]} 个过期旧二进制备份（保留最近 3 个）"
     fi
-
     _health_check
     echo ""
     echo -e "  ${BOLD}${GREEN}✅  更新完成：${YELLOW}${CURRENT}${GREEN} → ${YELLOW}${LATEST}${NC}"
@@ -1230,29 +946,21 @@ do_update() {
     chmod +x "$BIN_PATH"
     chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
     systemctl start "$SERVICE_NAME" 2>/dev/null || true
-
     if wait_for_service "$SERVICE_NAME" 15; then
       success "已成功回滚到旧版本（${CURRENT}），服务已恢复"
     else
       warn "回滚后服务仍未正常启动，请手动检查：journalctl -u ${SERVICE_NAME} -n 30 --no-pager"
     fi
-
     error "更新失败，已自动回滚至 ${CURRENT}。\n  诊断：journalctl -u ${SERVICE_NAME} -n 50 --no-pager"
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  手动备份
-# ════════════════════════════════════════════════════════════════
 do_backup() {
   show_banner
   preflight_check "backup"
   load_config
   acquire_lock
-
   step "手动备份 Sub2API 数据"
   mkdir -p "$BACKUP_DIR"
-
   if [[ -n "${PG_DSN:-}" ]]; then
     if command -v pg_dump &>/dev/null; then
       local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_$(date +%Y%m%d_%H%M%S).sql.gz"
@@ -1272,7 +980,6 @@ do_backup() {
   else
     warn "PG_DSN 未配置，跳过数据库备份"
   fi
-
   if [[ -d "$CONFIG_DIR" ]]; then
     local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_$(date +%Y%m%d_%H%M%S).tar.gz"
     local CONF_TMP="${CONF_ARCHIVE}.tmp"
@@ -1288,7 +995,6 @@ do_backup() {
   else
     warn "配置目录不存在（${CONFIG_DIR}），跳过"
   fi
-
   if [[ -d "$DATA_DIR" ]]; then
     local DATA_ARCHIVE; DATA_ARCHIVE="${BACKUP_DIR}/sub2api_data_$(date +%Y%m%d_%H%M%S).tar.gz"
     local DATA_TMP="${DATA_ARCHIVE}.tmp"
@@ -1303,22 +1009,14 @@ do_backup() {
       warn "数据目录备份失败"
     fi
   fi
-
   release_lock
   success "备份流程完成，归档目录：${BACKUP_DIR}"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  状态查看
-# ════════════════════════════════════════════════════════════════
 do_status() {
   show_banner
   preflight_check "status"
   load_config
-
   step "Sub2API 运行状态"
-
-  # ── systemd 服务 ──
   echo -e "\n${BOLD}【systemd 服务】${NC}"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo -e "  ${GREEN}[✓]${NC} 服务状态：${GREEN}running${NC}"
@@ -1327,7 +1025,6 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 服务状态：${YELLOW}inactive / unknown${NC}"
   fi
-
   local _pid
   _pid=$(systemctl show -p MainPID --value "$SERVICE_NAME" 2>/dev/null || echo "0")
   if [[ "$_pid" != "0" && -d "/proc/${_pid}" ]]; then
@@ -1341,8 +1038,6 @@ do_status() {
     echo -e "  CPU 占用：   ${_cpu}%"
     echo -e "  运行时长：   ${_uptime}"
   fi
-
-  # ── 版本信息 ──
   echo -e "\n${BOLD}【版本信息】${NC}"
   echo -e "  已安装版本（记录）：${YELLOW}${INSTALLED_VERSION:-未知}${NC}"
   if [[ -x "$BIN_PATH" ]]; then
@@ -1350,8 +1045,6 @@ do_status() {
     _bin_ver=$("$BIN_PATH" --version 2>/dev/null | head -1 || echo "（二进制不支持 --version）")
     echo -e "  二进制版本输出：    ${_bin_ver}"
   fi
-
-  # ── Nginx 状态 ──
   echo -e "\n${BOLD}【Nginx 状态】${NC}"
   if command -v nginx &>/dev/null; then
     if systemctl is-active --quiet nginx 2>/dev/null; then
@@ -1359,12 +1052,10 @@ do_status() {
     else
       echo -e "  ${RED}[✗]${NC} nginx 服务未运行（systemctl start nginx）"
     fi
-
     local nginx_conf="/etc/nginx/sites-available/sub2api"
     local nginx_link="/etc/nginx/sites-enabled/sub2api"
     if [[ -f "$nginx_conf" ]]; then
       echo -e "  ${GREEN}[✓]${NC} 反代配置存在：${nginx_conf}"
-      # 显示代理目标
       local proxy_pass
       proxy_pass=$(grep -oE 'proxy_pass[[:space:]]+[^;]+' "$nginx_conf" 2>/dev/null | awk '{print $2}' | head -1 || echo "N/A")
       echo -e "       代理目标：${proxy_pass}"
@@ -1379,7 +1070,6 @@ do_status() {
     else
       echo -e "  ${YELLOW}[!]${NC} sites-enabled 软链接不存在（ln -s ${nginx_conf} ${nginx_link}）"
     fi
-    # nginx 配置语法检查
     if nginx -t 2>/dev/null; then
       echo -e "  ${GREEN}[✓]${NC} nginx -t 语法校验通过"
     else
@@ -1388,8 +1078,6 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} nginx 未安装"
   fi
-
-  # ── 依赖服务连通性 ──
   echo -e "\n${BOLD}【依赖服务连通性】${NC}"
   for _svc_port in "PostgreSQL:5432" "Redis:6379"; do
     local _name="${_svc_port%%:*}" _port="${_svc_port##*:}"
@@ -1399,7 +1087,6 @@ do_status() {
       echo -e "  ${YELLOW}[!]${NC} ${_name}（:${_port}）不可达"
     fi
   done
-  # 显示 PostgreSQL DSN（脱敏）
   if [[ -n "${PG_DSN:-}" ]]; then
     local _dsn_masked
     _dsn_masked=$(echo "$PG_DSN" | sed 's|:\([^:@]*\)@|:***@|')
@@ -1407,8 +1094,6 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} PG_DSN 未配置，pg_dump 备份不可用"
   fi
-
-  # ── 目录信息 ──
   echo -e "\n${BOLD}【目录信息】${NC}"
   for _d in "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR"; do
     if [[ -d "$_d" ]]; then
@@ -1418,8 +1103,6 @@ do_status() {
       echo -e "  ${YELLOW}[!]${NC} ${_d}（不存在）"
     fi
   done
-
-  # ── 备份信息 ──
   echo -e "\n${BOLD}【备份信息】${NC}"
   if [[ -d "$BACKUP_DIR" ]]; then
     local bak_count bak_total_size
@@ -1441,13 +1124,9 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 备份目录不存在：${BACKUP_DIR}"
   fi
-
-  # ── 磁盘空间 ──
   echo -e "\n${BOLD}【磁盘空间】${NC}"
   df -h "$INSTALL_DIR" 2>/dev/null \
     | awk 'NR==2{printf "  挂载点: %-15s  已用: %s / %s（%s 已用）\n", $6,$3,$2,$5}' || true
-
-  # ── HTTP 健康检查 ──
   echo -e "\n${BOLD}【HTTP 健康检查（本地 127.0.0.1:${PORT}）】${NC}"
   local HTTP_CODE
   HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
@@ -1457,8 +1136,6 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 本地接口响应：HTTP ${HTTP_CODE}（服务未运行 / 等待 DB 连接？）"
   fi
-
-  # ── 防火墙 ──
   echo -e "\n${BOLD}【防火墙规则（端口 ${PORT}）】${NC}"
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     local ufw_rule
@@ -1477,29 +1154,20 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 未检测到防火墙（可能依赖云安全组）"
   fi
-
   echo ""
 }
-
-# ════════════════════════════════════════════════════════════════
-#  卸载流程
-# ════════════════════════════════════════════════════════════════
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
   load_config
   acquire_lock
-
-  # 关键路径变量非空 + 非根目录双重校验
   [[ -z "${INSTALL_DIR:-}" ]] && error "INSTALL_DIR 未设置，卸载中止（配置文件：${CONF_FILE}）"
   [[ -z "${DATA_DIR:-}"    ]] && error "DATA_DIR 未设置，卸载中止"
   [[ -z "${BACKUP_DIR:-}"  ]] && error "BACKUP_DIR 未设置，卸载中止"
   [[ "${INSTALL_DIR}" == "/" ]] && error "INSTALL_DIR 为根目录（/），拒绝执行卸载"
   [[ "${DATA_DIR}"    == "/" ]] && error "DATA_DIR 为根目录（/），拒绝执行卸载"
   [[ "${BACKUP_DIR}"  == "/" ]] && error "BACKUP_DIR 为根目录（/），拒绝执行卸载"
-
   step "卸载 Sub2API"
-
   echo -e "${RED}${BOLD}"
   echo "  ⚠️  此操作将删除："
   echo "     · Sub2API 二进制及旧版备份（${INSTALL_DIR}/sub2api*）"
@@ -1514,43 +1182,33 @@ do_uninstall() {
   echo "  ⚠️  PostgreSQL 数据库不会被删除（需手动清理）"
   echo "  数据目录（${DATA_DIR}）和配置目录（${CONFIG_DIR}）默认保留，可选是否删除。"
   echo -e "${NC}"
-
   prompt "确认继续卸载？（输入 YES 确认）："
   local _c; read -r _c
   [[ "$_c" != "YES" ]] && { info "已取消卸载"; exit 0; }
-
   prompt "是否同时删除本地数据目录（${DATA_DIR}）？[y/N]："
   local _del_data; read -r _del_data
   local DELETE_DATA=false
   [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-
   prompt "是否同时删除配置目录（${CONFIG_DIR}）？[y/N]："
   local _del_conf; read -r _del_conf
   local DELETE_CONF=false
   [[ "${_del_conf,,}" == "y" ]] && DELETE_CONF=true
-
   prompt "是否同时删除备份目录（${BACKUP_DIR}）？[y/N]："
   local _del_bak; read -r _del_bak
   local DELETE_BACKUP=false
   [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
-
-  # 停止并禁用服务
   info "停止并禁用 ${SERVICE_NAME} 服务..."
   systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
   success "systemd 服务已移除"
-
-  # 移除二进制及临时/备份文件
   rm -f "$BIN_PATH"
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*"       -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.tmp.*"       -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-release.*.tar.gz" -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-extract.*"   -type d -exec rm -rf {} + 2>/dev/null || true
   success "二进制及相关文件已删除"
-
-  # 移除 Nginx 配置和软链接
   rm -f /etc/nginx/sites-enabled/sub2api
   rm -f /etc/nginx/sites-available/sub2api
   if command -v nginx &>/dev/null && nginx -t 2>/dev/null; then
@@ -1559,24 +1217,18 @@ do_uninstall() {
   else
     success "Nginx 反代配置已清除"
   fi
-
-  # 移除定时任务、备份脚本、日志轮转
   rm -f /etc/cron.d/sub2api-backup \
         /usr/local/bin/sub2api-backup \
         /etc/logrotate.d/sub2api
   success "定时任务、备份脚本、日志轮转配置已清除"
-
   rm -f "$CONF_FILE"
   success "部署配置文件已清除"
-
-  # 日志目录
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
     rm -rf "$LOG_DIR"
     success "日志目录已删除：${LOG_DIR}"
   else
     warn "日志目录路径异常（${LOG_DIR:-未设置}），已跳过"
   fi
-
   if $DELETE_DATA; then
     rm -rf "$DATA_DIR"
     success "本地数据目录已删除：${DATA_DIR}"
@@ -1587,27 +1239,23 @@ do_uninstall() {
   else
     info "本地数据目录已保留：${DATA_DIR}"
   fi
-
   if $DELETE_CONF; then
     rm -rf "$CONFIG_DIR"
     success "配置目录已删除：${CONFIG_DIR}"
   else
     info "配置目录已保留：${CONFIG_DIR}"
   fi
-
   if $DELETE_BACKUP; then
     rm -rf "$BACKUP_DIR"
     success "备份目录已删除：${BACKUP_DIR}"
   else
     info "备份目录已保留：${BACKUP_DIR}"
   fi
-
   if $DELETE_DATA && $DELETE_CONF && id "$SERVICE_USER" &>/dev/null; then
     userdel "$SERVICE_USER" 2>/dev/null \
       && success "系统用户 ${SERVICE_USER} 已删除" \
       || warn "系统用户 ${SERVICE_USER} 删除失败，可能被其他服务引用"
   fi
-
   echo ""
   echo -e "${BOLD}${GREEN}  ✅  Sub2API 已完全卸载${NC}"
   echo ""
@@ -1617,10 +1265,6 @@ do_uninstall() {
   echo -e "    ${CYAN}sudo -u postgres psql -c 'DROP USER ${PG_USER};'${NC}"
   echo ""
 }
-
-# ════════════════════════════════════════════════════════════════
-#  交互式主菜单
-# ════════════════════════════════════════════════════════════════
 show_menu() {
   show_banner
   echo -e "  ${BOLD}请选择操作：${NC}"
@@ -1645,10 +1289,6 @@ show_menu() {
     *) error "无效选项：${MENU_CHOICE}" ;;
   esac
 }
-
-# ════════════════════════════════════════════════════════════════
-#  入口
-# ════════════════════════════════════════════════════════════════
 case "${1:-menu}" in
   install)   do_install   ;;
   update)    do_update    ;;

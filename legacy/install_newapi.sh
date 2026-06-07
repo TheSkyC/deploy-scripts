@@ -1,55 +1,6 @@
 #!/bin/bash
-# ============================================================
-#  New API 一键管理脚本（Debian / Ubuntu，无需 Docker）
-#  功能：部署 · 更新 · 备份 · 卸载 · 状态查看
-#  原理：从 GitHub Releases 下载静态二进制 + systemd 托管
-#  用法：sudo bash install_newapi.sh [install|update|backup|status|uninstall]
-#        不带参数则显示交互菜单
-#
-#  版本：v2
-#  v2 相对原版改进日志：
-#    [架构] 拆分为 install/update/backup/status/uninstall 五个子命令，
-#           均可通过命令行参数直接调用，也可通过交互菜单选择。
-#    [健壮] 新增 acquire_lock：flock 文件锁防止多实例并发运行（install/update/backup/uninstall）。
-#    [健壮] 新增 wait_for_service：等待 systemd 服务真正 active，遇到 failed 状态提前返回，
-#           避免 10/20 秒超时等待。
-#    [健壮] install 失败时完整回滚（删除二进制 + systemd unit），不留残破半截安装。
-#    [健壮] update 失败时自动回滚到备份的旧版二进制，服务恢复后再 error 退出。
-#    [健壮] 多重端点网络连通性检测（三个 GitHub 端点，任一可达即通过）。
-#    [健壮] 下载的二进制执行 ELF magic + 最小文件大小校验，防止下载不完整或 404 HTML 被误当二进制执行。
-#    [健壮] 下载时先写临时文件（mktemp）再 mv，避免覆盖旧二进制的中间态。
-#    [健壮] 启动服务前检测端口占用，给出可读的冲突进程信息（warn 级别，不阻断）。
-#    [健壮] 备份脚本：原子写（先写 .tmp 再 mv）+ 数据目录存在性前置校验 + tar 错误不再静默。
-#    [健壮] SQLite WAL flush + integrity_check 在备份前执行，完整性失败时发出 warn 并继续。
-#    [健壮] update 前自动 _backup_silent，保证回滚时始终有最新数据快照。
-#    [健壮] 旧备份二进制仅保留最近 3 个，防止磁盘无限积累。
-#    [安全] umask 077：所有新建文件/目录默认 700/600，防止非 root 读取。
-#    [安全] load_config 不再 source 配置文件，改为逐行手动解析赋值：
-#           KEY 白名单 + 仅大写字母+下划线 + VALUE 不经 shell 解释，
-#           彻底消除 source 执行任意代码的风险。
-#    [安全] 配置文件属主/权限严格校验（owner=root, 权限 600/400），不符合则拒绝加载。
-#    [安全] save_config 写入前对所有值调用 _sanitize_conf_val，截断换行/移除引号，
-#           防止含特殊字符的值破坏配置文件格式。
-#    [安全] systemd unit 增加安全加固：NoNewPrivileges / PrivateTmp / ProtectSystem=strict /
-#           ReadWritePaths / LimitNOFILE=65536 / StandardOutput+Error→journal。
-#    [安全] uninstall 对所有关键路径变量做非空 + 非根目录二重校验，
-#           防止配置文件未加载时变量为空/默认值而误删文件。
-#    [运维] 新增日志轮转（logrotate）配置：每日轮转，保留 14 天，copytruncate。
-#    [运维] 新增定时自动备份（每日 03:30，cron.d），保留 BACKUP_KEEP_DAYS 天。
-#    [运维] status 命令展示：服务状态 / 版本 / 进程资源（PID/内存/CPU）/
-#           数据目录大小 / 备份列表 / 磁盘空间 / HTTP 健康检查 / 防火墙规则。
-#    [运维] 所有 info/success/warn/error 输出重定向到 stderr，不污染 stdout。
-#    [运维] iptables 持久化：优先用 netfilter-persistent，降级用 iptables-save，
-#           两者均不可用时 warn 告知用户手动持久化。
-#    [卫生] preflight_check 提取为独立函数，各子命令统一调用。
-#    [卫生] banner 提取为 show_banner 函数，独立于业务逻辑。
-#    [卫生] 日志函数统一输出到 >&2，与原版混用 stdout/stderr 不一致问题修复。
-# ============================================================
-
 set -euo pipefail
-umask 077   # 所有新建文件/目录默认 700/600，防止 root 临时文件被其他用户读取
-
-# ── 颜色与日志函数 ────────────────────────────────────────────
+umask 077
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[·]${NC} $*" >&2; }
@@ -58,12 +9,8 @@ warn()    { echo -e "${YELLOW}[!]${NC} $*" >&2; }
 error()   { echo -e "${RED}[✗]${NC} $*" >&2; exit 1; }
 step()    { echo -e "\n${CYAN}${BOLD}── $* ──────────────────────────────${NC}" >&2; }
 prompt()  { echo -ne "${YELLOW}[?]${NC} $* " >&2; }
-
-# ════════════════════════════════════════════════════════════════
-#  用户配置（按需修改）
-# ════════════════════════════════════════════════════════════════
 DOMAIN="api.tarxf.com"
-PORT=8080                          # CF 免费版支持的端口，如无特殊需求勿改
+PORT=8080
 INSTALL_DIR="/opt/new-api"
 DATA_DIR="/opt/new-api/data"
 LOG_DIR="/opt/new-api/logs"
@@ -72,15 +19,9 @@ SERVICE_USER="newapi"
 GITHUB_REPO="QuantumNous/new-api"
 BACKUP_DIR="/opt/new-api-backups"
 BACKUP_KEEP_DAYS=30
-
-# ── 运行时路径（勿随意修改）──────────────────────────────────
 BIN_PATH="${INSTALL_DIR}/new-api"
 LOG_FILE="${LOG_DIR}/new-api.log"
-CONF_FILE="/etc/new-api-deploy.conf"  # 脚本自身的部署记录
-
-# ════════════════════════════════════════════════════════════════
-#  Banner
-# ════════════════════════════════════════════════════════════════
+CONF_FILE="/etc/new-api-deploy.conf"
 show_banner() {
   echo -e "\n${BOLD}${CYAN}"
   cat << 'EOF'
@@ -94,16 +35,10 @@ EOF
   echo -e "${NC}"
   echo -e "  ${BOLD}LLM API 聚合网关 · 二进制直装 · systemd 托管 · Cloudflare 兼容${NC}\n"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  前置检查
-# ════════════════════════════════════════════════════════════════
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
-
   command -v apt-get &>/dev/null \
     || error "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）"
-
   ARCH=$(uname -m)
   case $ARCH in
     x86_64)  BIN_ARCH="amd64" ;;
@@ -111,28 +46,16 @@ preflight_check() {
     *) error "不支持的架构：$ARCH（支持 x86_64 / aarch64）" ;;
   esac
 }
-
-# ════════════════════════════════════════════════════════════════
-#  并发锁：防止多实例同时运行
-# ════════════════════════════════════════════════════════════════
 LOCK_FILE="/var/lock/new-api-deploy.lock"
-
 acquire_lock() {
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
     error "另一个 new-api 管理进程正在运行（锁文件：${LOCK_FILE}），请稍后再试"
   fi
-  # EXIT trap 自动释放锁，防止脚本 error() 异常退出后锁未释放
   trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
 }
-
 release_lock() { flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null; }
-
-# ════════════════════════════════════════════════════════════════
-#  网络连通性检测
-# ════════════════════════════════════════════════════════════════
 check_connectivity() {
-  # 依次探测三个 GitHub 端点，任一可达即视为通
   local targets=(
     "https://api.github.com"
     "https://github.com"
@@ -145,14 +68,9 @@ check_connectivity() {
   done
   error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  等待 systemd 服务启动（最多 N 秒）
-# ════════════════════════════════════════════════════════════════
 wait_for_service() {
   local svc="$1" timeout="${2:-20}" elapsed=0
   while ! systemctl is-active --quiet "$svc"; do
-    # 若服务已进入 failed 状态，无需再等满超时
     if systemctl is-failed --quiet "$svc" 2>/dev/null; then
       return 1
     fi
@@ -162,18 +80,11 @@ wait_for_service() {
   done
   return 0
 }
-
-# ════════════════════════════════════════════════════════════════
-#  配置持久化（load / save）
-# ════════════════════════════════════════════════════════════════
-
-# 配置值安全化
 _sanitize_conf_val() {
-  local _v="${1%%$'\n'*}"   # 截断到首个换行
-  _v="${_v//\"/}"           # 移除双引号
+  local _v="${1%%$'\n'*}"
+  _v="${_v//\"/}"
   echo "$_v"
 }
-
 save_config() {
   cat > "$CONF_FILE" << CONF
 DOMAIN="$(_sanitize_conf_val "${DOMAIN}")"
@@ -191,15 +102,11 @@ CONF
   chmod 600 "$CONF_FILE"
   success "部署配置已持久化：${CONF_FILE}"
 }
-
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return
-
-  # 安全校验：文件必须属于 root，权限不超过 600
   local _owner _perms
   _owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
   _perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
-
   if [[ "$_owner" != "root" ]]; then
     warn "配置文件 ${CONF_FILE} 属主非 root（当前：${_owner}），拒绝加载"
     return
@@ -208,25 +115,19 @@ load_config() {
     warn "配置文件权限过于宽松（${_perms}），拒绝加载（建议：chmod 600 ${CONF_FILE}）"
     return
   fi
-
-  # 逐行手动解析，不使用 source，彻底消除任意代码执行风险
   local _line _key _val
   while IFS= read -r _line || [[ -n "$_line" ]]; do
-    # 跳过注释行与空行
     [[ "$_line" =~ ^[[:space:]]*(#|$) ]] && continue
-    # 提取 KEY
     _key="${_line%%=*}"
     _key="${_key// /}"
     if [[ ! "$_key" =~ ^[A-Z_]+$ ]]; then
       warn "配置文件含非法键名（${_key}），已跳过该行"
       continue
     fi
-    # 提取 VALUE，剥除首尾双引号
     _val="${_line#*=}"
     if [[ "$_val" =~ ^\"(.*)\"$ ]]; then
       _val="${BASH_REMATCH[1]}"
     fi
-    # 白名单：仅允许已知配置键
     case "$_key" in
       DOMAIN|PORT|INSTALL_DIR|DATA_DIR|LOG_DIR|SERVICE_NAME|\
       SERVICE_USER|GITHUB_REPO|BACKUP_DIR|BACKUP_KEEP_DAYS|INSTALLED_VERSION)
@@ -237,25 +138,15 @@ load_config() {
         ;;
     esac
   done < "$CONF_FILE"
-
-  # 重新计算派生路径（防止 INSTALL_DIR / LOG_DIR 变更后派生路径指向旧位置）
   BIN_PATH="${INSTALL_DIR}/new-api"
   LOG_FILE="${LOG_DIR}/new-api.log"
   success "已加载部署记录：${CONF_FILE}"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  辅助函数
-# ════════════════════════════════════════════════════════════════
-
-# 获取 GitHub 最新 Release Tag
 get_latest_release() {
   local json tag
   json=$(curl -fsSL --max-time 15 \
     "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null) \
     || { warn "无法访问 GitHub API"; echo ""; return; }
-
-  # 兼容 GNU grep -P 与 BSD grep 两种模式
   if echo "test" | grep -qP 'test' 2>/dev/null; then
     tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
   fi
@@ -263,16 +154,12 @@ get_latest_release() {
     tag=$(echo "$json" | grep '"tag_name"' | head -1 \
       | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
   fi
-
-  # 基本格式校验（必须以 v 或数字开头）
   if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
     echo "$tag"
   else
     echo ""
   fi
 }
-
-# 构建下载 URL
 get_download_url() {
   local version="$1"
   if [[ "${BIN_ARCH}" == "amd64" ]]; then
@@ -281,34 +168,24 @@ get_download_url() {
     echo "https://github.com/${GITHUB_REPO}/releases/download/${version}/new-api-arm64-${version}"
   fi
 }
-
-# 校验下载的二进制（ELF magic + 最小大小）
 verify_binary() {
   local bin="$1"
-
   [[ -s "$bin" ]] || error "二进制文件为空，疑似下载失败"
-
   local size
   size=$(wc -c < "$bin")
   [[ $size -lt 1048576 ]] \
     && error "二进制文件过小（${size} 字节），疑似下载不完整或 URL 返回了错误页（如 404 HTML）"
-
-  # ELF magic 校验（前 4 字节应为 7f 45 4c 46）
   local magic
   magic=$(dd if="$bin" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$magic" != "7f454c46" ]]; then
     error "二进制文件不是有效的 ELF 格式（magic: ${magic:-读取失败}）\n  请检查下载 URL 或网络环境是否有拦截/302 跳转"
   fi
-
   local size_mb=$(( size / 1024 / 1024 ))
   success "二进制校验通过（ELF，${size_mb} MB）"
 }
-
-# HTTP 健康检查（带重试）
 _health_check() {
   local elapsed=0
   local HTTP_CODE
-  # 最多等 15 秒让服务完成初始化
   until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
       "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000") \
       && [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; do
@@ -316,7 +193,6 @@ _health_check() {
     elapsed=$(( elapsed + 1 ))
     [[ $elapsed -ge 15 ]] && break
   done
-
   if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
     success "HTTP 健康检查通过（状态码 ${HTTP_CODE}）"
   else
@@ -324,10 +200,6 @@ _health_check() {
     warn "调试命令：journalctl -u ${SERVICE_NAME} -n 30 --no-pager"
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  写入 systemd 服务单元
-# ════════════════════════════════════════════════════════════════
 _write_systemd_unit() {
   local session_secret="$1"
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
@@ -381,26 +253,17 @@ SyslogIdentifier=${SERVICE_NAME}
 WantedBy=multi-user.target
 EOF
 }
-
-# ════════════════════════════════════════════════════════════════
-#  防火墙配置
-# ════════════════════════════════════════════════════════════════
 _configure_firewall() {
   local FW_DONE=false
-
-  # ufw（优先）
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "${PORT}/tcp" comment "New API" > /dev/null
     success "ufw 已放行端口 ${PORT}"
     FW_DONE=true
   fi
-
-  # iptables（fallback）
   if ! $FW_DONE && command -v iptables &>/dev/null; then
     if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
       iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
     fi
-    # 持久化：优先 netfilter-persistent，降级 iptables-save
     if command -v netfilter-persistent &>/dev/null; then
       netfilter-persistent save 2>/dev/null \
         && success "iptables 规则已持久化（netfilter-persistent）" || true
@@ -415,13 +278,8 @@ _configure_firewall() {
     success "iptables 已放行端口 ${PORT}"
     FW_DONE=true
   fi
-
   $FW_DONE || warn "未检测到活跃防火墙，如有云安全组（如 AWS/阿里云/腾讯云）请手动放行端口 ${PORT}"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  日志轮转
-# ════════════════════════════════════════════════════════════════
 _write_logrotate() {
   cat > /etc/logrotate.d/new-api << LOGR
 ${LOG_DIR}/*.log {
@@ -438,14 +296,8 @@ ${LOG_DIR}/*.log {
 LOGR
   success "日志轮转已配置（每日轮转，保留 14 天，自动压缩）"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  写入定时备份脚本
-# ════════════════════════════════════════════════════════════════
 _write_backup_script() {
   mkdir -p "$BACKUP_DIR"
-
-  # 分两段写入：第一段用普通 heredoc 展开父 shell 变量（注入配置值）
   cat > /usr/local/bin/new-api-backup << BKSH_HEADER
 #!/bin/bash
 # New API 自动备份脚本（由 install_newapi.sh 自动生成，请勿手动修改）
@@ -458,8 +310,6 @@ DATA_DIR="${DATA_DIR}"
 SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 BKSH_HEADER
-
-  # 第二段：业务逻辑不展开父 shell 变量（单引号 heredoc）
   cat >> /usr/local/bin/new-api-backup << 'BKSH_BODY'
 
 LOG="${BACKUP_DIR}/backup.log"
@@ -517,27 +367,18 @@ fi
 
 _log "── 备份完成 ────────────────────────────────────"
 BKSH_BODY
-
   chmod 750 /usr/local/bin/new-api-backup
   success "备份脚本已写入：/usr/local/bin/new-api-backup"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  静默备份（供 update 等内部调用，不交互）
-# ════════════════════════════════════════════════════════════════
 _backup_silent() {
   local label="${1:-manual}"
-
   if [[ ! -d "$DATA_DIR" ]]; then
     warn "_backup_silent: 数据目录不存在（${DATA_DIR}），跳过备份"
     return 1
   fi
-
   mkdir -p "$BACKUP_DIR"
   local archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
-
-  # SQLite WAL flush
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
     sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
@@ -545,8 +386,6 @@ _backup_silent() {
     _ic=$(sqlite3 "$DB_FILE" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
     [[ "$_ic" != "ok" ]] && warn "SQLite integrity_check 警告（${_ic}），备份继续"
   fi
-
-  # 原子写，tar 错误输出到 stderr（不静默）
   if tar -czf "$archive_tmp" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1 >&2; then
@@ -559,15 +398,10 @@ _backup_silent() {
     return 1
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  安装完成摘要
-# ════════════════════════════════════════════════════════════════
 _print_install_summary() {
   local version="$1"
   local INTERNAL_IP
   INTERNAL_IP=$(hostname -I | awk '{print $1}')
-
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔══════════════════════════════════════════════════════╗"
@@ -602,35 +436,23 @@ _print_install_summary() {
   echo -e "  ${YELLOW}${BOLD}[CF 提醒]${NC} 如遇流式响应（SSE）卡顿，在 CF 规则中关闭该域名的缓冲/缓存"
   echo ""
 }
-
-# ════════════════════════════════════════════════════════════════
-#  安装流程
-# ════════════════════════════════════════════════════════════════
 do_install() {
   show_banner
   preflight_check "install"
   acquire_lock
-
-  # ── Step 1: 获取最新版本 ─────────────────────────────────────
   step "Step 1  获取最新版本"
   check_connectivity
   info "查询 GitHub 最新 Release..."
-
   local LATEST
   LATEST=$(get_latest_release)
   [[ -z "$LATEST" ]] && error "获取版本号失败，请检查网络后重试"
   success "最新版本：${BOLD}${LATEST}${NC}"
-
   local DOWNLOAD_URL
   DOWNLOAD_URL=$(get_download_url "$LATEST")
-
-  # ── Step 2: 安装系统依赖 ──────────────────────────────────────
   step "Step 2  安装系统依赖"
   apt-get update -qq
   apt-get install -y -qq curl ca-certificates sqlite3
   success "依赖安装完成（curl / ca-certificates / sqlite3）"
-
-  # ── Step 3: 创建用户与目录 ──────────────────────────────────
   step "Step 3  创建用户与目录"
   if ! id "$SERVICE_USER" &>/dev/null; then
     useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"
@@ -638,85 +460,58 @@ do_install() {
   else
     info "用户 ${SERVICE_USER} 已存在，跳过创建"
   fi
-
   mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$BACKUP_DIR"
   success "目录创建完成：${INSTALL_DIR} / ${DATA_DIR} / ${LOG_DIR}"
-
-  # ── Step 4: 下载二进制 ────────────────────────────────────────
   step "Step 4  下载 New API 二进制（架构：${BIN_ARCH}）"
   info "下载地址：${DOWNLOAD_URL}"
-
-  # 先写到临时文件，避免下载中途失败覆盖旧的可用二进制
   local TMP_BIN
   TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX")
-
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     rm -f "$TMP_BIN"
     error "下载失败，请检查网络或前往 https://github.com/${GITHUB_REPO}/releases 确认版本存在"
   fi
-
   verify_binary "$TMP_BIN"
-
-  # 若已有旧二进制则带时间戳备份
   if [[ -f "$BIN_PATH" ]]; then
     local OLD_TS; OLD_TS=$(date +%Y%m%d_%H%M%S)
     mv "$BIN_PATH" "${INSTALL_DIR}/new-api.bak.${OLD_TS}"
     warn "已备份旧二进制 → new-api.bak.${OLD_TS}"
   fi
-
   mv "$TMP_BIN" "$BIN_PATH"
   chmod +x "$BIN_PATH"
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
   success "二进制安装完成：${BIN_PATH}"
-
-  # ── Step 5: 生成安全密钥 ─────────────────────────────────────
   step "Step 5  生成安全配置"
   local SESSION_SECRET
   SESSION_SECRET=$(tr -dc 'A-Za-z0-9!@#$%^&*' </dev/urandom 2>/dev/null | head -c 40; true)
   success "SESSION_SECRET 已随机生成（40 位混合字符）"
-
-  # ── Step 6: 写 systemd 服务单元 ──────────────────────────────
   step "Step 6  配置 systemd 服务"
   _write_systemd_unit "$SESSION_SECRET"
   success "systemd 服务文件已写入：/etc/systemd/system/${SERVICE_NAME}.service"
-
-  # ── Step 7: 配置防火墙 ────────────────────────────────────────
   step "Step 7  配置防火墙"
   _configure_firewall
-
-  # ── Step 8: 配置日志轮转 ─────────────────────────────────────
   step "Step 8  配置日志轮转"
   _write_logrotate
-
-  # ── Step 9: 配置定时备份 ─────────────────────────────────────
   step "Step 9  配置定时备份（每日 03:30）"
   _write_backup_script
   echo "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" \
     > /etc/cron.d/new-api-backup
   chmod 644 /etc/cron.d/new-api-backup
   success "定时备份已配置（每日 03:30，保留 ${BACKUP_KEEP_DAYS} 天）"
-
-  # ── Step 10: 启动服务 ─────────────────────────────────────────
   step "Step 10  启动服务"
-
-  # 端口冲突检测（warn 级别，不阻断，旧服务重启属正常）
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
     local _port_owner
     _port_owner=$(ss -ltnp 2>/dev/null | grep ":${PORT}" | awk '{print $NF}' | head -1 || echo "未知进程")
     warn "端口 ${PORT} 已被占用（${_port_owner}）"
     warn "若不是旧的 new-api 进程，请先释放端口，否则服务将无法绑定"
   fi
-
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" --quiet
   systemctl restart "$SERVICE_NAME"
-
   if wait_for_service "$SERVICE_NAME" 20; then
     success "服务启动成功"
     systemctl status "$SERVICE_NAME" --no-pager -l | head -12 | sed 's/^/  /' >&2
   else
-    # 安装失败回滚：删除二进制和 systemd unit，不留残破半截安装
     warn "服务在 20 秒内未能正常启动，正在回滚已安装文件..."
     systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
     systemctl disable "$SERVICE_NAME" 2>/dev/null || true
@@ -725,95 +520,67 @@ do_install() {
     rm -f "$BIN_PATH"
     error "安装失败：服务无法启动，已回滚二进制与 systemd unit。\n  调试命令：journalctl -u ${SERVICE_NAME} -n 30 --no-pager\n  （数据目录、日志目录已保留，修复原因后可重新执行 install）"
   fi
-
-  # ── Step 11: 健康检查 & 保存配置 ──────────────────────────────
   step "Step 11  健康检查"
   INSTALLED_VERSION="$LATEST"
   save_config
   _health_check
-
   _print_install_summary "$LATEST"
 }
-
-# ════════════════════════════════════════════════════════════════
-#  更新流程
-# ════════════════════════════════════════════════════════════════
 do_update() {
   show_banner
   preflight_check "update"
   load_config
   acquire_lock
-
   [[ ! -x "$BIN_PATH" ]] \
     && error "未检测到已安装的 New API 二进制（${BIN_PATH}），请先执行 install"
-
   step "检查更新"
   check_connectivity
   info "查询 GitHub 最新 Release..."
-
   local LATEST
   LATEST=$(get_latest_release)
   [[ -z "$LATEST" ]] && error "获取最新版本失败，请检查网络后重试"
-
   local CURRENT="${INSTALLED_VERSION:-unknown}"
   info "当前版本（记录）：${YELLOW}${CURRENT}${NC}"
   info "GitHub 最新版本：${YELLOW}${LATEST}${NC}"
-
   if [[ "$CURRENT" == "$LATEST" ]]; then
     success "已是最新版本（${LATEST}），无需更新"
     exit 0
   fi
-
-  # 记录更新前服务真实状态（systemctl stop 会清除 failed 标记）
   local _pre_svc_state
   _pre_svc_state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
   if [[ "$_pre_svc_state" == "failed" ]]; then
     warn "注意：更新前服务处于 failed 状态，本次更新将同时重置故障标记"
     warn "如更新后仍有问题，请先检查已有错误：journalctl -u ${SERVICE_NAME} -n 50 --no-pager"
   fi
-
   step "更新前备份数据"
   _backup_silent "pre-update" || warn "更新前备份失败，继续执行更新（建议手动检查数据目录完整性）"
-
   step "下载新版本二进制（${CURRENT} → ${LATEST}）"
   local DOWNLOAD_URL
   DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "下载地址：${DOWNLOAD_URL}"
-
   local TMP_BIN
   TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX")
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     rm -f "$TMP_BIN"
     error "下载失败，更新中止（当前版本未受影响）"
   fi
-
   verify_binary "$TMP_BIN"
-
   step "替换二进制并重启服务"
   local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
   local BAK_PATH="${INSTALL_DIR}/new-api.bak.${BAK_TS}"
-
   info "停止服务..."
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-
-  # 备份旧二进制（回滚依赖此文件）
   cp "$BIN_PATH" "$BAK_PATH"
   info "旧二进制已备份：${BAK_PATH}"
-
-  # 安装新二进制
   mv "$TMP_BIN" "$BIN_PATH"
   chmod +x "$BIN_PATH"
   chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
-
   systemctl daemon-reload
   systemctl start "$SERVICE_NAME"
-
   if wait_for_service "$SERVICE_NAME" 20; then
     success "服务以新版本启动成功"
     INSTALLED_VERSION="$LATEST"
     save_config
-
-    # 保留最近 3 个旧备份，其余删除
     local -a _old_baks
     mapfile -t _old_baks < <(
       find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f \
@@ -823,48 +590,34 @@ do_update() {
       rm -f "${_old_baks[@]}"
       info "已清理 ${#_old_baks[@]} 个过期旧备份（保留最近 3 个）"
     fi
-
     _health_check
-
     echo ""
     echo -e "  ${BOLD}${GREEN}✅  更新完成：${YELLOW}${CURRENT}${GREEN} → ${YELLOW}${LATEST}${NC}"
     echo ""
   else
-    # 自动回滚到备份的旧版二进制
     warn "新版本（${LATEST}）启动失败，正在自动回滚到 ${CURRENT}..."
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-
     mv "$BAK_PATH" "$BIN_PATH"
     chmod +x "$BIN_PATH"
     chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
-
     systemctl start "$SERVICE_NAME" 2>/dev/null || true
     if wait_for_service "$SERVICE_NAME" 15; then
       success "已成功回滚到旧版本（${CURRENT}），服务已恢复"
     else
       warn "回滚后服务仍未正常启动，请手动检查：journalctl -u ${SERVICE_NAME} -n 30 --no-pager"
     fi
-
     error "更新失败，已自动回滚至 ${CURRENT}。\n  新版本诊断：journalctl -u ${SERVICE_NAME} -n 50 --no-pager\n  新版二进制已保留在：${BAK_PATH}（实为回滚前的新版）如需手动测试可重命名使用"
   fi
 }
-
-# ════════════════════════════════════════════════════════════════
-#  手动备份
-# ════════════════════════════════════════════════════════════════
 do_backup() {
   show_banner
   preflight_check "backup"
   load_config
-  acquire_lock   # 防止与 install/update 并发，避免备份文件损坏
-
+  acquire_lock
   [[ ! -d "$DATA_DIR" ]] \
     && error "数据目录不存在（${DATA_DIR}），请先执行安装"
-
   step "手动备份 New API 数据"
   mkdir -p "$BACKUP_DIR"
-
-  # SQLite WAL flush + 完整性校验
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
     sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null \
@@ -878,11 +631,9 @@ do_backup() {
       warn "SQLite 完整性校验失败（${_ic}），备份继续，但数据库可能已损坏"
     fi
   fi
-
   local TS; TS=$(date +%Y%m%d_%H%M%S)
   local ARCHIVE="${BACKUP_DIR}/new-api_${TS}.tar.gz"
   local ARCHIVE_TMP="${ARCHIVE}.tmp"
-
   info "备份中：${DATA_DIR} → ${ARCHIVE}"
   if tar -czf "$ARCHIVE_TMP" \
       --exclude="*.log" --exclude="*.log.*" \
@@ -894,16 +645,12 @@ do_backup() {
     rm -f "$ARCHIVE_TMP"
     error "备份失败，请检查磁盘空间（${BACKUP_DIR} 所在磁盘）"
   fi
-
-  # 清理超期备份
   local _cleaned=0
   while IFS= read -r f; do
     rm -f "$f" && _cleaned=$(( _cleaned + 1 )) || true
   done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
            -mtime "+${BACKUP_KEEP_DAYS}" 2>/dev/null)
   [[ $_cleaned -gt 0 ]] && info "已清理 ${_cleaned} 个超过 ${BACKUP_KEEP_DAYS} 天的旧备份"
-
-  # 显示备份列表（最近 10 个）
   echo ""
   info "备份列表（${BACKUP_DIR}，最近 10 个）："
   local -a _bak_list
@@ -924,31 +671,20 @@ do_backup() {
     warn "暂无备份文件"
   fi
   echo ""
-
   release_lock
 }
-
-# ════════════════════════════════════════════════════════════════
-#  状态查看
-# ════════════════════════════════════════════════════════════════
 do_status() {
   show_banner
   preflight_check "status"
   load_config
-
   [[ $EUID -ne 0 ]] && warn "以非 root 运行，部分状态信息可能不完整（建议：sudo bash $0 status）"
-
   step "New API 系统状态"
-
-  # 服务状态
   echo -e "\n${BOLD}【systemd 服务状态】${NC}"
   systemctl is-active --quiet "$SERVICE_NAME" \
     && echo -e "  ${GREEN}[✓]${NC} ${SERVICE_NAME} 运行中" \
     || echo -e "  ${RED}[✗]${NC} ${SERVICE_NAME} 未运行"
   systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null \
     | tail -n +3 | head -10 | sed 's/^/  /' || true
-
-  # 版本信息
   echo -e "\n${BOLD}【版本信息】${NC}"
   if [[ -x "$BIN_PATH" ]]; then
     echo -e "  记录版本：  ${YELLOW}${INSTALLED_VERSION:-未知}${NC}"
@@ -958,8 +694,6 @@ do_status() {
   else
     echo -e "  ${RED}[✗]${NC} 未找到二进制：${BIN_PATH}"
   fi
-
-  # 进程资源
   echo -e "\n${BOLD}【进程资源】${NC}"
   local pid
   pid=$(systemctl show "$SERVICE_NAME" --property=MainPID --value 2>/dev/null || echo "0")
@@ -974,13 +708,10 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 服务未运行，无进程信息"
   fi
-
-  # 数据目录
   echo -e "\n${BOLD}【目录信息】${NC}"
   if [[ -d "$DATA_DIR" ]]; then
     local data_size; data_size=$(du -sh "$DATA_DIR" 2>/dev/null | awk '{print $1}')
     echo -e "  数据目录：  ${DATA_DIR}（${data_size}）"
-    # SQLite 文件
     if [[ -f "${DATA_DIR}/one-api.db" ]]; then
       local db_size; db_size=$(du -sh "${DATA_DIR}/one-api.db" 2>/dev/null | awk '{print $1}')
       echo -e "  数据库：    one-api.db（${db_size}）"
@@ -989,15 +720,12 @@ do_status() {
     echo -e "  ${RED}[✗]${NC} 数据目录不存在：${DATA_DIR}"
   fi
   echo -e "  日志目录：  ${LOG_DIR}"
-
-  # 备份信息
   echo -e "\n${BOLD}【备份信息】${NC}"
   if [[ -d "$BACKUP_DIR" ]]; then
     local bak_count bak_total_size
     bak_count=$(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" 2>/dev/null | wc -l)
     bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}')
     echo -e "  备份目录：  ${BACKUP_DIR}（${bak_total_size}，共 ${bak_count} 个）"
-    # 最新 3 个备份
     local _cnt=0
     while IFS= read -r f; do
       local _sz; _sz=$(du -sh "$f" 2>/dev/null | cut -f1 || echo "?")
@@ -1009,13 +737,9 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 备份目录不存在：${BACKUP_DIR}"
   fi
-
-  # 磁盘空间
   echo -e "\n${BOLD}【磁盘空间】${NC}"
   df -h "$INSTALL_DIR" 2>/dev/null \
     | awk 'NR==2{printf "  挂载点: %-15s  已用: %s / %s（%s 已用）\n", $6,$3,$2,$5}' || true
-
-  # HTTP 健康检查
   echo -e "\n${BOLD}【HTTP 健康检查（本地 127.0.0.1:${PORT}）】${NC}"
   local HTTP_CODE
   HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
@@ -1025,8 +749,6 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 本地接口响应：HTTP ${HTTP_CODE}（服务未运行、端口错误或仍在初始化？）"
   fi
-
-  # 防火墙规则
   echo -e "\n${BOLD}【防火墙规则（端口 ${PORT}）】${NC}"
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     local ufw_rule
@@ -1046,30 +768,20 @@ do_status() {
   else
     echo -e "  ${YELLOW}[!]${NC} 未检测到防火墙（可能依赖云安全组）"
   fi
-
   echo ""
 }
-
-# ════════════════════════════════════════════════════════════════
-#  卸载流程
-# ════════════════════════════════════════════════════════════════
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
   load_config
   acquire_lock
-
-  # 关键路径变量非空 + 非根目录双重校验
-  # 防止配置文件未加载（首次 install 前或配置文件损坏）时变量为空/默认值而误删文件
   [[ -z "${INSTALL_DIR:-}" ]] && error "INSTALL_DIR 未设置，卸载中止（请确认配置文件 ${CONF_FILE} 存在）"
   [[ -z "${DATA_DIR:-}"    ]] && error "DATA_DIR 未设置，卸载中止"
   [[ -z "${BACKUP_DIR:-}"  ]] && error "BACKUP_DIR 未设置，卸载中止"
   [[ "${INSTALL_DIR}" == "/" ]] && error "INSTALL_DIR 为根目录（/），拒绝执行卸载"
   [[ "${DATA_DIR}"    == "/" ]] && error "DATA_DIR 为根目录（/），拒绝执行卸载"
   [[ "${BACKUP_DIR}"  == "/" ]] && error "BACKUP_DIR 为根目录（/），拒绝执行卸载"
-
   step "卸载 New API"
-
   echo -e "${RED}${BOLD}"
   echo "  ⚠️  此操作将删除："
   echo "     · New API 二进制及旧版备份（${INSTALL_DIR}/new-api*）"
@@ -1082,58 +794,42 @@ do_uninstall() {
   echo "  数据目录（${DATA_DIR}）默认保留，可选是否删除。"
   echo "  备份目录（${BACKUP_DIR}）默认保留，可选是否删除。"
   echo -e "${NC}"
-
   prompt "确认继续卸载？（输入 YES 确认）："
   local _c; read -r _c
   [[ "$_c" != "YES" ]] && { info "已取消卸载"; exit 0; }
-
   prompt "是否同时删除数据目录（${DATA_DIR}）？[y/N]："
   local _del_data; read -r _del_data
   local DELETE_DATA=false
   [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-
   prompt "是否同时删除备份目录（${BACKUP_DIR}）？[y/N]："
   local _del_bak; read -r _del_bak
   local DELETE_BACKUP=false
   [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
-
-  # 停止并禁用服务
   info "停止并禁用 ${SERVICE_NAME} 服务..."
   systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
   success "systemd 服务已移除"
-
-  # 移除二进制及临时/备份文件
   rm -f "$BIN_PATH"
   find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "new-api.tmp.*" -type f -delete 2>/dev/null || true
   success "二进制及相关文件已删除"
-
-  # 移除定时任务、备份脚本、日志轮转
   rm -f /etc/cron.d/new-api-backup \
         /usr/local/bin/new-api-backup \
         /etc/logrotate.d/new-api
   success "定时任务、备份脚本、日志轮转配置已清除"
-
-  # 移除部署配置文件
   rm -f "$CONF_FILE"
   success "部署配置文件已清除"
-
-  # 移除日志目录（安全校验：非空 + 非根目录 + 非 .）
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
     rm -rf "$LOG_DIR"
     success "日志目录已删除：${LOG_DIR}"
   else
     warn "日志目录路径异常（${LOG_DIR:-未设置}），已跳过删除，请手动清理"
   fi
-
-  # 可选：删除数据目录
   if $DELETE_DATA; then
     rm -rf "$DATA_DIR"
     success "数据目录已删除：${DATA_DIR}"
-    # 若安装目录已空则一并清理
     if [[ -d "$INSTALL_DIR" ]] && [[ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
       rm -rf "$INSTALL_DIR"
       success "安装目录已清理：${INSTALL_DIR}"
@@ -1141,22 +837,17 @@ do_uninstall() {
   else
     info "数据目录已保留：${DATA_DIR}"
   fi
-
-  # 可选：删除备份目录
   if $DELETE_BACKUP; then
     rm -rf "$BACKUP_DIR"
     success "备份目录已删除：${BACKUP_DIR}"
   else
     info "备份目录已保留：${BACKUP_DIR}"
   fi
-
-  # 移除系统用户（仅当数据目录也删除时，否则用户可能仍是文件属主）
   if $DELETE_DATA && id "$SERVICE_USER" &>/dev/null; then
     userdel "$SERVICE_USER" 2>/dev/null \
       && success "系统用户 ${SERVICE_USER} 已删除" \
       || warn "系统用户 ${SERVICE_USER} 删除失败，可能被其他服务引用"
   fi
-
   echo ""
   echo -e "${BOLD}${GREEN}  ✅  New API 已完全卸载${NC}"
   if ! $DELETE_DATA; then
@@ -1168,10 +859,6 @@ do_uninstall() {
   fi
   echo ""
 }
-
-# ════════════════════════════════════════════════════════════════
-#  交互式主菜单
-# ════════════════════════════════════════════════════════════════
 show_menu() {
   show_banner
   echo -e "  ${BOLD}请选择操作：${NC}"
@@ -1196,10 +883,6 @@ show_menu() {
     *) error "无效选项：${MENU_CHOICE}" ;;
   esac
 }
-
-# ════════════════════════════════════════════════════════════════
-#  入口
-# ════════════════════════════════════════════════════════════════
 case "${1:-menu}" in
   install)   do_install   ;;
   update)    do_update    ;;

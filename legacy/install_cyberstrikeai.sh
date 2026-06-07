@@ -1,24 +1,6 @@
 #!/usr/bin/env bash
-# ============================================================
-# CyberStrikeAI one-key deployment manager for Debian / Ubuntu
-#
-# Features:
-#   install / update / backup / status / uninstall / menu
-#   source checkout + Go build + Python venv + systemd
-#   optional Nginx reverse proxy, firewall rule, logrotate,
-#   daily backup, config persistence, update rollback.
-#
-# Usage:
-#   sudo bash install_cyberstrikeai.sh [install|update|backup|status|uninstall]
-#   sudo CSAI_DOMAIN=csai.example.com CSAI_HTTPS=false bash install_cyberstrikeai.sh install
-#
-# This tool deploys a security-testing platform. Use it only on systems and
-# targets you own or are explicitly authorized to test.
-# ============================================================
-
 set -euo pipefail
 umask 077
-
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[i]${NC} $*" >&2; }
@@ -27,11 +9,9 @@ warn()    { echo -e "${YELLOW}[!]${NC} $*" >&2; }
 error()   { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
 step()    { echo -e "\n${CYAN}${BOLD}== $* ==${NC}" >&2; }
 prompt()  { echo -ne "${YELLOW}[?]${NC} $* " >&2; }
-
-# ---------------- User editable defaults ----------------
-CSAI_DOMAIN="${CSAI_DOMAIN:-}"                    # empty means IP / default server_name
-PORT="${PORT:-8080}"                              # local backend port
-PUBLIC_PORT="${PUBLIC_PORT:-80}"                  # Nginx public HTTP port
+CSAI_DOMAIN="${CSAI_DOMAIN:-}"
+PORT="${PORT:-8080}"
+PUBLIC_PORT="${PUBLIC_PORT:-80}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/cyberstrike-ai}"
 SERVICE_NAME="${SERVICE_NAME:-cyberstrike-ai}"
 SERVICE_USER="${SERVICE_USER:-cyberstrike}"
@@ -40,11 +20,10 @@ GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/cyberstrike-ai-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 ENABLE_NGINX="${ENABLE_NGINX:-true}"
-CSAI_HTTPS="${CSAI_HTTPS:-true}"                  # true: app self-signed HTTPS on local backend
+CSAI_HTTPS="${CSAI_HTTPS:-true}"
 OPEN_FIREWALL="${OPEN_FIREWALL:-true}"
 PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
-
 BIN_NAME="cyberstrike-ai"
 BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
 CONFIG_FILE="${INSTALL_DIR}/config.yaml"
@@ -57,7 +36,6 @@ NGINX_LINK="/etc/nginx/sites-enabled/cyberstrike-ai"
 BACKUP_SCRIPT="/usr/local/bin/cyberstrike-ai-backup"
 CRON_FILE="/etc/cron.d/cyberstrike-ai-backup"
 LOGROTATE_FILE="/etc/logrotate.d/cyberstrike-ai"
-
 show_banner() {
   echo -e "\n${BOLD}${CYAN}"
   cat <<'EOF'
@@ -66,20 +44,17 @@ show_banner() {
 EOF
   echo -e "${NC}"
 }
-
 _bool_true() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
 }
-
 _sanitize_conf_val() {
   local value="${1%%$'\n'*}"
   value="${value//\"/}"
   echo "$value"
 }
-
 save_config() {
   cat > "$CONF_FILE" <<CONF
 CSAI_DOMAIN="$(_sanitize_conf_val "$CSAI_DOMAIN")"
@@ -101,16 +76,13 @@ CONF
   chmod 600 "$CONF_FILE"
   success "Saved deployment config: $CONF_FILE"
 }
-
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
-
   local owner perms line key val
   owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
   perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
   [[ "$owner" == "root" ]] || { warn "$CONF_FILE owner is not root; ignoring it"; return 0; }
   [[ "$perms" == "600" || "$perms" == "400" ]] || { warn "$CONF_FILE perms are too open ($perms); ignoring it"; return 0; }
-
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
     key="${line%%=*}"
@@ -129,13 +101,11 @@ load_config() {
         ;;
     esac
   done < "$CONF_FILE"
-
   BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
 }
-
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "Please run as root: sudo bash $0 ${1:-}"
   command -v apt-get >/dev/null 2>&1 || error "Only Debian / Ubuntu is supported by this script"
@@ -147,7 +117,6 @@ preflight_check() {
     *) error "Unsupported architecture: $arch" ;;
   esac
 }
-
 acquire_lock() {
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
@@ -155,12 +124,10 @@ acquire_lock() {
   fi
   trap 'flock -u 9 2>/dev/null || true; exec 9>&- 2>/dev/null || true' EXIT
 }
-
 release_lock() {
   flock -u 9 2>/dev/null || true
   exec 9>&- 2>/dev/null || true
 }
-
 check_connectivity() {
   local targets=(
     "https://api.github.com"
@@ -175,7 +142,6 @@ check_connectivity() {
   done
   error "Cannot reach GitHub. Check network/proxy and retry."
 }
-
 apt_install_base() {
   step "Install system dependencies"
   apt-get update -qq
@@ -183,13 +149,11 @@ apt_install_base() {
     ca-certificates curl git build-essential \
     python3 python3-venv python3-pip \
     sqlite3 tar gzip openssl lsof
-
   if _bool_true "$ENABLE_NGINX"; then
     apt-get install -y -qq nginx
   fi
   success "Base dependencies installed"
 }
-
 install_go_if_needed() {
   local need_install=false
   if ! command -v go >/dev/null 2>&1; then
@@ -204,15 +168,12 @@ install_go_if_needed() {
       warn "Go version is too old: $ver"
     fi
   fi
-
   if ! $need_install; then
     success "Go is ready: $(go version)"
     return 0
   fi
-
   step "Install Go"
   apt-get install -y -qq golang-go || true
-
   if command -v go >/dev/null 2>&1; then
     local ver major minor
     ver=$(go version | awk '{print $3}' | sed 's/^go//')
@@ -224,7 +185,6 @@ install_go_if_needed() {
     fi
     warn "Repository Go is still too old: $ver. Installing official Go toolchain."
   fi
-
   local arch go_arch latest_json version tarball url tmp
   arch=$(uname -m)
   case "$arch" in
@@ -232,37 +192,31 @@ install_go_if_needed() {
     aarch64|arm64) go_arch="arm64" ;;
     *) error "Unsupported architecture for Go install: $arch" ;;
   esac
-
   latest_json=$(curl -fsSL --max-time 20 "https://go.dev/dl/?mode=json" 2>/dev/null) \
     || error "Failed to query official Go releases"
   version=$(printf '%s\n' "$latest_json" | grep -oE '"version"[[:space:]]*:[[:space:]]*"go[0-9]+\.[0-9]+(\.[0-9]+)?"' | head -1 | sed 's/.*"\(go[^"]*\)".*/\1/')
   [[ -n "$version" ]] || error "Failed to parse latest Go version"
-
   tarball="${version}.linux-${go_arch}.tar.gz"
   url="https://go.dev/dl/${tarball}"
   tmp=$(mktemp)
   info "Downloading ${url}"
   curl -fL --retry 3 --connect-timeout 15 -o "$tmp" "$url"
   [[ -s "$tmp" ]] || error "Downloaded Go archive is empty"
-
   rm -rf /usr/local/go
   tar -C /usr/local -xzf "$tmp"
   rm -f "$tmp"
   ln -sf /usr/local/go/bin/go /usr/local/bin/go
   ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
   hash -r 2>/dev/null || true
-
   command -v go >/dev/null 2>&1 || error "Go installation failed. Please install Go 1.21+ manually."
   success "Go installed: $(go version)"
 }
-
 ensure_service_user() {
   if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
     success "Created service user: $SERVICE_USER"
   fi
 }
-
 clone_or_update_repo() {
   step "Fetch CyberStrikeAI source"
   mkdir -p "$(dirname "$INSTALL_DIR")"
@@ -279,13 +233,10 @@ clone_or_update_repo() {
   fi
   success "Source ready: $INSTALL_DIR"
 }
-
 patch_config_port_and_paths() {
   [[ -f "$CONFIG_FILE" ]] || error "Missing config.yaml at $CONFIG_FILE"
-
   local backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
   cp "$CONFIG_FILE" "$backup"
-
   python3 - "$CONFIG_FILE" "$PORT" "$LOG_DIR/cyberstrike-ai.log" "$CSAI_HTTPS" <<'PY'
 from pathlib import Path
 import re
@@ -321,20 +272,16 @@ text = replace_in_section(text, "log", "output", log_file)
 
 path.write_text(text, encoding="utf-8")
 PY
-
   success "Adjusted config.yaml: local host, port $PORT, log file"
 }
-
 setup_python_env() {
   step "Prepare Python environment"
   cd "$INSTALL_DIR"
   if [[ ! -d "$VENV_DIR" ]]; then
     python3 -m venv "$VENV_DIR"
   fi
-  # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
   python -m pip install --index-url "$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1 || true
-
   if [[ -f requirements.txt ]]; then
     local pip_log
     pip_log=$(mktemp)
@@ -349,13 +296,11 @@ setup_python_env() {
     warn "requirements.txt not found; skipping Python dependency install"
   fi
 }
-
 build_binary() {
   step "Build Go binary"
   cd "$INSTALL_DIR"
   export GOPROXY="$GOPROXY"
   go mod download
-
   local tmp_bin="${BIN_PATH}.tmp.$$"
   go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go
   [[ -s "$tmp_bin" ]] || error "Built binary is empty"
@@ -363,7 +308,6 @@ build_binary() {
   mv "$tmp_bin" "$BIN_PATH"
   success "Built binary: $BIN_PATH"
 }
-
 install_runtime_dirs() {
   step "Prepare runtime directories"
   mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"
@@ -372,12 +316,10 @@ install_runtime_dirs() {
   chmod 750 "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp"
   success "Runtime directories prepared"
 }
-
 write_systemd_unit() {
   step "Install systemd service"
   local https_env="false"
   _bool_true "$CSAI_HTTPS" && https_env="true"
-
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SERVICE
 [Unit]
 Description=CyberStrikeAI
@@ -407,22 +349,17 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 SERVICE
-
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" --quiet
   success "systemd unit installed: $SERVICE_NAME"
 }
-
 write_nginx_config() {
   _bool_true "$ENABLE_NGINX" || return 0
   step "Configure Nginx reverse proxy"
-
   local server_name="_"
   [[ -n "$CSAI_DOMAIN" ]] && server_name="$CSAI_DOMAIN"
-
   local upstream_scheme="http"
   _bool_true "$CSAI_HTTPS" && upstream_scheme="https"
-
   cat > "$NGINX_CONF" <<NGINX
 server {
     listen ${PUBLIC_PORT};
@@ -468,18 +405,15 @@ server {
     error_log  /var/log/nginx/cyberstrike-ai_error.log;
 }
 NGINX
-
   ln -sf "$NGINX_CONF" "$NGINX_LINK"
   nginx -t
   systemctl enable nginx --quiet
   systemctl reload nginx 2>/dev/null || systemctl restart nginx
   success "Nginx reverse proxy installed"
 }
-
 open_firewall_ports() {
   _bool_true "$OPEN_FIREWALL" || return 0
   step "Configure firewall"
-
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
     if _bool_true "$ENABLE_NGINX"; then
       ufw allow "${PUBLIC_PORT}/tcp" >/dev/null 2>&1 || true
@@ -490,7 +424,6 @@ open_firewall_ports() {
     fi
     return 0
   fi
-
   if command -v iptables >/dev/null 2>&1; then
     local port_to_open="$PORT"
     _bool_true "$ENABLE_NGINX" && port_to_open="$PUBLIC_PORT"
@@ -500,10 +433,8 @@ open_firewall_ports() {
     success "iptables allows port: $port_to_open/tcp"
     return 0
   fi
-
   warn "No active ufw/iptables detected. Cloud security groups may still need manual rules."
 }
-
 write_logrotate() {
   cat > "$LOGROTATE_FILE" <<ROTATE
 ${LOG_DIR}/*.log {
@@ -517,7 +448,6 @@ ${LOG_DIR}/*.log {
 ROTATE
   chmod 644 "$LOGROTATE_FILE"
 }
-
 write_backup_script() {
   cat > "$BACKUP_SCRIPT" <<BACKUP
 #!/usr/bin/env bash
@@ -564,7 +494,6 @@ fi
 echo "\$(date '+%F %T') [OK] backup created: \$archive"
 BACKUP
   chmod 755 "$BACKUP_SCRIPT"
-
   cat > "$CRON_FILE" <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -572,7 +501,6 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 CRON
   chmod 644 "$CRON_FILE"
 }
-
 wait_for_service() {
   local svc="$1" timeout="${2:-30}" elapsed=0
   while ! systemctl is-active --quiet "$svc"; do
@@ -585,7 +513,6 @@ wait_for_service() {
   done
   return 0
 }
-
 check_port_conflict() {
   local port="$1"
   if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :$port )" | tail -n +2 | grep -q .; then
@@ -596,7 +523,6 @@ check_port_conflict() {
     lsof -iTCP:"$port" -sTCP:LISTEN -Pn | sed 's/^/  /' >&2 || true
   fi
 }
-
 start_service() {
   step "Start CyberStrikeAI"
   check_port_conflict "$PORT"
@@ -608,12 +534,10 @@ start_service() {
     error "$SERVICE_NAME failed to start"
   fi
 }
-
 health_check() {
   step "Health check"
   local scheme="http"
   _bool_true "$CSAI_HTTPS" && scheme="https"
-
   local code
   code=$(curl -k -o /dev/null -s -w "%{http_code}" --max-time 8 "${scheme}://127.0.0.1:${PORT}/" || echo "000")
   if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
@@ -621,7 +545,6 @@ health_check() {
   else
     warn "Backend health returned HTTP $code"
   fi
-
   if _bool_true "$ENABLE_NGINX"; then
     code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 8 "http://127.0.0.1:${PUBLIC_PORT}/" || echo "000")
     if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
@@ -631,13 +554,11 @@ health_check() {
     fi
   fi
 }
-
 print_summary() {
   local ip
   ip=$(hostname -I 2>/dev/null | awk '{print $1}')
   local backend_scheme="http"
   _bool_true "$CSAI_HTTPS" && backend_scheme="https"
-
   echo ""
   echo -e "${BOLD}${GREEN}CyberStrikeAI deployment complete${NC}"
   echo "  service:      ${SERVICE_NAME}"
@@ -664,7 +585,6 @@ print_summary() {
   warn "Set your model API key/base_url/model in the Web Settings page or edit ${CONFIG_FILE}."
   warn "Use this platform only for authorized security testing."
 }
-
 do_install() {
   show_banner
   preflight_check "install"
@@ -690,7 +610,6 @@ do_install() {
   print_summary
   release_lock
 }
-
 do_backup() {
   show_banner
   preflight_check "backup"
@@ -706,21 +625,17 @@ do_backup() {
       done
   release_lock
 }
-
 do_update() {
   show_banner
   preflight_check "update"
   load_config
   acquire_lock
   check_connectivity
-
   [[ -d "$INSTALL_DIR/.git" ]] || error "$INSTALL_DIR is not a git checkout. Run install first."
-
   step "Pre-update backup"
   if [[ -x "$BACKUP_SCRIPT" ]]; then
     "$BACKUP_SCRIPT" || warn "Pre-update backup failed; continuing cautiously"
   fi
-
   local old_rev new_rev bin_bak config_bak service_was_active=false
   old_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
   systemctl is-active --quiet "$SERVICE_NAME" && service_was_active=true
@@ -728,18 +643,15 @@ do_update() {
   config_bak="${CONFIG_FILE}.preupdate.$(date +%Y%m%d_%H%M%S)"
   [[ -f "$BIN_PATH" ]] && cp "$BIN_PATH" "$bin_bak"
   [[ -f "$CONFIG_FILE" ]] && cp "$CONFIG_FILE" "$config_bak"
-
   step "Update source"
   git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"
   git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"
   git -C "$INSTALL_DIR" pull --ff-only origin "$GITHUB_BRANCH"
   new_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-
   setup_python_env
   patch_config_port_and_paths
   build_binary
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
-
   if $service_was_active; then
     step "Restart updated service"
     systemctl restart "$SERVICE_NAME"
@@ -762,17 +674,14 @@ do_update() {
   else
     success "Update complete while service was inactive: $old_rev -> $new_rev"
   fi
-
   find "$INSTALL_DIR" -maxdepth 1 -name "${BIN_NAME}.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | tail -n +4 | awk '{print $2}' | xargs -r rm -f
   release_lock
 }
-
 do_status() {
   show_banner
   preflight_check "status"
   load_config
-
   step "Service status"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo -e "  ${GREEN}[+]${NC} ${SERVICE_NAME}: running"
@@ -782,7 +691,6 @@ do_status() {
     echo -e "  ${YELLOW}[!]${NC} ${SERVICE_NAME}: inactive / unknown"
   fi
   systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -16 | sed 's/^/  /' >&2 || true
-
   step "Version and paths"
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     echo "  git revision: $(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -792,7 +700,6 @@ do_status() {
   echo "  config:       $CONFIG_FILE"
   echo "  logs:         $LOG_DIR"
   echo "  backups:      $BACKUP_DIR"
-
   step "Process resources"
   local pid
   pid=$(systemctl show "$SERVICE_NAME" --property=MainPID --value 2>/dev/null || echo "0")
@@ -804,10 +711,8 @@ do_status() {
   else
     echo "  process:      not running"
   fi
-
   step "Health"
   health_check
-
   step "Nginx"
   if _bool_true "$ENABLE_NGINX"; then
     if command -v nginx >/dev/null 2>&1; then
@@ -820,7 +725,6 @@ do_status() {
   else
     echo "  nginx:        disabled by config"
   fi
-
   step "Backups"
   if [[ -d "$BACKUP_DIR" ]]; then
     local count size
@@ -837,22 +741,18 @@ do_status() {
   fi
   echo ""
 }
-
 safe_rm_dir() {
   local dir="$1" label="$2"
   [[ -n "$dir" && "$dir" != "/" && "$dir" != "." ]] || error "Unsafe $label path: ${dir:-empty}"
   rm -rf "$dir"
 }
-
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
   load_config
   acquire_lock
-
   [[ -n "${INSTALL_DIR:-}" && "$INSTALL_DIR" != "/" ]] || error "Unsafe INSTALL_DIR: ${INSTALL_DIR:-empty}"
   [[ -n "${BACKUP_DIR:-}" && "$BACKUP_DIR" != "/" ]] || error "Unsafe BACKUP_DIR: ${BACKUP_DIR:-empty}"
-
   step "Uninstall CyberStrikeAI"
   echo -e "${RED}${BOLD}"
   echo "This will remove:"
@@ -863,57 +763,47 @@ do_uninstall() {
   echo ""
   echo "Install dir and backup dir are kept by default unless you choose deletion."
   echo -e "${NC}"
-
   prompt "Type YES to continue:"
   local confirm
   read -r confirm
   [[ "$confirm" == "YES" ]] || { info "Cancelled"; exit 0; }
-
   prompt "Delete install directory ${INSTALL_DIR}? [y/N]:"
   local del_install
   read -r del_install
   prompt "Delete backup directory ${BACKUP_DIR}? [y/N]:"
   local del_backup
   read -r del_backup
-
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
   success "Removed systemd service"
-
   rm -f "$NGINX_LINK" "$NGINX_CONF"
   if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
     systemctl reload nginx 2>/dev/null || true
   fi
   success "Removed Nginx config"
-
   rm -f "$LOGROTATE_FILE" "$CRON_FILE" "$BACKUP_SCRIPT" "$CONF_FILE"
   success "Removed deploy configs"
-
   if [[ "${del_install,,}" == "y" ]]; then
     safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
     success "Deleted install dir: $INSTALL_DIR"
   else
     info "Kept install dir: $INSTALL_DIR"
   fi
-
   if [[ "${del_backup,,}" == "y" ]]; then
     safe_rm_dir "$BACKUP_DIR" "BACKUP_DIR"
     success "Deleted backup dir: $BACKUP_DIR"
   else
     info "Kept backup dir: $BACKUP_DIR"
   fi
-
   if [[ "${del_install,,}" == "y" ]] && id "$SERVICE_USER" >/dev/null 2>&1; then
     userdel "$SERVICE_USER" 2>/dev/null && success "Deleted user: $SERVICE_USER" || warn "Could not delete user: $SERVICE_USER"
   fi
-
   echo ""
   success "CyberStrikeAI uninstalled"
   release_lock
 }
-
 show_menu() {
   show_banner
   echo "Choose an action:"
@@ -938,7 +828,6 @@ show_menu() {
     *) error "Invalid choice: $choice" ;;
   esac
 }
-
 case "${1:-menu}" in
   install) do_install ;;
   update) do_update ;;

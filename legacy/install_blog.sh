@@ -1,13 +1,5 @@
 #!/bin/bash
-# ============================================================
-#  Hugo + Nginx 个人博客一键部署脚本（Debian / Ubuntu）
-#  主题：hugo-theme-stack
-#  用法：sudo bash install_blog.sh
-# ============================================================
-
 set -euo pipefail
-
-# ── 颜色 ────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[·]${NC} $*"; }
@@ -15,39 +7,21 @@ success() { echo -e "${GREEN}[✓]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
 error()   { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 step()    { echo -e "\n${CYAN}${BOLD}── $* ──────────────────────────────${NC}"; }
-
-# ── 配置项（按需修改）───────────────────────────────────────
-BLOG_DOMAIN="blog.tarxf.com"       # 你的域名，留空则仅用 IP 访问
+BLOG_DOMAIN="blog.tarxf.com"
 BLOG_TITLE="Abyte 的个人博客"
 BLOG_AUTHOR="Abyte"
 BLOG_DESCRIPTION="记录技术与生活"
 BLOG_LANG="zh-cn"
-
-SITE_DIR="/opt/blog/site"            # Hugo 项目目录
-PUBLIC_DIR="/opt/blog/public"        # Hugo 生成的静态文件目录
-NGINX_ROOT="/var/www/blog"           # Nginx 站点根目录
+SITE_DIR="/opt/blog/site"
+PUBLIC_DIR="/opt/blog/public"
+NGINX_ROOT="/var/www/blog"
 THEME_NAME="hugo-theme-stack"
 THEME_REPO="https://github.com/CaiJimmy/hugo-theme-stack.git"
-
-# ── Decap CMS 配置 ─────────────────────────────────────────
-# 若不需要 CMS，将 ENABLE_CMS 设为 false
 ENABLE_CMS=true
-
-# Git 后端类型：github | gitlab | gitea
 CMS_BACKEND="github"
-
-# 你的 Git 仓库（格式：用户名/仓库名）
-# 博客源文件必须托管在此仓库中，Decap CMS 通过 Git 提交保存内容
 CMS_REPO="TheSkyC/my-hugo-blog"
-
-# 仓库默认分支
 CMS_BRANCH="main"
-
-# OAuth 授权回调地址（填写你的完整域名，末尾不加斜杠）
-# 需在 GitHub/GitLab 创建 OAuth App，回调 URL 填：https://your-domain/api/auth
 CMS_SITE_URL="https://${BLOG_DOMAIN}"
-
-# ── Banner ──────────────────────────────────────────────────
 echo -e "\n${BOLD}${CYAN}"
 cat << 'EOF'
   ██╗  ██╗██╗   ██╗ ██████╗  ██████╗     ██████╗ ██╗      ██████╗  ██████╗
@@ -60,98 +34,69 @@ EOF
 echo -e "${NC}"
 echo -e "  ${BOLD}主题：${CYAN}hugo-theme-stack${NC}"
 echo -e "  ${BOLD}服务：${CYAN}Hugo + Nginx + Decap CMS${NC}\n"
-
-# ── 前置检查 ────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0"
-
 ARCH=$(uname -m)
 case $ARCH in
   x86_64)  DEB_ARCH="amd64" ;;
   aarch64) DEB_ARCH="arm64" ;;
   *)       error "不支持的架构：$ARCH" ;;
 esac
-
-# ── Step 1: 安装系统依赖 ─────────────────────────────────────
 step "Step 1  安装系统依赖"
 apt-get update -qq
 apt-get install -y -qq curl wget git nginx ca-certificates
 success "依赖安装完成（curl / wget / git / nginx）"
-
-# ── Step 2: 安装 Hugo Extended ───────────────────────────────
 step "Step 2  安装 Hugo Extended"
-
-# 从 GitHub API 获取最新版本号
 info "查询 Hugo 最新版本..."
 HUGO_VER=$(curl -fsSL --max-time 15 \
   "https://api.github.com/repos/gohugoio/hugo/releases/latest" \
   | grep '"tag_name"' | head -1 \
   | sed 's/.*"v\([^"]*\)".*/\1/') \
   || error "无法访问 GitHub API，请检查网络连接"
-
 [[ -z "$HUGO_VER" ]] && error "获取 Hugo 版本失败"
 success "最新版本：v${HUGO_VER}"
-
-# 下载 .deb 包（Extended 版本，支持 SCSS，大多数主题必需）
 DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"
 info "下载：${DEB_URL}"
 wget -q --show-progress -O /tmp/hugo.deb "$DEB_URL" \
   || error "Hugo 下载失败，请检查网络或手动下载"
-
 dpkg -i /tmp/hugo.deb
 rm -f /tmp/hugo.deb
 success "Hugo $(hugo version | head -1) 安装完成"
-
-# ── Step 3: 创建博客项目 ─────────────────────────────────────
 step "Step 3  初始化 Hugo 博客项目"
 mkdir -p "$(dirname "$SITE_DIR")"
-
 if [[ -d "$SITE_DIR" ]]; then
   warn "目录 ${SITE_DIR} 已存在，跳过初始化（保留现有内容）"
 else
   hugo new site "$SITE_DIR" --format toml
   success "Hugo 项目创建于：${SITE_DIR}"
 fi
-
-# 初始化 Git 仓库（Hugo enableGitInfo 及主题子模块需要）
 if [[ ! -d "${SITE_DIR}/.git" ]]; then
   git -C "$SITE_DIR" init -q
   git -C "$SITE_DIR" config user.email "blog@localhost"
   git -C "$SITE_DIR" config user.name "${BLOG_AUTHOR}"
   success "Git 仓库已初始化"
 fi
-
-# ── Step 4: 安装 Stack 主题 ──────────────────────────────────
 step "Step 4  安装 hugo-theme-stack 主题"
 THEME_DIR="${SITE_DIR}/themes/${THEME_NAME}"
-
 if [[ -d "$THEME_DIR" && -f "$THEME_DIR/theme.toml" ]]; then
   info "主题已存在，跳过克隆"
   success "主题已是最新"
 else
   info "克隆主题仓库（首次可能需要一点时间）..."
-  # 以 git submodule 方式添加，避免「嵌套 git 仓库」警告
   git -C "$SITE_DIR" submodule add --depth 1 "$THEME_REPO" "themes/${THEME_NAME}" 2>/dev/null \
     || { git clone --depth 1 "$THEME_REPO" "$THEME_DIR" && rm -rf "$THEME_DIR/.git"; }
   success "主题安装完成"
 fi
-
-# ── Step 5: 生成配置文件 ─────────────────────────────────────
 step "Step 5  生成站点配置"
-
-# 若配置已存在则备份
 CONFIG_FILE="${SITE_DIR}/hugo.toml"
 if [[ -f "$CONFIG_FILE" && $(wc -l < "$CONFIG_FILE") -gt 3 ]]; then
   cp "$CONFIG_FILE" "${CONFIG_FILE}.bak.$(date +%Y%m%d%H%M%S)"
   warn "已备份旧配置"
 fi
-
-# 若有域名则用 https，否则用占位符
 if [[ -n "$BLOG_DOMAIN" ]]; then
   BASE_URL="https://${BLOG_DOMAIN}"
 else
   BASE_URL="http://localhost"
 fi
-
 cat > "$CONFIG_FILE" << TOML
 baseURL = "${BASE_URL}"
 locale = "${BLOG_LANG}"
@@ -223,17 +168,11 @@ enableGitInfo = true
   series = "series"
 TOML
 success "配置文件已写入：${CONFIG_FILE}"
-
-# ── Step 6: 创建示例内容 ─────────────────────────────────────
 step "Step 6  创建示例文章与页面"
-
-# 创建必要目录
 mkdir -p "${SITE_DIR}/content/post/hello-world"
 mkdir -p "${SITE_DIR}/content/page/about"
 mkdir -p "${SITE_DIR}/content/page/archives"
 mkdir -p "${SITE_DIR}/static/img"
-
-# 第一篇文章
 if [[ ! -f "${SITE_DIR}/content/post/hello-world/index.md" ]]; then
 cat > "${SITE_DIR}/content/post/hello-world/index.md" << MD
 +++
@@ -269,8 +208,6 @@ hugo new content post/my-new-post/index.md
 MD
 success "示例文章已创建"
 fi
-
-# 关于页面
 if [[ ! -f "${SITE_DIR}/content/page/about/index.md" ]]; then
 cat > "${SITE_DIR}/content/page/about/index.md" << MD
 +++
@@ -291,8 +228,6 @@ menu = "main"
 MD
 success "关于页面已创建"
 fi
-
-# 归档页面（Stack 主题特有）
 if [[ ! -f "${SITE_DIR}/content/page/archives/index.md" ]]; then
 cat > "${SITE_DIR}/content/page/archives/index.md" << MD
 +++
@@ -303,17 +238,12 @@ layout = "archives"
 MD
 success "归档页面已创建"
 fi
-
-# ── Step 7: 集成 Decap CMS ───────────────────────────────────
 step "Step 7  集成 Decap CMS（可视化内容管理）"
-
 if [[ "$ENABLE_CMS" != "true" ]]; then
   warn "ENABLE_CMS=false，跳过 Decap CMS 安装"
 else
   CMS_ADMIN_DIR="${SITE_DIR}/static/admin"
   mkdir -p "$CMS_ADMIN_DIR"
-
-  # ── 7-a: Admin 入口页面 ──────────────────────────────────
   cat > "${CMS_ADMIN_DIR}/index.html" << 'HTML'
 <!doctype html>
 <html>
@@ -328,8 +258,6 @@ else
   </body>
 </html>
 HTML
-
-  # ── 7-b: CMS 配置文件（适配 Stack 主题字段结构）────────────
   cat > "${CMS_ADMIN_DIR}/config.yml" << YAML
 # ─────────────────────────────────────────────
 #  Decap CMS 配置（hugo-theme-stack）
@@ -416,37 +344,24 @@ collections:
       - { label: "布局模板", name: "layout", widget: "string", required: false, hint: "特殊布局如 archives，留空使用默认" }
       - { label: "正文内容", name: "body", widget: "markdown" }
 YAML
-
   success "Decap CMS 配置文件已创建：${CMS_ADMIN_DIR}/"
   info "Admin 入口将位于：${CMS_SITE_URL}/admin/"
 fi
-
-# ── Step 8: 构建静态文件 ─────────────────────────────────────
 step "Step 8  构建静态网站（含 CMS admin 文件）"
 mkdir -p "$PUBLIC_DIR"
-
-# enableGitInfo=true 需要所有内容文件已被 git 跟踪
 cd "$SITE_DIR"
 git add -A
 git diff --cached --quiet || git commit -q -m "init: add site content"
 info "Git 提交完成，Hugo 可读取文件修改时间"
 hugo --destination "$PUBLIC_DIR" --gc --minify \
   || error "Hugo 构建失败，请检查配置"
-
 PAGE_COUNT=$(find "$PUBLIC_DIR" -name "*.html" | wc -l)
 success "构建完成，共生成 ${PAGE_COUNT} 个 HTML 页面"
-
-# ── Step 9: 配置 Nginx ───────────────────────────────────────
 step "Step 9  配置 Nginx"
-
-# 将静态文件复制到 Nginx 根目录
 mkdir -p "$NGINX_ROOT"
 cp -a "${PUBLIC_DIR}/." "$NGINX_ROOT/"
 success "静态文件已部署到：${NGINX_ROOT}"
-
-# 写 Nginx 站点配置
 NGINX_CONF="/etc/nginx/sites-available/blog"
-
 cat > "$NGINX_CONF" << NGINX
 server {
     listen 80;
@@ -505,27 +420,17 @@ server {
     error_log  /var/log/nginx/blog_error.log;
 }
 NGINX
-
-# 启用站点
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/blog
-
-# 禁用默认站点（避免冲突）
 rm -f /etc/nginx/sites-enabled/default
-
-# 验证配置
 nginx -t || error "Nginx 配置验证失败，请检查上方错误"
 success "Nginx 配置完成"
-
-# ── Step 10: 防火墙放行 ───────────────────────────────────────
 step "Step 10  配置防火墙"
 FW_DONE=false
-
 if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow "Nginx Full" > /dev/null 2>&1 || ufw allow 80/tcp > /dev/null
   success "ufw 已放行 HTTP/HTTPS"
   FW_DONE=true
 fi
-
 if ! $FW_DONE && command -v iptables &>/dev/null; then
   for PORT in 80 443; do
     if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
@@ -535,22 +440,16 @@ if ! $FW_DONE && command -v iptables &>/dev/null; then
   success "iptables 已放行 80/443"
   FW_DONE=true
 fi
-
 $FW_DONE || warn "未检测到防火墙，如有云安全组请手动放行 80 和 443 端口"
-
-# ── Step 11: 启动 Nginx ──────────────────────────────────────
 step "Step 11  启动 Nginx"
 systemctl enable nginx --quiet
 systemctl restart nginx
-
 sleep 1
 if systemctl is-active --quiet nginx; then
   success "Nginx 已启动"
 else
   error "Nginx 启动失败，请运行：journalctl -u nginx -n 30"
 fi
-
-# ── Step 12: 健康检查 ────────────────────────────────────────
 step "Step 12  健康检查"
 HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
 if [[ "$HTTP_CODE" == "200" ]]; then
@@ -558,10 +457,7 @@ if [[ "$HTTP_CODE" == "200" ]]; then
 else
   warn "HTTP 返回 ${HTTP_CODE}，如无域名指向请用内网 IP 访问"
 fi
-
-# ── 完成 ─────────────────────────────────────────────────────
 INTERNAL_IP=$(hostname -I | awk '{print $1}')
-
 echo ""
 echo -e "${BOLD}${GREEN}"
 echo "  ╔══════════════════════════════════════════════════════╗"
@@ -583,7 +479,6 @@ echo -e "  ║  CMS 配置  ${YELLOW}${SITE_DIR}/static/admin/config.yml${GREEN}
 fi
 echo "  ╚══════════════════════════════════════════════════════╝"
 echo -e "${NC}"
-
 echo -e "  ${BOLD}📝  写作与发布工作流：${NC}"
 echo ""
 echo -e "  ${CYAN}# 1. 创建新文章${NC}"
