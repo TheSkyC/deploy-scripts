@@ -28,63 +28,24 @@ NGINX_LINK="/etc/nginx/sites-enabled/cyberstrike-ai"
 BACKUP_SCRIPT="/usr/local/bin/cyberstrike-ai-backup"
 CRON_FILE="/etc/cron.d/cyberstrike-ai-backup"
 LOGROTATE_FILE="/etc/logrotate.d/cyberstrike-ai"
+CONFIG_KEYS=(
+  CSAI_DOMAIN PORT PUBLIC_PORT INSTALL_DIR SERVICE_NAME SERVICE_USER
+  GITHUB_REPO GITHUB_BRANCH BACKUP_DIR BACKUP_KEEP_DAYS ENABLE_NGINX
+  CSAI_HTTPS OPEN_FIREWALL PIP_INDEX_URL GOPROXY
+)
 _bool_true() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
 }
-_sanitize_conf_val() {
-  local value="${1%%$'\n'*}"
-  value="${value//\"/}"
-  echo "$value"
-}
 save_config() {
-  cat > "$CONF_FILE" <<CONF
-CSAI_DOMAIN="$(_sanitize_conf_val "$CSAI_DOMAIN")"
-PORT="$(_sanitize_conf_val "$PORT")"
-PUBLIC_PORT="$(_sanitize_conf_val "$PUBLIC_PORT")"
-INSTALL_DIR="$(_sanitize_conf_val "$INSTALL_DIR")"
-SERVICE_NAME="$(_sanitize_conf_val "$SERVICE_NAME")"
-SERVICE_USER="$(_sanitize_conf_val "$SERVICE_USER")"
-GITHUB_REPO="$(_sanitize_conf_val "$GITHUB_REPO")"
-GITHUB_BRANCH="$(_sanitize_conf_val "$GITHUB_BRANCH")"
-BACKUP_DIR="$(_sanitize_conf_val "$BACKUP_DIR")"
-BACKUP_KEEP_DAYS="$(_sanitize_conf_val "$BACKUP_KEEP_DAYS")"
-ENABLE_NGINX="$(_sanitize_conf_val "$ENABLE_NGINX")"
-CSAI_HTTPS="$(_sanitize_conf_val "$CSAI_HTTPS")"
-OPEN_FIREWALL="$(_sanitize_conf_val "$OPEN_FIREWALL")"
-PIP_INDEX_URL="$(_sanitize_conf_val "$PIP_INDEX_URL")"
-GOPROXY="$(_sanitize_conf_val "$GOPROXY")"
-CONF
-  chmod 600 "$CONF_FILE"
-  success "Saved deployment config: $CONF_FILE"
+  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
+  success "$(t config.saved "$CONF_FILE")"
 }
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
-  local owner perms line key val
-  owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
-  perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
-  [[ "$owner" == "root" ]] || { warn "$CONF_FILE owner is not root; ignoring it"; return 0; }
-  [[ "$perms" == "600" || "$perms" == "400" ]] || { warn "$CONF_FILE perms are too open ($perms); ignoring it"; return 0; }
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
-    key="${line%%=*}"
-    key="${key// /}"
-    [[ "$key" =~ ^[A-Z_]+$ ]] || { warn "Ignoring invalid config key: $key"; continue; }
-    val="${line#*=}"
-    if [[ "$val" =~ ^\"(.*)\"$ ]]; then
-      val="${BASH_REMATCH[1]}"
-    fi
-    case "$key" in
-      CSAI_DOMAIN|PORT|PUBLIC_PORT|INSTALL_DIR|SERVICE_NAME|SERVICE_USER|GITHUB_REPO|GITHUB_BRANCH|BACKUP_DIR|BACKUP_KEEP_DAYS|ENABLE_NGINX|CSAI_HTTPS|OPEN_FIREWALL|PIP_INDEX_URL|GOPROXY)
-        printf -v "$key" '%s' "$val"
-        ;;
-      *)
-        warn "Ignoring unknown config key: $key"
-        ;;
-    esac
-  done < "$CONF_FILE"
+  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
   BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"
@@ -100,13 +61,6 @@ preflight_check() {
     x86_64|aarch64|arm64) ;;
     *) error "Unsupported architecture: $arch" ;;
   esac
-}
-acquire_lock() {
-  exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
-    error "Another CyberStrikeAI deployment process is running: $LOCK_FILE"
-  fi
-  trap 'flock -u 9 2>/dev/null || true; exec 9>&- 2>/dev/null || true' EXIT
 }
 check_connectivity() {
   check_connectivity_urls \

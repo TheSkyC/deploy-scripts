@@ -18,6 +18,11 @@ PG_DB="sub2api"
 PG_DSN=""
 BIN_PATH="${INSTALL_DIR}/sub2api"
 CONF_FILE="/etc/sub2api-deploy.conf"
+CONFIG_KEYS=(
+  PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
+  SUB2API_DOMAIN INSTALLED_VERSION
+)
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
   if command -v apt-get &>/dev/null; then
@@ -37,13 +42,6 @@ preflight_check() {
   esac
 }
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
-acquire_lock() {
-  exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
-    error "另一个 sub2api 管理进程正在运行（锁文件：${LOCK_FILE}），请稍后再试"
-  fi
-  trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
-}
 check_connectivity() {
   check_connectivity_urls \
     "https://api.github.com" \
@@ -51,72 +49,15 @@ check_connectivity() {
     "https://objects.githubusercontent.com" && return 0
   error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
 }
-_sanitize_conf_val() {
-  local _v="${1%%$'\n'*}"
-  _v="${_v//\"/}"
-  echo "$_v"
-}
 save_config() {
-  cat > "$CONF_FILE" << CONF
-PORT="$(_sanitize_conf_val "${PORT}")"
-INSTALL_DIR="$(_sanitize_conf_val "${INSTALL_DIR}")"
-DATA_DIR="$(_sanitize_conf_val "${DATA_DIR}")"
-LOG_DIR="$(_sanitize_conf_val "${LOG_DIR}")"
-CONFIG_DIR="$(_sanitize_conf_val "${CONFIG_DIR}")"
-SERVICE_NAME="$(_sanitize_conf_val "${SERVICE_NAME}")"
-SERVICE_USER="$(_sanitize_conf_val "${SERVICE_USER}")"
-GITHUB_REPO="$(_sanitize_conf_val "${GITHUB_REPO}")"
-BACKUP_DIR="$(_sanitize_conf_val "${BACKUP_DIR}")"
-BACKUP_KEEP_DAYS="$(_sanitize_conf_val "${BACKUP_KEEP_DAYS}")"
-PG_USER="$(_sanitize_conf_val "${PG_USER}")"
-PG_PASS="$(_sanitize_conf_val "${PG_PASS:-}")"
-PG_DB="$(_sanitize_conf_val "${PG_DB}")"
-PG_DSN="$(_sanitize_conf_val "${PG_DSN:-}")"
-SUB2API_DOMAIN="$(_sanitize_conf_val "${SUB2API_DOMAIN:-}")"
-INSTALLED_VERSION="$(_sanitize_conf_val "${INSTALLED_VERSION:-unknown}")"
-CONF
-  chmod 600 "$CONF_FILE"
-  success "部署配置已持久化：${CONF_FILE}"
+  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
+  success "$(t config.saved "$CONF_FILE")"
 }
 load_config() {
-  [[ ! -f "$CONF_FILE" ]] && return
-  local _owner _perms
-  _owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
-  _perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
-  if [[ "$_owner" != "root" ]]; then
-    warn "配置文件 ${CONF_FILE} 属主非 root（当前：${_owner}），拒绝加载"
-    return
-  fi
-  if [[ "$_perms" != "600" && "$_perms" != "400" ]]; then
-    warn "配置文件权限过于宽松（${_perms}），拒绝加载（建议：chmod 600 ${CONF_FILE}）"
-    return
-  fi
-  local _line _key _val
-  while IFS= read -r _line || [[ -n "$_line" ]]; do
-    [[ "$_line" =~ ^[[:space:]]*(#|$) ]] && continue
-    _key="${_line%%=*}"
-    _key="${_key// /}"
-    if [[ ! "$_key" =~ ^[A-Z_]+$ ]]; then
-      warn "配置文件含非法键名（${_key}），已跳过"
-      continue
-    fi
-    _val="${_line#*=}"
-    if [[ "$_val" =~ ^\"(.*)\"$ ]]; then
-      _val="${BASH_REMATCH[1]}"
-    fi
-    case "$_key" in
-      PORT|INSTALL_DIR|DATA_DIR|LOG_DIR|CONFIG_DIR|SERVICE_NAME|\
-      SERVICE_USER|GITHUB_REPO|BACKUP_DIR|BACKUP_KEEP_DAYS|\
-      PG_USER|PG_PASS|PG_DB|PG_DSN|SUB2API_DOMAIN|INSTALLED_VERSION)
-        printf -v "$_key" '%s' "$_val"
-        ;;
-      *)
-        warn "配置文件包含未知键 ${_key}，已忽略"
-        ;;
-    esac
-  done < "$CONF_FILE"
+  [[ -f "$CONF_FILE" ]] || return 0
+  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
   BIN_PATH="${INSTALL_DIR}/sub2api"
-  success "已加载部署记录：${CONF_FILE}"
+  success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {
   local json tag

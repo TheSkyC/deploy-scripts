@@ -23,6 +23,8 @@ __deploy_i18n_message() {
     common.quit) echo "quit|退出" ;;
     common.selection_prompt) echo "Selection [1-5/q]:|请输入选项 [1-5/q]：" ;;
     common.usage) echo "Usage: sudo bash %s [install|update|backup|status|uninstall]|用法：sudo bash %s [install|update|backup|status|uninstall]" ;;
+    config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
+    config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
     error.config_permission) echo "Refusing to load unsafe config permissions: %s|拒绝加载权限不安全的配置文件：%s" ;;
     error.config_owner) echo "Refusing to load config not owned by root: %s|拒绝加载非 root 拥有的配置文件：%s" ;;
@@ -38,6 +40,10 @@ __deploy_i18n_message() {
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
     status.unknown) echo "unknown|未知" ;;
+    warn.config_invalid_key) echo "Ignoring invalid config key: %s|已忽略非法配置键：%s" ;;
+    warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
+    warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
+    warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
     *) echo "$key|$key" ;;
   esac
 }

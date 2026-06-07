@@ -32,6 +32,8 @@ __deploy_i18n_message() {
     common.quit) echo "quit|退出" ;;
     common.selection_prompt) echo "Selection [1-5/q]:|请输入选项 [1-5/q]：" ;;
     common.usage) echo "Usage: sudo bash %s [install|update|backup|status|uninstall]|用法：sudo bash %s [install|update|backup|status|uninstall]" ;;
+    config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
+    config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
     error.config_permission) echo "Refusing to load unsafe config permissions: %s|拒绝加载权限不安全的配置文件：%s" ;;
     error.config_owner) echo "Refusing to load config not owned by root: %s|拒绝加载非 root 拥有的配置文件：%s" ;;
@@ -47,6 +49,10 @@ __deploy_i18n_message() {
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
     status.unknown) echo "unknown|未知" ;;
+    warn.config_invalid_key) echo "Ignoring invalid config key: %s|已忽略非法配置键：%s" ;;
+    warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
+    warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
+    warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
     *) echo "$key|$key" ;;
   esac
 }
@@ -135,25 +141,40 @@ sanitize_conf_val() {
   echo "$value"
 }
 
+config_file_is_safe() {
+  local conf_file="$1"
+  [[ -f "$conf_file" ]] || return 0
+
+  if command -v stat >/dev/null 2>&1; then
+    local owner mode
+    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
+    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo 777)"
+    [[ "$owner" == "root" ]] || { warn "$(t warn.config_owner "$conf_file" "$owner")"; return 1; }
+    [[ "$mode" == "600" || "$mode" == "400" ]] || { warn "$(t warn.config_permission "$conf_file" "$mode")"; return 1; }
+  fi
+  return 0
+}
+
 load_config_file() {
   local conf_file="$1"
   shift
   local -a allowed_keys=("$@")
   [[ -f "$conf_file" ]] || return 0
-
-  if command -v stat >/dev/null 2>&1; then
-    local owner mode
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo root)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo 600)"
-    [[ "$owner" == "root" ]] || error "$(t error.config_owner "$conf_file")"
-    [[ "$mode" == "600" || "$mode" == "400" ]] || error "$(t error.config_permission "$conf_file")"
-  fi
+  config_file_is_safe "$conf_file" || return 1
 
   local line key value allowed
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+    [[ "$line" =~ ^[[:space:]]*(#|$) || "$line" != *=* ]] && continue
     key="${line%%=*}"
+    key="${key// /}"
+    if [[ ! "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+      warn "$(t warn.config_invalid_key "$key")"
+      continue
+    fi
     value="${line#*=}"
+    if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+      value="${BASH_REMATCH[1]}"
+    fi
     allowed=false
     local allowed_key
     for allowed_key in "${allowed_keys[@]}"; do
@@ -162,8 +183,7 @@ load_config_file() {
         break
       fi
     done
-    $allowed || continue
-    [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
+    $allowed || { warn "$(t warn.config_unknown_key "$key")"; continue; }
     printf -v "$key" '%s' "$value"
   done < "$conf_file"
 }
@@ -177,7 +197,7 @@ write_config_file() {
   local key value
   for key in "$@"; do
     value="$(sanitize_conf_val "${!key:-}")"
-    printf '%s=%s\n' "$key" "$value" >> "$tmp_file"
+    printf '%s="%s"\n' "$key" "$value" >> "$tmp_file"
   done
   chown root:root "$tmp_file" 2>/dev/null || true
   mv "$tmp_file" "$conf_file"
@@ -406,6 +426,11 @@ PG_DB="sub2api"
 PG_DSN=""
 BIN_PATH="${INSTALL_DIR}/sub2api"
 CONF_FILE="/etc/sub2api-deploy.conf"
+CONFIG_KEYS=(
+  PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
+  SUB2API_DOMAIN INSTALLED_VERSION
+)
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
   if command -v apt-get &>/dev/null; then
@@ -425,13 +450,6 @@ preflight_check() {
   esac
 }
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
-acquire_lock() {
-  exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
-    error "另一个 sub2api 管理进程正在运行（锁文件：${LOCK_FILE}），请稍后再试"
-  fi
-  trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
-}
 check_connectivity() {
   check_connectivity_urls \
     "https://api.github.com" \
@@ -439,72 +457,15 @@ check_connectivity() {
     "https://objects.githubusercontent.com" && return 0
   error "网络不通，无法访问 GitHub，请检查网络或代理后重试"
 }
-_sanitize_conf_val() {
-  local _v="${1%%$'\n'*}"
-  _v="${_v//\"/}"
-  echo "$_v"
-}
 save_config() {
-  cat > "$CONF_FILE" << CONF
-PORT="$(_sanitize_conf_val "${PORT}")"
-INSTALL_DIR="$(_sanitize_conf_val "${INSTALL_DIR}")"
-DATA_DIR="$(_sanitize_conf_val "${DATA_DIR}")"
-LOG_DIR="$(_sanitize_conf_val "${LOG_DIR}")"
-CONFIG_DIR="$(_sanitize_conf_val "${CONFIG_DIR}")"
-SERVICE_NAME="$(_sanitize_conf_val "${SERVICE_NAME}")"
-SERVICE_USER="$(_sanitize_conf_val "${SERVICE_USER}")"
-GITHUB_REPO="$(_sanitize_conf_val "${GITHUB_REPO}")"
-BACKUP_DIR="$(_sanitize_conf_val "${BACKUP_DIR}")"
-BACKUP_KEEP_DAYS="$(_sanitize_conf_val "${BACKUP_KEEP_DAYS}")"
-PG_USER="$(_sanitize_conf_val "${PG_USER}")"
-PG_PASS="$(_sanitize_conf_val "${PG_PASS:-}")"
-PG_DB="$(_sanitize_conf_val "${PG_DB}")"
-PG_DSN="$(_sanitize_conf_val "${PG_DSN:-}")"
-SUB2API_DOMAIN="$(_sanitize_conf_val "${SUB2API_DOMAIN:-}")"
-INSTALLED_VERSION="$(_sanitize_conf_val "${INSTALLED_VERSION:-unknown}")"
-CONF
-  chmod 600 "$CONF_FILE"
-  success "部署配置已持久化：${CONF_FILE}"
+  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
+  success "$(t config.saved "$CONF_FILE")"
 }
 load_config() {
-  [[ ! -f "$CONF_FILE" ]] && return
-  local _owner _perms
-  _owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
-  _perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
-  if [[ "$_owner" != "root" ]]; then
-    warn "配置文件 ${CONF_FILE} 属主非 root（当前：${_owner}），拒绝加载"
-    return
-  fi
-  if [[ "$_perms" != "600" && "$_perms" != "400" ]]; then
-    warn "配置文件权限过于宽松（${_perms}），拒绝加载（建议：chmod 600 ${CONF_FILE}）"
-    return
-  fi
-  local _line _key _val
-  while IFS= read -r _line || [[ -n "$_line" ]]; do
-    [[ "$_line" =~ ^[[:space:]]*(#|$) ]] && continue
-    _key="${_line%%=*}"
-    _key="${_key// /}"
-    if [[ ! "$_key" =~ ^[A-Z_]+$ ]]; then
-      warn "配置文件含非法键名（${_key}），已跳过"
-      continue
-    fi
-    _val="${_line#*=}"
-    if [[ "$_val" =~ ^\"(.*)\"$ ]]; then
-      _val="${BASH_REMATCH[1]}"
-    fi
-    case "$_key" in
-      PORT|INSTALL_DIR|DATA_DIR|LOG_DIR|CONFIG_DIR|SERVICE_NAME|\
-      SERVICE_USER|GITHUB_REPO|BACKUP_DIR|BACKUP_KEEP_DAYS|\
-      PG_USER|PG_PASS|PG_DB|PG_DSN|SUB2API_DOMAIN|INSTALLED_VERSION)
-        printf -v "$_key" '%s' "$_val"
-        ;;
-      *)
-        warn "配置文件包含未知键 ${_key}，已忽略"
-        ;;
-    esac
-  done < "$CONF_FILE"
+  [[ -f "$CONF_FILE" ]] || return 0
+  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
   BIN_PATH="${INSTALL_DIR}/sub2api"
-  success "已加载部署记录：${CONF_FILE}"
+  success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {
   local json tag

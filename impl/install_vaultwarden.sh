@@ -23,6 +23,12 @@ EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/m
 EXTRACT_TOOL_SHA256=""
 VW_BIN="${VW_BIN_DIR}/vaultwarden"
 CONF_FILE="/etc/vaultwarden_deploy.conf"
+CONFIG_KEYS=(
+  VW_DOMAIN VW_PORT VW_USER VW_GROUP VW_BIN_DIR VW_DATA_DIR VW_WEB_DIR
+  VW_ENV_FILE VW_LOG_FILE VW_BACKUP_DIR BACKUP_KEEP_DAYS SIGNUPS_ALLOWED
+  ENABLE_HTTPS CERTBOT_EMAIL VW_IMAGE_REPO VW_IMAGE_TAG WEB_VAULT_VER
+  EXTRACT_TOOL_COMMIT EXTRACT_TOOL_SHA256
+)
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0"
   if ! command -v apt-get &>/dev/null; then
@@ -37,13 +43,6 @@ preflight_check() {
   esac
 }
 LOCK_FILE="/var/lock/vaultwarden-deploy.lock"
-acquire_lock() {
-  exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
-    error "另一个 vaultwarden 管理进程正在运行（锁文件：${LOCK_FILE}），请稍后再试"
-  fi
-  trap 'flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null' EXIT
-}
 check_connectivity() {
   check_connectivity_urls \
     "https://auth.docker.io/token" \
@@ -53,79 +52,17 @@ check_connectivity() {
 }
 load_config() {
   if [[ -f "$CONF_FILE" ]]; then
-    local _owner _perms
-    _owner=$(stat -c '%U' "$CONF_FILE" 2>/dev/null || echo "unknown")
-    _perms=$(stat -c '%a' "$CONF_FILE" 2>/dev/null || echo "777")
-    if [[ "$_owner" != "root" ]]; then
-      warn "配置文件 ${CONF_FILE} 属主非 root（当前：${_owner}），拒绝加载（请检查文件安全性）"
-      return
-    fi
-    if [[ "$_perms" != "600" && "$_perms" != "400" ]]; then
-      warn "配置文件 ${CONF_FILE} 权限过于宽松（${_perms}），拒绝加载（建议：chmod 600 ${CONF_FILE}）"
-      return
-    fi
-    local _line _key _val
-    while IFS= read -r _line || [[ -n "$_line" ]]; do
-      [[ "$_line" =~ ^[[:space:]]*(#|$) ]] && continue
-      _key="${_line%%=*}"
-      _key="${_key// /}"
-      if [[ ! "$_key" =~ ^[A-Z_]+$ ]]; then
-        warn "配置文件含非法键名（${_key}），已跳过该行"
-        continue
-      fi
-      _val="${_line#*=}"
-      if [[ "$_val" =~ ^\"(.*)\"$ ]]; then
-        _val="${BASH_REMATCH[1]}"
-      fi
-      case "$_key" in
-        VW_DOMAIN|VW_PORT|VW_USER|VW_GROUP|VW_BIN_DIR|VW_DATA_DIR|\
-        VW_WEB_DIR|VW_ENV_FILE|VW_LOG_FILE|VW_BACKUP_DIR|BACKUP_KEEP_DAYS|\
-        SIGNUPS_ALLOWED|ENABLE_HTTPS|CERTBOT_EMAIL|VW_IMAGE_REPO|\
-        VW_IMAGE_TAG|WEB_VAULT_VER|EXTRACT_TOOL_COMMIT|EXTRACT_TOOL_SHA256)
-          printf -v "$_key" '%s' "$_val"
-          ;;
-        *)
-          warn "配置文件包含未知键 ${_key}，已忽略"
-          ;;
-      esac
-    done < "$CONF_FILE"
+    load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
     VW_BIN="${VW_BIN_DIR}/vaultwarden"
     if [[ "${VW_WEB_DIR}" == */web-vault ]]; then
       VW_WEB_DIR="${VW_DATA_DIR}/web-vault"
     fi
     EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
-    success "已加载部署记录：${CONF_FILE}"
+    success "$(t config.loaded "$CONF_FILE")"
   fi
 }
-_sanitize_conf_val() {
-  local _v="${1%%$'\n'*}"
-  _v="${_v//\"/}"
-  echo "$_v"
-}
 save_config() {
-  cat > "$CONF_FILE" << CONF
-VW_DOMAIN="$(_sanitize_conf_val "${VW_DOMAIN}")"
-VW_PORT="$(_sanitize_conf_val "${VW_PORT}")"
-VW_USER="$(_sanitize_conf_val "${VW_USER}")"
-VW_GROUP="$(_sanitize_conf_val "${VW_GROUP}")"
-VW_BIN_DIR="$(_sanitize_conf_val "${VW_BIN_DIR}")"
-VW_DATA_DIR="$(_sanitize_conf_val "${VW_DATA_DIR}")"
-VW_WEB_DIR="$(_sanitize_conf_val "${VW_WEB_DIR}")"
-VW_ENV_FILE="$(_sanitize_conf_val "${VW_ENV_FILE}")"
-VW_LOG_FILE="$(_sanitize_conf_val "${VW_LOG_FILE}")"
-VW_BACKUP_DIR="$(_sanitize_conf_val "${VW_BACKUP_DIR}")"
-BACKUP_KEEP_DAYS="$(_sanitize_conf_val "${BACKUP_KEEP_DAYS}")"
-SIGNUPS_ALLOWED="$(_sanitize_conf_val "${SIGNUPS_ALLOWED}")"
-ENABLE_HTTPS="$(_sanitize_conf_val "${ENABLE_HTTPS}")"
-CERTBOT_EMAIL="$(_sanitize_conf_val "${CERTBOT_EMAIL}")"
-VW_IMAGE_REPO="$(_sanitize_conf_val "${VW_IMAGE_REPO}")"
-VW_IMAGE_TAG="$(_sanitize_conf_val "${VW_IMAGE_TAG}")"
-WEB_VAULT_VER="$(_sanitize_conf_val "${WEB_VAULT_VER}")"
-# 供应链安全：固定 docker-image-extract commit hash（安装/更新后自动持久化）
-EXTRACT_TOOL_COMMIT="$(_sanitize_conf_val "${EXTRACT_TOOL_COMMIT}")"
-EXTRACT_TOOL_SHA256="$(_sanitize_conf_val "${EXTRACT_TOOL_SHA256}")"
-CONF
-  chmod 600 "$CONF_FILE"
+  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || echo "未安装"
