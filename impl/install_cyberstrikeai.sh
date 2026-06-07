@@ -70,7 +70,7 @@ check_connectivity() {
   error "$(t app.cyberstrikeai.error.github_unreachable)"
 }
 apt_install_base() {
-  step "Install system dependencies"
+  step "$(t app.cyberstrikeai.step.install_deps)"
   apt-get update -qq
   apt-get install -y -qq \
     ca-certificates curl git build-essential \
@@ -79,7 +79,7 @@ apt_install_base() {
   if _bool_true "$ENABLE_NGINX"; then
     apt-get install -y -qq nginx
   fi
-  success "Base dependencies installed"
+  success "$(t app.cyberstrikeai.success.deps)"
 }
 install_go_if_needed() {
   local need_install=false
@@ -92,14 +92,14 @@ install_go_if_needed() {
     minor="${ver#*.}"; minor="${minor%%.*}"
     if [[ "$major" -lt 1 || ( "$major" -eq 1 && "$minor" -lt 21 ) ]]; then
       need_install=true
-      warn "Go version is too old: $ver"
+      warn "$(t app.cyberstrikeai.warn.go_old "$ver")"
     fi
   fi
   if ! $need_install; then
-    success "Go is ready: $(go version)"
+    success "$(t app.cyberstrikeai.success.go_ready "$(go version)")"
     return 0
   fi
-  step "Install Go"
+  step "$(t app.cyberstrikeai.step.install_go)"
   apt-get install -y -qq golang-go || true
   if command -v go >/dev/null 2>&1; then
     local ver major minor
@@ -107,61 +107,61 @@ install_go_if_needed() {
     major="${ver%%.*}"
     minor="${ver#*.}"; minor="${minor%%.*}"
     if [[ "$major" -gt 1 || ( "$major" -eq 1 && "$minor" -ge 21 ) ]]; then
-      success "Go installed: $(go version)"
+      success "$(t app.cyberstrikeai.success.go_installed "$(go version)")"
       return 0
     fi
-    warn "Repository Go is still too old: $ver. Installing official Go toolchain."
+    warn "$(t app.cyberstrikeai.warn.go_repo_old "$ver")"
   fi
   local arch go_arch latest_json version tarball url tmp
   arch=$(uname -m)
   case "$arch" in
     x86_64) go_arch="amd64" ;;
     aarch64|arm64) go_arch="arm64" ;;
-    *) error "Unsupported architecture for Go install: $arch" ;;
+    *) error "$(t app.cyberstrikeai.error.go_arch "$arch")" ;;
   esac
   latest_json=$(curl -fsSL --max-time 20 "https://go.dev/dl/?mode=json" 2>/dev/null) \
-    || error "Failed to query official Go releases"
+    || error "$(t app.cyberstrikeai.error.go_query)"
   version=$(printf '%s\n' "$latest_json" | grep -oE '"version"[[:space:]]*:[[:space:]]*"go[0-9]+\.[0-9]+(\.[0-9]+)?"' | head -1 | sed 's/.*"\(go[^"]*\)".*/\1/')
-  [[ -n "$version" ]] || error "Failed to parse latest Go version"
+  [[ -n "$version" ]] || error "$(t app.cyberstrikeai.error.go_parse)"
   tarball="${version}.linux-${go_arch}.tar.gz"
   url="https://go.dev/dl/${tarball}"
   tmp=$(mktemp)
-  info "Downloading ${url}"
+  info "$(t app.cyberstrikeai.info.download "$url")"
   curl -fL --retry 3 --connect-timeout 15 -o "$tmp" "$url"
-  [[ -s "$tmp" ]] || error "Downloaded Go archive is empty"
+  [[ -s "$tmp" ]] || error "$(t app.cyberstrikeai.error.go_empty)"
   rm -rf /usr/local/go
   tar -C /usr/local -xzf "$tmp"
   rm -f "$tmp"
   ln -sf /usr/local/go/bin/go /usr/local/bin/go
   ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
   hash -r 2>/dev/null || true
-  command -v go >/dev/null 2>&1 || error "Go installation failed. Please install Go 1.21+ manually."
-  success "Go installed: $(go version)"
+  command -v go >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.go_failed)"
+  success "$(t app.cyberstrikeai.success.go_installed "$(go version)")"
 }
 ensure_service_user() {
   if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
-    success "Created service user: $SERVICE_USER"
+    success "$(t app.cyberstrikeai.success.user_created "$SERVICE_USER")"
   fi
 }
 clone_or_update_repo() {
-  step "Fetch CyberStrikeAI source"
+  step "$(t app.cyberstrikeai.step.fetch_source)"
   mkdir -p "$(dirname "$INSTALL_DIR")"
   if [[ -d "$INSTALL_DIR/.git" ]]; then
-    info "Repository exists, fetching latest branch: $GITHUB_BRANCH"
+    info "$(t app.cyberstrikeai.info.repo_fetch "$GITHUB_BRANCH")"
     git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"
     git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"
     git -C "$INSTALL_DIR" pull --ff-only origin "$GITHUB_BRANCH"
   elif [[ -d "$INSTALL_DIR" && -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-    error "$INSTALL_DIR exists and is not an empty git checkout"
+    error "$(t app.cyberstrikeai.error.nonempty_dir "$INSTALL_DIR")"
   else
     rm -rf "$INSTALL_DIR"
     git clone --depth 1 --branch "$GITHUB_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"
   fi
-  success "Source ready: $INSTALL_DIR"
+  success "$(t app.cyberstrikeai.success.source_ready "$INSTALL_DIR")"
 }
 patch_config_port_and_paths() {
-  [[ -f "$CONFIG_FILE" ]] || error "Missing config.yaml at $CONFIG_FILE"
+  [[ -f "$CONFIG_FILE" ]] || error "$(t app.cyberstrikeai.error.config_missing "$CONFIG_FILE")"
   local backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
   cp "$CONFIG_FILE" "$backup"
   python3 - "$CONFIG_FILE" "$PORT" "$LOG_DIR/cyberstrike-ai.log" "$CSAI_HTTPS" <<'PY'
@@ -199,10 +199,10 @@ text = replace_in_section(text, "log", "output", log_file)
 
 path.write_text(text, encoding="utf-8")
 PY
-  success "Adjusted config.yaml: local host, port $PORT, log file"
+  success "$(t app.cyberstrikeai.success.config_adjusted "$PORT")"
 }
 setup_python_env() {
-  step "Prepare Python environment"
+  step "$(t app.cyberstrikeai.step.python_env)"
   cd "$INSTALL_DIR"
   if [[ ! -d "$VENV_DIR" ]]; then
     python3 -m venv "$VENV_DIR"
@@ -213,38 +213,38 @@ setup_python_env() {
     local pip_log
     pip_log=$(mktemp)
     if python -m pip install --index-url "$PIP_INDEX_URL" -r requirements.txt >"$pip_log" 2>&1; then
-      success "Python requirements installed"
+      success "$(t app.cyberstrikeai.success.python_requirements)"
     else
-      warn "Some Python requirements failed to install; continuing because several tools are optional"
+      warn "$(t app.cyberstrikeai.warn.python_requirements)"
       tail -n 20 "$pip_log" | sed 's/^/  /' >&2 || true
     fi
     rm -f "$pip_log"
   else
-    warn "requirements.txt not found; skipping Python dependency install"
+    warn "$(t app.cyberstrikeai.warn.requirements_missing)"
   fi
 }
 build_binary() {
-  step "Build Go binary"
+  step "$(t app.cyberstrikeai.step.build)"
   cd "$INSTALL_DIR"
   export GOPROXY="$GOPROXY"
   go mod download
   local tmp_bin="${BIN_PATH}.tmp.$$"
   go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go
-  [[ -s "$tmp_bin" ]] || error "Built binary is empty"
+  [[ -s "$tmp_bin" ]] || error "$(t app.cyberstrikeai.error.binary_empty)"
   chmod 0755 "$tmp_bin"
   mv "$tmp_bin" "$BIN_PATH"
-  success "Built binary: $BIN_PATH"
+  success "$(t app.cyberstrikeai.success.binary_built "$BIN_PATH")"
 }
 install_runtime_dirs() {
-  step "Prepare runtime directories"
+  step "$(t app.cyberstrikeai.step.runtime_dirs)"
   mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$BACKUP_DIR"
   chmod 750 "$INSTALL_DIR" "$BACKUP_DIR"
   chmod 750 "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp"
-  success "Runtime directories prepared"
+  success "$(t app.cyberstrikeai.success.runtime_dirs)"
 }
 write_systemd_unit() {
-  step "Install systemd service"
+  step "$(t app.cyberstrikeai.step.systemd)"
   local https_env="false"
   _bool_true "$CSAI_HTTPS" && https_env="true"
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SERVICE
@@ -278,11 +278,11 @@ WantedBy=multi-user.target
 SERVICE
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" --quiet
-  success "systemd unit installed: $SERVICE_NAME"
+  success "$(t app.cyberstrikeai.success.systemd "$SERVICE_NAME")"
 }
 write_nginx_config() {
   _bool_true "$ENABLE_NGINX" || return 0
-  step "Configure Nginx reverse proxy"
+  step "$(t app.cyberstrikeai.step.nginx)"
   local server_name="_"
   [[ -n "$CSAI_DOMAIN" ]] && server_name="$CSAI_DOMAIN"
   local upstream_scheme="http"
@@ -336,18 +336,18 @@ NGINX
   nginx -t
   systemctl enable nginx --quiet
   systemctl reload nginx 2>/dev/null || systemctl restart nginx
-  success "Nginx reverse proxy installed"
+  success "$(t app.cyberstrikeai.success.nginx)"
 }
 open_firewall_ports() {
   _bool_true "$OPEN_FIREWALL" || return 0
-  step "Configure firewall"
+  step "$(t app.cyberstrikeai.step.firewall)"
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
     if _bool_true "$ENABLE_NGINX"; then
       ufw allow "${PUBLIC_PORT}/tcp" >/dev/null 2>&1 || true
-      success "ufw allows public port: $PUBLIC_PORT/tcp"
+      success "$(t app.cyberstrikeai.success.ufw "$PUBLIC_PORT")"
     else
       ufw allow "${PORT}/tcp" >/dev/null 2>&1 || true
-      success "ufw allows backend port: $PORT/tcp"
+      success "$(t app.cyberstrikeai.success.ufw_backend "$PORT")"
     fi
     return 0
   fi
@@ -357,10 +357,10 @@ open_firewall_ports() {
     if ! iptables -C INPUT -p tcp --dport "$port_to_open" -j ACCEPT 2>/dev/null; then
       iptables -A INPUT -p tcp --dport "$port_to_open" -j ACCEPT
     fi
-    success "iptables allows port: $port_to_open/tcp"
+    success "$(t app.cyberstrikeai.success.iptables "$port_to_open")"
     return 0
   fi
-  warn "No active ufw/iptables detected. Cloud security groups may still need manual rules."
+  warn "$(t app.cyberstrikeai.warn.no_firewall)"
 }
 write_logrotate() {
   cat > "$LOGROTATE_FILE" <<ROTATE
@@ -376,6 +376,10 @@ ROTATE
   chmod 644 "$LOGROTATE_FILE"
 }
 write_backup_script() {
+  local msg_install_missing msg_sqlite_integrity msg_backup_created
+  msg_install_missing="$(t app.cyberstrikeai.backup.error.install_missing '%s')"
+  msg_sqlite_integrity="$(t app.cyberstrikeai.backup.warn.sqlite_integrity '%s' '%s')"
+  msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
   cat > "$BACKUP_SCRIPT" <<BACKUP
 #!/usr/bin/env bash
 set -euo pipefail
@@ -389,7 +393,7 @@ SERVICE_NAME="${SERVICE_NAME}"
 
 mkdir -p "\$BACKUP_DIR"
 if [[ ! -d "\$INSTALL_DIR" ]]; then
-  echo "\$(date '+%F %T') [ERROR] install dir missing: \$INSTALL_DIR" >&2
+  printf "\$(date '+%F %T') [ERROR] ${msg_install_missing}\n" "\$INSTALL_DIR" >&2
   exit 1
 fi
 
@@ -397,7 +401,7 @@ if command -v sqlite3 >/dev/null 2>&1; then
   find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f 2>/dev/null | while read -r db; do
     sqlite3 "\$db" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1 || true
     integrity=\$(sqlite3 "\$db" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    [[ "\$integrity" == "ok" ]] || echo "\$(date '+%F %T') [WARN] SQLite integrity warning for \$db: \$integrity" >&2
+    [[ "\$integrity" == "ok" ]] || printf "\$(date '+%F %T') [WARN] ${msg_sqlite_integrity}\n" "\$db" "\$integrity" >&2
   done
 fi
 
@@ -418,7 +422,7 @@ if [[ "\$KEEP_DAYS" -gt 0 ]]; then
   find "\$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -mtime "+\$KEEP_DAYS" -delete 2>/dev/null || true
 fi
 
-echo "\$(date '+%F %T') [OK] backup created: \$archive"
+printf "\$(date '+%F %T') [OK] ${msg_backup_created}\n" "\$archive"
 BACKUP
   chmod 755 "$BACKUP_SCRIPT"
   cat > "$CRON_FILE" <<CRON
@@ -431,41 +435,43 @@ CRON
 check_port_conflict() {
   local port="$1"
   if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :$port )" | tail -n +2 | grep -q .; then
-    warn "Port $port appears to be in use:"
+    warn "$(t app.cyberstrikeai.warn.port_in_use "$port")"
     ss -ltnp "( sport = :$port )" 2>/dev/null | sed 's/^/  /' >&2 || true
   elif command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$port" -sTCP:LISTEN -Pn >/dev/null 2>&1; then
-    warn "Port $port appears to be in use:"
+    warn "$(t app.cyberstrikeai.warn.port_in_use "$port")"
     lsof -iTCP:"$port" -sTCP:LISTEN -Pn | sed 's/^/  /' >&2 || true
   fi
 }
 start_service() {
-  step "Start CyberStrikeAI"
+  step "$(t app.cyberstrikeai.step.start)"
   check_port_conflict "$PORT"
   systemctl restart "$SERVICE_NAME"
   if wait_for_service "$SERVICE_NAME" 35; then
-    success "$SERVICE_NAME is running"
+    success "$(t app.cyberstrikeai.success.running "$SERVICE_NAME")"
   else
     journalctl -u "$SERVICE_NAME" -n 40 --no-pager >&2 || true
-    error "$SERVICE_NAME failed to start"
+    error "$(t app.cyberstrikeai.error.start_failed "$SERVICE_NAME")"
   fi
 }
 health_check() {
-  step "Health check"
+  step "$(t app.cyberstrikeai.step.health)"
   local scheme="http"
   _bool_true "$CSAI_HTTPS" && scheme="https"
-  local code
-  code=$(curl -k -o /dev/null -s -w "%{http_code}" --max-time 8 "${scheme}://127.0.0.1:${PORT}/" || echo "000")
+  local code backend_url public_url
+  backend_url="${scheme}://127.0.0.1:${PORT}/"
+  code=$(curl -k -o /dev/null -s -w "%{http_code}" --max-time 8 "$backend_url" || echo "000")
   if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
-    success "Backend health OK: ${scheme}://127.0.0.1:${PORT}/ HTTP $code"
+    success "$(t app.cyberstrikeai.success.backend_health "$backend_url" "$code")"
   else
-    warn "Backend health returned HTTP $code"
+    warn "$(t app.cyberstrikeai.warn.backend_health "$code")"
   fi
   if _bool_true "$ENABLE_NGINX"; then
-    code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 8 "http://127.0.0.1:${PUBLIC_PORT}/" || echo "000")
+    public_url="http://127.0.0.1:${PUBLIC_PORT}/"
+    code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
     if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
-      success "Nginx health OK: http://127.0.0.1:${PUBLIC_PORT}/ HTTP $code"
+      success "$(t app.cyberstrikeai.success.nginx_health "$public_url" "$code")"
     else
-      warn "Nginx health returned HTTP $code"
+      warn "$(t app.cyberstrikeai.warn.nginx_health "$code")"
     fi
   fi
 }
@@ -475,30 +481,30 @@ print_summary() {
   local backend_scheme="http"
   _bool_true "$CSAI_HTTPS" && backend_scheme="https"
   echo ""
-  echo -e "${BOLD}${GREEN}CyberStrikeAI deployment complete${NC}"
-  echo "  service:      ${SERVICE_NAME}"
-  echo "  install dir:  ${INSTALL_DIR}"
-  echo "  config:       ${CONFIG_FILE}"
-  echo "  logs:         ${LOG_DIR}"
-  echo "  backups:      ${BACKUP_DIR}"
-  echo "  backend:      ${backend_scheme}://127.0.0.1:${PORT}/"
+  echo -e "${BOLD}${GREEN}$(t app.cyberstrikeai.summary.title)${NC}"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.service):" "$SERVICE_NAME"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.install_dir):" "$INSTALL_DIR"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.config):" "$CONFIG_FILE"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.logs):" "$LOG_DIR"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.backups):" "$BACKUP_DIR"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.backend):" "${backend_scheme}://127.0.0.1:${PORT}/"
   if _bool_true "$ENABLE_NGINX"; then
     if [[ -n "$CSAI_DOMAIN" ]]; then
-      echo "  public:       http://${CSAI_DOMAIN}:${PUBLIC_PORT}/"
+      printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.public):" "http://${CSAI_DOMAIN}:${PUBLIC_PORT}/"
     elif [[ -n "${ip:-}" ]]; then
-      echo "  public:       http://${ip}:${PUBLIC_PORT}/"
+      printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.public):" "http://${ip}:${PUBLIC_PORT}/"
     else
-      echo "  public:       http://<server-ip>:${PUBLIC_PORT}/"
+      printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.public):" "http://<server-ip>:${PUBLIC_PORT}/"
     fi
   fi
   echo ""
-  echo "Useful commands:"
+  echo "$(t app.cyberstrikeai.summary.commands)"
   echo "  systemctl status ${SERVICE_NAME} --no-pager"
   echo "  journalctl -u ${SERVICE_NAME} -n 80 --no-pager"
   echo "  bash $0 status"
   echo ""
-  warn "Set your model API key/base_url/model in the Web Settings page or edit ${CONFIG_FILE}."
-  warn "Use this platform only for authorized security testing."
+  warn "$(t app.cyberstrikeai.warn.configure_model "$CONFIG_FILE")"
+  warn "$(t app.cyberstrikeai.warn.authorized_only)"
 }
 do_install() {
   show_banner
@@ -530,9 +536,9 @@ do_backup() {
   preflight_check "backup"
   load_config
   acquire_lock
-  step "Manual backup"
+  step "$(t app.cyberstrikeai.step.manual_backup)"
   "$BACKUP_SCRIPT"
-  info "Latest backups:"
+  info "$(t app.cyberstrikeai.info.latest_backups)"
   find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | head -10 | awk '{print $2}' | while read -r file; do
         [[ -n "$file" ]] || continue
@@ -546,10 +552,10 @@ do_update() {
   load_config
   acquire_lock
   check_connectivity
-  [[ -d "$INSTALL_DIR/.git" ]] || error "$INSTALL_DIR is not a git checkout. Run install first."
-  step "Pre-update backup"
+  [[ -d "$INSTALL_DIR/.git" ]] || error "$(t app.cyberstrikeai.error.not_git "$INSTALL_DIR")"
+  step "$(t app.cyberstrikeai.step.preupdate_backup)"
   if [[ -x "$BACKUP_SCRIPT" ]]; then
-    "$BACKUP_SCRIPT" || warn "Pre-update backup failed; continuing cautiously"
+    "$BACKUP_SCRIPT" || warn "$(t app.cyberstrikeai.warn.preupdate_backup)"
   fi
   local old_rev new_rev bin_bak config_bak service_was_active=false
   old_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -558,7 +564,7 @@ do_update() {
   config_bak="${CONFIG_FILE}.preupdate.$(date +%Y%m%d_%H%M%S)"
   [[ -f "$BIN_PATH" ]] && cp "$BIN_PATH" "$bin_bak"
   [[ -f "$CONFIG_FILE" ]] && cp "$CONFIG_FILE" "$config_bak"
-  step "Update source"
+  step "$(t app.cyberstrikeai.step.update_source)"
   git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"
   git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"
   git -C "$INSTALL_DIR" pull --ff-only origin "$GITHUB_BRANCH"
@@ -568,26 +574,26 @@ do_update() {
   build_binary
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
   if $service_was_active; then
-    step "Restart updated service"
+    step "$(t app.cyberstrikeai.step.restart_updated)"
     systemctl restart "$SERVICE_NAME"
     if wait_for_service "$SERVICE_NAME" 35; then
-      success "Update complete: $old_rev -> $new_rev"
+      success "$(t app.cyberstrikeai.success.update_complete "$old_rev" "$new_rev")"
       health_check
     else
-      warn "Updated version failed to start. Rolling back binary and config."
+      warn "$(t app.cyberstrikeai.warn.update_start_failed)"
       systemctl stop "$SERVICE_NAME" 2>/dev/null || true
       [[ -f "$bin_bak" ]] && cp "$bin_bak" "$BIN_PATH"
       [[ -f "$config_bak" ]] && cp "$config_bak" "$CONFIG_FILE"
       chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" "$CONFIG_FILE" 2>/dev/null || true
       systemctl start "$SERVICE_NAME" 2>/dev/null || true
       if wait_for_service "$SERVICE_NAME" 35; then
-        error "Update failed and rollback succeeded. Inspect: journalctl -u ${SERVICE_NAME} -n 80 --no-pager"
+        error "$(t app.cyberstrikeai.error.update_rollback_ok "$SERVICE_NAME")"
       else
-        error "Update failed and rollback also failed. Inspect: journalctl -u ${SERVICE_NAME} -n 120 --no-pager"
+        error "$(t app.cyberstrikeai.error.update_rollback_failed "$SERVICE_NAME")"
       fi
     fi
   else
-    success "Update complete while service was inactive: $old_rev -> $new_rev"
+    success "$(t app.cyberstrikeai.success.update_inactive "$old_rev" "$new_rev")"
   fi
   find "$INSTALL_DIR" -maxdepth 1 -name "${BIN_NAME}.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | tail -n +4 | awk '{print $2}' | xargs -r rm -f
@@ -597,62 +603,72 @@ do_status() {
   show_banner
   preflight_check "status"
   load_config
-  step "Service status"
+  step "$(t app.cyberstrikeai.step.service_status)"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo -e "  ${GREEN}[+]${NC} ${SERVICE_NAME}: running"
+    echo -e "  ${GREEN}[+]${NC} ${SERVICE_NAME}: $(t app.cyberstrikeai.status.running)"
   elif systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo -e "  ${RED}[x]${NC} ${SERVICE_NAME}: failed"
+    echo -e "  ${RED}[x]${NC} ${SERVICE_NAME}: $(t app.cyberstrikeai.status.failed)"
   else
-    echo -e "  ${YELLOW}[!]${NC} ${SERVICE_NAME}: inactive / unknown"
+    echo -e "  ${YELLOW}[!]${NC} ${SERVICE_NAME}: $(t app.cyberstrikeai.status.inactive)"
   fi
   systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -16 | sed 's/^/  /' >&2 || true
-  step "Version and paths"
+  step "$(t app.cyberstrikeai.step.version_paths)"
   if [[ -d "$INSTALL_DIR/.git" ]]; then
-    echo "  git revision: $(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    echo "  git branch:   $(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_revision):" "$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || t status.unknown)"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_branch):" "$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || t status.unknown)"
   fi
-  [[ -x "$BIN_PATH" ]] && echo "  binary:       $BIN_PATH ($(du -sh "$BIN_PATH" | awk '{print $1}'))" || echo "  binary:       missing"
-  echo "  config:       $CONFIG_FILE"
-  echo "  logs:         $LOG_DIR"
-  echo "  backups:      $BACKUP_DIR"
-  step "Process resources"
+  if [[ -x "$BIN_PATH" ]]; then
+    printf '  %-12s %s (%s)\n' "$(t app.cyberstrikeai.status.binary):" "$BIN_PATH" "$(du -sh "$BIN_PATH" | awk '{print $1}')"
+  else
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.binary):" "$(t app.cyberstrikeai.status.missing)"
+  fi
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.config):" "$CONFIG_FILE"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.logs):" "$LOG_DIR"
+  printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.backups):" "$BACKUP_DIR"
+  step "$(t app.cyberstrikeai.step.resources)"
   local pid
   pid=$(systemctl show "$SERVICE_NAME" --property=MainPID --value 2>/dev/null || echo "0")
   if [[ "$pid" != "0" && -d "/proc/$pid" ]]; then
     echo "  PID:          $pid"
-    echo "  memory RSS:   $(awk '/VmRSS/{printf "%.1f MB", $2/1024}' "/proc/$pid/status" 2>/dev/null || echo N/A)"
-    echo "  CPU:          $(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')%"
-    echo "  uptime:       $(ps -p "$pid" -o etime= 2>/dev/null | tr -d ' ')"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.memory_rss):" "$(awk '/VmRSS/{printf "%.1f MB", $2/1024}' "/proc/$pid/status" 2>/dev/null || echo N/A)"
+    printf '  %-12s %s%%\n' "$(t app.cyberstrikeai.status.cpu):" "$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.uptime):" "$(ps -p "$pid" -o etime= 2>/dev/null | tr -d ' ')"
   else
-    echo "  process:      not running"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.process):" "$(t app.cyberstrikeai.status.not_running)"
   fi
-  step "Health"
+  step "$(t app.cyberstrikeai.step.health)"
   health_check
-  step "Nginx"
+  step "$(t app.cyberstrikeai.step.nginx)"
   if _bool_true "$ENABLE_NGINX"; then
     if command -v nginx >/dev/null 2>&1; then
-      systemctl is-active --quiet nginx && echo "  nginx:        running" || echo "  nginx:        not running"
-      [[ -f "$NGINX_CONF" ]] && echo "  config:       $NGINX_CONF" || echo "  config:       missing"
-      nginx -t >/dev/null 2>&1 && echo "  syntax:       OK" || echo "  syntax:       failed"
+      systemctl is-active --quiet nginx \
+        && printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.nginx):" "$(t app.cyberstrikeai.status.running)" \
+        || printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.nginx):" "$(t app.cyberstrikeai.status.not_running)"
+      [[ -f "$NGINX_CONF" ]] \
+        && printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.config):" "$NGINX_CONF" \
+        || printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.config):" "$(t app.cyberstrikeai.status.missing)"
+      nginx -t >/dev/null 2>&1 \
+        && printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.syntax):" "$(t app.cyberstrikeai.status.ok)" \
+        || printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.syntax):" "$(t app.cyberstrikeai.status.failed)"
     else
-      echo "  nginx:        not installed"
+      printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.nginx):" "$(t app.cyberstrikeai.status.not_installed)"
     fi
   else
-    echo "  nginx:        disabled by config"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.nginx):" "$(t app.cyberstrikeai.status.disabled)"
   fi
-  step "Backups"
+  step "$(t app.cyberstrikeai.step.backups)"
   if [[ -d "$BACKUP_DIR" ]]; then
     local count size
     count=$(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" 2>/dev/null | wc -l)
     size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}')
-    echo "  backup dir:   $BACKUP_DIR ($size, $count files)"
+    printf '  %-12s %s (%s, %s)\n' "$(t app.cyberstrikeai.status.backup_dir):" "$BACKUP_DIR" "$size" "$(t app.cyberstrikeai.status.files "$count")"
     find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null \
       | sort -rn | head -5 | awk '{print $2}' | while read -r file; do
           [[ -n "$file" ]] || continue
           printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}')" >&2
         done
   else
-    echo "  backup dir:   missing"
+    printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.backup_dir):" "$(t app.cyberstrikeai.status.missing)"
   fi
   echo ""
 }
@@ -663,54 +679,56 @@ do_uninstall() {
   acquire_lock
   require_safe_path "INSTALL_DIR" "${INSTALL_DIR:-}"
   require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"
-  step "Uninstall CyberStrikeAI"
+  step "$(t app.cyberstrikeai.step.uninstall)"
   echo -e "${RED}${BOLD}"
-  echo "This will remove:"
-  echo "  - systemd service: ${SERVICE_NAME}"
-  echo "  - Nginx config: ${NGINX_CONF}"
-  echo "  - logrotate and cron backup config"
-  echo "  - deploy config: ${CONF_FILE}"
+  echo "$(t app.cyberstrikeai.uninstall.removes)"
+  echo "  - $(t app.cyberstrikeai.uninstall.systemd "$SERVICE_NAME")"
+  echo "  - $(t app.cyberstrikeai.uninstall.nginx "$NGINX_CONF")"
+  echo "  - $(t app.cyberstrikeai.uninstall.logrotate_cron)"
+  echo "  - $(t app.cyberstrikeai.uninstall.deploy_config "$CONF_FILE")"
   echo ""
-  echo "Install dir and backup dir are kept by default unless you choose deletion."
+  echo "$(t app.cyberstrikeai.uninstall.keep_default)"
   echo -e "${NC}"
-  prompt "Type YES to continue:"
+  prompt "$(t app.cyberstrikeai.prompt.continue)"
   local confirm
   read -r confirm
-  [[ "$confirm" == "YES" ]] || { info "Cancelled"; exit 0; }
-  prompt "Delete install directory ${INSTALL_DIR}? [y/N]:"
+  [[ "$confirm" == "YES" ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 0; }
+  prompt "$(t app.cyberstrikeai.prompt.delete_install "$INSTALL_DIR")"
   local del_install
   read -r del_install
-  prompt "Delete backup directory ${BACKUP_DIR}? [y/N]:"
+  prompt "$(t app.cyberstrikeai.prompt.delete_backup "$BACKUP_DIR")"
   local del_backup
   read -r del_backup
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
-  success "Removed systemd service"
+  success "$(t app.cyberstrikeai.success.removed_systemd)"
   rm -f "$NGINX_LINK" "$NGINX_CONF"
   if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
     systemctl reload nginx 2>/dev/null || true
   fi
-  success "Removed Nginx config"
+  success "$(t app.cyberstrikeai.success.removed_nginx)"
   rm -f "$LOGROTATE_FILE" "$CRON_FILE" "$BACKUP_SCRIPT" "$CONF_FILE"
-  success "Removed deploy configs"
+  success "$(t app.cyberstrikeai.success.removed_configs)"
   if [[ "${del_install,,}" == "y" ]]; then
     safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
-    success "Deleted install dir: $INSTALL_DIR"
+    success "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"
   else
-    info "Kept install dir: $INSTALL_DIR"
+    info "$(t app.cyberstrikeai.info.kept_install "$INSTALL_DIR")"
   fi
   if [[ "${del_backup,,}" == "y" ]]; then
     safe_rm_dir "$BACKUP_DIR" "BACKUP_DIR"
-    success "Deleted backup dir: $BACKUP_DIR"
+    success "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"
   else
-    info "Kept backup dir: $BACKUP_DIR"
+    info "$(t app.cyberstrikeai.info.kept_backup "$BACKUP_DIR")"
   fi
   if [[ "${del_install,,}" == "y" ]] && id "$SERVICE_USER" >/dev/null 2>&1; then
-    userdel "$SERVICE_USER" 2>/dev/null && success "Deleted user: $SERVICE_USER" || warn "Could not delete user: $SERVICE_USER"
+    userdel "$SERVICE_USER" 2>/dev/null \
+      && success "$(t app.cyberstrikeai.success.deleted_user "$SERVICE_USER")" \
+      || warn "$(t app.cyberstrikeai.warn.delete_user "$SERVICE_USER")"
   fi
   echo ""
-  success "CyberStrikeAI uninstalled"
+  success "$(t app.cyberstrikeai.success.uninstalled)"
   release_lock
 }

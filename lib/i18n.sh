@@ -20,6 +20,17 @@ i18n_register() {
   __DEPLOY_I18N_ZH["$key"]="$zh"
 }
 
+i18n_register_many() {
+  while [[ $# -gt 0 ]]; do
+    if [[ $# -lt 3 ]]; then
+      printf 'i18n_register_many requires key/en/zh triples\n' >&2
+      return 1
+    fi
+    i18n_register "$1" "$2" "$3"
+    shift 3
+  done
+}
+
 i18n_print() {
   local text="$1"
   shift || true

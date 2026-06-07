@@ -77,6 +77,29 @@ check_blog_localized_defaults() {
   expect_blog_defaults zh "Abyte 的个人博客" "zh-cn"
 }
 
+expect_app_description() {
+  local app="$1"
+  local lang="$2"
+  local expected="$3"
+  local output
+
+  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" -c "
+    source lib/core.sh
+    source apps/${app}.sh
+    printf '%s\n' \"\$APP_DESCRIPTION\"
+  ")"
+
+  [[ "$output" == "$expected" ]] || {
+    echo "Unexpected ${app} description for ${lang}: ${output}" >&2
+    return 1
+  }
+}
+
+check_app_localized_descriptions() {
+  expect_app_description cyberstrikeai en "Source build deployment with Go, Python, systemd, Nginx, and backups."
+  expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"
+}
+
 check_no_release_temp_files() {
   if find dist -maxdepth 1 -name '*_impl.sh' -type f | grep -q .; then
     echo "Unexpected bundled implementation file in dist/" >&2
@@ -91,6 +114,7 @@ main() {
   check_release_syntax
   check_localized_dispatch
   check_blog_localized_defaults
+  check_app_localized_descriptions
   check_no_release_temp_files
   echo "Verification passed"
 }
