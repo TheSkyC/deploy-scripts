@@ -516,10 +516,10 @@ defaultContentLanguage = "${BLOG_LANG}"
 title = "${BLOG_TITLE}"
 theme = "${THEME_NAME}"
 
-# 分页
+# Pagination.
 paginate = 10
 
-# 启用 Git 信息（显示文章最后更新时间，需要 git 仓库）
+# Enable Git metadata for last-modified timestamps.
 enableGitInfo = true
 
 [params]
@@ -530,7 +530,7 @@ enableGitInfo = true
     emoji = "✍️"
     subtitle = "${BLOG_DESCRIPTION}"
 
-    # avatar: 若要显示头像，去掉注释并把图片放到 assets/img/avatar.png
+    # Uncomment this block after placing an avatar at assets/img/avatar.png.
     # [params.sidebar.avatar]
     #   enabled = true
     #   local   = true
@@ -612,7 +612,7 @@ tags = ["Hugo", "博客"]
 在 \`content/post/\` 目录下创建文件夹和 \`index.md\` 即可发布新文章。
 
 \`\`\`bash
-# 快速创建新文章
+# Create a new post quickly.
 hugo new content post/my-new-post/index.md
 \`\`\`
 
@@ -672,26 +672,26 @@ else
 HTML
   cat > "${CMS_ADMIN_DIR}/config.yml" << YAML
 # ─────────────────────────────────────────────
-#  Decap CMS 配置（hugo-theme-stack）
-#  文档：https://decapcms.org/docs/configuration-options/
+#  Decap CMS configuration for hugo-theme-stack.
+#  Docs: https://decapcms.org/docs/configuration-options/
 # ─────────────────────────────────────────────
 
 backend:
   name: ${CMS_BACKEND}
   repo: ${CMS_REPO}
   branch: ${CMS_BRANCH}
-  # 若自建 OAuth 代理服务，取消注释并填写地址
+  # Uncomment and fill this when using a self-hosted OAuth proxy.
   # base_url: https://your-oauth-server.com
 
 site_url: ${CMS_SITE_URL}
 
-# 媒体文件存储路径（相对于 Hugo 项目根目录）
+# Media paths are relative to the Hugo project root.
 media_folder: "static/img/uploads"
 public_folder: "/img/uploads"
 
 collections:
 
-  # ── 博客文章（content/post/） ──────────────────────────────
+  # ── Blog posts (content/post/) ──────────────────────────────
   - name: "post"
     label: "博客文章"
     label_singular: "文章"
@@ -735,7 +735,7 @@ collections:
       - { label: "权重（排序）", name: "weight", widget: "number", required: false, value_type: "int" }
       - { label: "正文内容", name: "body", widget: "markdown" }
 
-  # ── 独立页面（content/page/） ──────────────────────────────
+  # ── Standalone pages (content/page/) ────────────────────────
   - name: "page"
     label: "独立页面"
     label_singular: "页面"
@@ -779,55 +779,55 @@ server {
     listen 80;
     listen [::]:80;
 
-    server_name ${BLOG_DOMAIN:-_};   # 无域名时匹配所有
+    server_name ${BLOG_DOMAIN:-_};   # Match all hosts when no domain is configured.
     root ${NGINX_ROOT};
     index index.html;
 
-    # 字符编码
+    # Character encoding.
     charset utf-8;
 
-    # 静态文件缓存
+    # Static asset caching.
     location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 30d;
         add_header Cache-Control "public, no-transform";
     }
 
-    # Hugo 生成的 RSS
+    # Hugo-generated RSS.
     location /index.xml {
         add_header Content-Type "application/rss+xml; charset=utf-8";
     }
 
-    # Decap CMS admin（SPA 入口，禁止缓存、禁止搜索引擎收录）
+    # Decap CMS admin SPA entrypoint; disable caching and indexing.
     location /admin/ {
         try_files \$uri \$uri/ /admin/index.html;
         add_header Cache-Control "no-store, no-cache, must-revalidate";
         add_header X-Robots-Tag "noindex, nofollow";
     }
 
-    # Decap CMS config.yml 不缓存，方便热更新
+    # Keep Decap CMS config.yml uncached for live configuration updates.
     location = /admin/config.yml {
         add_header Cache-Control "no-store";
     }
 
-    # 404 处理
+    # 404 handling.
     error_page 404 /404.html;
     location = /404.html {
         internal;
     }
 
-    # Gzip 压缩
+    # Gzip compression.
     gzip on;
     gzip_types text/plain text/css application/json application/javascript
                text/xml application/xml application/xml+rss text/javascript
                application/x-yaml;
     gzip_min_length 1024;
 
-    # 安全头
+    # Security headers.
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
     add_header Referrer-Policy "strict-origin-when-cross-origin";
 
-    # 日志
+    # Logs.
     access_log /var/log/nginx/blog_access.log;
     error_log  /var/log/nginx/blog_error.log;
 }

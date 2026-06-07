@@ -702,53 +702,52 @@ do_install() {
   success "Admin Token 生成完成"
   step "Step 6  写入 ${VW_ENV_FILE}"
   cat > "$VW_ENV_FILE" << ENV
-# Vaultwarden 环境变量配置文件
-# 此文件包含敏感信息，chmod 600 保护，请勿提交至版本控制
-# 修改后需重启服务：systemctl restart vaultwarden
+# Vaultwarden environment file.
+# This file contains secrets; keep mode 600 and do not commit it.
+# Restart the service after changes: systemctl restart vaultwarden
 
-# ── 基本配置 ──────────────────────────────────────────────────
+# ── Basic settings ────────────────────────────────────────────
 DOMAIN=https://${VW_DOMAIN}
 ROCKET_PORT=${VW_PORT}
 ROCKET_ADDRESS=127.0.0.1
 
-# 数据和 Web Vault 目录（与 systemd WorkingDirectory 对应）
+# Data and Web Vault directories. DATA_FOLDER should match WorkingDirectory.
 DATA_FOLDER=${VW_DATA_DIR}
 WEB_VAULT_FOLDER=${VW_WEB_DIR}
 WEB_VAULT_ENABLED=true
 
-# ── 注册控制 ──────────────────────────────────────────────────
-# 首次创建账号后建议改为 false，然后 systemctl restart vaultwarden
+# ── Registration control ──────────────────────────────────────
+# After creating the first account, set this to false and restart the service.
 SIGNUPS_ALLOWED=${SIGNUPS_ALLOWED}
 INVITATIONS_ALLOWED=true
 
-# ── Admin 面板 ─────────────────────────────────────────────────
-# Argon2id 哈希保护（明文 Token 在新版本中已废弃）
-# 重要：必须用单引号包裹，防止 systemd EnvironmentFile 对 $ 做变量展开
-# （argon2 PHC 格式含多个 $ 符号，双引号下会被 systemd 错误展开为空串）
+# ── Admin panel ───────────────────────────────────────────────
+# Argon2id hash protection; plaintext tokens are deprecated.
+# Single quotes prevent systemd EnvironmentFile expansion of $ in PHC hashes.
 ADMIN_TOKEN='${ADMIN_HASH}'
 
-# ── WebSocket 实时推送（客户端实时同步必需）────────────────────
-# 1.29+ 已将 WebSocket 合并到主端口（ROCKET_PORT），无需独立端口
-# WEBSOCKET_ENABLED 保留以兼容旧版本；新版本已忽略此项
+# ── Realtime sync ─────────────────────────────────────────────
+# Vaultwarden 1.29+ serves WebSocket traffic on the main ROCKET_PORT.
+# WEBSOCKET_ENABLED is kept for compatibility with older versions.
 WEBSOCKET_ENABLED=true
 
-# ── 日志 ──────────────────────────────────────────────────────
+# ── Logging ───────────────────────────────────────────────────
 LOG_FILE=${VW_LOG_FILE}
 LOG_LEVEL=info
 EXTENDED_LOGGING=true
 
-# ── 安全加固 ──────────────────────────────────────────────────
+# ── Security hardening ────────────────────────────────────────
 LOGIN_RATELIMIT_MAX_BURST=10
 LOGIN_RATELIMIT_SECONDS=60
 ADMIN_RATELIMIT_MAX_BURST=10
 ADMIN_RATELIMIT_SECONDS=60
 IP_HEADER=X-Real-IP
 
-# ── 附件限制（单位 KiB）──────────────────────────────────────
+# ── Attachment limits in KiB ──────────────────────────────────
 ATTACHMENTS_SIZE_LIMIT=10240
 USER_ATTACHMENT_LIMIT=102400
 
-# ── SMTP 邮件（可选，取消注释并填写）────────────────────────
+# ── Optional SMTP settings ────────────────────────────────────
 # SMTP_HOST=smtp.example.com
 # SMTP_PORT=587
 # SMTP_SECURITY=starttls
@@ -757,7 +756,7 @@ USER_ATTACHMENT_LIMIT=102400
 # SMTP_FROM=no-reply@${VW_DOMAIN}
 # SMTP_FROM_NAME=Vaultwarden
 
-# ── 推送通知（可选，需向 Bitwarden 官方申请 ID/Key）──────────
+# ── Optional push notifications; request ID/key from Bitwarden first ──
 # PUSH_ENABLED=true
 # PUSH_INSTALLATION_ID=
 # PUSH_INSTALLATION_KEY=
@@ -771,41 +770,41 @@ ENV
 Description=Vaultwarden Password Manager (Bitwarden-compatible)
 Documentation=https://github.com/dani-garcia/vaultwarden
 After=network.target
-# 若使用外部数据库，取消注释并按实际修改：
+# Uncomment and adjust when using an external database.
 # After=mysql.service
 # Requires=mysql.service
 
 [Service]
-# 以专用低权限用户运行
+# Run as a dedicated low-privilege user.
 User=${VW_USER}
 Group=${VW_GROUP}
 
-# 环境变量配置文件
+# Environment file.
 EnvironmentFile=${VW_ENV_FILE}
 
-# 工作目录（SQLite 数据库写在此处）
+# Working directory; SQLite data is stored here.
 WorkingDirectory=${VW_DATA_DIR}
 
-# 二进制路径
+# Binary path.
 ExecStart=${VW_BIN}
 
-# 进程限制
+# Process limits.
 LimitNOFILE=1048576
 LimitNPROC=64
 
-# systemd 沙箱隔离（加固安全）
+# systemd sandboxing for defense in depth.
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
-# 允许写入的目录（数据目录和日志目录）
+# Keep the filesystem read-only except for data and log directories.
 ReadWritePaths=${VW_DATA_DIR} $(dirname "${VW_LOG_FILE}")
 
-# 崩溃后自动重启
+# Restart after failures.
 Restart=on-failure
 RestartSec=5s
 
-# 标准输出也转发到 journal
+# Send stdout and stderr to the systemd journal.
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=vaultwarden
@@ -840,7 +839,7 @@ UNIT
   local NGINX_CONF="/etc/nginx/sites-available/vaultwarden"
   mkdir -p /var/www/certbot
   cat > "$NGINX_CONF" << NGINX
-# Vaultwarden Nginx 反向代理配置（HTTP 阶段）
+# Vaultwarden reverse proxy configuration for the HTTP bootstrap phase.
 server {
     listen 80;
     listen [::]:80;
@@ -851,7 +850,7 @@ server {
         root /var/www/certbot;
     }
 
-    # 临时直接反代（HTTPS 申请前）
+    # Temporary direct proxy before HTTPS certificates are available.
     location / {
         proxy_pass         http://127.0.0.1:${VW_PORT};
         proxy_http_version 1.1;
@@ -927,7 +926,7 @@ NGINX
         _listen_https="    listen 443 ssl http2;\n    listen [::]:443 ssl http2;"
       fi
       cat > "$NGINX_CONF" << NGINX2
-# Vaultwarden Nginx 反向代理配置（完整 HTTP + HTTPS）
+# Vaultwarden reverse proxy configuration for HTTP to HTTPS redirect.
 server {
     listen 80;
     listen [::]:80;
@@ -949,11 +948,11 @@ NGINX2
         cat << NGINX2BODY
     server_name ${VW_DOMAIN};
 
-    # TLS 证书
+    # TLS certificates.
     ssl_certificate     ${CERT_PATH_FULL};
     ssl_certificate_key ${CERT_KEY_FULL};
 
-    # TLS 加固
+    # TLS hardening.
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-CHACHA20-POLY1305';
     ssl_prefer_server_ciphers off;
@@ -962,10 +961,10 @@ NGINX2
     ssl_stapling on;
     ssl_stapling_verify on;
 
-    # 附件上传大小（与 .env 中的限制对应）
+    # Match the attachment size limit configured in the environment file.
     client_max_body_size 20M;
 
-    # 安全响应头
+    # Security headers.
     add_header Strict-Transport-Security  "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Content-Type-Options     "nosniff"                                      always;
     add_header X-Frame-Options            "SAMEORIGIN"                                   always;
@@ -973,7 +972,7 @@ NGINX2
     add_header Referrer-Policy            "strict-origin-when-cross-origin"              always;
     add_header Permissions-Policy         "camera=(), microphone=(), geolocation=()"     always;
 
-    # 主反向代理（含 WebSocket 升级支持）
+    # Main reverse proxy with WebSocket upgrade support.
     location / {
         proxy_pass         http://127.0.0.1:${VW_PORT};
         proxy_http_version 1.1;
@@ -986,7 +985,7 @@ NGINX2
         proxy_read_timeout 90s;
     }
 
-    # WebSocket 通知（1.29+ 通过主端口处理，此块保留向后兼容旧版本）
+    # Notification WebSocket path retained for older Vaultwarden versions.
     location /notifications/hub {
         proxy_pass         http://127.0.0.1:${VW_PORT};
         proxy_http_version 1.1;
@@ -1002,9 +1001,9 @@ NGINX2
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
-    # Admin 面板（建议生产环境限制来源 IP）
+    # Admin panel. Restrict source IPs in production when possible.
     location /admin {
-        # 取消注释以限制 IP（强烈推荐）：
+        # Uncomment to restrict access to trusted IPs:
         # allow YOUR_TRUSTED_IP/32;
         # deny  all;
         proxy_pass       http://127.0.0.1:${VW_PORT}/admin;
@@ -1014,14 +1013,14 @@ NGINX2
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
-    # Gzip 压缩
+    # Gzip compression.
     gzip on;
     gzip_types text/plain text/css application/json application/javascript
                text/xml application/xml text/javascript image/svg+xml application/wasm;
     gzip_min_length 1024;
     gzip_vary on;
 
-    # 日志
+    # Logs.
     access_log /var/log/nginx/vaultwarden_access.log;
     error_log  /var/log/nginx/vaultwarden_error.log;
 }
@@ -1085,8 +1084,8 @@ ${VW_LOG_FILE} {
     delaycompress
     missingok
     notifempty
-    # copytruncate：原地截断日志文件，无需 Rocket 实现 SIGHUP/SIGUSR1
-    # 缺点：极短窗口内可能丢失少量日志行，对密码管理器场景可接受
+    # copytruncate avoids requiring SIGHUP/SIGUSR1 support from Rocket.
+    # A tiny number of log lines can be lost during rotation.
     copytruncate
 }
 LOGR
@@ -1315,9 +1314,9 @@ do_update() {
 _write_backup_script() {
   cat > /usr/local/bin/vaultwarden-backup << 'BKSH'
 #!/bin/bash
-# Vaultwarden 备份脚本（由 vaultwarden.sh 生成）
+# Auto-generated Vaultwarden backup script.
 set -euo pipefail
-umask 077   # 备份文件只有 root 可读（含密钥、env 文件等敏感数据）
+umask 077   # Backup files include secrets and must be root-readable only.
 BKSH
   cat >> /usr/local/bin/vaultwarden-backup << BKSH_VARS
 BACKUP_DIR="${VW_BACKUP_DIR}"
@@ -1328,35 +1327,34 @@ BKSH_VARS
   cat >> /usr/local/bin/vaultwarden-backup << 'BKSH'
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
-ARCHIVE_TMP="${ARCHIVE}.tmp"   # 原子写：先写临时文件，完成后再 mv
+ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
 mkdir -p "${BACKUP_DIR}"
 
-# 【Fix v6】提前校验数据目录存在，否则后续 sqlite3 WAL flush 和 tar
-# 的错误均被静默处理，backup.log 写入"成功"但实际产生空/损坏档案。
+# Refuse to create an empty archive when the data directory is missing.
 if [[ ! -d "${DATA_DIR}" ]]; then
   echo "$(date '+%Y-%m-%d %H:%M:%S')  [ERROR] 数据目录不存在（${DATA_DIR}），备份已中止"
   exit 1
 fi
 
-# 对 SQLite 执行 WAL checkpoint，保证所有写入已落盘
+# Checkpoint SQLite WAL data before archiving.
 if [[ -f "${DATA_DIR}/db.sqlite3" ]]; then
   sqlite3 "${DATA_DIR}/db.sqlite3" "PRAGMA wal_checkpoint(FULL);" 2>/dev/null || true
-  # 完整性校验：确保数据库未损坏再备份
+  # Warn about database corruption without blocking file-level backups.
   INTEGRITY=$(sqlite3 "${DATA_DIR}/db.sqlite3" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
   if [[ "$INTEGRITY" != "ok" ]]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S')  [WARN] SQLite 完整性校验失败（${INTEGRITY}），备份仍将继续但数据库可能已损坏"
   fi
 fi
 
-# 打包数据目录 + 环境变量配置（不含日志）
+# Archive data and environment configuration, excluding logs.
 DATA_PARENT=$(dirname "${DATA_DIR}")
 DATA_BASE=$(basename "${DATA_DIR}")
 
-# 仅在 ENV_FILE 存在时才纳入备份
+# Include the environment file only when it exists.
 TAR_EXTRA=()
 [[ -f "${ENV_FILE}" ]] && TAR_EXTRA=(-C / "${ENV_FILE#/}")
 
-# 原子写：写入临时文件，成功后再重命名，避免备份中断产生半截文件
+# Move the completed archive into place atomically.
 if tar -czf "${ARCHIVE_TMP}" \
   --exclude="*.log" \
   --exclude="*.log.*" \
@@ -1371,7 +1369,7 @@ else
   exit 1
 fi
 
-# 清理过期备份
+# Remove expired backups.
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   REMOVED=$(find "${BACKUP_DIR}" -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
   [[ "${REMOVED}" -gt 0 ]] && echo "$(date '+%Y-%m-%d %H:%M:%S')  [OK] 已清理 ${REMOVED} 个过期备份（>${KEEP_DAYS} 天）"
