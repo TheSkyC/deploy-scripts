@@ -509,7 +509,241 @@ i18n_register_many \
   "未找到备份二进制，回滚失败！请手动检查：journalctl -u vaultwarden -n 30 --no-pager。" \
   app.vaultwarden.info.cleaned_webvault_backups \
   "Removed %s old web-vault backup directories (keeping the latest 3)." \
-  "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。"
+  "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。" \
+  app.vaultwarden.backup.script.data_missing \
+  "[ERROR] Data directory does not exist (%s); backup aborted." \
+  "[ERROR] 数据目录不存在（%s），备份已中止。" \
+  app.vaultwarden.backup.script.sqlite_warning \
+  "[WARN] SQLite integrity check failed (%s). Backup will continue, but the database may be corrupted." \
+  "[WARN] SQLite 完整性校验失败（%s），备份仍将继续但数据库可能已损坏。" \
+  app.vaultwarden.backup.script.success \
+  "[OK] Backup succeeded: %s (%s)" \
+  "[OK] 备份成功：%s（%s）" \
+  app.vaultwarden.backup.script.failed \
+  "[ERROR] Backup failed; temporary file removed." \
+  "[ERROR] 备份失败，临时文件已清理。" \
+  app.vaultwarden.backup.script.cleaned \
+  "[OK] Removed %s expired backups (>%s days)." \
+  "[OK] 已清理 %s 个过期备份（>%s 天）。" \
+  app.vaultwarden.warn.backup_data_missing \
+  "Backup skipped: data directory does not exist (%s)." \
+  "备份跳过：数据目录不存在（%s）。" \
+  app.vaultwarden.warn.sqlite_integrity \
+  "SQLite integrity check warning (%s). Backup continues, but the database may be corrupted." \
+  "SQLite 完整性校验警告（%s），备份继续但数据库可能已损坏。" \
+  app.vaultwarden.success.backup_created \
+  "Backup created: %s" \
+  "备份已创建：%s" \
+  app.vaultwarden.warn.backup_failed_continue \
+  "Backup failed; temporary file removed. Continuing..." \
+  "备份失败，临时文件已清理，继续..." \
+  app.vaultwarden.step.manual_backup \
+  "Manual Vaultwarden backup" \
+  "手动备份 Vaultwarden" \
+  app.vaultwarden.error.data_missing_install \
+  "Data directory does not exist: %s. Run install first." \
+  "数据目录不存在：%s，请先执行安装。" \
+  app.vaultwarden.info.backup_list \
+  "All current backups (latest 10):" \
+  "当前所有备份（最近 10 个）：" \
+  app.vaultwarden.warn.no_backups \
+  "No backup files yet." \
+  "暂无备份文件。" \
+  app.vaultwarden.info.backup_total \
+  "%s backups total, %s combined." \
+  "共 %s 个备份，合计 %s。" \
+  app.vaultwarden.warn.non_root_status \
+  "Running as non-root; some status details (fail2ban, systemd details, etc.) may be incomplete." \
+  "当前以非 root 用户运行，部分状态信息（fail2ban、systemd 详情等）可能不完整。" \
+  app.vaultwarden.warn.root_status \
+  "For complete status, run: sudo bash %s status" \
+  "如需完整状态，请：sudo bash %s status" \
+  app.vaultwarden.step.status \
+  "Vaultwarden system status" \
+  "Vaultwarden 系统状态" \
+  app.vaultwarden.status.systemd \
+  "systemd service status" \
+  "systemd 服务状态" \
+  app.vaultwarden.status.service_missing \
+  "vaultwarden service is not installed or not running" \
+  "vaultwarden 服务未安装或未运行" \
+  app.vaultwarden.status.version_info \
+  "Version info" \
+  "版本信息" \
+  app.vaultwarden.status.binary_version \
+  "Binary version: %s" \
+  "二进制版本：%s" \
+  app.vaultwarden.status.binary_path \
+  "Binary path: %s (%s)" \
+  "二进制路径：%s（%s）" \
+  app.vaultwarden.status.binary_time \
+  "Binary time: %s" \
+  "二进制时间：%s" \
+  app.vaultwarden.status.binary_missing \
+  "Vaultwarden binary was not found: %s" \
+  "未找到 Vaultwarden 二进制：%s" \
+  app.vaultwarden.status.data_dir \
+  "Data directory (%s)" \
+  "数据目录（%s）" \
+  app.vaultwarden.status.total \
+  "Total: %s" \
+  "合计：%s" \
+  app.vaultwarden.status.database \
+  "Database: db.sqlite3 (%s)" \
+  "数据库：db.sqlite3（%s）" \
+  app.vaultwarden.status.data_missing \
+  "Data directory does not exist" \
+  "数据目录不存在" \
+  app.vaultwarden.status.backup_files \
+  "Backup files (latest 5)" \
+  "备份文件（最近 5 个）" \
+  app.vaultwarden.status.backup_count \
+  "%s backups total" \
+  "共 %s 个备份" \
+  app.vaultwarden.status.nginx \
+  "Nginx status" \
+  "Nginx 状态" \
+  app.vaultwarden.status.nginx_running \
+  "nginx is running" \
+  "nginx 运行中" \
+  app.vaultwarden.status.nginx_stopped \
+  "nginx is not running" \
+  "nginx 未运行" \
+  app.vaultwarden.status.fail2ban \
+  "Fail2Ban status" \
+  "Fail2Ban 状态" \
+  app.vaultwarden.status.fail2ban_jail_missing \
+  "fail2ban is running, but the vaultwarden jail is not loaded" \
+  "fail2ban 运行中，但 vaultwarden jail 未加载" \
+  app.vaultwarden.status.fail2ban_stopped \
+  "fail2ban is not running" \
+  "fail2ban 未运行" \
+  app.vaultwarden.status.http_health \
+  "HTTP health check" \
+  "HTTP 健康检查" \
+  app.vaultwarden.status.local_response \
+  "Local endpoint response: HTTP %s" \
+  "本地接口响应：HTTP %s" \
+  app.vaultwarden.status.local_response_warn \
+  "Local endpoint response: HTTP %s (service not running or wrong port?)" \
+  "本地接口响应：HTTP %s（服务未运行或端口错误？）" \
+  app.vaultwarden.status.tls \
+  "TLS certificate" \
+  "TLS 证书" \
+  app.vaultwarden.status.cert_valid \
+  "Certificate is valid, %s days remaining (%s)" \
+  "证书有效，剩余 %s 天（%s）" \
+  app.vaultwarden.status.cert_expiring \
+  "Certificate is expiring soon (%s days remaining). Run certbot renew soon." \
+  "证书即将到期（剩余 %s 天），请尽快执行：certbot renew。" \
+  app.vaultwarden.status.cert_expired \
+  "Certificate expired (%s days ago). Run certbot renew immediately." \
+  "证书已过期（%s 天前），请立即执行：certbot renew。" \
+  app.vaultwarden.status.cert_missing \
+  "Certificate was not found (HTTPS is not configured or certificate path is wrong)." \
+  "未找到证书（未配置 HTTPS 或证书路径有误）。" \
+  app.vaultwarden.error.bin_empty \
+  "VW_BIN is not set. Run install first or confirm the config file exists." \
+  "VW_BIN 未设置，请先执行 install 或确认配置文件存在。" \
+  app.vaultwarden.error.data_dir_empty \
+  "VW_DATA_DIR is not set; uninstall aborted." \
+  "VW_DATA_DIR 未设置，卸载已中止。" \
+  app.vaultwarden.error.backup_dir_empty \
+  "VW_BACKUP_DIR is not set; uninstall aborted." \
+  "VW_BACKUP_DIR 未设置，卸载已中止。" \
+  app.vaultwarden.error.data_dir_root \
+  "VW_DATA_DIR is root (/); refusing uninstall." \
+  "VW_DATA_DIR 为根目录（/），拒绝卸载。" \
+  app.vaultwarden.error.backup_dir_root \
+  "VW_BACKUP_DIR is root (/); refusing uninstall." \
+  "VW_BACKUP_DIR 为根目录（/），拒绝卸载。" \
+  app.vaultwarden.step.uninstall \
+  "Uninstall Vaultwarden" \
+  "卸载 Vaultwarden" \
+  app.vaultwarden.uninstall.removes \
+  "This will remove:" \
+  "此操作将删除：" \
+  app.vaultwarden.uninstall.binary \
+  "Vaultwarden binary (%s)" \
+  "Vaultwarden 二进制（%s）" \
+  app.vaultwarden.uninstall.systemd \
+  "systemd service unit" \
+  "systemd 服务单元" \
+  app.vaultwarden.uninstall.nginx \
+  "Nginx config" \
+  "Nginx 配置" \
+  app.vaultwarden.uninstall.fail2ban \
+  "Fail2Ban rules" \
+  "Fail2Ban 规则" \
+  app.vaultwarden.uninstall.env \
+  "environment file (%s)" \
+  "环境变量文件（%s）" \
+  app.vaultwarden.uninstall.cron \
+  "scheduled backup job" \
+  "定时备份任务" \
+  app.vaultwarden.uninstall.keep_data \
+  "Data directory (%s) is kept by default; you can choose deletion." \
+  "数据目录（%s）默认保留，可选是否删除。" \
+  app.vaultwarden.prompt.continue \
+  "Continue uninstall? Type YES to confirm:" \
+  "确认继续卸载？（输入 YES 确认）：" \
+  app.vaultwarden.info.cancelled \
+  "Cancelled." \
+  "已取消。" \
+  app.vaultwarden.prompt.delete_data \
+  "Delete data directory too (%s)? (y/N):" \
+  "是否同时删除数据目录（%s）？（y/N）：" \
+  app.vaultwarden.prompt.delete_backup \
+  "Delete backup directory too (%s)? (y/N):" \
+  "是否同时删除备份目录（%s）？（y/N）：" \
+  app.vaultwarden.success.removed_systemd \
+  "systemd service removed." \
+  "systemd 服务已移除。" \
+  app.vaultwarden.success.removed_binary \
+  "Binary removed." \
+  "二进制已删除。" \
+  app.vaultwarden.success.removed_nginx \
+  "Nginx config removed." \
+  "Nginx 配置已清除。" \
+  app.vaultwarden.success.removed_fail2ban \
+  "Fail2Ban rules removed." \
+  "Fail2Ban 规则已清除。" \
+  app.vaultwarden.success.removed_scheduled \
+  "Scheduled job, backup script, and logrotate config removed." \
+  "定时任务、备份脚本、日志轮转已清除。" \
+  app.vaultwarden.success.removed_config \
+  "Config files removed." \
+  "配置文件已清除。" \
+  app.vaultwarden.success.deleted_log \
+  "Log directory deleted: %s" \
+  "日志目录已删除：%s。" \
+  app.vaultwarden.warn.log_path \
+  "Log directory path is unusual (%s); skipped deletion." \
+  "日志目录路径异常（%s），已跳过删除。" \
+  app.vaultwarden.success.deleted_data \
+  "Data directory deleted: %s" \
+  "数据目录已删除：%s。" \
+  app.vaultwarden.info.kept_data \
+  "Data directory kept: %s" \
+  "数据目录已保留：%s。" \
+  app.vaultwarden.success.deleted_backup \
+  "Backup directory deleted: %s" \
+  "备份目录已删除：%s。" \
+  app.vaultwarden.info.kept_backup \
+  "Backup directory kept: %s" \
+  "备份目录已保留：%s。" \
+  app.vaultwarden.success.deleted_user \
+  "System user %s deleted." \
+  "系统用户 %s 已删除。" \
+  app.vaultwarden.success.uninstalled \
+  "Vaultwarden fully uninstalled" \
+  "Vaultwarden 已完全卸载" \
+  app.vaultwarden.hint.data_kept \
+  "Data kept at: %s" \
+  "数据保留在：%s" \
+  app.vaultwarden.hint.remove_data \
+  "When you are sure it is no longer needed, manually run: rm -rf %s" \
+  "如确认不再需要，可手动执行：rm -rf %s"
 
 APP_DESCRIPTION="$(t app.vaultwarden.description)"
 APP_IMPL_SCRIPT="impl/install_vaultwarden.sh"

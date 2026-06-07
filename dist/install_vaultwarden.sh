@@ -936,7 +936,241 @@ i18n_register_many \
   "未找到备份二进制，回滚失败！请手动检查：journalctl -u vaultwarden -n 30 --no-pager。" \
   app.vaultwarden.info.cleaned_webvault_backups \
   "Removed %s old web-vault backup directories (keeping the latest 3)." \
-  "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。"
+  "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。" \
+  app.vaultwarden.backup.script.data_missing \
+  "[ERROR] Data directory does not exist (%s); backup aborted." \
+  "[ERROR] 数据目录不存在（%s），备份已中止。" \
+  app.vaultwarden.backup.script.sqlite_warning \
+  "[WARN] SQLite integrity check failed (%s). Backup will continue, but the database may be corrupted." \
+  "[WARN] SQLite 完整性校验失败（%s），备份仍将继续但数据库可能已损坏。" \
+  app.vaultwarden.backup.script.success \
+  "[OK] Backup succeeded: %s (%s)" \
+  "[OK] 备份成功：%s（%s）" \
+  app.vaultwarden.backup.script.failed \
+  "[ERROR] Backup failed; temporary file removed." \
+  "[ERROR] 备份失败，临时文件已清理。" \
+  app.vaultwarden.backup.script.cleaned \
+  "[OK] Removed %s expired backups (>%s days)." \
+  "[OK] 已清理 %s 个过期备份（>%s 天）。" \
+  app.vaultwarden.warn.backup_data_missing \
+  "Backup skipped: data directory does not exist (%s)." \
+  "备份跳过：数据目录不存在（%s）。" \
+  app.vaultwarden.warn.sqlite_integrity \
+  "SQLite integrity check warning (%s). Backup continues, but the database may be corrupted." \
+  "SQLite 完整性校验警告（%s），备份继续但数据库可能已损坏。" \
+  app.vaultwarden.success.backup_created \
+  "Backup created: %s" \
+  "备份已创建：%s" \
+  app.vaultwarden.warn.backup_failed_continue \
+  "Backup failed; temporary file removed. Continuing..." \
+  "备份失败，临时文件已清理，继续..." \
+  app.vaultwarden.step.manual_backup \
+  "Manual Vaultwarden backup" \
+  "手动备份 Vaultwarden" \
+  app.vaultwarden.error.data_missing_install \
+  "Data directory does not exist: %s. Run install first." \
+  "数据目录不存在：%s，请先执行安装。" \
+  app.vaultwarden.info.backup_list \
+  "All current backups (latest 10):" \
+  "当前所有备份（最近 10 个）：" \
+  app.vaultwarden.warn.no_backups \
+  "No backup files yet." \
+  "暂无备份文件。" \
+  app.vaultwarden.info.backup_total \
+  "%s backups total, %s combined." \
+  "共 %s 个备份，合计 %s。" \
+  app.vaultwarden.warn.non_root_status \
+  "Running as non-root; some status details (fail2ban, systemd details, etc.) may be incomplete." \
+  "当前以非 root 用户运行，部分状态信息（fail2ban、systemd 详情等）可能不完整。" \
+  app.vaultwarden.warn.root_status \
+  "For complete status, run: sudo bash %s status" \
+  "如需完整状态，请：sudo bash %s status" \
+  app.vaultwarden.step.status \
+  "Vaultwarden system status" \
+  "Vaultwarden 系统状态" \
+  app.vaultwarden.status.systemd \
+  "systemd service status" \
+  "systemd 服务状态" \
+  app.vaultwarden.status.service_missing \
+  "vaultwarden service is not installed or not running" \
+  "vaultwarden 服务未安装或未运行" \
+  app.vaultwarden.status.version_info \
+  "Version info" \
+  "版本信息" \
+  app.vaultwarden.status.binary_version \
+  "Binary version: %s" \
+  "二进制版本：%s" \
+  app.vaultwarden.status.binary_path \
+  "Binary path: %s (%s)" \
+  "二进制路径：%s（%s）" \
+  app.vaultwarden.status.binary_time \
+  "Binary time: %s" \
+  "二进制时间：%s" \
+  app.vaultwarden.status.binary_missing \
+  "Vaultwarden binary was not found: %s" \
+  "未找到 Vaultwarden 二进制：%s" \
+  app.vaultwarden.status.data_dir \
+  "Data directory (%s)" \
+  "数据目录（%s）" \
+  app.vaultwarden.status.total \
+  "Total: %s" \
+  "合计：%s" \
+  app.vaultwarden.status.database \
+  "Database: db.sqlite3 (%s)" \
+  "数据库：db.sqlite3（%s）" \
+  app.vaultwarden.status.data_missing \
+  "Data directory does not exist" \
+  "数据目录不存在" \
+  app.vaultwarden.status.backup_files \
+  "Backup files (latest 5)" \
+  "备份文件（最近 5 个）" \
+  app.vaultwarden.status.backup_count \
+  "%s backups total" \
+  "共 %s 个备份" \
+  app.vaultwarden.status.nginx \
+  "Nginx status" \
+  "Nginx 状态" \
+  app.vaultwarden.status.nginx_running \
+  "nginx is running" \
+  "nginx 运行中" \
+  app.vaultwarden.status.nginx_stopped \
+  "nginx is not running" \
+  "nginx 未运行" \
+  app.vaultwarden.status.fail2ban \
+  "Fail2Ban status" \
+  "Fail2Ban 状态" \
+  app.vaultwarden.status.fail2ban_jail_missing \
+  "fail2ban is running, but the vaultwarden jail is not loaded" \
+  "fail2ban 运行中，但 vaultwarden jail 未加载" \
+  app.vaultwarden.status.fail2ban_stopped \
+  "fail2ban is not running" \
+  "fail2ban 未运行" \
+  app.vaultwarden.status.http_health \
+  "HTTP health check" \
+  "HTTP 健康检查" \
+  app.vaultwarden.status.local_response \
+  "Local endpoint response: HTTP %s" \
+  "本地接口响应：HTTP %s" \
+  app.vaultwarden.status.local_response_warn \
+  "Local endpoint response: HTTP %s (service not running or wrong port?)" \
+  "本地接口响应：HTTP %s（服务未运行或端口错误？）" \
+  app.vaultwarden.status.tls \
+  "TLS certificate" \
+  "TLS 证书" \
+  app.vaultwarden.status.cert_valid \
+  "Certificate is valid, %s days remaining (%s)" \
+  "证书有效，剩余 %s 天（%s）" \
+  app.vaultwarden.status.cert_expiring \
+  "Certificate is expiring soon (%s days remaining). Run certbot renew soon." \
+  "证书即将到期（剩余 %s 天），请尽快执行：certbot renew。" \
+  app.vaultwarden.status.cert_expired \
+  "Certificate expired (%s days ago). Run certbot renew immediately." \
+  "证书已过期（%s 天前），请立即执行：certbot renew。" \
+  app.vaultwarden.status.cert_missing \
+  "Certificate was not found (HTTPS is not configured or certificate path is wrong)." \
+  "未找到证书（未配置 HTTPS 或证书路径有误）。" \
+  app.vaultwarden.error.bin_empty \
+  "VW_BIN is not set. Run install first or confirm the config file exists." \
+  "VW_BIN 未设置，请先执行 install 或确认配置文件存在。" \
+  app.vaultwarden.error.data_dir_empty \
+  "VW_DATA_DIR is not set; uninstall aborted." \
+  "VW_DATA_DIR 未设置，卸载已中止。" \
+  app.vaultwarden.error.backup_dir_empty \
+  "VW_BACKUP_DIR is not set; uninstall aborted." \
+  "VW_BACKUP_DIR 未设置，卸载已中止。" \
+  app.vaultwarden.error.data_dir_root \
+  "VW_DATA_DIR is root (/); refusing uninstall." \
+  "VW_DATA_DIR 为根目录（/），拒绝卸载。" \
+  app.vaultwarden.error.backup_dir_root \
+  "VW_BACKUP_DIR is root (/); refusing uninstall." \
+  "VW_BACKUP_DIR 为根目录（/），拒绝卸载。" \
+  app.vaultwarden.step.uninstall \
+  "Uninstall Vaultwarden" \
+  "卸载 Vaultwarden" \
+  app.vaultwarden.uninstall.removes \
+  "This will remove:" \
+  "此操作将删除：" \
+  app.vaultwarden.uninstall.binary \
+  "Vaultwarden binary (%s)" \
+  "Vaultwarden 二进制（%s）" \
+  app.vaultwarden.uninstall.systemd \
+  "systemd service unit" \
+  "systemd 服务单元" \
+  app.vaultwarden.uninstall.nginx \
+  "Nginx config" \
+  "Nginx 配置" \
+  app.vaultwarden.uninstall.fail2ban \
+  "Fail2Ban rules" \
+  "Fail2Ban 规则" \
+  app.vaultwarden.uninstall.env \
+  "environment file (%s)" \
+  "环境变量文件（%s）" \
+  app.vaultwarden.uninstall.cron \
+  "scheduled backup job" \
+  "定时备份任务" \
+  app.vaultwarden.uninstall.keep_data \
+  "Data directory (%s) is kept by default; you can choose deletion." \
+  "数据目录（%s）默认保留，可选是否删除。" \
+  app.vaultwarden.prompt.continue \
+  "Continue uninstall? Type YES to confirm:" \
+  "确认继续卸载？（输入 YES 确认）：" \
+  app.vaultwarden.info.cancelled \
+  "Cancelled." \
+  "已取消。" \
+  app.vaultwarden.prompt.delete_data \
+  "Delete data directory too (%s)? (y/N):" \
+  "是否同时删除数据目录（%s）？（y/N）：" \
+  app.vaultwarden.prompt.delete_backup \
+  "Delete backup directory too (%s)? (y/N):" \
+  "是否同时删除备份目录（%s）？（y/N）：" \
+  app.vaultwarden.success.removed_systemd \
+  "systemd service removed." \
+  "systemd 服务已移除。" \
+  app.vaultwarden.success.removed_binary \
+  "Binary removed." \
+  "二进制已删除。" \
+  app.vaultwarden.success.removed_nginx \
+  "Nginx config removed." \
+  "Nginx 配置已清除。" \
+  app.vaultwarden.success.removed_fail2ban \
+  "Fail2Ban rules removed." \
+  "Fail2Ban 规则已清除。" \
+  app.vaultwarden.success.removed_scheduled \
+  "Scheduled job, backup script, and logrotate config removed." \
+  "定时任务、备份脚本、日志轮转已清除。" \
+  app.vaultwarden.success.removed_config \
+  "Config files removed." \
+  "配置文件已清除。" \
+  app.vaultwarden.success.deleted_log \
+  "Log directory deleted: %s" \
+  "日志目录已删除：%s。" \
+  app.vaultwarden.warn.log_path \
+  "Log directory path is unusual (%s); skipped deletion." \
+  "日志目录路径异常（%s），已跳过删除。" \
+  app.vaultwarden.success.deleted_data \
+  "Data directory deleted: %s" \
+  "数据目录已删除：%s。" \
+  app.vaultwarden.info.kept_data \
+  "Data directory kept: %s" \
+  "数据目录已保留：%s。" \
+  app.vaultwarden.success.deleted_backup \
+  "Backup directory deleted: %s" \
+  "备份目录已删除：%s。" \
+  app.vaultwarden.info.kept_backup \
+  "Backup directory kept: %s" \
+  "备份目录已保留：%s。" \
+  app.vaultwarden.success.deleted_user \
+  "System user %s deleted." \
+  "系统用户 %s 已删除。" \
+  app.vaultwarden.success.uninstalled \
+  "Vaultwarden fully uninstalled" \
+  "Vaultwarden 已完全卸载" \
+  app.vaultwarden.hint.data_kept \
+  "Data kept at: %s" \
+  "数据保留在：%s" \
+  app.vaultwarden.hint.remove_data \
+  "When you are sure it is no longer needed, manually run: rm -rf %s" \
+  "如确认不再需要，可手动执行：rm -rf %s"
 
 APP_DESCRIPTION="$(t app.vaultwarden.description)"
 APP_IMPL_SCRIPT="impl/install_vaultwarden.sh"
@@ -1865,6 +2099,11 @@ BACKUP_DIR="${VW_BACKUP_DIR}"
 DATA_DIR="${VW_DATA_DIR}"
 ENV_FILE="${VW_ENV_FILE}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+MSG_DATA_MISSING="$(t app.vaultwarden.backup.script.data_missing)"
+MSG_SQLITE_WARNING="$(t app.vaultwarden.backup.script.sqlite_warning)"
+MSG_SUCCESS="$(t app.vaultwarden.backup.script.success)"
+MSG_FAILED="$(t app.vaultwarden.backup.script.failed)"
+MSG_CLEANED="$(t app.vaultwarden.backup.script.cleaned)"
 BKSH_VARS
   cat >> /usr/local/bin/vaultwarden-backup << 'BKSH'
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -1874,7 +2113,7 @@ mkdir -p "${BACKUP_DIR}"
 
 # Refuse to create an empty archive when the data directory is missing.
 if [[ ! -d "${DATA_DIR}" ]]; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S')  [ERROR] 数据目录不存在（${DATA_DIR}），备份已中止"
+  printf '%s  '"${MSG_DATA_MISSING}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${DATA_DIR}"
   exit 1
 fi
 
@@ -1884,7 +2123,7 @@ if [[ -f "${DATA_DIR}/db.sqlite3" ]]; then
   # Warn about database corruption without blocking file-level backups.
   INTEGRITY=$(sqlite3 "${DATA_DIR}/db.sqlite3" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
   if [[ "$INTEGRITY" != "ok" ]]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S')  [WARN] SQLite 完整性校验失败（${INTEGRITY}），备份仍将继续但数据库可能已损坏"
+    printf '%s  '"${MSG_SQLITE_WARNING}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${INTEGRITY}"
   fi
 fi
 
@@ -1904,17 +2143,17 @@ if tar -czf "${ARCHIVE_TMP}" \
   "${TAR_EXTRA[@]+"${TAR_EXTRA[@]}"}" 2>&1; then
   mv "${ARCHIVE_TMP}" "${ARCHIVE}"
   ARCHIVE_SIZE=$(du -sh "${ARCHIVE}" | cut -f1)
-  echo "$(date '+%Y-%m-%d %H:%M:%S')  [OK] 备份成功：${ARCHIVE} (${ARCHIVE_SIZE})"
+  printf '%s  '"${MSG_SUCCESS}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${ARCHIVE}" "${ARCHIVE_SIZE}"
 else
   rm -f "${ARCHIVE_TMP}"
-  echo "$(date '+%Y-%m-%d %H:%M:%S')  [ERROR] 备份失败，临时文件已清理"
+  printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${MSG_FAILED}"
   exit 1
 fi
 
 # Remove expired backups.
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   REMOVED=$(find "${BACKUP_DIR}" -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
-  [[ "${REMOVED}" -gt 0 ]] && echo "$(date '+%Y-%m-%d %H:%M:%S')  [OK] 已清理 ${REMOVED} 个过期备份（>${KEEP_DAYS} 天）"
+  [[ "${REMOVED}" -gt 0 ]] && printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
 fi
 BKSH
   chmod +x /usr/local/bin/vaultwarden-backup
@@ -1925,14 +2164,14 @@ _backup_silent() {
   local archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
-    warn "备份跳过：数据目录不存在（${VW_DATA_DIR}）"
+    warn "$(t app.vaultwarden.warn.backup_data_missing "$VW_DATA_DIR")"
     return 1
   fi
   if [[ -f "${VW_DATA_DIR}/db.sqlite3" ]]; then
     sqlite3 "${VW_DATA_DIR}/db.sqlite3" "PRAGMA wal_checkpoint(FULL);" 2>/dev/null || true
     local _ic
     _ic=$(sqlite3 "${VW_DATA_DIR}/db.sqlite3" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    [[ "$_ic" != "ok" ]] && warn "SQLite 完整性校验警告（${_ic}），备份继续但数据库可能已损坏"
+    [[ "$_ic" != "ok" ]] && warn "$(t app.vaultwarden.warn.sqlite_integrity "$_ic")"
   fi
   local tar_extra=()
   [[ -f "$VW_ENV_FILE" ]] && tar_extra=(-C / "${VW_ENV_FILE#/}")
@@ -1940,22 +2179,22 @@ _backup_silent() {
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
     "${tar_extra[@]+"${tar_extra[@]}"}" 2>&1 >&2; then
     mv "$archive_tmp" "$archive"
-    success "备份已创建：${archive}"
+    success "$(t app.vaultwarden.success.backup_created "$archive")"
   else
     rm -f "$archive_tmp"
-    warn "备份失败，临时文件已清理，继续..."
+    warn "$(t app.vaultwarden.warn.backup_failed_continue)"
   fi
 }
 do_backup() {
   show_banner
-  [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0"
+  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "")"
   load_config
   acquire_lock
-  step "手动备份 Vaultwarden"
-  [[ ! -d "$VW_DATA_DIR" ]] && error "数据目录不存在：${VW_DATA_DIR}，请先执行安装"
+  step "$(t app.vaultwarden.step.manual_backup)"
+  [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
   _backup_silent "manual"
   echo ""
-  info "当前所有备份（最近 10 个）："
+  info "$(t app.vaultwarden.info.backup_list)"
   mapfile -t _bak_list < <(
     find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" \
       -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -10 | awk '{print $2}'
@@ -1967,13 +2206,13 @@ do_backup() {
       printf '  %-60s  %s\n' "$_f" "$_sz"
     done
   else
-    warn "暂无备份文件"
+    warn "$(t app.vaultwarden.warn.no_backups)"
   fi
   echo ""
   local _total _total_size
   _total=$(find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | wc -l)
   _total_size=$(du -sh "${VW_BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "0")
-  info "共 ${_total} 个备份，合计 ${_total_size}"
+  info "$(t app.vaultwarden.info.backup_total "$_total" "$_total_size")"
   release_lock
 }
 do_status() {
@@ -1981,71 +2220,71 @@ do_status() {
   show_banner
   load_config
   if [[ $EUID -ne 0 ]]; then
-    warn "当前以非 root 用户运行，部分状态信息（fail2ban、systemd 详情等）可能不完整"
-    warn "如需完整状态，请：sudo bash $0 status"
+    warn "$(t app.vaultwarden.warn.non_root_status)"
+    warn "$(t app.vaultwarden.warn.root_status "$0")"
   fi
-  step "Vaultwarden 系统状态"
-  echo -e "\n${BOLD}【systemd 服务状态】${NC}"
+  step "$(t app.vaultwarden.step.status)"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.systemd)]${NC}"
   systemctl status vaultwarden --no-pager -l 2>/dev/null | head -15 | sed 's/^/  /' \
-    || echo -e "  ${RED}[✗]${NC} vaultwarden 服务未安装或未运行"
-  echo -e "\n${BOLD}【版本信息】${NC}"
+    || echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.service_missing)"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.version_info)]${NC}"
   if [[ -x "$VW_BIN" ]]; then
-    echo -e "  二进制版本：$(get_installed_version)"
-    echo -e "  二进制路径：${VW_BIN}（$(du -sh "$VW_BIN" | cut -f1)）"
-    echo -e "  二进制时间：$(stat -c '%y' "$VW_BIN" | cut -d'.' -f1)"
+    echo -e "  $(t app.vaultwarden.status.binary_version "$(get_installed_version)")"
+    echo -e "  $(t app.vaultwarden.status.binary_path "$VW_BIN" "$(du -sh "$VW_BIN" | cut -f1)")"
+    echo -e "  $(t app.vaultwarden.status.binary_time "$(stat -c '%y' "$VW_BIN" | cut -d'.' -f1)")"
   else
-    echo -e "  ${RED}[✗]${NC} 未找到 Vaultwarden 二进制：${VW_BIN}"
+    echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.binary_missing "$VW_BIN")"
   fi
-  echo -e "\n${BOLD}【数据目录（${VW_DATA_DIR}）】${NC}"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.data_dir "$VW_DATA_DIR")]${NC}"
   if [[ -d "$VW_DATA_DIR" ]]; then
     ls -lh "${VW_DATA_DIR}" 2>/dev/null | tail -n +2 | awk '{printf "  %-12s  %s\n", $5, $NF}'
     echo "  ──────────────────────────"
-    echo "  合计：$(du -sh "$VW_DATA_DIR" | cut -f1)"
+    echo "  $(t app.vaultwarden.status.total "$(du -sh "$VW_DATA_DIR" | cut -f1)")"
     if [[ -f "${VW_DATA_DIR}/db.sqlite3" ]]; then
       DB_SIZE=$(du -sh "${VW_DATA_DIR}/db.sqlite3" | cut -f1)
-      echo -e "  数据库：db.sqlite3（${DB_SIZE}）"
+      echo -e "  $(t app.vaultwarden.status.database "$DB_SIZE")"
     fi
   else
-    echo -e "  ${RED}[✗]${NC} 数据目录不存在"
+    echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.data_missing)"
   fi
-  echo -e "\n${BOLD}【备份文件（最近 5 个）】${NC}"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.backup_files)]${NC}"
   if find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | grep -q .; then
     ls -lht "${VW_BACKUP_DIR}"/vaultwarden_*.tar.gz 2>/dev/null | head -5 \
       | awk '{printf "  %-60s  %s\n", $NF, $5}'
-    echo -e "  共 $(find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | wc -l) 个备份"
+    echo -e "  $(t app.vaultwarden.status.backup_count "$(find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | wc -l)")"
   else
-    echo -e "  ${YELLOW}[!]${NC} 暂无备份文件"
+    echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.warn.no_backups)"
   fi
-  echo -e "\n${BOLD}【Nginx 状态】${NC}"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.nginx)]${NC}"
   systemctl is-active nginx &>/dev/null \
-    && echo -e "  ${GREEN}[✓]${NC} nginx 运行中" \
-    || echo -e "  ${RED}[✗]${NC} nginx 未运行"
-  echo -e "\n${BOLD}【Fail2Ban 状态】${NC}"
+    && echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.nginx_running)" \
+    || echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.nginx_stopped)"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.fail2ban)]${NC}"
   if systemctl is-active fail2ban &>/dev/null; then
     fail2ban-client status vaultwarden 2>/dev/null | sed 's/^/  /' \
-      || echo -e "  ${YELLOW}[!]${NC} fail2ban 运行中，但 vaultwarden jail 未加载"
+      || echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.fail2ban_jail_missing)"
   else
-    echo -e "  ${RED}[✗]${NC} fail2ban 未运行"
+    echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.fail2ban_stopped)"
   fi
-  echo -e "\n${BOLD}【HTTP 健康检查】${NC}"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.http_health)]${NC}"
   HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${VW_PORT}/" 2>/dev/null || echo "000")
   [[ "$HTTP_CODE" =~ ^(200|302|301)$ ]] \
-    && echo -e "  ${GREEN}[✓]${NC} 本地接口响应：HTTP ${HTTP_CODE}" \
-    || echo -e "  ${YELLOW}[!]${NC} 本地接口响应：HTTP ${HTTP_CODE}（服务未运行或端口错误？）"
-  echo -e "\n${BOLD}【TLS 证书】${NC}"
+    && echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.local_response "$HTTP_CODE")" \
+    || echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.local_response_warn "$HTTP_CODE")"
+  echo -e "\n${BOLD}[$(t app.vaultwarden.status.tls)]${NC}"
   CERT_PATH="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
   if [[ -f "$CERT_PATH" ]]; then
     EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_PATH" | sed 's/notAfter=//')
     DAYS=$(( ( $(date -d "$EXPIRY" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
     if [[ $DAYS -gt 30 ]]; then
-      echo -e "  ${GREEN}[✓]${NC} 证书有效，剩余 ${DAYS} 天（${EXPIRY}）"
+      echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.cert_valid "$DAYS" "$EXPIRY")"
     elif [[ $DAYS -gt 0 ]]; then
-      echo -e "  ${YELLOW}[!]${NC} 证书即将到期（剩余 ${DAYS} 天），请尽快执行：certbot renew"
+      echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.cert_expiring "$DAYS")"
     else
-      echo -e "  ${RED}[✗]${NC} 证书已过期（${DAYS} 天前），请立即执行：certbot renew"
+      echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.cert_expired "$DAYS")"
     fi
   else
-    echo -e "  ${YELLOW}[!]${NC} 未找到证书（未配置 HTTPS 或证书路径有误）"
+    echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.cert_missing)"
   fi
   echo ""
 }
@@ -2054,82 +2293,82 @@ do_uninstall() {
   preflight_check
   load_config
   acquire_lock
-  [[ -z "${VW_BIN:-}"        ]] && error "VW_BIN 未设置，请先执行 install 或确认配置文件存在"
-  [[ -z "${VW_DATA_DIR:-}"   ]] && error "VW_DATA_DIR 未设置，卸载已中止"
-  [[ -z "${VW_BACKUP_DIR:-}" ]] && error "VW_BACKUP_DIR 未设置，卸载已中止"
-  [[ "${VW_DATA_DIR}"   == "/" ]] && error "VW_DATA_DIR 为根目录（/），拒绝卸载"
-  [[ "${VW_BACKUP_DIR}" == "/" ]] && error "VW_BACKUP_DIR 为根目录（/），拒绝卸载"
-  step "卸载 Vaultwarden"
+  [[ -z "${VW_BIN:-}"        ]] && error "$(t app.vaultwarden.error.bin_empty)"
+  [[ -z "${VW_DATA_DIR:-}"   ]] && error "$(t app.vaultwarden.error.data_dir_empty)"
+  [[ -z "${VW_BACKUP_DIR:-}" ]] && error "$(t app.vaultwarden.error.backup_dir_empty)"
+  [[ "${VW_DATA_DIR}"   == "/" ]] && error "$(t app.vaultwarden.error.data_dir_root)"
+  [[ "${VW_BACKUP_DIR}" == "/" ]] && error "$(t app.vaultwarden.error.backup_dir_root)"
+  step "$(t app.vaultwarden.step.uninstall)"
   echo -e "${RED}${BOLD}"
-  echo "  ⚠️  此操作将删除："
-  echo "     · Vaultwarden 二进制（${VW_BIN}）"
-  echo "     · systemd 服务单元"
-  echo "     · Nginx 配置"
-  echo "     · Fail2Ban 规则"
-  echo "     · 环境变量文件（${VW_ENV_FILE}）"
-  echo "     · 定时备份任务"
-  echo "  数据目录（${VW_DATA_DIR}）默认保留，可选是否删除。"
+  echo "  $(t app.vaultwarden.uninstall.removes)"
+  echo "     - $(t app.vaultwarden.uninstall.binary "$VW_BIN")"
+  echo "     - $(t app.vaultwarden.uninstall.systemd)"
+  echo "     - $(t app.vaultwarden.uninstall.nginx)"
+  echo "     - $(t app.vaultwarden.uninstall.fail2ban)"
+  echo "     - $(t app.vaultwarden.uninstall.env "$VW_ENV_FILE")"
+  echo "     - $(t app.vaultwarden.uninstall.cron)"
+  echo "  $(t app.vaultwarden.uninstall.keep_data "$VW_DATA_DIR")"
   echo -e "${NC}"
-  prompt "确认继续卸载？（输入 YES 确认）："
+  prompt "$(t app.vaultwarden.prompt.continue)"
   read -r _c
-  [[ "$_c" != "YES" ]] && { info "已取消"; exit 0; }
-  prompt "是否同时删除数据目录（${VW_DATA_DIR}）？（y/N）："
+  [[ "$_c" != "YES" ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
+  prompt "$(t app.vaultwarden.prompt.delete_data "$VW_DATA_DIR")"
   local _del_data; read -r _del_data
   local DELETE_DATA=false; [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-  prompt "是否同时删除备份目录（${VW_BACKUP_DIR}）？（y/N）："
+  prompt "$(t app.vaultwarden.prompt.delete_backup "$VW_BACKUP_DIR")"
   local _del_bak; read -r _del_bak
   local DELETE_BACKUP=false; [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
-  info "停止 Vaultwarden 服务..."
+  info "$(t app.vaultwarden.info.stop_service)"
   systemctl stop    vaultwarden 2>/dev/null || true
   systemctl disable vaultwarden 2>/dev/null || true
   rm -f /etc/systemd/system/vaultwarden.service
   systemctl daemon-reload
-  success "systemd 服务已移除"
+  success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
   find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -delete 2>/dev/null || true
-  success "二进制已删除"
+  success "$(t app.vaultwarden.success.removed_binary)"
   rm -f /etc/nginx/sites-enabled/vaultwarden /etc/nginx/sites-available/vaultwarden
   nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
-  success "Nginx 配置已清除"
+  success "$(t app.vaultwarden.success.removed_nginx)"
   rm -f /etc/fail2ban/filter.d/vaultwarden.conf \
         /etc/fail2ban/filter.d/vaultwarden-admin.conf \
         /etc/fail2ban/jail.d/vaultwarden.conf
   systemctl restart fail2ban 2>/dev/null || true
-  success "Fail2Ban 规则已清除"
+  success "$(t app.vaultwarden.success.removed_fail2ban)"
   rm -f /etc/cron.d/vaultwarden-backup \
         /usr/local/bin/vaultwarden-backup \
         /etc/logrotate.d/vaultwarden
-  success "定时任务、备份脚本、日志轮转已清除"
+  success "$(t app.vaultwarden.success.removed_scheduled)"
   rm -f "$VW_ENV_FILE" "$CONF_FILE"
-  success "配置文件已清除"
+  success "$(t app.vaultwarden.success.removed_config)"
   local _log_dir
   _log_dir=$(dirname "$VW_LOG_FILE")
   if [[ -n "$_log_dir" && "$_log_dir" != "." && "$_log_dir" != "/" && -d "$_log_dir" ]]; then
     safe_rm_dir "$_log_dir" "LOG_DIR"
-    success "日志目录已删除：${_log_dir}"
+    success "$(t app.vaultwarden.success.deleted_log "$_log_dir")"
   else
-    warn "日志目录路径异常（${_log_dir}），已跳过删除"
+    warn "$(t app.vaultwarden.warn.log_path "$_log_dir")"
   fi
   if $DELETE_DATA; then
     safe_rm_dir "$VW_DATA_DIR" "VW_DATA_DIR"
-    success "数据目录已删除：${VW_DATA_DIR}"
+    success "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"
   else
-    info "数据目录已保留：${VW_DATA_DIR}"
+    info "$(t app.vaultwarden.info.kept_data "$VW_DATA_DIR")"
   fi
   if $DELETE_BACKUP; then
     safe_rm_dir "$VW_BACKUP_DIR" "VW_BACKUP_DIR"
-    success "备份目录已删除：${VW_BACKUP_DIR}"
+    success "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"
   else
-    info "备份目录已保留：${VW_BACKUP_DIR}"
+    info "$(t app.vaultwarden.info.kept_backup "$VW_BACKUP_DIR")"
   fi
   if $DELETE_DATA && id "$VW_USER" &>/dev/null; then
-    userdel "$VW_USER" 2>/dev/null && success "系统用户 ${VW_USER} 已删除" || true
+    userdel "$VW_USER" 2>/dev/null && success "$(t app.vaultwarden.success.deleted_user "$VW_USER")" || true
   fi
   echo ""
-  echo -e "${BOLD}${GREEN}  ✅  Vaultwarden 已完全卸载${NC}"
+  echo -e "${BOLD}${GREEN}  $(t app.vaultwarden.success.uninstalled)${NC}"
   if ! $DELETE_DATA; then
-    echo -e "  ${YELLOW}[提示]${NC} 数据保留在：${VW_DATA_DIR}"
-    echo -e "  ${YELLOW}[提示]${NC} 如确认不再需要，可手动执行：rm -rf ${VW_DATA_DIR}"
+    echo -e "  ${YELLOW}[hint]${NC} $(t app.vaultwarden.hint.data_kept "$VW_DATA_DIR")"
+    echo -e "  ${YELLOW}[hint]${NC} $(t app.vaultwarden.hint.remove_data "$VW_DATA_DIR")"
   fi
   echo ""
 }
