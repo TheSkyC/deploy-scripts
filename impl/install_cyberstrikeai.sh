@@ -155,7 +155,7 @@ clone_or_update_repo() {
   elif [[ -d "$INSTALL_DIR" && -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
     error "$(t app.cyberstrikeai.error.nonempty_dir "$INSTALL_DIR")"
   else
-    rm -rf "$INSTALL_DIR"
+    safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
     git clone --depth 1 --branch "$GITHUB_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"
   fi
   success "$(t app.cyberstrikeai.success.source_ready "$INSTALL_DIR")"

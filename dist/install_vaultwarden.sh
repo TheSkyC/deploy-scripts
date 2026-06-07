@@ -1607,19 +1607,19 @@ do_uninstall() {
   local _log_dir
   _log_dir=$(dirname "$VW_LOG_FILE")
   if [[ -n "$_log_dir" && "$_log_dir" != "." && "$_log_dir" != "/" && -d "$_log_dir" ]]; then
-    rm -rf "$_log_dir"
+    safe_rm_dir "$_log_dir" "LOG_DIR"
     success "日志目录已删除：${_log_dir}"
   else
     warn "日志目录路径异常（${_log_dir}），已跳过删除"
   fi
   if $DELETE_DATA; then
-    rm -rf "$VW_DATA_DIR"
+    safe_rm_dir "$VW_DATA_DIR" "VW_DATA_DIR"
     success "数据目录已删除：${VW_DATA_DIR}"
   else
     info "数据目录已保留：${VW_DATA_DIR}"
   fi
   if $DELETE_BACKUP; then
-    rm -rf "$VW_BACKUP_DIR"
+    safe_rm_dir "$VW_BACKUP_DIR" "VW_BACKUP_DIR"
     success "备份目录已删除：${VW_BACKUP_DIR}"
   else
     info "备份目录已保留：${VW_BACKUP_DIR}"

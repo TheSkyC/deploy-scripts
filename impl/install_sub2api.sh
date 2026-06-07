@@ -1124,29 +1124,29 @@ do_uninstall() {
   rm -f "$CONF_FILE"
   success "部署配置文件已清除"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
-    rm -rf "$LOG_DIR"
+    safe_rm_dir "$LOG_DIR" "LOG_DIR"
     success "日志目录已删除：${LOG_DIR}"
   else
     warn "日志目录路径异常（${LOG_DIR:-未设置}），已跳过"
   fi
   if $DELETE_DATA; then
-    rm -rf "$DATA_DIR"
+    safe_rm_dir "$DATA_DIR" "DATA_DIR"
     success "本地数据目录已删除：${DATA_DIR}"
     if [[ -d "$INSTALL_DIR" ]] && [[ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-      rm -rf "$INSTALL_DIR"
+      safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
       success "安装目录已清理：${INSTALL_DIR}"
     fi
   else
     info "本地数据目录已保留：${DATA_DIR}"
   fi
   if $DELETE_CONF; then
-    rm -rf "$CONFIG_DIR"
+    safe_rm_dir "$CONFIG_DIR" "CONFIG_DIR"
     success "配置目录已删除：${CONFIG_DIR}"
   else
     info "配置目录已保留：${CONFIG_DIR}"
   fi
   if $DELETE_BACKUP; then
-    rm -rf "$BACKUP_DIR"
+    safe_rm_dir "$BACKUP_DIR" "BACKUP_DIR"
     success "备份目录已删除：${BACKUP_DIR}"
   else
     info "备份目录已保留：${BACKUP_DIR}"
