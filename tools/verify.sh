@@ -54,6 +54,27 @@ check_localized_dispatch() {
   expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
 }
 
+expect_menu_output() {
+  local lang="$1"
+  local script="$2"
+  local expected="$3"
+  local output
+
+  output="$(printf 'q\n' | DEPLOY_LANG="$lang" "$BASH_BIN" "$script" 2>&1)"
+  [[ "$output" == *"$expected"* ]] || {
+    echo "Expected ${script} without arguments to show menu text: ${expected}" >&2
+    echo "$output" >&2
+    return 1
+  }
+}
+
+check_no_argument_menu() {
+  expect_menu_output en install_blog.sh "Choose an action"
+  expect_menu_output zh install_blog.sh "请选择操作"
+  expect_menu_output en dist/install_blog.sh "Choose an action"
+  expect_menu_output zh dist/install_blog.sh "请选择操作"
+}
+
 expect_blog_defaults() {
   local lang="$1"
   local expected_title="$2"
@@ -148,6 +169,7 @@ main() {
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
   check_release_syntax
   check_localized_dispatch
+  check_no_argument_menu
   check_blog_localized_defaults
   check_app_localized_descriptions
   check_no_hardcoded_chinese_impl

@@ -7,4 +7,4 @@ DEPLOY_ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 source "${DEPLOY_ROOT_DIR}/lib/core.sh"
 source "${DEPLOY_ROOT_DIR}/apps/blog.sh"
 
-main "${1:-install}"
+main "$@"
