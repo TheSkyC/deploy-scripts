@@ -20,6 +20,16 @@ i18n_register() {
   __DEPLOY_I18N_ZH["$key"]="$zh"
 }
 
+i18n_print() {
+  local text="$1"
+  shift || true
+  if [[ $# -gt 0 ]]; then
+    printf "$text" "$@"
+  else
+    printf '%s' "$text"
+  fi
+}
+
 __deploy_i18n_message() {
   local key="$1"
   case "$key" in
@@ -64,11 +74,11 @@ t() {
   shift || true
   local pair text
   if [[ "$DEPLOY_LANG" == "zh" && -v "__DEPLOY_I18N_ZH[$key]" ]]; then
-    printf "${__DEPLOY_I18N_ZH[$key]}" "$@"
+    i18n_print "${__DEPLOY_I18N_ZH[$key]}" "$@"
     return 0
   fi
   if [[ -v "__DEPLOY_I18N_EN[$key]" ]]; then
-    printf "${__DEPLOY_I18N_EN[$key]}" "$@"
+    i18n_print "${__DEPLOY_I18N_EN[$key]}" "$@"
     return 0
   fi
   pair="$(__deploy_i18n_message "$key")"
@@ -77,5 +87,5 @@ t() {
   else
     text="${pair%%|*}"
   fi
-  printf "$text" "$@"
+  i18n_print "$text" "$@"
 }
