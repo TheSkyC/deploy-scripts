@@ -22,6 +22,8 @@ CMS_BACKEND="github"
 CMS_REPO="TheSkyC/my-hugo-blog"
 CMS_BRANCH="main"
 CMS_SITE_URL="https://${BLOG_DOMAIN}"
+
+do_install() {
 echo -e "\n${BOLD}${CYAN}"
 cat << 'EOF'
   ██╗  ██╗██╗   ██╗ ██████╗  ██████╗     ██████╗ ██╗      ██████╗  ██████╗
@@ -34,12 +36,14 @@ EOF
 echo -e "${NC}"
 echo -e "  ${BOLD}主题：${CYAN}hugo-theme-stack${NC}"
 echo -e "  ${BOLD}服务：${CYAN}Hugo + Nginx + Decap CMS${NC}\n"
-[[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0"
+[[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
+command -v apt-get >/dev/null 2>&1 || error "$(t app.blog.error.apt_only)"
+command -v systemctl >/dev/null 2>&1 || error "$(t app.blog.error.systemd_required)"
 ARCH=$(uname -m)
 case $ARCH in
   x86_64)  DEB_ARCH="amd64" ;;
   aarch64) DEB_ARCH="arm64" ;;
-  *)       error "不支持的架构：$ARCH" ;;
+  *)       error "$(t app.blog.error.arch "$ARCH")" ;;
 esac
 step "Step 1  安装系统依赖"
 apt-get update -qq
@@ -517,3 +521,4 @@ echo -e "  ${BOLD}📖  Decap CMS：${NC} https://decapcms.org/docs/"
 echo ""
 echo -e "  ${YELLOW}${BOLD}[提示]${NC} 修改配置后需重新构建：hugo --destination ${NGINX_ROOT} --gc --minify"
 echo ""
+}

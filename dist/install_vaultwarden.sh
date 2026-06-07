@@ -357,15 +357,6 @@ load_app_impl() {
   restore_framework_functions
 }
 
-app_impl_dispatch() {
-  local action="$1"
-  ensure_bundled_app_impl_script
-  local script_path
-  script_path="$(app_impl_script_path)"
-  [[ -f "$script_path" ]] || error "App implementation script not found: $script_path"
-  exec bash "$script_path" "$action"
-}
-
 # ----- lib/cli.sh -----
 
 show_banner() {

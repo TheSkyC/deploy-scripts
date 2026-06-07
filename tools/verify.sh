@@ -24,10 +24,11 @@ expect_failure_output() {
   local lang="$1"
   local script="$2"
   local expected="$3"
+  local action="${4:-not-a-command}"
   local output status
 
   set +e
-  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" "$script" not-a-command 2>&1)"
+  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" "$script" "$action" 2>&1)"
   status=$?
   set -e
 
@@ -47,6 +48,10 @@ check_localized_dispatch() {
   expect_failure_output zh install_newapi.sh "无效选项"
   expect_failure_output en dist/install_newapi.sh "Invalid choice"
   expect_failure_output zh dist/install_newapi.sh "无效选项"
+  expect_failure_output en install_blog.sh "does not support update" update
+  expect_failure_output zh install_blog.sh "暂不支持 update" update
+  expect_failure_output en dist/install_blog.sh "does not support update" update
+  expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
 }
 
 check_no_release_temp_files() {
