@@ -19,13 +19,13 @@ app_file_for() {
   esac
 }
 
-legacy_file_for() {
+impl_file_for() {
   case "$1" in
-    newapi) echo "legacy/install_newapi.sh" ;;
-    sub2api) echo "legacy/install_sub2api.sh" ;;
-    vaultwarden) echo "legacy/install_vaultwarden.sh" ;;
-    cyberstrikeai) echo "legacy/install_cyberstrikeai.sh" ;;
-    blog) echo "legacy/install_blog.sh" ;;
+    newapi) echo "impl/install_newapi.sh" ;;
+    sub2api) echo "impl/install_sub2api.sh" ;;
+    vaultwarden) echo "impl/install_vaultwarden.sh" ;;
+    cyberstrikeai) echo "impl/install_cyberstrikeai.sh" ;;
+    blog) echo "impl/install_blog.sh" ;;
     *) return 1 ;;
   esac
 }
@@ -37,12 +37,12 @@ emit_without_shebang() {
 
 build_one() {
   local app="$1"
-  local app_file legacy_file output commit built_at
+  local app_file impl_file output commit built_at
   app_file="$(app_file_for "$app")" || {
     usage
     exit 1
   }
-  legacy_file="$(legacy_file_for "$app")" || {
+  impl_file="$(impl_file_for "$app")" || {
     usage
     exit 1
   }
@@ -82,9 +82,9 @@ build_one() {
     echo '# ----- lib/network.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/network.sh"
     echo
-    echo '# ----- lib/legacy.sh -----'
-    echo "BUNDLED_LEGACY_SCRIPT_NAME=\"install_${app}_legacy.sh\""
-    emit_without_shebang "${ROOT_DIR}/lib/legacy.sh"
+    echo '# ----- lib/app_loader.sh -----'
+    echo "BUNDLED_APP_IMPL_SCRIPT_NAME=\"install_${app}_impl.sh\""
+    emit_without_shebang "${ROOT_DIR}/lib/app_loader.sh"
     echo
     echo '# ----- lib/cli.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/cli.sh"
@@ -98,8 +98,8 @@ build_one() {
     echo
     echo 'main "$@"'
     echo 'exit 0'
-    echo '__DEPLOY_LEGACY_SCRIPT__'
-    cat "${ROOT_DIR}/${legacy_file}"
+    echo '__DEPLOY_APP_IMPL_SCRIPT__'
+    cat "${ROOT_DIR}/${impl_file}"
   } > "$output"
 
   chmod 755 "$output"

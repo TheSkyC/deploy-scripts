@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-legacy_script_path() {
-  local script="${LEGACY_SCRIPT:-}"
+app_impl_script_path() {
+  local script="${APP_IMPL_SCRIPT:-}"
   if [[ "${DEPLOY_BUNDLED:-0}" == "1" ]]; then
-    echo "${DEPLOY_ROOT_DIR}/${BUNDLED_LEGACY_SCRIPT_NAME}"
+    echo "${DEPLOY_ROOT_DIR}/${BUNDLED_APP_IMPL_SCRIPT_NAME}"
     return 0
   fi
-  [[ -n "$script" ]] || error "LEGACY_SCRIPT is not configured for ${APP_ID:-unknown}"
+  [[ -n "$script" ]] || error "APP_IMPL_SCRIPT is not configured for ${APP_ID:-unknown}"
   if [[ "$script" = /* ]]; then
     echo "$script"
   else
@@ -14,12 +14,12 @@ legacy_script_path() {
   fi
 }
 
-ensure_bundled_legacy_script() {
+ensure_bundled_app_impl_script() {
   [[ "${DEPLOY_BUNDLED:-0}" == "1" ]] || return 0
   local script_path
-  script_path="$(legacy_script_path)"
+  script_path="$(app_impl_script_path)"
   if [[ ! -f "$script_path" ]]; then
-    awk "/^__DEPLOY_LEGACY_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$script_path"
+    awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$script_path"
     chmod 700 "$script_path"
   fi
 }
@@ -74,22 +74,22 @@ restore_framework_functions() {
   }
 }
 
-load_legacy_functions() {
-  LEGACY_SCRIPT="$1"
-  ensure_bundled_legacy_script
+load_app_impl() {
+  APP_IMPL_SCRIPT="$1"
+  ensure_bundled_app_impl_script
   local script_path
-  script_path="$(legacy_script_path)"
-  [[ -f "$script_path" ]] || error "Legacy script not found: $script_path"
-  DEPLOY_LEGACY_SOURCE_ONLY=1 source "$script_path"
-  unset DEPLOY_LEGACY_SOURCE_ONLY
+  script_path="$(app_impl_script_path)"
+  [[ -f "$script_path" ]] || error "App implementation script not found: $script_path"
+  DEPLOY_IMPL_SOURCE_ONLY=1 source "$script_path"
+  unset DEPLOY_IMPL_SOURCE_ONLY
   restore_framework_functions
 }
 
-legacy_dispatch() {
+app_impl_dispatch() {
   local action="$1"
-  ensure_bundled_legacy_script
+  ensure_bundled_app_impl_script
   local script_path
-  script_path="$(legacy_script_path)"
-  [[ -f "$script_path" ]] || error "Legacy script not found: $script_path"
+  script_path="$(app_impl_script_path)"
+  [[ -f "$script_path" ]] || error "App implementation script not found: $script_path"
   exec bash "$script_path" "$action"
 }

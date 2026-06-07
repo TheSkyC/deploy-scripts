@@ -3,6 +3,6 @@
 APP_ID="cyberstrikeai"
 APP_NAME="CyberStrikeAI"
 APP_DESCRIPTION="Source build deployment with Go, Python, systemd, Nginx, and backups."
-LEGACY_SCRIPT="legacy/install_cyberstrikeai.sh"
+APP_IMPL_SCRIPT="impl/install_cyberstrikeai.sh"
 
-load_legacy_functions "$LEGACY_SCRIPT"
+load_app_impl "$APP_IMPL_SCRIPT"
