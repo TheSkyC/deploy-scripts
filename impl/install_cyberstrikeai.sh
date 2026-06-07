@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
-info()    { echo -e "${BLUE}[i]${NC} $*" >&2; }
-success() { echo -e "${GREEN}[+]${NC} $*" >&2; }
-warn()    { echo -e "${YELLOW}[!]${NC} $*" >&2; }
-error()   { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
-step()    { echo -e "\n${CYAN}${BOLD}== $* ==${NC}" >&2; }
-prompt()  { echo -ne "${YELLOW}[?]${NC} $* " >&2; }
 CSAI_DOMAIN="${CSAI_DOMAIN:-}"
 PORT="${PORT:-8080}"
 PUBLIC_PORT="${PUBLIC_PORT:-80}"
@@ -36,14 +28,6 @@ NGINX_LINK="/etc/nginx/sites-enabled/cyberstrike-ai"
 BACKUP_SCRIPT="/usr/local/bin/cyberstrike-ai-backup"
 CRON_FILE="/etc/cron.d/cyberstrike-ai-backup"
 LOGROTATE_FILE="/etc/logrotate.d/cyberstrike-ai"
-show_banner() {
-  echo -e "\n${BOLD}${CYAN}"
-  cat <<'EOF'
-  CyberStrikeAI Deployment Manager
-  source build + systemd + nginx + backup + rollback
-EOF
-  echo -e "${NC}"
-}
 _bool_true() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;

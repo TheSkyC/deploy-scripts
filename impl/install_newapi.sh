@@ -1,14 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 umask 077
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
-info()    { echo -e "${BLUE}[·]${NC} $*" >&2; }
-success() { echo -e "${GREEN}[✓]${NC} $*" >&2; }
-warn()    { echo -e "${YELLOW}[!]${NC} $*" >&2; }
-error()   { echo -e "${RED}[✗]${NC} $*" >&2; exit 1; }
-step()    { echo -e "\n${CYAN}${BOLD}── $* ──────────────────────────────${NC}" >&2; }
-prompt()  { echo -ne "${YELLOW}[?]${NC} $* " >&2; }
 DOMAIN="api.tarxf.com"
 PORT=8080
 INSTALL_DIR="/opt/new-api"
@@ -22,19 +14,6 @@ BACKUP_KEEP_DAYS=30
 BIN_PATH="${INSTALL_DIR}/new-api"
 LOG_FILE="${LOG_DIR}/new-api.log"
 CONF_FILE="/etc/new-api-deploy.conf"
-show_banner() {
-  echo -e "\n${BOLD}${CYAN}"
-  cat << 'EOF'
-  ███╗   ██╗███████╗██╗    ██╗      █████╗ ██████╗ ██╗
-  ████╗  ██║██╔════╝██║    ██║     ██╔══██╗██╔══██╗██║
-  ██╔██╗ ██║█████╗  ██║ █╗ ██║     ███████║██████╔╝██║
-  ██║╚██╗██║██╔══╝  ██║███╗██║     ██╔══██║██╔═══╝ ██║
-  ██║ ╚████║███████╗╚███╔███╔╝     ██║  ██║██║     ██║
-  ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝      ╚═╝  ╚═╝╚═╝     ╚═╝
-EOF
-  echo -e "${NC}"
-  echo -e "  ${BOLD}LLM API 聚合网关 · 二进制直装 · systemd 托管 · Cloudflare 兼容${NC}\n"
-}
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "请用 root 权限运行：sudo bash $0 ${1:-}"
   command -v apt-get &>/dev/null \
