@@ -9,6 +9,9 @@ i18n_register_many \
   app.sub2api.error.package_manager \
   "No supported package manager was found. Install dependencies manually or use apt, dnf, or yum." \
   "未找到支持的包管理器（apt / dnf / yum），请手动安装依赖。" \
+  app.sub2api.error.os_codename \
+  "Cannot determine the Debian / Ubuntu codename from lsb_release or /etc/os-release." \
+  "无法从 lsb_release 或 /etc/os-release 获取 Debian / Ubuntu 发行版代号。" \
   app.sub2api.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \

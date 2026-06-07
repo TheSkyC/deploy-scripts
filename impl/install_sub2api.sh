@@ -49,6 +49,19 @@ check_connectivity() {
     "https://objects.githubusercontent.com" && return 0
   error "$(t app.sub2api.error.github_unreachable)"
 }
+_apt_codename() {
+  local codename=""
+  if command -v lsb_release &>/dev/null; then
+    codename="$(lsb_release -cs 2>/dev/null || true)"
+  fi
+  if [[ -z "$codename" && -r /etc/os-release ]]; then
+    local VERSION_CODENAME="" UBUNTU_CODENAME=""
+    . /etc/os-release
+    codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+  fi
+  [[ -n "$codename" ]] || error "$(t app.sub2api.error.os_codename)"
+  printf '%s\n' "$codename"
+}
 save_config() {
   write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   success "$(t config.saved "$CONF_FILE")"
@@ -204,7 +217,7 @@ _install_postgres() {
       error "$(t app.sub2api.error.postgres_key)"
     fi
     local codename
-    codename=$(lsb_release -cs 2>/dev/null || . /etc/os-release && echo "$VERSION_CODENAME")
+    codename="$(_apt_codename)"
     echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
 https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
       > /etc/apt/sources.list.d/pgdg.list
@@ -250,7 +263,7 @@ _install_redis() {
       | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
     chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
     local codename
-    codename=$(lsb_release -cs 2>/dev/null || . /etc/os-release && echo "$VERSION_CODENAME")
+    codename="$(_apt_codename)"
     echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] \
 https://packages.redis.io/deb ${codename} main" \
       > /etc/apt/sources.list.d/redis.list

@@ -255,6 +255,28 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_sub2api_codename_resolution() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
+  cat > "${tmp_dir}/lsb_release" <<'STUB'
+#!/usr/bin/env bash
+[[ "${1:-}" == "-cs" ]] || exit 1
+echo jammy
+STUB
+  chmod +x "${tmp_dir}/lsb_release"
+
+  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    unset VERSION_CODENAME UBUNTU_CODENAME
+    source lib/core.sh
+    source apps/sub2api.sh
+    [[ "$(_apt_codename)" == "jammy" ]]
+  '
+
+  rm -rf "$tmp_dir"
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -270,6 +292,7 @@ main() {
   check_safe_path_guard
   check_service_status_label
   check_config_crlf_handling
+  check_sub2api_codename_resolution
   echo "Verification passed"
 }
 
