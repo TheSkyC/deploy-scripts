@@ -1289,6 +1289,7 @@ show_menu() {
     *) error "无效选项：${MENU_CHOICE}" ;;
   esac
 }
+if [[ "${DEPLOY_LEGACY_SOURCE_ONLY:-0}" != "1" ]]; then
 case "${1:-menu}" in
   install)   do_install   ;;
   update)    do_update    ;;
@@ -1302,3 +1303,4 @@ case "${1:-menu}" in
     exit 1
     ;;
 esac
+fi

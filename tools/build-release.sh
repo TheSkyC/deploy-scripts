@@ -82,19 +82,9 @@ build_one() {
     echo '# ----- lib/network.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/network.sh"
     echo
-    echo '# ----- bundled legacy adapter -----'
+    echo '# ----- lib/legacy.sh -----'
     echo "BUNDLED_LEGACY_SCRIPT_NAME=\"install_${app}_legacy.sh\""
-    echo 'legacy_script_path() { echo "${DEPLOY_ROOT_DIR}/${BUNDLED_LEGACY_SCRIPT_NAME}"; }'
-    echo 'legacy_dispatch() {'
-    echo '  local action="$1"'
-    echo '  local script_path'
-    echo '  script_path="$(legacy_script_path)"'
-    echo '  if [[ ! -f "$script_path" ]]; then'
-    echo '    awk "/^__DEPLOY_LEGACY_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$script_path"'
-    echo '    chmod 700 "$script_path"'
-    echo '  fi'
-    echo '  exec bash "$script_path" "$action"'
-    echo '}'
+    emit_without_shebang "${ROOT_DIR}/lib/legacy.sh"
     echo
     echo '# ----- lib/cli.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/cli.sh"
@@ -104,7 +94,7 @@ build_one() {
     echo '}'
     echo
     echo '# ----- app definition -----'
-    sed '/^LEGACY_SCRIPT=/d' "${ROOT_DIR}/${app_file}" | awk 'NR == 1 && /^#!/ { next } { print }'
+    emit_without_shebang "${ROOT_DIR}/${app_file}"
     echo
     echo 'main "$@"'
     echo 'exit 0'
