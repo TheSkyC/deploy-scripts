@@ -288,14 +288,23 @@ check_connectivity_urls() {
 # ----- lib/app_loader.sh -----
 BUNDLED_APP_IMPL_SCRIPT_NAME="install_sub2api_impl.sh"
 
+ensure_bundled_impl_dir() {
+  [[ "${DEPLOY_BUNDLED:-0}" == "1" ]] || return 0
+  [[ -n "${DEPLOY_BUNDLED_IMPL_DIR:-}" ]] && return 0
+
+  local tmp_root
+  tmp_root="${TMPDIR:-/tmp}"
+  tmp_root="${tmp_root%/}"
+  DEPLOY_BUNDLED_IMPL_DIR="$(mktemp -d "${tmp_root}/deploy-scripts.${APP_ID:-app}.XXXXXX")" \
+    || error "Failed to create bundled implementation directory"
+  chmod 700 "$DEPLOY_BUNDLED_IMPL_DIR" 2>/dev/null || true
+}
+
 app_impl_script_path() {
   local script="${APP_IMPL_SCRIPT:-}"
   if [[ "${DEPLOY_BUNDLED:-0}" == "1" ]]; then
-    local bundle_dir
-    bundle_dir="${DEPLOY_BUNDLED_IMPL_DIR:-${TMPDIR:-/tmp}/deploy-scripts/${APP_ID:-app}}"
-    mkdir -p "$bundle_dir"
-    chmod 700 "$bundle_dir" 2>/dev/null || true
-    echo "${bundle_dir}/${BUNDLED_APP_IMPL_SCRIPT_NAME}"
+    ensure_bundled_impl_dir
+    echo "${DEPLOY_BUNDLED_IMPL_DIR}/${BUNDLED_APP_IMPL_SCRIPT_NAME}"
     return 0
   fi
   [[ -n "$script" ]] || error "APP_IMPL_SCRIPT is not configured for ${APP_ID:-unknown}"
@@ -309,12 +318,20 @@ app_impl_script_path() {
 ensure_bundled_app_impl_script() {
   [[ "${DEPLOY_BUNDLED:-0}" == "1" ]] || return 0
   local script_path tmp_path
+  ensure_bundled_impl_dir
   script_path="$(app_impl_script_path)"
   tmp_path="${script_path}.$$"
   awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$tmp_path"
   [[ -s "$tmp_path" ]] || error "Bundled app implementation payload is empty"
   chmod 700 "$tmp_path"
   mv "$tmp_path" "$script_path"
+}
+
+cleanup_bundled_app_impl_script() {
+  [[ "${DEPLOY_BUNDLED:-0}" == "1" ]] || return 0
+  [[ -n "${DEPLOY_BUNDLED_IMPL_DIR:-}" ]] || return 0
+  safe_rm_dir "$DEPLOY_BUNDLED_IMPL_DIR" "bundled implementation directory"
+  unset DEPLOY_BUNDLED_IMPL_DIR
 }
 
 restore_framework_functions() {
@@ -369,12 +386,20 @@ restore_framework_functions() {
 
 load_app_impl() {
   APP_IMPL_SCRIPT="$1"
+  ensure_bundled_impl_dir
   ensure_bundled_app_impl_script
   local script_path
   script_path="$(app_impl_script_path)"
   [[ -f "$script_path" ]] || error "App implementation script not found: $script_path"
-  DEPLOY_IMPL_SOURCE_ONLY=1 source "$script_path"
-  unset DEPLOY_IMPL_SOURCE_ONLY
+  if DEPLOY_IMPL_SOURCE_ONLY=1 source "$script_path"; then
+    unset DEPLOY_IMPL_SOURCE_ONLY
+    cleanup_bundled_app_impl_script
+  else
+    local source_status=$?
+    unset DEPLOY_IMPL_SOURCE_ONLY
+    cleanup_bundled_app_impl_script
+    return "$source_status"
+  fi
   restore_framework_functions
 }
 

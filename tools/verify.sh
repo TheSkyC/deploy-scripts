@@ -128,6 +128,21 @@ check_no_release_temp_files() {
   fi
 }
 
+check_bundled_impl_cleanup() {
+  local tmp_root
+  tmp_root="$(mktemp -d)"
+
+  TMPDIR="$tmp_root" expect_failure_output en dist/install_newapi.sh "Invalid choice" not-a-command
+
+  if find "$tmp_root" -name 'install_*_impl.sh' -type f | grep -q .; then
+    echo "Bundled implementation script was left behind under ${tmp_root}" >&2
+    find "$tmp_root" -name 'install_*_impl.sh' -type f >&2
+    rm -rf "$tmp_root"
+    return 1
+  fi
+  rm -rf "$tmp_root"
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -138,6 +153,7 @@ main() {
   check_no_hardcoded_chinese_impl
   check_no_chinese_comments
   check_no_release_temp_files
+  check_bundled_impl_cleanup
   echo "Verification passed"
 }
 
