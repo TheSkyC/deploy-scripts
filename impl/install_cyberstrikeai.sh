@@ -656,18 +656,13 @@ do_status() {
   fi
   echo ""
 }
-safe_rm_dir() {
-  local dir="$1" label="$2"
-  [[ -n "$dir" && "$dir" != "/" && "$dir" != "." ]] || error "Unsafe $label path: ${dir:-empty}"
-  rm -rf "$dir"
-}
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
   load_config
   acquire_lock
-  [[ -n "${INSTALL_DIR:-}" && "$INSTALL_DIR" != "/" ]] || error "Unsafe INSTALL_DIR: ${INSTALL_DIR:-empty}"
-  [[ -n "${BACKUP_DIR:-}" && "$BACKUP_DIR" != "/" ]] || error "Unsafe BACKUP_DIR: ${BACKUP_DIR:-empty}"
+  require_safe_path "INSTALL_DIR" "${INSTALL_DIR:-}"
+  require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"
   step "Uninstall CyberStrikeAI"
   echo -e "${RED}${BOLD}"
   echo "This will remove:"
