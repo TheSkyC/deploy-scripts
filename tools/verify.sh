@@ -613,6 +613,25 @@ check_vaultwarden_env_file_is_atomic() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_admin_token_file_is_private() {
+  if grep -R -n 'mktemp /tmp/vw_token_' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden admin token display files must not be created in world-writable /tmp." >&2
+    return 1
+  fi
+  awk '
+      /_token_tmp=\$\(mktemp \/root\/\.vaultwarden-admin-token\.XXXXXX\)/ { saw_tmp=1 }
+      /chmod 600 "\$_token_tmp"/ { saw_chmod=1 }
+      /printf .*\$ADMIN_PLAIN.*> "\$_token_tmp"/ { saw_write=1 }
+      /rm -f "\$_token_tmp"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_chmod && saw_write && saw_cleanup)) {
+          print "Vaultwarden admin token display files must be private and cleaned up on write failure." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_systemd_units_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > "?/etc/systemd/system/|^[[:space:]]*cat > "\/etc\/systemd\/system/\$\{SERVICE_NAME\}\.service"' impl dist 2>/dev/null; then
     echo "systemd unit files must be written through temporary files before replacement." >&2
@@ -843,6 +862,7 @@ main() {
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
   check_vaultwarden_env_file_is_atomic
+  check_vaultwarden_admin_token_file_is_private
   check_systemd_units_are_atomic
   check_backup_scripts_are_atomic
   check_cron_logrotate_are_atomic
