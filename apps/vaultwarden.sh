@@ -336,6 +336,9 @@ i18n_register_many \
   app.vaultwarden.success.iptables_saved \
   "iptables rules persisted with netfilter-persistent." \
   "iptables 规则已持久化（netfilter-persistent）。" \
+  app.vaultwarden.warn.firewall_config_failed \
+  "Automatic firewall configuration failed for ports 80/443. Open them manually or retry after fixing the firewall service." \
+  "80/443 端口的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行这些端口。" \
   app.vaultwarden.warn.iptables_not_persisted \
   "iptables rules are not persisted and may be lost after reboot. Recommended: apt-get install -y iptables-persistent && netfilter-persistent save" \
   "iptables 规则未持久化（重启后失效）。建议：apt-get install -y iptables-persistent && netfilter-persistent save。" \

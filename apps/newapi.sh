@@ -42,6 +42,9 @@ i18n_register_many \
   app.newapi.success.ufw_port \
   "ufw allows port %s." \
   "ufw 已放行端口 %s。" \
+  app.newapi.warn.firewall_config_failed \
+  "Automatic firewall configuration failed for port %s. Open it manually or retry after fixing the firewall service." \
+  "端口 %s 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.newapi.success.iptables_saved \
   "iptables rules persisted with netfilter-persistent." \
   "iptables 规则已持久化（netfilter-persistent）。" \

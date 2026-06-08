@@ -823,6 +823,9 @@ i18n_register app.blog.ufw_opened \
 i18n_register app.blog.iptables_opened \
   "iptables allows ports 80/443." \
   "iptables 已放行 80/443"
+i18n_register app.blog.firewall_config_failed \
+  "Automatic firewall configuration failed for ports 80 and 443. Open them manually or retry after fixing the firewall service." \
+  "80 和 443 端口的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行这些端口"
 i18n_register app.blog.firewall_missing \
   "No firewall was detected. If you use cloud security groups, allow ports 80 and 443 manually." \
   "未检测到防火墙，如有云安全组请手动放行 80 和 443 端口"
@@ -1453,21 +1456,40 @@ nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"
 step "$(t app.blog.step_firewall)"
 FW_DONE=false
+FW_ERROR=false
 if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-  ufw allow "Nginx Full" > /dev/null 2>&1 || ufw allow 80/tcp > /dev/null
-  success "$(t app.blog.ufw_opened)"
-  FW_DONE=true
+  if ufw allow "Nginx Full" > /dev/null 2>&1 \
+      || { ufw allow 80/tcp > /dev/null 2>&1 && ufw allow 443/tcp > /dev/null 2>&1; }; then
+    success "$(t app.blog.ufw_opened)"
+    FW_DONE=true
+  else
+    FW_ERROR=true
+  fi
 fi
 if ! $FW_DONE && command -v iptables &>/dev/null; then
+  iptables_ok=true
   for PORT in 80 443; do
     if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
-      iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
+      if ! iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT; then
+        iptables_ok=false
+        break
+      fi
     fi
   done
-  success "$(t app.blog.iptables_opened)"
-  FW_DONE=true
+  if $iptables_ok; then
+    success "$(t app.blog.iptables_opened)"
+    FW_DONE=true
+  else
+    FW_ERROR=true
+  fi
 fi
-$FW_DONE || warn "$(t app.blog.firewall_missing)"
+if ! $FW_DONE; then
+  if $FW_ERROR; then
+    warn "$(t app.blog.firewall_config_failed)"
+  else
+    warn "$(t app.blog.firewall_missing)"
+  fi
+fi
 step "$(t app.blog.step_start_nginx)"
 systemctl enable nginx --quiet
 systemctl restart nginx

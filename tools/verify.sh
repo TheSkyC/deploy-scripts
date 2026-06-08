@@ -1209,11 +1209,29 @@ check_sub2api_nginx_reload_results_are_checked() {
 
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
-      impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
-      dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "Firewall success paths must not ignore command failures." >&2
     return 1
   fi
+  if grep -R -n 'ufw allow "Nginx Full" > /dev/null 2>&1 || ufw allow 80/tcp > /dev/null' \
+      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog firewall fallback must not report success unless both HTTP and HTTPS rules are applied." >&2
+    return 1
+  fi
+  awk '
+      /_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
+      in_block && /if ufw allow "\$\{PORT\}\/tcp" comment "New API" > \/dev\/null; then/ { saw_ufw_if=1 }
+      in_block && /if iptables -C INPUT -p tcp --dport "\$PORT" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
+      in_block && /warn "\$\(t app\.newapi\.warn\.firewall_config_failed "\$PORT"\)"/ { saw_failure_warn=1 }
+      in_block && /^}/ {
+        if (!(saw_ufw_if && saw_iptables_if && saw_failure_warn)) {
+          printf "%s NewAPI firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
   awk '
       /_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_firewalld_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
       in_block && /if ufw allow "\$\{PORT\}\/tcp" comment "Sub2API" > \/dev\/null; then/ { saw_ufw_if=1 }
@@ -1241,6 +1259,32 @@ check_firewall_success_paths_validate_command_results() {
         in_block=0
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.firewall\)"/ { in_block=1; saw_ufw_if=0; saw_iptables_ok=0; saw_failure_warn=0; next }
+      in_block && /if ufw allow "Nginx Full" >\/dev\/null 2>&1; then/ { saw_ufw_if=1 }
+      in_block && /local iptables_ok=true/ { saw_iptables_ok=1 }
+      in_block && /warn "\$\(t app\.vaultwarden\.warn\.firewall_config_failed\)"/ { saw_failure_warn=1 }
+      in_block && /step "\$\(t app\.vaultwarden\.step\.auto_backup\)"/ {
+        if (!(saw_ufw_if && saw_iptables_ok && saw_failure_warn)) {
+          printf "%s Vaultwarden firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+  awk '
+      /step "\$\(t app\.blog\.step_firewall\)"/ { in_block=1; saw_ufw_if=0; saw_iptables_ok=0; saw_failure_warn=0; next }
+      in_block && /if ufw allow "Nginx Full" > \/dev\/null 2>&1/ { saw_ufw_if=1 }
+      in_block && /iptables_ok=true/ { saw_iptables_ok=1 }
+      in_block && /warn "\$\(t app\.blog\.firewall_config_failed\)"/ { saw_failure_warn=1 }
+      in_block && /step "\$\(t app\.blog\.step_start_nginx\)"/ {
+        if (!(saw_ufw_if && saw_iptables_ok && saw_failure_warn)) {
+          printf "%s Blog firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
 }
 
 check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {

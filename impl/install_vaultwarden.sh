@@ -839,26 +839,47 @@ LOGR
   success "$(t app.vaultwarden.success.logrotate)"
   step "$(t app.vaultwarden.step.firewall)"
   local FW_DONE=false
+  local FW_ERROR=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    ufw allow "Nginx Full" >/dev/null 2>&1 && success "$(t app.vaultwarden.success.ufw)" && FW_DONE=true
+    if ufw allow "Nginx Full" >/dev/null 2>&1; then
+      success "$(t app.vaultwarden.success.ufw)"
+      FW_DONE=true
+    else
+      FW_ERROR=true
+    fi
   fi
   if ! $FW_DONE && command -v iptables &>/dev/null; then
+    local iptables_ok=true
     for P in 80 443; do
-      iptables -C INPUT -p tcp --dport "$P" -j ACCEPT 2>/dev/null \
-        || iptables -A INPUT -p tcp --dport "$P" -j ACCEPT
+      if ! iptables -C INPUT -p tcp --dport "$P" -j ACCEPT 2>/dev/null \
+          && ! iptables -A INPUT -p tcp --dport "$P" -j ACCEPT; then
+        iptables_ok=false
+        break
+      fi
     done
-    success "$(t app.vaultwarden.success.iptables)" && FW_DONE=true
-    if command -v netfilter-persistent &>/dev/null; then
-      if netfilter-persistent save 2>/dev/null; then
-        success "$(t app.vaultwarden.success.iptables_saved)"
+    if $iptables_ok; then
+      success "$(t app.vaultwarden.success.iptables)"
+      FW_DONE=true
+      if command -v netfilter-persistent &>/dev/null; then
+        if netfilter-persistent save 2>/dev/null; then
+          success "$(t app.vaultwarden.success.iptables_saved)"
+        else
+          warn "$(t app.vaultwarden.warn.iptables_not_persisted)"
+        fi
       else
         warn "$(t app.vaultwarden.warn.iptables_not_persisted)"
       fi
     else
-      warn "$(t app.vaultwarden.warn.iptables_not_persisted)"
+      FW_ERROR=true
     fi
   fi
-  $FW_DONE || warn "$(t app.vaultwarden.warn.no_firewall)"
+  if ! $FW_DONE; then
+    if $FW_ERROR; then
+      warn "$(t app.vaultwarden.warn.firewall_config_failed)"
+    else
+      warn "$(t app.vaultwarden.warn.no_firewall)"
+    fi
+  fi
   step "$(t app.vaultwarden.step.auto_backup)"
   _write_backup_script
   local _vw_cron_file="/etc/cron.d/vaultwarden-backup"

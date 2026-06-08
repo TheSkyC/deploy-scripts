@@ -308,6 +308,9 @@ i18n_register app.blog.ufw_opened \
 i18n_register app.blog.iptables_opened \
   "iptables allows ports 80/443." \
   "iptables 已放行 80/443"
+i18n_register app.blog.firewall_config_failed \
+  "Automatic firewall configuration failed for ports 80 and 443. Open them manually or retry after fixing the firewall service." \
+  "80 和 443 端口的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行这些端口"
 i18n_register app.blog.firewall_missing \
   "No firewall was detected. If you use cloud security groups, allow ports 80 and 443 manually." \
   "未检测到防火墙，如有云安全组请手动放行 80 和 443 端口"
