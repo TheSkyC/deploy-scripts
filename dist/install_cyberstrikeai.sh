@@ -1191,6 +1191,17 @@ build_binary() {
   fi
   success "$(t app.cyberstrikeai.success.binary_built "$BIN_PATH")"
 }
+restore_update_backup() {
+  local bin_backup="$1" config_backup="$2"
+  [[ -f "$bin_backup" ]] || return 1
+  cp "$bin_backup" "$BIN_PATH" || return 1
+  chmod 0755 "$BIN_PATH" || return 1
+  chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" || return 1
+  if [[ -f "$config_backup" ]]; then
+    cp "$config_backup" "$CONFIG_FILE" || return 1
+    chown "${SERVICE_USER}:${SERVICE_USER}" "$CONFIG_FILE" || return 1
+  fi
+}
 install_runtime_dirs() {
   step "$(t app.cyberstrikeai.step.runtime_dirs)"
   mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"
@@ -1604,11 +1615,9 @@ do_update() {
     else
       warn "$(t app.cyberstrikeai.warn.update_start_failed)"
       systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-      [[ -f "$bin_bak" ]] && cp "$bin_bak" "$BIN_PATH"
-      [[ -f "$config_bak" ]] && cp "$config_bak" "$CONFIG_FILE"
-      chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" "$CONFIG_FILE" 2>/dev/null || true
-      systemctl start "$SERVICE_NAME" 2>/dev/null || true
-      if wait_for_service "$SERVICE_NAME" 35; then
+      if restore_update_backup "$bin_bak" "$config_bak" \
+          && systemctl start "$SERVICE_NAME" 2>/dev/null \
+          && wait_for_service "$SERVICE_NAME" 35; then
         error "$(t app.cyberstrikeai.error.update_rollback_ok "$SERVICE_NAME")"
       else
         error "$(t app.cyberstrikeai.error.update_rollback_failed "$SERVICE_NAME")"

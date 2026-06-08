@@ -592,6 +592,29 @@ check_cyberstrikeai_build_temp_cleanup() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_rollback_restore_is_validated() {
+  if grep -R -nE '^[[:space:]]*(\[\[ -f "\$(bin_bak|config_bak)" \]\] && cp "\$(bin_bak|config_bak)"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH" "\$CONFIG_FILE" 2>/dev/null \|\| true)' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI update rollback must validate backup restore, mode, and ownership changes." >&2
+    return 1
+  fi
+  awk '
+      /restore_update_backup\(\)/ { in_func=1; saw_bin_cp=0; saw_chmod=0; saw_bin_chown=0; saw_config_cp=0; saw_config_chown=0; next }
+      in_func && /cp "\$bin_backup" "\$BIN_PATH"/ { saw_bin_cp=1 }
+      in_func && /chmod 0755 "\$BIN_PATH"/ { saw_chmod=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_bin_chown=1 }
+      in_func && /cp "\$config_backup" "\$CONFIG_FILE"/ { saw_config_cp=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$CONFIG_FILE"/ { saw_config_chown=1 }
+      in_func && /^}/ {
+        if (!(saw_bin_cp && saw_chmod && saw_bin_chown && saw_config_cp && saw_config_chown)) {
+          printf "%s CyberStrikeAI rollback helper must validate restored binary and config state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_backup_temp_moves_handle_failure() {
   if grep -R -nE '^[[:space:]]*mv "\$[^"]*(TMP|tmp|ARCHIVE_TMP|archive_tmp|PG_TMP|pg_tmp|CONF_TMP|conf_tmp|DATA_TMP|data_tmp|DUMP_TMP|dump_tmp)[^"]*" "\$[^"]*(ARCHIVE|archive|FILE|file)' impl dist 2>/dev/null; then
     echo "Backup temporary files must be removed when the final move fails." >&2
@@ -929,6 +952,7 @@ main() {
   check_update_backs_up_before_stop
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_build_temp_cleanup
+  check_cyberstrikeai_rollback_restore_is_validated
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
   check_binary_restores_validate_permissions
