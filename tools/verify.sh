@@ -573,7 +573,7 @@ check_update_backs_up_before_stop() {
   for file in impl/install_newapi.sh impl/install_sub2api.sh; do
     awk '
       /local BAK_PATH=/ { seen_bak=1; seen_cp=0 }
-      seen_bak && index($0, "cp \"$BIN_PATH\" \"$BAK_PATH\"") { seen_cp=1 }
+      seen_bak && index($0, "_backup_current_binary \"$BAK_PATH\"") { seen_cp=1 }
       seen_bak && index($0, "systemctl stop \"$SERVICE_NAME\"") {
         if (!seen_cp) {
           printf "%s stops the service before backing up the current binary\n", FILENAME > "/dev/stderr"
@@ -582,6 +582,30 @@ check_update_backs_up_before_stop() {
       }
     ' "$file"
   done
+}
+
+check_update_binary_backups_are_atomic() {
+  if grep -R -nE '^[[:space:]]*cp "\$(BIN_PATH|VW_BIN)" "?\$\{?(BAK_PATH|VW_BIN)\}?' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Update binary backups must copy to a temporary file before replacing the final backup path." >&2
+    return 1
+  fi
+  awk '
+      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\)/ { saw_tmp=1 }
+      in_func && /cp "\$(BIN_PATH|VW_BIN)" "\$backup_tmp"/ { saw_cp=1 }
+      in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
+      in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
+      in_func && /^}/ {
+        if (!(saw_tmp && saw_cp && saw_mv && saw_cleanup)) {
+          printf "%s binary backup helper must stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
 }
 
 check_sub2api_extract_move_failure_cleanup() {
@@ -1027,6 +1051,7 @@ main() {
   check_go_tarball_failures_cleanup
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
+  check_update_binary_backups_are_atomic
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated

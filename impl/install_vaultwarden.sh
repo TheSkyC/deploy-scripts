@@ -171,6 +171,15 @@ install_vaultwarden_binary() {
     return 1
   fi
 }
+backup_vaultwarden_binary() {
+  local backup_path="$1"
+  local backup_tmp
+  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! cp "$VW_BIN" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
+    rm -f "$backup_tmp"
+    return 1
+  fi
+}
 _write_nginx_config_file() {
   local nginx_conf="$1"
   local nginx_tmp
@@ -933,7 +942,8 @@ do_update() {
   step "$(t app.vaultwarden.step.extract_update_binary)"
   NEW_BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
-  cp "$VW_BIN" "${VW_BIN}.bak.$(date +%Y%m%d%H%M%S)"
+  backup_vaultwarden_binary "${VW_BIN}.bak.$(date +%Y%m%d%H%M%S)" \
+    || error "$(t app.vaultwarden.error.binary_install "$VW_BIN")"
   install_vaultwarden_binary "$NEW_BIN_PATH" \
     || error "$(t app.vaultwarden.error.binary_install "$VW_BIN")"
   success "$(t app.vaultwarden.success.binary_updated)"

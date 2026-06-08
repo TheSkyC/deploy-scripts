@@ -132,6 +132,15 @@ _restore_binary_backup() {
   chmod +x "$BIN_PATH" \
     && chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
 }
+_backup_current_binary() {
+  local backup_path="$1"
+  local backup_tmp
+  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! cp "$BIN_PATH" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
+    rm -f "$backup_tmp"
+    return 1
+  fi
+}
 _health_check() {
   local elapsed=0
   local HTTP_CODE
@@ -612,7 +621,8 @@ do_update() {
   step "$(t app.newapi.step.replace_restart)"
   local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
   local BAK_PATH="${INSTALL_DIR}/new-api.bak.${BAK_TS}"
-  cp "$BIN_PATH" "$BAK_PATH"
+  _backup_current_binary "$BAK_PATH" \
+    || error "$(t app.newapi.error.binary_install "$BIN_PATH")"
   info "$(t app.newapi.info.old_binary "$BAK_PATH")"
   info "$(t app.newapi.info.stop_service)"
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true

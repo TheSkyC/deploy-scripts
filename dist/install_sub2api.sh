@@ -1566,6 +1566,15 @@ _restore_binary_backup() {
   chmod +x "$BIN_PATH" \
     && chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
 }
+_backup_current_binary() {
+  local backup_path="$1"
+  local backup_tmp
+  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! cp "$BIN_PATH" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
+    rm -f "$backup_tmp"
+    return 1
+  fi
+}
 _health_check() {
   local elapsed=0 HTTP_CODE
   until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
@@ -2400,7 +2409,8 @@ do_update() {
   step "$(t app.sub2api.step.replace_restart)"
   local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
   local BAK_PATH="${INSTALL_DIR}/sub2api.bak.${BAK_TS}"
-  cp "$BIN_PATH" "$BAK_PATH"
+  _backup_current_binary "$BAK_PATH" \
+    || error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
   info "$(t app.sub2api.info.old_binary_backup "$BAK_PATH")"
   info "$(t app.sub2api.info.stopping_service)"
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
