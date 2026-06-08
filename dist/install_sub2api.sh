@@ -1655,10 +1655,12 @@ _health_check() {
   done
   if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
     success "$(t app.sub2api.success.http_health "$HTTP_CODE")"
+    return 0
   else
     warn "$(t app.sub2api.warn.http_health "$HTTP_CODE")"
     warn "$(t app.sub2api.warn.debug_command "$SERVICE_NAME")"
     warn "$(t app.sub2api.warn.setup_wizard "$PORT")"
+    return 1
   fi
 }
 _install_base_deps() {
@@ -2565,7 +2567,9 @@ do_install() {
   step "$(t app.sub2api.step.health_save)"
   INSTALLED_VERSION="$LATEST"
   save_config
-  _health_check
+  if ! _health_check; then
+    _install_summary_state="pending"
+  fi
   _print_install_summary "$LATEST" "$_install_summary_state"
 }
 do_update() {
@@ -2638,7 +2642,9 @@ do_update() {
       rm -f "${_old_baks[@]}"
       info "$(t app.sub2api.info.cleaned_old_binaries "${#_old_baks[@]}")"
     fi
-    _health_check
+    if ! _health_check; then
+      :
+    fi
     echo ""
     echo -e "  ${BOLD}${GREEN}$(t app.sub2api.success.update_done "${YELLOW}${CURRENT}${GREEN}" "${YELLOW}${LATEST}${NC}")"
     echo ""

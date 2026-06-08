@@ -2302,6 +2302,18 @@ check_sub2api_install_summary_matches_runtime_state() {
       }
     ' apps/sub2api.sh
   awk '
+      /_health_check\(\)/ { in_health=1; saw_success=0; saw_return_ok=0; saw_warn=0; saw_return_fail=0; next }
+      in_health && /success "\$\(t app\.sub2api\.success\.http_health "\$HTTP_CODE"\)"/ { saw_success=1 }
+      in_health && /return 0/ { saw_return_ok=1 }
+      in_health && /warn "\$\(t app\.sub2api\.warn\.http_health "\$HTTP_CODE"\)"/ { saw_warn=1 }
+      in_health && /return 1/ { saw_return_fail=1 }
+      in_health && /^}/ {
+        if (!(saw_success && saw_return_ok && saw_warn && saw_return_fail)) {
+          printf "%s Sub2API health helper must return explicit ready/pending status\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_health=0
+      }
       /_print_install_summary\(\)/ { in_summary=1; saw_state=0; saw_pending=0; saw_ready=0; next }
       in_summary && /local summary_state="\$\{2:-ready\}"/ { saw_state=1 }
       in_summary && /summary_title="\$\(t app\.sub2api\.summary\.title_pending\)"/ { saw_pending=1 }
@@ -2329,6 +2341,20 @@ check_sub2api_install_summary_matches_runtime_state() {
           print "Sub2API install path must pass runtime state into the install summary." > "/dev/stderr"
           exit 1
         }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
+check_sub2api_health_checks_are_nonfatal_outside_install() {
+  awk '
+      /if systemctl start "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 25; then/ { in_update=1; saw_health_if=0; next }
+      in_update && /if ! _health_check; then/ { saw_health_if=1 }
+      in_update && /echo -e "  \$\{BOLD\}\$\{GREEN\}\$\(t app\.sub2api\.success\.update_done/ {
+        if (!saw_health_if) {
+          printf "%s Sub2API update must treat post-restart health warnings as nonfatal\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
@@ -3199,6 +3225,7 @@ main() {
   check_vaultwarden_service_start_paths_are_explicit
   check_sub2api_update_rollbacks_report_restart_failures
   check_sub2api_install_summary_matches_runtime_state
+  check_sub2api_health_checks_are_nonfatal_outside_install
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_cyberstrikeai_install_summary_matches_health_state
   check_cyberstrikeai_nginx_health_probe_matches_server_name
