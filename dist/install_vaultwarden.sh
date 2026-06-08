@@ -896,9 +896,12 @@ i18n_register_many \
   app.vaultwarden.warn.debug \
   "Debug command: journalctl -u vaultwarden -n 30 --no-pager" \
   "调试命令：journalctl -u vaultwarden -n 30 --no-pager" \
-  app.vaultwarden.summary.title \
+  app.vaultwarden.summary.title_ready \
   "Vaultwarden deployment complete! (binary edition)" \
   "Vaultwarden 部署完成！（二进制版）" \
+  app.vaultwarden.summary.title_pending \
+  "Vaultwarden files installed; verify service health before first use" \
+  "Vaultwarden 文件已安装；首次使用前请先确认服务健康" \
   app.vaultwarden.summary.url \
   "Access URL" \
   "访问地址" \
@@ -2233,9 +2236,11 @@ LOGR
   done
   if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "302" ]]; then
     success "$(t app.vaultwarden.success.local_health "$HTTP_CODE")"
+    local _health_state="ready"
   else
     warn "$(t app.vaultwarden.warn.local_health "$HTTP_CODE")"
     warn "$(t app.vaultwarden.warn.debug)"
+    local _health_state="pending"
   fi
   local INTERNAL_IP PROTO INSTALLED_VER
   INTERNAL_IP=$(hostname -I | awk '{print $1}')
@@ -2250,7 +2255,11 @@ LOGR
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔═══════════════════════════════════════════════════════════════╗"
-  echo "  ║             $(t app.vaultwarden.summary.title)            ║"
+  if [[ "$_health_state" == "pending" ]]; then
+    echo "  ║             $(t app.vaultwarden.summary.title_pending)            ║"
+  else
+    echo "  ║             $(t app.vaultwarden.summary.title_ready)            ║"
+  fi
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
   echo -e "  ║  $(t app.vaultwarden.summary.url)    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.admin)  ${CYAN}${PROTO}://${VW_DOMAIN}/admin${GREEN}"

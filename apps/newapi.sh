@@ -114,9 +114,12 @@ i18n_register_many \
   app.newapi.warn.silent_backup_failed \
   "Silent backup failed (tar error); continuing..." \
   "静默备份失败（tar 报错），继续执行..." \
-  app.newapi.summary.title \
+  app.newapi.summary.title_ready \
   "New API deployment complete" \
   "New API 部署完成！" \
+  app.newapi.summary.title_pending \
+  "New API files installed; verify service health before use" \
+  "New API 文件已安装；请先确认服务健康后再使用" \
   app.newapi.summary.public \
   "Public URL" \
   "公网访问" \

@@ -2303,6 +2303,83 @@ check_sub2api_install_summary_matches_runtime_state() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_newapi_install_summary_matches_health_state() {
+  awk '
+      /app\.newapi\.summary\.title_ready/ { saw_title_ready=1 }
+      /app\.newapi\.summary\.title_pending/ { saw_title_pending=1 }
+      END {
+        if (!(saw_title_ready && saw_title_pending)) {
+          print "NewAPI install summary strings must distinguish ready and pending health states." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /_health_check\(\)/ { in_health=1; saw_success=0; saw_return_ok=0; saw_warn=0; saw_return_fail=0; next }
+      in_health && /success "\$\(t app\.newapi\.success\.http_health "\$HTTP_CODE"\)"/ { saw_success=1 }
+      in_health && /return 0/ { saw_return_ok=1 }
+      in_health && /warn "\$\(t app\.newapi\.warn\.http_health "\$HTTP_CODE"\)"/ { saw_warn=1 }
+      in_health && /return 1/ { saw_return_fail=1 }
+      in_health && /^}/ {
+        if (!(saw_success && saw_return_ok && saw_warn && saw_return_fail)) {
+          printf "%s NewAPI health helper must return explicit ready/pending status\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_health=0
+      }
+      /_print_install_summary\(\)/ { in_summary=1; saw_state=0; saw_pending=0; saw_ready=0; next }
+      in_summary && /local summary_state="\$\{2:-ready\}"/ { saw_state=1 }
+      in_summary && /summary_title="\$\(t app\.newapi\.summary\.title_pending\)"/ { saw_pending=1 }
+      in_summary && /summary_title="\$\(t app\.newapi\.summary\.title_ready\)"/ { saw_ready=1 }
+      in_summary && /^}/ {
+        if (!(saw_state && saw_pending && saw_ready)) {
+          printf "%s NewAPI install summary helper must branch on health state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_summary=0
+      }
+      /local _install_summary_state="ready"/ { saw_init=1 }
+      /step "\$\(t app\.newapi\.step\.health\)"/ { in_install=1; saw_pending_state=0; saw_health_if=0; saw_summary_call=0; next }
+      in_install && /if ! _health_check; then/ { saw_health_if=1 }
+      in_install && /_install_summary_state="pending"/ { saw_pending_state=1 }
+      in_install && /_print_install_summary "\$LATEST" "\$_install_summary_state"/ {
+        saw_summary_call=1
+        if (!(saw_init && saw_health_if && saw_pending_state)) {
+          printf "%s NewAPI install flow must downgrade the summary when health checks stay pending\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
+check_vaultwarden_install_summary_matches_health_state() {
+  awk '
+      /app\.vaultwarden\.summary\.title_ready/ { saw_title_ready=1 }
+      /app\.vaultwarden\.summary\.title_pending/ { saw_title_pending=1 }
+      END {
+        if (!(saw_title_ready && saw_title_pending)) {
+          print "Vaultwarden install summary strings must distinguish ready and pending health states." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.health\)"/ { in_install=1; saw_ready=0; saw_pending=0; saw_pending_title=0; saw_ready_title=0; next }
+      in_install && /local _health_state="ready"/ { saw_ready=1 }
+      in_install && /local _health_state="pending"/ { saw_pending=1 }
+      in_install && /app\.vaultwarden\.summary\.title_pending/ { saw_pending_title=1 }
+      in_install && /app\.vaultwarden\.summary\.title_ready/ { saw_ready_title=1 }
+      in_install && /echo -e "  \$\{YELLOW\}\$\{BOLD\}\$\(t app\.vaultwarden\.summary\.important\)/ {
+        if (!(saw_ready && saw_pending && saw_pending_title && saw_ready_title)) {
+          printf "%s Vaultwarden install summary must branch on ready vs pending local health state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_cyberstrikeai_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -2963,6 +3040,8 @@ main() {
   check_sub2api_install_summary_matches_runtime_state
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures
+  check_newapi_install_summary_matches_health_state
+  check_vaultwarden_install_summary_matches_health_state
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics

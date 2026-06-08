@@ -160,9 +160,11 @@ _health_check() {
   done
   if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
     success "$(t app.newapi.success.http_health "$HTTP_CODE")"
+    return 0
   else
     warn "$(t app.newapi.warn.http_health "$HTTP_CODE")"
     warn "$(t app.newapi.warn.debug_command "$SERVICE_NAME")"
+    return 1
   fi
 }
 _write_systemd_unit() {
@@ -468,12 +470,19 @@ _backup_silent() {
 }
 _print_install_summary() {
   local version="$1"
+  local summary_state="${2:-ready}"
   local INTERNAL_IP
+  local summary_title
   INTERNAL_IP=$(hostname -I | awk '{print $1}')
+  if [[ "$summary_state" == "pending" ]]; then
+    summary_title="$(t app.newapi.summary.title_pending)"
+  else
+    summary_title="$(t app.newapi.summary.title_ready)"
+  fi
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║           $(t app.newapi.summary.title)                     ║"
+  echo "  ║           ${summary_title}                     ║"
   echo "  ╠══════════════════════════════════════════════════════╣"
   echo -e "  ║  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
   echo -e "  ║  $(t app.newapi.summary.internal)  ${CYAN}http://${INTERNAL_IP}:${PORT}${GREEN}"
@@ -582,6 +591,7 @@ do_install() {
   fi
   success "$(t app.newapi.success.cron "$BACKUP_KEEP_DAYS")"
   step "$(t app.newapi.step.start)"
+  local _install_summary_state="ready"
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
     local _port_owner
     _port_owner=$(ss -ltnp 2>/dev/null | grep ":${PORT}" | awk '{print $NF}' | head -1 || t app.newapi.status.unknown_process)
@@ -612,8 +622,10 @@ do_install() {
   step "$(t app.newapi.step.health)"
   INSTALLED_VERSION="$LATEST"
   save_config
-  _health_check
-  _print_install_summary "$LATEST"
+  if ! _health_check; then
+    _install_summary_state="pending"
+  fi
+  _print_install_summary "$LATEST" "$_install_summary_state"
 }
 do_update() {
   show_banner

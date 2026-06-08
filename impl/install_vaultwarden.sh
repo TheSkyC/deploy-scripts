@@ -915,9 +915,11 @@ LOGR
   done
   if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "302" ]]; then
     success "$(t app.vaultwarden.success.local_health "$HTTP_CODE")"
+    local _health_state="ready"
   else
     warn "$(t app.vaultwarden.warn.local_health "$HTTP_CODE")"
     warn "$(t app.vaultwarden.warn.debug)"
+    local _health_state="pending"
   fi
   local INTERNAL_IP PROTO INSTALLED_VER
   INTERNAL_IP=$(hostname -I | awk '{print $1}')
@@ -932,7 +934,11 @@ LOGR
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔═══════════════════════════════════════════════════════════════╗"
-  echo "  ║             $(t app.vaultwarden.summary.title)            ║"
+  if [[ "$_health_state" == "pending" ]]; then
+    echo "  ║             $(t app.vaultwarden.summary.title_pending)            ║"
+  else
+    echo "  ║             $(t app.vaultwarden.summary.title_ready)            ║"
+  fi
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
   echo -e "  ║  $(t app.vaultwarden.summary.url)    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.admin)  ${CYAN}${PROTO}://${VW_DOMAIN}/admin${GREEN}"
