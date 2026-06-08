@@ -63,6 +63,9 @@ i18n_register_many \
   app.newapi.success.logrotate \
   "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.newapi.error.logrotate \
+  "Logrotate config write failed: /etc/logrotate.d/new-api" \
+  "日志轮转配置写入失败：/etc/logrotate.d/new-api。" \
   app.newapi.backup.log.start \
   "Backup started" \
   "开始备份" \
@@ -249,6 +252,9 @@ i18n_register_many \
   app.newapi.success.cron \
   "Scheduled backup configured (daily 03:30, keep %s days)." \
   "定时备份已配置（每日 03:30，保留 %s 天）。" \
+  app.newapi.error.cron \
+  "Scheduled backup config write failed: /etc/cron.d/new-api-backup" \
+  "定时备份配置写入失败：/etc/cron.d/new-api-backup。" \
   app.newapi.step.start \
   "Step 10  Start service" \
   "Step 10  启动服务" \

@@ -508,6 +508,25 @@ check_backup_scripts_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
 }
 
+check_cron_logrotate_are_atomic() {
+  if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
+    echo "cron and logrotate configs must be written through temporary files before replacement." >&2
+    return 1
+  fi
+  awk '
+      /(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)=\$\(mktemp/ { saw_tmp=1 }
+      /mv "\$(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)" "\$(cron_file|_vw_cron_file|logrotate_file|_vw_logrotate_file|CRON_FILE|LOGROTATE_FILE)"/ { saw_mv=1 }
+      /rm -f "\$(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_mv && saw_cleanup)) {
+          print "cron and logrotate config writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   awk '
       /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
@@ -599,6 +618,7 @@ main() {
   check_vaultwarden_env_file_is_atomic
   check_systemd_units_are_atomic
   check_backup_scripts_are_atomic
+  check_cron_logrotate_are_atomic
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree

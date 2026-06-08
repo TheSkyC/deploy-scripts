@@ -648,6 +648,12 @@ i18n_register_many \
   app.cyberstrikeai.warn.no_firewall \
   "No active ufw/iptables detected. Cloud security groups may still need manual rules." \
   "未检测到活跃的 ufw/iptables。云安全组可能仍需手动配置规则。" \
+  app.cyberstrikeai.error.logrotate \
+  "Logrotate config write failed: %s" \
+  "日志轮转配置写入失败：%s" \
+  app.cyberstrikeai.error.cron \
+  "Scheduled backup config write failed: %s" \
+  "定时备份配置写入失败：%s" \
   app.cyberstrikeai.step.start \
   "Start CyberStrikeAI" \
   "启动 CyberStrikeAI" \
@@ -1315,7 +1321,9 @@ open_firewall_ports() {
   warn "$(t app.cyberstrikeai.warn.no_firewall)"
 }
 write_logrotate() {
-  cat > "$LOGROTATE_FILE" <<ROTATE
+  local logrotate_tmp
+  logrotate_tmp=$(mktemp "${LOGROTATE_FILE}.XXXXXX")
+  if ! cat > "$logrotate_tmp" <<ROTATE
 ${LOG_DIR}/*.log {
     daily
     rotate 14
@@ -1325,7 +1333,16 @@ ${LOG_DIR}/*.log {
     compress
 }
 ROTATE
-  chmod 644 "$LOGROTATE_FILE"
+  then
+    rm -f "$logrotate_tmp"
+    error "$(t app.cyberstrikeai.error.logrotate "$LOGROTATE_FILE")"
+  fi
+  if ! chmod 644 "$logrotate_tmp" \
+      || ! chown root:root "$logrotate_tmp" \
+      || ! mv "$logrotate_tmp" "$LOGROTATE_FILE"; then
+    rm -f "$logrotate_tmp"
+    error "$(t app.cyberstrikeai.error.logrotate "$LOGROTATE_FILE")"
+  fi
 }
 write_backup_script() {
   local msg_install_missing msg_sqlite_integrity msg_backup_created
@@ -1395,12 +1412,23 @@ BACKUP
     rm -f "$backup_tmp"
     error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
   fi
-  cat > "$CRON_FILE" <<CRON
+  local cron_tmp
+  cron_tmp=$(mktemp "${CRON_FILE}.XXXXXX")
+  if ! cat > "$cron_tmp" <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 30 3 * * * root ${BACKUP_SCRIPT} >> ${LOG_DIR}/backup.log 2>&1
 CRON
-  chmod 644 "$CRON_FILE"
+  then
+    rm -f "$cron_tmp"
+    error "$(t app.cyberstrikeai.error.cron "$CRON_FILE")"
+  fi
+  if ! chmod 644 "$cron_tmp" \
+      || ! chown root:root "$cron_tmp" \
+      || ! mv "$cron_tmp" "$CRON_FILE"; then
+    rm -f "$cron_tmp"
+    error "$(t app.cyberstrikeai.error.cron "$CRON_FILE")"
+  fi
 }
 check_port_conflict() {
   local port="$1"

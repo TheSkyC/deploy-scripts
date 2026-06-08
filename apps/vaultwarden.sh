@@ -312,6 +312,9 @@ i18n_register_many \
   app.vaultwarden.success.logrotate \
   "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.vaultwarden.error.logrotate \
+  "Logrotate config write failed: /etc/logrotate.d/vaultwarden" \
+  "日志轮转配置写入失败：/etc/logrotate.d/vaultwarden" \
   app.vaultwarden.step.firewall \
   "Step 13  Configure firewall" \
   "Step 13  配置防火墙" \
@@ -336,6 +339,9 @@ i18n_register_many \
   app.vaultwarden.success.auto_backup \
   "Automatic backup configured (daily 03:30, retaining %s days)." \
   "自动备份已配置（每日 03:30，保留 %s 天）。" \
+  app.vaultwarden.error.auto_backup \
+  "Automatic backup config write failed: /etc/cron.d/vaultwarden-backup" \
+  "自动备份配置写入失败：/etc/cron.d/vaultwarden-backup" \
   app.vaultwarden.step.health \
   "Step 15  Health check" \
   "Step 15  健康检查" \

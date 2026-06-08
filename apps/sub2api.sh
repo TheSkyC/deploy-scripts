@@ -183,6 +183,9 @@ i18n_register_many \
   app.sub2api.success.logrotate \
   "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.sub2api.error.logrotate \
+  "Logrotate config write failed: /etc/logrotate.d/sub2api" \
+  "日志轮转配置写入失败：/etc/logrotate.d/sub2api。" \
   app.sub2api.backup.log.start \
   "Backup started" \
   "开始备份" \
@@ -411,6 +414,9 @@ i18n_register_many \
   app.sub2api.success.cron_backup \
   "Scheduled backup configured (daily 03:30, retaining %s days)." \
   "定时备份已配置（每日 03:30，保留 %s 天）。" \
+  app.sub2api.error.cron_backup \
+  "Scheduled backup config write failed: /etc/cron.d/sub2api-backup" \
+  "定时备份配置写入失败：/etc/cron.d/sub2api-backup。" \
   app.sub2api.step.start_service \
   "Step 14  Start service" \
   "Step 14  启动服务" \

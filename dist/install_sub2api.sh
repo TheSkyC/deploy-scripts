@@ -690,6 +690,9 @@ i18n_register_many \
   app.sub2api.success.logrotate \
   "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.sub2api.error.logrotate \
+  "Logrotate config write failed: /etc/logrotate.d/sub2api" \
+  "日志轮转配置写入失败：/etc/logrotate.d/sub2api。" \
   app.sub2api.backup.log.start \
   "Backup started" \
   "开始备份" \
@@ -918,6 +921,9 @@ i18n_register_many \
   app.sub2api.success.cron_backup \
   "Scheduled backup configured (daily 03:30, retaining %s days)." \
   "定时备份已配置（每日 03:30，保留 %s 天）。" \
+  app.sub2api.error.cron_backup \
+  "Scheduled backup config write failed: /etc/cron.d/sub2api-backup" \
+  "定时备份配置写入失败：/etc/cron.d/sub2api-backup。" \
   app.sub2api.step.start_service \
   "Step 14  Start service" \
   "Step 14  启动服务" \
@@ -1862,7 +1868,10 @@ _configure_firewall() {
   $FW_DONE || warn "$(t app.sub2api.warn.no_firewall "$PORT")"
 }
 _write_logrotate() {
-  cat > /etc/logrotate.d/sub2api << LOGR
+  local logrotate_file="/etc/logrotate.d/sub2api"
+  local logrotate_tmp
+  logrotate_tmp=$(mktemp "${logrotate_file}.XXXXXX")
+  if ! cat > "$logrotate_tmp" << LOGR
 ${LOG_DIR}/*.log {
     daily
     rotate 14
@@ -1873,6 +1882,16 @@ ${LOG_DIR}/*.log {
     copytruncate
 }
 LOGR
+  then
+    rm -f "$logrotate_tmp"
+    error "$(t app.sub2api.error.logrotate)"
+  fi
+  if ! chmod 644 "$logrotate_tmp" \
+      || ! chown root:root "$logrotate_tmp" \
+      || ! mv "$logrotate_tmp" "$logrotate_file"; then
+    rm -f "$logrotate_tmp"
+    error "$(t app.sub2api.error.logrotate)"
+  fi
   success "$(t app.sub2api.success.logrotate)"
 }
 _write_backup_script() {
@@ -2190,9 +2209,16 @@ do_install() {
   _write_logrotate
   step "$(t app.sub2api.step.cron_backup)"
   _write_backup_script
-  echo "30 3 * * * root /bin/bash /usr/local/bin/sub2api-backup" \
-    > /etc/cron.d/sub2api-backup
-  chmod 644 /etc/cron.d/sub2api-backup
+  local cron_file="/etc/cron.d/sub2api-backup"
+  local cron_tmp
+  cron_tmp=$(mktemp "${cron_file}.XXXXXX")
+  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/sub2api-backup" > "$cron_tmp" \
+      || ! chmod 644 "$cron_tmp" \
+      || ! chown root:root "$cron_tmp" \
+      || ! mv "$cron_tmp" "$cron_file"; then
+    rm -f "$cron_tmp"
+    error "$(t app.sub2api.error.cron_backup)"
+  fi
   success "$(t app.sub2api.success.cron_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.sub2api.step.start_service)"
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then

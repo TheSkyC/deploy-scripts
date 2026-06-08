@@ -141,6 +141,12 @@ i18n_register_many \
   app.cyberstrikeai.warn.no_firewall \
   "No active ufw/iptables detected. Cloud security groups may still need manual rules." \
   "未检测到活跃的 ufw/iptables。云安全组可能仍需手动配置规则。" \
+  app.cyberstrikeai.error.logrotate \
+  "Logrotate config write failed: %s" \
+  "日志轮转配置写入失败：%s" \
+  app.cyberstrikeai.error.cron \
+  "Scheduled backup config write failed: %s" \
+  "定时备份配置写入失败：%s" \
   app.cyberstrikeai.step.start \
   "Start CyberStrikeAI" \
   "启动 CyberStrikeAI" \

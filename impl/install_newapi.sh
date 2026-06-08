@@ -222,7 +222,10 @@ _configure_firewall() {
   $FW_DONE || warn "$(t app.newapi.warn.no_firewall "$PORT")"
 }
 _write_logrotate() {
-  cat > /etc/logrotate.d/new-api << LOGR
+  local logrotate_file="/etc/logrotate.d/new-api"
+  local logrotate_tmp
+  logrotate_tmp=$(mktemp "${logrotate_file}.XXXXXX")
+  if ! cat > "$logrotate_tmp" << LOGR
 ${LOG_DIR}/*.log {
     daily
     rotate 14
@@ -235,6 +238,16 @@ ${LOG_DIR}/*.log {
     copytruncate
 }
 LOGR
+  then
+    rm -f "$logrotate_tmp"
+    error "$(t app.newapi.error.logrotate)"
+  fi
+  if ! chmod 644 "$logrotate_tmp" \
+      || ! chown root:root "$logrotate_tmp" \
+      || ! mv "$logrotate_tmp" "$logrotate_file"; then
+    rm -f "$logrotate_tmp"
+    error "$(t app.newapi.error.logrotate)"
+  fi
   success "$(t app.newapi.success.logrotate)"
 }
 _write_backup_script() {
@@ -484,9 +497,16 @@ do_install() {
   _write_logrotate
   step "$(t app.newapi.step.cron)"
   _write_backup_script
-  echo "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" \
-    > /etc/cron.d/new-api-backup
-  chmod 644 /etc/cron.d/new-api-backup
+  local cron_file="/etc/cron.d/new-api-backup"
+  local cron_tmp
+  cron_tmp=$(mktemp "${cron_file}.XXXXXX")
+  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
+      || ! chmod 644 "$cron_tmp" \
+      || ! chown root:root "$cron_tmp" \
+      || ! mv "$cron_tmp" "$cron_file"; then
+    rm -f "$cron_tmp"
+    error "$(t app.newapi.error.cron)"
+  fi
   success "$(t app.newapi.success.cron "$BACKUP_KEEP_DAYS")"
   step "$(t app.newapi.step.start)"
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then

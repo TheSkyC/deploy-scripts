@@ -819,6 +819,9 @@ i18n_register_many \
   app.vaultwarden.success.logrotate \
   "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.vaultwarden.error.logrotate \
+  "Logrotate config write failed: /etc/logrotate.d/vaultwarden" \
+  "日志轮转配置写入失败：/etc/logrotate.d/vaultwarden" \
   app.vaultwarden.step.firewall \
   "Step 13  Configure firewall" \
   "Step 13  配置防火墙" \
@@ -843,6 +846,9 @@ i18n_register_many \
   app.vaultwarden.success.auto_backup \
   "Automatic backup configured (daily 03:30, retaining %s days)." \
   "自动备份已配置（每日 03:30，保留 %s 天）。" \
+  app.vaultwarden.error.auto_backup \
+  "Automatic backup config write failed: /etc/cron.d/vaultwarden-backup" \
+  "自动备份配置写入失败：/etc/cron.d/vaultwarden-backup" \
   app.vaultwarden.step.health \
   "Step 15  Health check" \
   "Step 15  健康检查" \
@@ -1982,7 +1988,10 @@ JAIL
   systemctl restart fail2ban
   success "$(t app.vaultwarden.success.fail2ban)"
   step "$(t app.vaultwarden.step.logrotate)"
-  cat > /etc/logrotate.d/vaultwarden << LOGR
+  local _vw_logrotate_file="/etc/logrotate.d/vaultwarden"
+  local _vw_logrotate_tmp
+  _vw_logrotate_tmp=$(mktemp "${_vw_logrotate_file}.XXXXXX")
+  if ! cat > "$_vw_logrotate_tmp" << LOGR
 ${VW_LOG_FILE} {
     daily
     rotate 14
@@ -1995,6 +2004,16 @@ ${VW_LOG_FILE} {
     copytruncate
 }
 LOGR
+  then
+    rm -f "$_vw_logrotate_tmp"
+    error "$(t app.vaultwarden.error.logrotate)"
+  fi
+  if ! chmod 644 "$_vw_logrotate_tmp" \
+      || ! chown root:root "$_vw_logrotate_tmp" \
+      || ! mv "$_vw_logrotate_tmp" "$_vw_logrotate_file"; then
+    rm -f "$_vw_logrotate_tmp"
+    error "$(t app.vaultwarden.error.logrotate)"
+  fi
   success "$(t app.vaultwarden.success.logrotate)"
   step "$(t app.vaultwarden.step.firewall)"
   local FW_DONE=false
@@ -2016,9 +2035,16 @@ LOGR
   $FW_DONE || warn "$(t app.vaultwarden.warn.no_firewall)"
   step "$(t app.vaultwarden.step.auto_backup)"
   _write_backup_script
-  echo "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" \
-    > /etc/cron.d/vaultwarden-backup
-  chmod 644 /etc/cron.d/vaultwarden-backup
+  local _vw_cron_file="/etc/cron.d/vaultwarden-backup"
+  local _vw_cron_tmp
+  _vw_cron_tmp=$(mktemp "${_vw_cron_file}.XXXXXX")
+  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" > "$_vw_cron_tmp" \
+      || ! chmod 644 "$_vw_cron_tmp" \
+      || ! chown root:root "$_vw_cron_tmp" \
+      || ! mv "$_vw_cron_tmp" "$_vw_cron_file"; then
+    rm -f "$_vw_cron_tmp"
+    error "$(t app.vaultwarden.error.auto_backup)"
+  fi
   success "$(t app.vaultwarden.success.auto_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.vaultwarden.step.health)"
   save_config

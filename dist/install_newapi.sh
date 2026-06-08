@@ -570,6 +570,9 @@ i18n_register_many \
   app.newapi.success.logrotate \
   "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
+  app.newapi.error.logrotate \
+  "Logrotate config write failed: /etc/logrotate.d/new-api" \
+  "日志轮转配置写入失败：/etc/logrotate.d/new-api。" \
   app.newapi.backup.log.start \
   "Backup started" \
   "开始备份" \
@@ -756,6 +759,9 @@ i18n_register_many \
   app.newapi.success.cron \
   "Scheduled backup configured (daily 03:30, keep %s days)." \
   "定时备份已配置（每日 03:30，保留 %s 天）。" \
+  app.newapi.error.cron \
+  "Scheduled backup config write failed: /etc/cron.d/new-api-backup" \
+  "定时备份配置写入失败：/etc/cron.d/new-api-backup。" \
   app.newapi.step.start \
   "Step 10  Start service" \
   "Step 10  启动服务" \
@@ -1346,7 +1352,10 @@ _configure_firewall() {
   $FW_DONE || warn "$(t app.newapi.warn.no_firewall "$PORT")"
 }
 _write_logrotate() {
-  cat > /etc/logrotate.d/new-api << LOGR
+  local logrotate_file="/etc/logrotate.d/new-api"
+  local logrotate_tmp
+  logrotate_tmp=$(mktemp "${logrotate_file}.XXXXXX")
+  if ! cat > "$logrotate_tmp" << LOGR
 ${LOG_DIR}/*.log {
     daily
     rotate 14
@@ -1359,6 +1368,16 @@ ${LOG_DIR}/*.log {
     copytruncate
 }
 LOGR
+  then
+    rm -f "$logrotate_tmp"
+    error "$(t app.newapi.error.logrotate)"
+  fi
+  if ! chmod 644 "$logrotate_tmp" \
+      || ! chown root:root "$logrotate_tmp" \
+      || ! mv "$logrotate_tmp" "$logrotate_file"; then
+    rm -f "$logrotate_tmp"
+    error "$(t app.newapi.error.logrotate)"
+  fi
   success "$(t app.newapi.success.logrotate)"
 }
 _write_backup_script() {
@@ -1608,9 +1627,16 @@ do_install() {
   _write_logrotate
   step "$(t app.newapi.step.cron)"
   _write_backup_script
-  echo "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" \
-    > /etc/cron.d/new-api-backup
-  chmod 644 /etc/cron.d/new-api-backup
+  local cron_file="/etc/cron.d/new-api-backup"
+  local cron_tmp
+  cron_tmp=$(mktemp "${cron_file}.XXXXXX")
+  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
+      || ! chmod 644 "$cron_tmp" \
+      || ! chown root:root "$cron_tmp" \
+      || ! mv "$cron_tmp" "$cron_file"; then
+    rm -f "$cron_tmp"
+    error "$(t app.newapi.error.cron)"
+  fi
   success "$(t app.newapi.success.cron "$BACKUP_KEEP_DAYS")"
   step "$(t app.newapi.step.start)"
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then

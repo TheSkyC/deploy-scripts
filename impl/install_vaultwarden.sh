@@ -708,7 +708,10 @@ JAIL
   systemctl restart fail2ban
   success "$(t app.vaultwarden.success.fail2ban)"
   step "$(t app.vaultwarden.step.logrotate)"
-  cat > /etc/logrotate.d/vaultwarden << LOGR
+  local _vw_logrotate_file="/etc/logrotate.d/vaultwarden"
+  local _vw_logrotate_tmp
+  _vw_logrotate_tmp=$(mktemp "${_vw_logrotate_file}.XXXXXX")
+  if ! cat > "$_vw_logrotate_tmp" << LOGR
 ${VW_LOG_FILE} {
     daily
     rotate 14
@@ -721,6 +724,16 @@ ${VW_LOG_FILE} {
     copytruncate
 }
 LOGR
+  then
+    rm -f "$_vw_logrotate_tmp"
+    error "$(t app.vaultwarden.error.logrotate)"
+  fi
+  if ! chmod 644 "$_vw_logrotate_tmp" \
+      || ! chown root:root "$_vw_logrotate_tmp" \
+      || ! mv "$_vw_logrotate_tmp" "$_vw_logrotate_file"; then
+    rm -f "$_vw_logrotate_tmp"
+    error "$(t app.vaultwarden.error.logrotate)"
+  fi
   success "$(t app.vaultwarden.success.logrotate)"
   step "$(t app.vaultwarden.step.firewall)"
   local FW_DONE=false
@@ -742,9 +755,16 @@ LOGR
   $FW_DONE || warn "$(t app.vaultwarden.warn.no_firewall)"
   step "$(t app.vaultwarden.step.auto_backup)"
   _write_backup_script
-  echo "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" \
-    > /etc/cron.d/vaultwarden-backup
-  chmod 644 /etc/cron.d/vaultwarden-backup
+  local _vw_cron_file="/etc/cron.d/vaultwarden-backup"
+  local _vw_cron_tmp
+  _vw_cron_tmp=$(mktemp "${_vw_cron_file}.XXXXXX")
+  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" > "$_vw_cron_tmp" \
+      || ! chmod 644 "$_vw_cron_tmp" \
+      || ! chown root:root "$_vw_cron_tmp" \
+      || ! mv "$_vw_cron_tmp" "$_vw_cron_file"; then
+    rm -f "$_vw_cron_tmp"
+    error "$(t app.vaultwarden.error.auto_backup)"
+  fi
   success "$(t app.vaultwarden.success.auto_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.vaultwarden.step.health)"
   save_config
