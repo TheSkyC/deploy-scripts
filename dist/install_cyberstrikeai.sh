@@ -647,6 +647,12 @@ i18n_register_many \
   app.cyberstrikeai.error.nginx \
   "Nginx config write failed: %s" \
   "Nginx 配置写入失败：%s" \
+  app.cyberstrikeai.error.nginx_test \
+  "Nginx configuration validation failed. Run: nginx -t" \
+  "Nginx 配置校验失败。请执行：nginx -t" \
+  app.cyberstrikeai.error.nginx_start \
+  "Cannot start Nginx service. Inspect: journalctl -u nginx -n 30" \
+  "无法启动 Nginx 服务，请检查：journalctl -u nginx -n 30" \
   app.cyberstrikeai.success.nginx \
   "Nginx reverse proxy installed" \
   "Nginx 反向代理已安装" \
@@ -1414,12 +1420,23 @@ NGINX
   fi
   _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
     || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
-  nginx -t
+  if ! nginx -t; then
+    error "$(t app.cyberstrikeai.error.nginx_test)"
+  fi
   if ! systemctl enable nginx --quiet; then
     warn "$(t app.cyberstrikeai.warn.service_enable_failed "nginx" "nginx")"
   fi
-  if ! systemctl reload nginx; then
-    systemctl restart nginx
+  if systemctl is-active --quiet nginx; then
+    if ! systemctl reload nginx; then
+      if ! systemctl restart nginx; then
+        error "$(t app.cyberstrikeai.error.nginx_start)"
+      fi
+    fi
+  elif ! systemctl restart nginx; then
+    error "$(t app.cyberstrikeai.error.nginx_start)"
+  fi
+  if ! wait_for_service nginx 10; then
+    error "$(t app.cyberstrikeai.error.nginx_start)"
   fi
   success "$(t app.cyberstrikeai.success.nginx)"
 }

@@ -489,12 +489,23 @@ NGINX
   fi
   _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
     || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
-  nginx -t
+  if ! nginx -t; then
+    error "$(t app.cyberstrikeai.error.nginx_test)"
+  fi
   if ! systemctl enable nginx --quiet; then
     warn "$(t app.cyberstrikeai.warn.service_enable_failed "nginx" "nginx")"
   fi
-  if ! systemctl reload nginx; then
-    systemctl restart nginx
+  if systemctl is-active --quiet nginx; then
+    if ! systemctl reload nginx; then
+      if ! systemctl restart nginx; then
+        error "$(t app.cyberstrikeai.error.nginx_start)"
+      fi
+    fi
+  elif ! systemctl restart nginx; then
+    error "$(t app.cyberstrikeai.error.nginx_start)"
+  fi
+  if ! wait_for_service nginx 10; then
+    error "$(t app.cyberstrikeai.error.nginx_start)"
   fi
   success "$(t app.cyberstrikeai.success.nginx)"
 }

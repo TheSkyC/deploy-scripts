@@ -1564,12 +1564,16 @@ check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
   fi
   awk '
       /_write_nginx_site_link "\$NGINX_CONF" "\$NGINX_LINK"/ { in_block=1; saw_test=0; saw_reload=0; saw_restart=0; next }
-      in_block && /^  nginx -t$/ { saw_test=1 }
+      in_block && /if ! nginx -t; then/ { saw_test=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.nginx_test\)"/ { saw_test_error=1 }
+      in_block && /if systemctl is-active --quiet nginx; then/ { saw_active_check=1 }
       in_block && /if ! systemctl reload nginx; then/ { saw_reload=1 }
-      in_block && /^    systemctl restart nginx$/ { saw_restart=1 }
+      in_block && /if ! systemctl restart nginx; then/ { saw_restart=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.nginx_start\)"/ { saw_start_error=1 }
+      in_block && /if ! wait_for_service nginx 10; then/ { saw_wait=1 }
       in_block && /success "\$\(t app\.cyberstrikeai\.success\.nginx\)"/ {
-        if (!(saw_test && saw_reload && saw_restart)) {
-          printf "%s CyberStrikeAI nginx apply path must test config, preserve reload diagnostics, and fall back to restart explicitly\n", FILENAME > "/dev/stderr"
+        if (!(saw_test && saw_test_error && saw_active_check && saw_reload && saw_restart && saw_start_error && saw_wait)) {
+          printf "%s CyberStrikeAI nginx apply path must validate config, preserve reload diagnostics, and report start failures explicitly\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_block=0
