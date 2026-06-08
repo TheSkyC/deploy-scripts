@@ -207,6 +207,9 @@ i18n_register_many \
   app.vaultwarden.step.env_file \
   "Step 6  Write %s" \
   "Step 6  写入 %s" \
+  app.vaultwarden.error.env_file \
+  "Environment config file write failed: %s" \
+  "环境配置文件写入失败：%s" \
   app.vaultwarden.success.env_file \
   "Environment config file written: %s (mode 600)." \
   "环境配置文件已写入：%s（权限 600）。" \

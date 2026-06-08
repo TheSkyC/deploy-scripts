@@ -310,7 +310,9 @@ do_install() {
   fi
   success "$(t app.vaultwarden.success.admin_token)"
   step "$(t app.vaultwarden.step.env_file "$VW_ENV_FILE")"
-  cat > "$VW_ENV_FILE" << ENV
+  local _vw_env_tmp
+  _vw_env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX")
+  if ! cat > "$_vw_env_tmp" << ENV
 # Vaultwarden environment file.
 # This file contains secrets; keep mode 600 and do not commit it.
 # Restart the service after changes: systemctl restart vaultwarden
@@ -370,8 +372,16 @@ USER_ATTACHMENT_LIMIT=102400
 # PUSH_INSTALLATION_ID=
 # PUSH_INSTALLATION_KEY=
 ENV
-  chmod 600 "$VW_ENV_FILE"
-  chown root:root "$VW_ENV_FILE"
+  then
+    rm -f "$_vw_env_tmp"
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
+  if ! chmod 600 "$_vw_env_tmp" \
+      || ! chown root:root "$_vw_env_tmp" \
+      || ! mv "$_vw_env_tmp" "$VW_ENV_FILE"; then
+    rm -f "$_vw_env_tmp"
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
   success "$(t app.vaultwarden.success.env_file "$VW_ENV_FILE")"
   step "$(t app.vaultwarden.step.systemd)"
   cat > /etc/systemd/system/vaultwarden.service << UNIT

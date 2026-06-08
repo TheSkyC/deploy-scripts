@@ -452,6 +452,24 @@ check_binary_replacements_handle_failure() {
   fi
 }
 
+check_vaultwarden_env_file_is_atomic() {
+  if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden env files contain secrets and must be written through a temporary file before replacement." >&2
+    return 1
+  fi
+  awk '
+      /_vw_env_tmp=\$\(mktemp "\$\(dirname "\$VW_ENV_FILE"\)\/\.vaultwarden\.env\./ { saw_tmp=1 }
+      /mv "\$_vw_env_tmp" "\$VW_ENV_FILE"/ { saw_mv=1 }
+      /rm -f "\$_vw_env_tmp"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_mv && saw_cleanup)) {
+          print "Vaultwarden env file writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   awk '
       /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
@@ -540,6 +558,7 @@ main() {
   check_cyberstrikeai_build_temp_cleanup
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
+  check_vaultwarden_env_file_is_atomic
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree
