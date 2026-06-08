@@ -635,6 +635,9 @@ i18n_register_many \
   app.sub2api.success.redis \
   "Redis installed." \
   "Redis 安装完成。" \
+  app.sub2api.error.redis_start \
+  "Cannot start Redis service. Inspect: journalctl -u redis -n 30" \
+  "无法启动 Redis 服务，请检查：journalctl -u redis -n 30" \
   app.sub2api.warn.postgres_not_running \
   "PostgreSQL service is not running; trying to start it..." \
   "PostgreSQL 服务未运行，尝试启动..." \
@@ -1626,16 +1629,26 @@ _install_base_deps() {
   fi
   success "$(t app.sub2api.success.base_deps)"
 }
+_ensure_postgres_running() {
+  local pg_ver="${1:-15}"
+  if systemctl is-active --quiet postgresql 2>/dev/null || \
+      systemctl is-active --quiet "postgresql-${pg_ver}" 2>/dev/null; then
+    return 0
+  fi
+  warn "$(t app.sub2api.warn.postgres_not_running)"
+  systemctl start postgresql 2>/dev/null || \
+    systemctl start "postgresql-${pg_ver}" 2>/dev/null || \
+    error "$(t app.sub2api.error.postgres_start)"
+}
 _install_postgres() {
   if command -v psql &>/dev/null; then
     local pg_ver
     pg_ver=$(psql --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo "0")
     if [[ "$pg_ver" -ge 15 ]]; then
-      success "$(t app.sub2api.success.postgres_exists "$pg_ver")"
       systemctl enable postgresql 2>/dev/null || \
         systemctl enable "postgresql-${pg_ver}" 2>/dev/null || true
-      systemctl start  postgresql 2>/dev/null || \
-        systemctl start  "postgresql-${pg_ver}" 2>/dev/null || true
+      _ensure_postgres_running "$pg_ver"
+      success "$(t app.sub2api.success.postgres_exists "$pg_ver")"
       return 0
     fi
     warn "$(t app.sub2api.warn.postgres_old "$pg_ver")"
@@ -1669,7 +1682,8 @@ _install_postgres() {
     fi
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
-    systemctl enable --now postgresql
+    systemctl enable postgresql 2>/dev/null || true
+    _ensure_postgres_running "15"
     success "$(t app.sub2api.success.postgres15)"
   elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
     info "$(t app.sub2api.info.postgres_rpm_source)"
@@ -1688,9 +1702,18 @@ _install_postgres() {
     if [[ ! -f "$pg_data_version" ]]; then
       /usr/pgsql-15/bin/postgresql-15-setup initdb || error "$(t app.sub2api.error.postgres_initdb)"
     fi
-    systemctl enable --now postgresql-15
+    systemctl enable postgresql-15 2>/dev/null || true
+    _ensure_postgres_running "15"
     success "$(t app.sub2api.success.postgres15)"
   fi
+}
+_ensure_redis_running() {
+  if systemctl is-active --quiet redis-server 2>/dev/null || \
+      systemctl is-active --quiet redis 2>/dev/null; then
+    return 0
+  fi
+  systemctl enable --now redis-server 2>/dev/null || \
+    systemctl enable --now redis 2>/dev/null
 }
 _install_redis() {
   if command -v redis-server &>/dev/null; then
@@ -1698,9 +1721,8 @@ _install_redis() {
     redis_ver=$(redis-server --version 2>/dev/null \
       | grep -oE 'v=[0-9]+' | grep -oE '[0-9]+' || echo "0")
     if [[ "$redis_ver" -ge 7 ]]; then
+      _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
       success "$(t app.sub2api.success.redis_exists "$redis_ver")"
-      systemctl enable --now redis-server 2>/dev/null || \
-        systemctl enable --now redis 2>/dev/null || true
       return 0
     fi
     warn "$(t app.sub2api.warn.redis_old "$redis_ver")"
@@ -1737,15 +1759,15 @@ _install_redis() {
     fi
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y redis
-    systemctl enable --now redis-server
+    _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis7)"
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
     dnf install -y redis
-    systemctl enable --now redis
+    _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis)"
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
     yum install -y redis
-    systemctl enable --now redis
+    _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis)"
   fi
 }

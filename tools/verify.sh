@@ -1234,6 +1234,43 @@ check_sub2api_postgres_rpm_setup_failures_are_explicit() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_dependency_services_start_before_success() {
+  if grep -R -nE 'success "\$\(t app\.sub2api\.success\.(postgres_exists|redis_exists)[^"]*"\)[[:space:]]*$' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    awk '
+        /if \[\[ "\$pg_ver" -ge 15 \]\]; then/ { in_pg=1; saw_ensure=0; next }
+        in_pg && /_ensure_postgres_running "\$pg_ver"/ { saw_ensure=1 }
+        in_pg && /success "\$\(t app\.sub2api\.success\.postgres_exists "\$pg_ver"\)"/ {
+          if (!saw_ensure) {
+            printf "%s Sub2API must ensure PostgreSQL is running before reporting an existing installation as ready\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+          in_pg=0
+        }
+        /if \[\[ "\$redis_ver" -ge 7 \]\]; then/ { in_redis=1; saw_redis_ensure=0; next }
+        in_redis && /_ensure_redis_running \|\| error "\$\(t app\.sub2api\.error\.redis_start\)"/ { saw_redis_ensure=1 }
+        in_redis && /success "\$\(t app\.sub2api\.success\.redis_exists "\$redis_ver"\)"/ {
+          if (!saw_redis_ensure) {
+            printf "%s Sub2API must ensure Redis is running before reporting an existing installation as ready\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+          in_redis=0
+        }
+      ' impl/install_sub2api.sh dist/install_sub2api.sh
+  fi
+  awk '
+      /_ensure_postgres_running\(\)/ { saw_pg_helper=1 }
+      /_ensure_redis_running\(\)/ { saw_redis_helper=1 }
+      /app\.sub2api\.error\.redis_start/ { saw_redis_error=1 }
+      END {
+        if (!(saw_pg_helper && saw_redis_helper && saw_redis_error)) {
+          print "Sub2API must keep explicit helpers and error reporting for PostgreSQL and Redis service startup." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -1682,6 +1719,7 @@ main() {
   check_nginx_test_failures_report_diagnostics
   check_sub2api_nginx_reload_results_are_checked
   check_sub2api_postgres_rpm_setup_failures_are_explicit
+  check_sub2api_dependency_services_start_before_success
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics

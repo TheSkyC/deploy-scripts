@@ -120,6 +120,9 @@ i18n_register_many \
   app.sub2api.success.redis \
   "Redis installed." \
   "Redis 安装完成。" \
+  app.sub2api.error.redis_start \
+  "Cannot start Redis service. Inspect: journalctl -u redis -n 30" \
+  "无法启动 Redis 服务，请检查：journalctl -u redis -n 30" \
   app.sub2api.warn.postgres_not_running \
   "PostgreSQL service is not running; trying to start it..." \
   "PostgreSQL 服务未运行，尝试启动..." \
