@@ -753,9 +753,15 @@ NGINX2
 }
 NGINX2BODY
       } | _write_nginx_config_file "$NGINX_CONF"
-      nginx -t && systemctl reload nginx \
-        && success "$(t app.vaultwarden.success.nginx_https)" \
-        || warn "$(t app.vaultwarden.warn.nginx_https_test)"
+      if nginx -t; then
+        if systemctl reload nginx; then
+          success "$(t app.vaultwarden.success.nginx_https)"
+        else
+          warn "$(t app.vaultwarden.warn.nginx_https_test)"
+        fi
+      else
+        warn "$(t app.vaultwarden.warn.nginx_https_test)"
+      fi
     else
       warn "$(t app.vaultwarden.warn.cert_missing)"
     fi
@@ -1383,7 +1389,9 @@ do_uninstall() {
     info "$(t app.vaultwarden.info.kept_backup "$VW_BACKUP_DIR")"
   fi
   if $DELETE_DATA && id "$VW_USER" &>/dev/null; then
-    userdel "$VW_USER" 2>/dev/null && success "$(t app.vaultwarden.success.deleted_user "$VW_USER")" || true
+    if userdel "$VW_USER" 2>/dev/null; then
+      success "$(t app.vaultwarden.success.deleted_user "$VW_USER")"
+    fi
   fi
   echo ""
   echo -e "${BOLD}${GREEN}  $(t app.vaultwarden.success.uninstalled)${NC}"

@@ -1250,6 +1250,38 @@ check_fail2ban_configs_are_atomic() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_result_chains_are_explicit() {
+  if grep -R -nE 'nginx -t && systemctl reload nginx[[:space:]\\]*$|userdel "\$VW_USER" 2>/dev/null && success .* \|\| true' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden must use explicit conditionals for nginx reload and user deletion outcomes." >&2
+    return 1
+  fi
+  awk '
+      /} \| _write_nginx_config_file "\$NGINX_CONF"/ { in_https=1; saw_test=0; saw_reload=0; saw_success=0; saw_warn=0; next }
+      in_https && /if nginx -t; then/ { saw_test=1 }
+      in_https && /if systemctl reload nginx; then/ { saw_reload=1 }
+      in_https && /success "\$\(t app\.vaultwarden\.success\.nginx_https\)"/ { saw_success=1 }
+      in_https && /warn "\$\(t app\.vaultwarden\.warn\.nginx_https_test\)"/ { saw_warn=1 }
+      in_https && /^    else$/ {
+        if (!(saw_test && saw_reload && saw_success && saw_warn)) {
+          printf "%s Vaultwarden HTTPS apply path must make nginx test and reload outcomes explicit\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_https=0
+      }
+      /if \$DELETE_DATA && id "\$VW_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_userdel_success=0; next }
+      in_userdel && /if userdel "\$VW_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
+      in_userdel && /success "\$\(t app\.vaultwarden\.success\.deleted_user "\$VW_USER"\)"/ { saw_userdel_success=1 }
+      in_userdel && /^  fi$/ {
+        if (!(saw_userdel_if && saw_userdel_success)) {
+          printf "%s Vaultwarden uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_userdel=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   if grep -R -nE '^[[:space:]]*\[\[ -d "\$_wv_(bak_ts|install_bak)" \]\] && mv "\$_wv_(bak_ts|install_bak)" "\$VW_WEB_DIR" \|\| true' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
@@ -1445,6 +1477,7 @@ main() {
   check_nginx_test_failures_report_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
+  check_vaultwarden_result_chains_are_explicit
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_webvault_replacements_are_atomic
   check_vaultwarden_install_webvault_replacement_is_recoverable
