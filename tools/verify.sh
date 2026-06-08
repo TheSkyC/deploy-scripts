@@ -794,6 +794,74 @@ check_cyberstrikeai_dependency_failures_are_reported() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_sub2api_apt_failures_are_reported() {
+  if grep -R -nE '^[[:space:]]*apt-get update -qq$' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API apt-get update paths must use explicit conditionals with actionable errors." >&2
+    return 1
+  fi
+  awk '
+      /app\.sub2api\.error\.apt_update/ { saw_base_update_key=1 }
+      /app\.sub2api\.error\.base_deps_install/ { saw_base_install_key=1 }
+      /app\.sub2api\.error\.postgres_apt_update/ { saw_pg_update_key=1 }
+      /app\.sub2api\.error\.postgres_apt_install/ { saw_pg_install_key=1 }
+      /app\.sub2api\.error\.redis_apt_update/ { saw_redis_update_key=1 }
+      /app\.sub2api\.error\.redis_apt_install/ { saw_redis_install_key=1 }
+      /\/var\/log\/apt\/\*/ { saw_apt_guidance=1 }
+      /apt-get install -y curl ca-certificates gnupg lsb-release/ { saw_base_install_guidance=1 }
+      /apt-get install -y postgresql-15 postgresql-client-15/ { saw_pg_install_guidance=1 }
+      /apt-get install -y redis/ { saw_redis_install_guidance=1 }
+      /\/etc\/apt\/sources\.list\.d\/pgdg\.list/ { saw_pg_source_guidance=1 }
+      /\/etc\/apt\/sources\.list\.d\/redis\.list/ { saw_redis_source_guidance=1 }
+      END {
+        if (!(saw_base_update_key && saw_base_install_key && saw_pg_update_key && saw_pg_install_key && saw_redis_update_key && saw_redis_install_key && saw_apt_guidance && saw_base_install_guidance && saw_pg_install_guidance && saw_redis_install_guidance && saw_pg_source_guidance && saw_redis_source_guidance)) {
+          print "Sub2API apt failures must tell users how to inspect apt logs, repair repository files, and retry package installation." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /_install_base_deps\(\)/ { in_base=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; next }
+      in_base && /if ! apt-get update -qq; then/ { saw_update_if=1 }
+      in_base && /error "\$\(t app\.sub2api\.error\.apt_update\)"/ { saw_update_error=1 }
+      in_base && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \\/ { saw_install_if=1 }
+      in_base && /error "\$\(t app\.sub2api\.error\.base_deps_install\)"/ { saw_install_error=1 }
+      in_base && /success "\$\(t app\.sub2api\.success\.base_deps\)"/ {
+        if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error)) {
+          printf "%s Sub2API base dependency installation must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_base=0
+      }
+      /_install_postgres\(\)/ { in_pg_func=1; next }
+      /_install_redis\(\)/ { in_redis_func=1; next }
+      in_pg_func && /if \[\[ "\$PKG_MANAGER" == "apt" \]\]; then/ { in_pg=1; in_pg_func=0; next }
+      in_redis_func && /if \[\[ "\$PKG_MANAGER" == "apt" \]\]; then/ { in_redis=1; in_redis_func=0; next }
+      in_pg && /if ! apt-get update -qq; then/ { saw_pg_update_if=1 }
+      in_pg && /error "\$\(t app\.sub2api\.error\.postgres_apt_update\)"/ { saw_pg_update_error=1 }
+      in_pg && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then/ { saw_pg_install_if=1 }
+      in_pg && /error "\$\(t app\.sub2api\.error\.postgres_apt_install\)"/ { saw_pg_install_error=1 }
+      in_pg && /if ! systemctl enable postgresql 2>\/dev\/null; then/ {
+        if (!(saw_pg_update_if && saw_pg_update_error && saw_pg_install_if && saw_pg_install_error)) {
+          printf "%s Sub2API PostgreSQL apt installation must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_pg=0
+      }
+      in_redis && /if ! apt-get update -qq; then/ { saw_redis_update_if=1 }
+      in_redis && /error "\$\(t app\.sub2api\.error\.redis_apt_update\)"/ { saw_redis_update_error=1 }
+      in_redis && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then/ { saw_redis_install_if=1 }
+      in_redis && /error "\$\(t app\.sub2api\.error\.redis_apt_install\)"/ { saw_redis_install_error=1 }
+      in_redis && /_ensure_redis_running \|\| error "\$\(t app\.sub2api\.error\.redis_start\)"/ {
+        if (!(saw_redis_update_if && saw_redis_update_error && saw_redis_install_if && saw_redis_install_error)) {
+          printf "%s Sub2API Redis apt installation must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_redis=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_vaultwarden_backup_failures_include_followup_guidance() {
   awk '
       /app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn_key=1 }
@@ -2498,6 +2566,7 @@ main() {
   check_blog_dependency_failures_are_reported
   check_newapi_dependency_failures_are_reported
   check_cyberstrikeai_dependency_failures_are_reported
+  check_sub2api_apt_failures_are_reported
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance

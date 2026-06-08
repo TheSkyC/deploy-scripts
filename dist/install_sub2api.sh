@@ -581,6 +581,12 @@ i18n_register_many \
   app.sub2api.info.install_base_deps \
   "Installing base dependencies..." \
   "安装基础依赖..." \
+  app.sub2api.error.apt_update \
+  "apt-get update failed. Check /var/log/apt/*, fix repository or network issues, and retry." \
+  "apt-get update 失败。请检查 /var/log/apt/*，修复软件源或网络问题后重试。" \
+  app.sub2api.error.base_deps_install \
+  "Base dependency installation failed. Run apt-get install -y curl ca-certificates gnupg lsb-release after fixing the package manager state." \
+  "基础依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl ca-certificates gnupg lsb-release。" \
   app.sub2api.success.base_deps \
   "Base dependencies installed." \
   "基础依赖安装完成。" \
@@ -599,6 +605,12 @@ i18n_register_many \
   app.sub2api.error.postgres_source \
   "PostgreSQL apt source write failed: /etc/apt/sources.list.d/pgdg.list" \
   "PostgreSQL apt 源写入失败：/etc/apt/sources.list.d/pgdg.list。" \
+  app.sub2api.error.postgres_apt_update \
+  "apt-get update failed after adding the PostgreSQL PGDG repository. Check /var/log/apt/* and /etc/apt/sources.list.d/pgdg.list, then retry." \
+  "添加 PostgreSQL PGDG 源后 apt-get update 失败。请检查 /var/log/apt/* 和 /etc/apt/sources.list.d/pgdg.list，然后重试。" \
+  app.sub2api.error.postgres_apt_install \
+  "PostgreSQL 15 installation failed. Run apt-get install -y postgresql-15 postgresql-client-15 after fixing the package manager state." \
+  "PostgreSQL 15 安装失败。请在修复软件包管理器状态后执行 apt-get install -y postgresql-15 postgresql-client-15。" \
   app.sub2api.success.postgres15 \
   "PostgreSQL 15 installed." \
   "PostgreSQL 15 安装完成。" \
@@ -629,6 +641,12 @@ i18n_register_many \
   app.sub2api.error.redis_source \
   "Redis apt source write failed: /etc/apt/sources.list.d/redis.list" \
   "Redis apt 源写入失败：/etc/apt/sources.list.d/redis.list。" \
+  app.sub2api.error.redis_apt_update \
+  "apt-get update failed after adding the Redis repository. Check /var/log/apt/* and /etc/apt/sources.list.d/redis.list, then retry." \
+  "添加 Redis 源后 apt-get update 失败。请检查 /var/log/apt/* 和 /etc/apt/sources.list.d/redis.list，然后重试。" \
+  app.sub2api.error.redis_apt_install \
+  "Redis installation failed. Run apt-get install -y redis after fixing the package manager state." \
+  "Redis 安装失败。请在修复软件包管理器状态后执行 apt-get install -y redis。" \
   app.sub2api.success.redis7 \
   "Redis 7 installed." \
   "Redis 7 安装完成。" \
@@ -1625,9 +1643,13 @@ _health_check() {
 _install_base_deps() {
   info "$(t app.sub2api.info.install_base_deps)"
   if [[ "$PKG_MANAGER" == "apt" ]]; then
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-      curl ca-certificates gnupg lsb-release
+    if ! apt-get update -qq; then
+      error "$(t app.sub2api.error.apt_update)"
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+      curl ca-certificates gnupg lsb-release; then
+      error "$(t app.sub2api.error.base_deps_install)"
+    fi
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
     dnf install -y -q curl ca-certificates
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
@@ -1692,8 +1714,12 @@ _install_postgres() {
       rm -f "$pg_source_tmp"
       error "$(t app.sub2api.error.postgres_source)"
     fi
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
+    if ! apt-get update -qq; then
+      error "$(t app.sub2api.error.postgres_apt_update)"
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then
+      error "$(t app.sub2api.error.postgres_apt_install)"
+    fi
     if ! systemctl enable postgresql 2>/dev/null; then
       warn "$(t app.sub2api.warn.service_enable_failed "postgresql" "postgresql")"
     fi
@@ -1782,8 +1808,12 @@ _install_redis() {
       rm -f "$redis_source_tmp"
       error "$(t app.sub2api.error.redis_source)"
     fi
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y redis
+    if ! apt-get update -qq; then
+      error "$(t app.sub2api.error.redis_apt_update)"
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then
+      error "$(t app.sub2api.error.redis_apt_install)"
+    fi
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis7)"
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then

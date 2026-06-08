@@ -247,9 +247,13 @@ _health_check() {
 _install_base_deps() {
   info "$(t app.sub2api.info.install_base_deps)"
   if [[ "$PKG_MANAGER" == "apt" ]]; then
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-      curl ca-certificates gnupg lsb-release
+    if ! apt-get update -qq; then
+      error "$(t app.sub2api.error.apt_update)"
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+      curl ca-certificates gnupg lsb-release; then
+      error "$(t app.sub2api.error.base_deps_install)"
+    fi
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
     dnf install -y -q curl ca-certificates
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
@@ -314,8 +318,12 @@ _install_postgres() {
       rm -f "$pg_source_tmp"
       error "$(t app.sub2api.error.postgres_source)"
     fi
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
+    if ! apt-get update -qq; then
+      error "$(t app.sub2api.error.postgres_apt_update)"
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then
+      error "$(t app.sub2api.error.postgres_apt_install)"
+    fi
     if ! systemctl enable postgresql 2>/dev/null; then
       warn "$(t app.sub2api.warn.service_enable_failed "postgresql" "postgresql")"
     fi
@@ -404,8 +412,12 @@ _install_redis() {
       rm -f "$redis_source_tmp"
       error "$(t app.sub2api.error.redis_source)"
     fi
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y redis
+    if ! apt-get update -qq; then
+      error "$(t app.sub2api.error.redis_apt_update)"
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then
+      error "$(t app.sub2api.error.redis_apt_install)"
+    fi
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis7)"
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
