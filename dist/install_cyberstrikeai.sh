@@ -1408,7 +1408,9 @@ NGINX
     || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
   nginx -t
   systemctl enable nginx --quiet
-  systemctl reload nginx 2>/dev/null || systemctl restart nginx
+  if ! systemctl reload nginx; then
+    systemctl restart nginx
+  fi
   success "$(t app.cyberstrikeai.success.nginx)"
 }
 open_firewall_ports() {

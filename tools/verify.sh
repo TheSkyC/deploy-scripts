@@ -1180,6 +1180,27 @@ check_nginx_test_failures_report_diagnostics() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
+  if grep -R -n 'systemctl reload nginx 2>/dev/null || systemctl restart nginx' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI nginx apply path must not suppress reload diagnostics." >&2
+    return 1
+  fi
+  awk '
+      /_write_nginx_site_link "\$NGINX_CONF" "\$NGINX_LINK"/ { in_block=1; saw_test=0; saw_reload=0; saw_restart=0; next }
+      in_block && /^  nginx -t$/ { saw_test=1 }
+      in_block && /if ! systemctl reload nginx; then/ { saw_reload=1 }
+      in_block && /^    systemctl restart nginx$/ { saw_restart=1 }
+      in_block && /success "\$\(t app\.cyberstrikeai\.success\.nginx\)"/ {
+        if (!(saw_test && saw_reload && saw_restart)) {
+          printf "%s CyberStrikeAI nginx apply path must test config, preserve reload diagnostics, and fall back to restart explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_uninstall_nginx_paths_preserve_diagnostics() {
   if grep -R -nE 'nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null \|\| true|systemctl reload nginx 2>/dev/null \|\| true$' \
       impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
@@ -1525,6 +1546,7 @@ main() {
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic
   check_nginx_test_failures_report_diagnostics
+  check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
   check_vaultwarden_result_chains_are_explicit
