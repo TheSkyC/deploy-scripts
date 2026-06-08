@@ -967,6 +967,16 @@ restore_nginx_root_backup() {
   mv "$DEPLOY_BAK" "$NGINX_ROOT" || return 1
 }
 
+backup_blog_file() {
+  local source_path="$1" backup_path="$2"
+  local backup_tmp
+  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! cp "$source_path" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
+    rm -f "$backup_tmp"
+    return 1
+  fi
+}
+
 _write_blog_file() {
   local target_path="$1"
   local target_dir target_tmp
@@ -1061,7 +1071,8 @@ fi
 step "$(t app.blog.step_config)"
 CONFIG_FILE="${SITE_DIR}/hugo.toml"
 if [[ -f "$CONFIG_FILE" && $(wc -l < "$CONFIG_FILE") -gt 3 ]]; then
-  cp "$CONFIG_FILE" "${CONFIG_FILE}.bak.$(date +%Y%m%d%H%M%S)"
+  backup_blog_file "$CONFIG_FILE" "${CONFIG_FILE}.bak.$(date +%Y%m%d%H%M%S)" \
+    || error "$(t app.blog.error.file_write "$CONFIG_FILE")"
   warn "$(t app.blog.config_backed_up)"
 fi
 if [[ -n "$BLOG_DOMAIN" ]]; then

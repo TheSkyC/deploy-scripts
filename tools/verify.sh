@@ -1029,7 +1029,23 @@ check_blog_site_files_are_atomic() {
     echo "Blog site files must be written through temporary files before replacement." >&2
     return 1
   fi
+  if grep -R -n '^[[:space:]]*cp "\$CONFIG_FILE" "\${CONFIG_FILE}.bak.' impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog config backups must copy to a temporary file before replacing the final backup path." >&2
+    return 1
+  fi
   awk '
+      /backup_blog_file\(\)/ { in_backup=1; saw_tmp=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      in_backup && /backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\)/ { saw_tmp=1 }
+      in_backup && /cp "\$source_path" "\$backup_tmp"/ { saw_cp=1 }
+      in_backup && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
+      in_backup && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
+      in_backup && /^}/ {
+        if (!(saw_tmp && saw_cp && saw_mv && saw_cleanup)) {
+          print "Blog config backup helper must stage, replace, and clean up temporary backups." > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
       /target_tmp=\$\(mktemp "\$\{target_dir\}\/\.\$\(basename "\$target_path"\)\.XXXXXX"\)/ { saw_tmp=1 }
       /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
       /rm -f "\$target_tmp"/ { saw_cleanup=1 }
