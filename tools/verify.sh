@@ -1051,6 +1051,52 @@ check_sub2api_runtime_dir_failures_are_explicit() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_vaultwarden_runtime_dir_failures_are_explicit() {
+  awk '
+      /app\.vaultwarden\.error\.user_create/ { saw_user_key=1 }
+      /app\.vaultwarden\.error\.dir_create/ { saw_dir_key=1 }
+      /Check permissions for %s and %s, then retry/ { saw_dir_guidance=1 }
+      /app\.vaultwarden\.error\.dir_owner/ { saw_owner_key=1 }
+      /app\.vaultwarden\.error\.data_dir_mode/ { saw_mode_key=1 }
+      /app\.vaultwarden\.error\.web_vault_extract_dir/ { saw_extract_key=1 }
+      /Web Vault extraction directory/ { saw_extract_guidance=1 }
+      END {
+        if (!(saw_user_key && saw_dir_key && saw_dir_guidance && saw_owner_key && saw_mode_key && saw_extract_key && saw_extract_guidance)) {
+          print "Vaultwarden runtime directory failures must provide actionable user, mkdir, chown, chmod, and Web Vault extract-dir guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_chown_if=0; saw_chown_error=0; saw_chmod_if=0; saw_chmod_error=0; next }
+      in_dirs && /if ! useradd --system --no-create-home \\/ { saw_user_if=1 }
+      in_dirs && /error "\$\(t app\.vaultwarden\.error\.user_create "\$VW_USER"\)"/ { saw_user_error=1 }
+      in_dirs && /if ! mkdir -p "\$VW_DATA_DIR" "\$\(dirname "\$VW_LOG_FILE"\)" "\$VW_BACKUP_DIR"; then/ { saw_mkdir_if=1 }
+      in_dirs && /error "\$\(t app\.vaultwarden\.error\.dir_create "\$VW_DATA_DIR" "\$VW_BACKUP_DIR"\)"/ { saw_mkdir_error=1 }
+      in_dirs && /if ! chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_DATA_DIR" "\$\(dirname "\$VW_LOG_FILE"\)"; then/ { saw_chown_if=1 }
+      in_dirs && /error "\$\(t app\.vaultwarden\.error\.dir_owner "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_DATA_DIR"\)"/ { saw_chown_error=1 }
+      in_dirs && /if ! chmod 750 "\$VW_DATA_DIR"; then/ { saw_chmod_if=1 }
+      in_dirs && /error "\$\(t app\.vaultwarden\.error\.data_dir_mode "\$VW_DATA_DIR"\)"/ { saw_chmod_error=1 }
+      in_dirs && /success "\$\(t app\.vaultwarden\.success\.dirs\)"/ {
+        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_chown_if && saw_chown_error && saw_chmod_if && saw_chmod_error)) {
+          printf "%s Vaultwarden install must fail explicitly when user creation, directory creation, ownership setup, or data-dir chmod fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_dirs=0
+      }
+      /web-vault-extract/ { in_extract=1; saw_extract_if=0; saw_extract_error=0; next }
+      in_extract && /if ! mkdir -p "\$_wv_extract_root"; then/ { saw_extract_if=1 }
+      in_extract && /error "\$\(t app\.vaultwarden\.error\.web_vault_extract_dir "\$_wv_extract_root"\)"/ { saw_extract_error=1 }
+      in_extract && /if tar -xzf .* -C "\$_wv_extract_root"; then/ {
+        if (!(saw_extract_if && saw_extract_error)) {
+          printf "%s Vaultwarden Web Vault extraction must fail explicitly when the extraction directory cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_extract=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_backup_failures_include_followup_guidance() {
   awk '
       /app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn_key=1 }
@@ -3460,6 +3506,7 @@ main() {
   check_sub2api_apt_failures_are_reported
   check_sub2api_rpm_dependency_failures_are_reported
   check_sub2api_runtime_dir_failures_are_explicit
+  check_vaultwarden_runtime_dir_failures_are_explicit
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance

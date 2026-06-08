@@ -147,6 +147,18 @@ i18n_register_many \
   app.vaultwarden.warn.user_exists \
   "User %s already exists; skipping." \
   "用户 %s 已存在，跳过。" \
+  app.vaultwarden.error.user_create \
+  "Failed to create system user %s. Check useradd output and retry." \
+  "创建系统用户 %s 失败。请检查 useradd 输出后重试。" \
+  app.vaultwarden.error.dir_create \
+  "Failed to create one or more runtime directories. Check permissions for %s and %s, then retry." \
+  "创建运行目录失败。请检查 %s 和 %s 的权限后重试。" \
+  app.vaultwarden.error.dir_owner \
+  "Failed to apply ownership %s to %s. Check filesystem permissions and retry." \
+  "无法将 %s 的所有权设置到 %s。请检查文件系统权限后重试。" \
+  app.vaultwarden.error.data_dir_mode \
+  "Failed to set directory mode 750 on %s. Check filesystem permissions and retry." \
+  "无法将 %s 的目录权限设置为 750。请检查文件系统权限后重试。" \
   app.vaultwarden.success.dirs \
   "Directories created and permissions set." \
   "目录已创建并设置权限。" \
@@ -186,6 +198,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_download \
   "Web Vault download failed." \
   "Web Vault 下载失败。" \
+  app.vaultwarden.error.web_vault_extract_dir \
+  "Failed to prepare the Web Vault extraction directory: %s. Check filesystem permissions and retry." \
+  "准备 Web Vault 解压目录失败：%s。请检查文件系统权限后重试。" \
   app.vaultwarden.error.web_vault_install \
   "Web Vault installation failed." \
   "Web Vault 安装失败。" \

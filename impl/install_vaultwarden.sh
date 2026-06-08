@@ -315,18 +315,26 @@ do_install() {
   success "$(t app.vaultwarden.success.deps)"
   step "$(t app.vaultwarden.step.user_dirs)"
   if ! id "$VW_USER" &>/dev/null; then
-    useradd --system --no-create-home \
+    if ! useradd --system --no-create-home \
       --home-dir "$VW_DATA_DIR" \
       --shell /usr/sbin/nologin \
       --comment "Vaultwarden Service Account" \
-      "$VW_USER"
+      "$VW_USER"; then
+      error "$(t app.vaultwarden.error.user_create "$VW_USER")"
+    fi
     success "$(t app.vaultwarden.success.user_created "$VW_USER")"
   else
     warn "$(t app.vaultwarden.warn.user_exists "$VW_USER")"
   fi
-  mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"
-  chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"
-  chmod 750 "$VW_DATA_DIR"
+  if ! mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"; then
+    error "$(t app.vaultwarden.error.dir_create "$VW_DATA_DIR" "$VW_BACKUP_DIR")"
+  fi
+  if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"; then
+    error "$(t app.vaultwarden.error.dir_owner "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR")"
+  fi
+  if ! chmod 750 "$VW_DATA_DIR"; then
+    error "$(t app.vaultwarden.error.data_dir_mode "$VW_DATA_DIR")"
+  fi
   success "$(t app.vaultwarden.success.dirs)"
   step "$(t app.vaultwarden.step.extract_binary)"
   local PLATFORM
@@ -375,7 +383,9 @@ do_install() {
     wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
       || error "$(t app.vaultwarden.error.web_vault_download)"
     local _wv_extract_root="${WORK_DIR}/web-vault-extract"
-    mkdir -p "$_wv_extract_root"
+    if ! mkdir -p "$_wv_extract_root"; then
+      error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
+    fi
     if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
       local _wv_source_dir
       _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
@@ -1042,7 +1052,9 @@ do_update() {
       local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_fetched_wv_ver}/bw_web_v${_fetched_wv_ver}.tar.gz"
       if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
         local _wv_extract_root="${WORK_DIR}/web-vault-extract"
-        mkdir -p "$_wv_extract_root"
+        if ! mkdir -p "$_wv_extract_root"; then
+          error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
+        fi
         if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
           local _wv_source_dir
           _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)

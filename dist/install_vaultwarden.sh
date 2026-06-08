@@ -662,6 +662,18 @@ i18n_register_many \
   app.vaultwarden.warn.user_exists \
   "User %s already exists; skipping." \
   "用户 %s 已存在，跳过。" \
+  app.vaultwarden.error.user_create \
+  "Failed to create system user %s. Check useradd output and retry." \
+  "创建系统用户 %s 失败。请检查 useradd 输出后重试。" \
+  app.vaultwarden.error.dir_create \
+  "Failed to create one or more runtime directories. Check permissions for %s and %s, then retry." \
+  "创建运行目录失败。请检查 %s 和 %s 的权限后重试。" \
+  app.vaultwarden.error.dir_owner \
+  "Failed to apply ownership %s to %s. Check filesystem permissions and retry." \
+  "无法将 %s 的所有权设置到 %s。请检查文件系统权限后重试。" \
+  app.vaultwarden.error.data_dir_mode \
+  "Failed to set directory mode 750 on %s. Check filesystem permissions and retry." \
+  "无法将 %s 的目录权限设置为 750。请检查文件系统权限后重试。" \
   app.vaultwarden.success.dirs \
   "Directories created and permissions set." \
   "目录已创建并设置权限。" \
@@ -701,6 +713,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_download \
   "Web Vault download failed." \
   "Web Vault 下载失败。" \
+  app.vaultwarden.error.web_vault_extract_dir \
+  "Failed to prepare the Web Vault extraction directory: %s. Check filesystem permissions and retry." \
+  "准备 Web Vault 解压目录失败：%s。请检查文件系统权限后重试。" \
   app.vaultwarden.error.web_vault_install \
   "Web Vault installation failed." \
   "Web Vault 安装失败。" \
@@ -1642,18 +1657,26 @@ do_install() {
   success "$(t app.vaultwarden.success.deps)"
   step "$(t app.vaultwarden.step.user_dirs)"
   if ! id "$VW_USER" &>/dev/null; then
-    useradd --system --no-create-home \
+    if ! useradd --system --no-create-home \
       --home-dir "$VW_DATA_DIR" \
       --shell /usr/sbin/nologin \
       --comment "Vaultwarden Service Account" \
-      "$VW_USER"
+      "$VW_USER"; then
+      error "$(t app.vaultwarden.error.user_create "$VW_USER")"
+    fi
     success "$(t app.vaultwarden.success.user_created "$VW_USER")"
   else
     warn "$(t app.vaultwarden.warn.user_exists "$VW_USER")"
   fi
-  mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"
-  chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"
-  chmod 750 "$VW_DATA_DIR"
+  if ! mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"; then
+    error "$(t app.vaultwarden.error.dir_create "$VW_DATA_DIR" "$VW_BACKUP_DIR")"
+  fi
+  if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"; then
+    error "$(t app.vaultwarden.error.dir_owner "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR")"
+  fi
+  if ! chmod 750 "$VW_DATA_DIR"; then
+    error "$(t app.vaultwarden.error.data_dir_mode "$VW_DATA_DIR")"
+  fi
   success "$(t app.vaultwarden.success.dirs)"
   step "$(t app.vaultwarden.step.extract_binary)"
   local PLATFORM
@@ -1702,7 +1725,9 @@ do_install() {
     wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
       || error "$(t app.vaultwarden.error.web_vault_download)"
     local _wv_extract_root="${WORK_DIR}/web-vault-extract"
-    mkdir -p "$_wv_extract_root"
+    if ! mkdir -p "$_wv_extract_root"; then
+      error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
+    fi
     if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
       local _wv_source_dir
       _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
@@ -2369,7 +2394,9 @@ do_update() {
       local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_fetched_wv_ver}/bw_web_v${_fetched_wv_ver}.tar.gz"
       if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
         local _wv_extract_root="${WORK_DIR}/web-vault-extract"
-        mkdir -p "$_wv_extract_root"
+        if ! mkdir -p "$_wv_extract_root"; then
+          error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
+        fi
         if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
           local _wv_source_dir
           _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
