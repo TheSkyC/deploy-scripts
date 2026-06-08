@@ -307,15 +307,18 @@ _install_postgres() {
     local el_ver
     el_ver=$(rpm -E '%{rhel}' 2>/dev/null || echo "8")
     local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm"
+    local pg_data_version="/var/lib/pgsql/15/data/PG_VERSION"
     if [[ "$PKG_MANAGER" == "dnf" ]]; then
-      dnf install -y "$pgdg_rpm" 2>/dev/null || true
-      dnf -qy module disable postgresql 2>/dev/null || true
+      dnf install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
+      dnf -qy module disable postgresql || error "$(t app.sub2api.error.postgres_module)"
       dnf install -y postgresql15-server postgresql15-contrib
     else
-      yum install -y "$pgdg_rpm" 2>/dev/null || true
+      yum install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
       yum install -y postgresql15-server postgresql15-contrib
     fi
-    /usr/pgsql-15/bin/postgresql-15-setup initdb 2>/dev/null || true
+    if [[ ! -f "$pg_data_version" ]]; then
+      /usr/pgsql-15/bin/postgresql-15-setup initdb || error "$(t app.sub2api.error.postgres_initdb)"
+    fi
     systemctl enable --now postgresql-15
     success "$(t app.sub2api.success.postgres15)"
   fi

@@ -605,6 +605,15 @@ i18n_register_many \
   app.sub2api.info.postgres_rpm_source \
   "Adding the PostgreSQL PGDG RPM repository..." \
   "添加 PostgreSQL PGDG RPM 源..." \
+  app.sub2api.error.postgres_repo \
+  "Cannot install the PostgreSQL PGDG RPM repository. Check the network and package manager output." \
+  "无法安装 PostgreSQL PGDG RPM 仓库。请检查网络和包管理器输出。" \
+  app.sub2api.error.postgres_module \
+  "Cannot disable the built-in PostgreSQL module. Resolve the package manager error and retry." \
+  "无法禁用内置 PostgreSQL 模块。请先解决包管理器错误后重试。" \
+  app.sub2api.error.postgres_initdb \
+  "PostgreSQL 15 database initialization failed. Inspect: journalctl -u postgresql-15 -n 30" \
+  "PostgreSQL 15 数据目录初始化失败，请检查：journalctl -u postgresql-15 -n 30" \
   app.sub2api.success.redis_exists \
   "Redis %s is already installed; skipping installation." \
   "Redis %s 已安装，跳过安装。" \
@@ -1667,15 +1676,18 @@ _install_postgres() {
     local el_ver
     el_ver=$(rpm -E '%{rhel}' 2>/dev/null || echo "8")
     local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm"
+    local pg_data_version="/var/lib/pgsql/15/data/PG_VERSION"
     if [[ "$PKG_MANAGER" == "dnf" ]]; then
-      dnf install -y "$pgdg_rpm" 2>/dev/null || true
-      dnf -qy module disable postgresql 2>/dev/null || true
+      dnf install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
+      dnf -qy module disable postgresql || error "$(t app.sub2api.error.postgres_module)"
       dnf install -y postgresql15-server postgresql15-contrib
     else
-      yum install -y "$pgdg_rpm" 2>/dev/null || true
+      yum install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
       yum install -y postgresql15-server postgresql15-contrib
     fi
-    /usr/pgsql-15/bin/postgresql-15-setup initdb 2>/dev/null || true
+    if [[ ! -f "$pg_data_version" ]]; then
+      /usr/pgsql-15/bin/postgresql-15-setup initdb || error "$(t app.sub2api.error.postgres_initdb)"
+    fi
     systemctl enable --now postgresql-15
     success "$(t app.sub2api.success.postgres15)"
   fi

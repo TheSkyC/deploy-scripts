@@ -1207,6 +1207,33 @@ check_sub2api_nginx_reload_results_are_checked() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_postgres_rpm_setup_failures_are_explicit() {
+  if grep -R -nE 'dnf install -y "\$pgdg_rpm" 2>/dev/null \|\| true|dnf -qy module disable postgresql 2>/dev/null \|\| true|yum install -y "\$pgdg_rpm" 2>/dev/null \|\| true|/usr/pgsql-15/bin/postgresql-15-setup initdb 2>/dev/null \|\| true' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API PostgreSQL RPM setup must not suppress repository, module, or initdb failures." >&2
+    return 1
+  fi
+  awk '
+      /\[\[ "\$PKG_MANAGER" == "dnf" \|\| "\$PKG_MANAGER" == "yum" \]\]/ { in_block=1; saw_repo=0; saw_module=0; saw_initdb_guard=0; saw_initdb=0; next }
+      in_block && /dnf install -y "\$pgdg_rpm" \|\| error "\$\(t app\.sub2api\.error\.postgres_repo\)"/ { saw_repo=1 }
+      in_block && /dnf -qy module disable postgresql \|\| error "\$\(t app\.sub2api\.error\.postgres_module\)"/ { saw_module=1 }
+      in_block && /yum install -y "\$pgdg_rpm" \|\| error "\$\(t app\.sub2api\.error\.postgres_repo\)"/ { saw_repo=1 }
+      in_block && /if \[\[ ! -f "\$pg_data_version" \]\]; then/ { saw_initdb_guard=1 }
+      in_block && /\/usr\/pgsql-15\/bin\/postgresql-15-setup initdb \|\| error "\$\(t app\.sub2api\.error\.postgres_initdb\)"/ { saw_initdb=1 }
+      in_block && /success "\$\(t app\.sub2api\.success\.postgres15\)"/ {
+        if (!(saw_repo && saw_initdb_guard && saw_initdb)) {
+          printf "%s Sub2API PostgreSQL RPM setup must fail explicitly when repository install or initdb fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        if (FILENAME ~ /install_sub2api\.sh$/ && /dnf/ && !saw_module) {
+          printf "%s Sub2API dnf path must fail explicitly when module disable fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -1654,6 +1681,7 @@ main() {
   check_nginx_main_config_edits_are_atomic
   check_nginx_test_failures_report_diagnostics
   check_sub2api_nginx_reload_results_are_checked
+  check_sub2api_postgres_rpm_setup_failures_are_explicit
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
