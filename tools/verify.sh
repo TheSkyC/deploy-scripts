@@ -619,6 +619,56 @@ check_cyberstrikeai_go_restore_failures_are_reported() {
     ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_preupdate_backup_warnings_include_followup_guidance() {
+  awk '
+      /app\.newapi\.warn\.pre_backup_failed/ { saw_newapi=1 }
+      /\/opt\/new-api-backups\/backup\.log/ { saw_newapi_log=1 }
+      /\/usr\/local\/bin\/new-api-backup/ { saw_newapi_cmd=1 }
+      /app\.sub2api\.warn\.pre_update_backup/ { saw_sub2api=1 }
+      /\/opt\/sub2api-backups\/backup\.log/ { saw_sub2api_log=1 }
+      /\/usr\/local\/bin\/sub2api-backup/ { saw_sub2api_cmd=1 }
+      /app\.cyberstrikeai\.warn\.preupdate_backup/ { saw_csai=1 }
+      /\/opt\/cyberstrike-ai\/logs\/backup\.log/ { saw_csai_log=1 }
+      /\/usr\/local\/bin\/cyberstrike-ai-backup/ { saw_csai_cmd=1 }
+      END {
+        if (!(saw_newapi && saw_newapi_log && saw_newapi_cmd && saw_sub2api && saw_sub2api_log && saw_sub2api_cmd && saw_csai && saw_csai_log && saw_csai_cmd)) {
+          print "Pre-update backup warnings must tell users where to inspect backup logs and how to run a manual backup." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh
+  awk '
+      /step "\$\(t app\.newapi\.step\.pre_backup\)"/ { in_newapi=1; saw_newapi_if=0; next }
+      in_newapi && /if ! _backup_silent "pre-update"; then/ { saw_newapi_if=1 }
+      in_newapi && /warn "\$\(t app\.newapi\.warn\.pre_backup_failed\)"/ {
+        if (!saw_newapi_if) {
+          printf "%s NewAPI pre-update backup warning must come from an explicit conditional\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_newapi=0
+      }
+      /step "\$\(t app\.sub2api\.step\.pre_update_backup\)"/ { in_sub2api=1; saw_sub2api_if=0; next }
+      in_sub2api && /if ! _backup_silent "pre-update"; then/ { saw_sub2api_if=1 }
+      in_sub2api && /warn "\$\(t app\.sub2api\.warn\.pre_update_backup\)"/ {
+        if (!saw_sub2api_if) {
+          printf "%s Sub2API pre-update backup warning must come from an explicit conditional\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_sub2api=0
+      }
+      /step "\$\(t app\.cyberstrikeai\.step\.preupdate_backup\)"/ { in_csai=1; saw_csai_if=0; next }
+      in_csai && /if ! "\$BACKUP_SCRIPT"; then/ { saw_csai_if=1 }
+      in_csai && /warn "\$\(t app\.cyberstrikeai\.warn\.preupdate_backup\)"/ {
+        if (!saw_csai_if) {
+          printf "%s CyberStrikeAI pre-update backup warning must come from an explicit conditional\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_csai=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh
+}
+
 check_mutating_installs_acquire_locks() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -2162,6 +2212,7 @@ main() {
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
+  check_preupdate_backup_warnings_include_followup_guidance
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic

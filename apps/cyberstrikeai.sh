@@ -253,8 +253,8 @@ i18n_register_many \
   "Pre-update backup" \
   "更新前备份" \
   app.cyberstrikeai.warn.preupdate_backup \
-  "Pre-update backup failed; continuing cautiously" \
-  "更新前备份失败；将谨慎继续" \
+  "Pre-update backup failed; continuing cautiously. Inspect /opt/cyberstrike-ai/logs/backup.log or run /usr/local/bin/cyberstrike-ai-backup manually before proceeding further." \
+  "更新前备份失败；将谨慎继续。请检查 /opt/cyberstrike-ai/logs/backup.log，或先手动执行 /usr/local/bin/cyberstrike-ai-backup 再继续后续操作。" \
   app.cyberstrikeai.step.update_source \
   "Update source" \
   "更新源码" \

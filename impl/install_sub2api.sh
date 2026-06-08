@@ -1138,7 +1138,9 @@ do_update() {
     warn "$(t app.sub2api.warn.update_failed_state)"
   fi
   step "$(t app.sub2api.step.pre_update_backup)"
-  _backup_silent "pre-update" || warn "$(t app.sub2api.warn.pre_update_backup)"
+  if ! _backup_silent "pre-update"; then
+    warn "$(t app.sub2api.warn.pre_update_backup)"
+  fi
   step "$(t app.sub2api.step.download_update "$CURRENT" "$LATEST")"
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "$(t app.sub2api.info.download_url "$DOWNLOAD_URL")"

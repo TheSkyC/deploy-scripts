@@ -630,7 +630,9 @@ do_update() {
     warn "$(t app.newapi.warn.pre_failed_debug "$SERVICE_NAME")"
   fi
   step "$(t app.newapi.step.pre_backup)"
-  _backup_silent "pre-update" || warn "$(t app.newapi.warn.pre_backup_failed)"
+  if ! _backup_silent "pre-update"; then
+    warn "$(t app.newapi.warn.pre_backup_failed)"
+  fi
   step "$(t app.newapi.step.download_update "$CURRENT" "$LATEST")"
   local DOWNLOAD_URL
   DOWNLOAD_URL=$(get_download_url "$LATEST")

@@ -773,7 +773,9 @@ do_update() {
   [[ -d "$INSTALL_DIR/.git" ]] || error "$(t app.cyberstrikeai.error.not_git "$INSTALL_DIR")"
   step "$(t app.cyberstrikeai.step.preupdate_backup)"
   if [[ -x "$BACKUP_SCRIPT" ]]; then
-    "$BACKUP_SCRIPT" || warn "$(t app.cyberstrikeai.warn.preupdate_backup)"
+    if ! "$BACKUP_SCRIPT"; then
+      warn "$(t app.cyberstrikeai.warn.preupdate_backup)"
+    fi
   fi
   local old_rev new_rev bin_bak config_bak service_was_active=false
   old_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")

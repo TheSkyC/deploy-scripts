@@ -768,8 +768,8 @@ i18n_register_many \
   "Pre-update backup" \
   "更新前备份" \
   app.cyberstrikeai.warn.preupdate_backup \
-  "Pre-update backup failed; continuing cautiously" \
-  "更新前备份失败；将谨慎继续" \
+  "Pre-update backup failed; continuing cautiously. Inspect /opt/cyberstrike-ai/logs/backup.log or run /usr/local/bin/cyberstrike-ai-backup manually before proceeding further." \
+  "更新前备份失败；将谨慎继续。请检查 /opt/cyberstrike-ai/logs/backup.log，或先手动执行 /usr/local/bin/cyberstrike-ai-backup 再继续后续操作。" \
   app.cyberstrikeai.step.update_source \
   "Update source" \
   "更新源码" \
@@ -1707,7 +1707,9 @@ do_update() {
   [[ -d "$INSTALL_DIR/.git" ]] || error "$(t app.cyberstrikeai.error.not_git "$INSTALL_DIR")"
   step "$(t app.cyberstrikeai.step.preupdate_backup)"
   if [[ -x "$BACKUP_SCRIPT" ]]; then
-    "$BACKUP_SCRIPT" || warn "$(t app.cyberstrikeai.warn.preupdate_backup)"
+    if ! "$BACKUP_SCRIPT"; then
+      warn "$(t app.cyberstrikeai.warn.preupdate_backup)"
+    fi
   fi
   local old_rev new_rev bin_bak config_bak service_was_active=false
   old_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")

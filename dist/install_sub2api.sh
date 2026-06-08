@@ -1020,8 +1020,8 @@ i18n_register_many \
   "Back up data before update" \
   "更新前备份数据" \
   app.sub2api.warn.pre_update_backup \
-  "Pre-update backup failed; continuing the update." \
-  "更新前备份失败，继续执行更新。" \
+  "Pre-update backup failed; continuing the update. Inspect /opt/sub2api-backups/backup.log or run /usr/local/bin/sub2api-backup manually before proceeding further." \
+  "更新前备份失败，继续执行更新。请检查 /opt/sub2api-backups/backup.log，或先手动执行 /usr/local/bin/sub2api-backup 再继续后续操作。" \
   app.sub2api.step.download_update \
   "Download new version (%s -> %s)" \
   "下载新版本（%s → %s）" \
@@ -2516,7 +2516,9 @@ do_update() {
     warn "$(t app.sub2api.warn.update_failed_state)"
   fi
   step "$(t app.sub2api.step.pre_update_backup)"
-  _backup_silent "pre-update" || warn "$(t app.sub2api.warn.pre_update_backup)"
+  if ! _backup_silent "pre-update"; then
+    warn "$(t app.sub2api.warn.pre_update_backup)"
+  fi
   step "$(t app.sub2api.step.download_update "$CURRENT" "$LATEST")"
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "$(t app.sub2api.info.download_url "$DOWNLOAD_URL")"

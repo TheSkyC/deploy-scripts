@@ -828,8 +828,8 @@ i18n_register_many \
   "Back up data before update" \
   "更新前备份数据" \
   app.newapi.warn.pre_backup_failed \
-  "Pre-update backup failed; continuing with update. Manually check data directory integrity." \
-  "更新前备份失败，继续执行更新（建议手动检查数据目录完整性）。" \
+  "Pre-update backup failed; continuing with update. Inspect /opt/new-api-backups/backup.log or run /usr/local/bin/new-api-backup manually before proceeding further." \
+  "更新前备份失败，继续执行更新。请检查 /opt/new-api-backups/backup.log，或先手动执行 /usr/local/bin/new-api-backup 再继续后续操作。" \
   app.newapi.step.download_update \
   "Download new binary (%s -> %s)" \
   "下载新版本二进制（%s → %s）" \
@@ -1774,7 +1774,9 @@ do_update() {
     warn "$(t app.newapi.warn.pre_failed_debug "$SERVICE_NAME")"
   fi
   step "$(t app.newapi.step.pre_backup)"
-  _backup_silent "pre-update" || warn "$(t app.newapi.warn.pre_backup_failed)"
+  if ! _backup_silent "pre-update"; then
+    warn "$(t app.newapi.warn.pre_backup_failed)"
+  fi
   step "$(t app.newapi.step.download_update "$CURRENT" "$LATEST")"
   local DOWNLOAD_URL
   DOWNLOAD_URL=$(get_download_url "$LATEST")
