@@ -640,6 +640,27 @@ check_cyberstrikeai_pip_upgrade_failures_are_reported() {
     ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_repo_go_install_failures_are_reported() {
+  if grep -R -n 'apt-get install -y -qq golang-go || true' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI repository Go installation failures must not be silently ignored." >&2
+    return 1
+  fi
+  awk '
+      /app\.cyberstrikeai\.warn\.go_repo_install_failed/ { saw_warn_key=1 }
+      /step "\$\(t app\.cyberstrikeai\.step\.install_go\)"/ { in_block=1; saw_install_if=0; saw_warn=0; next }
+      in_block && /if ! apt-get install -y -qq golang-go; then/ { saw_install_if=1 }
+      in_block && /warn "\$\(t app\.cyberstrikeai\.warn\.go_repo_install_failed\)"/ { saw_warn=1 }
+      in_block && /if command -v go >\/dev\/null 2>&1; then/ {
+        if (!(saw_warn_key && saw_install_if && saw_warn)) {
+          printf "%s CyberStrikeAI must warn when apt-based Go installation fails before falling back to the official toolchain\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
       /app\.newapi\.warn\.pre_backup_failed/ { saw_newapi=1 }
@@ -2234,6 +2255,7 @@ main() {
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
+  check_cyberstrikeai_repo_go_install_failures_are_reported
   check_preupdate_backup_warnings_include_followup_guidance
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop

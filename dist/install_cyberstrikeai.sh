@@ -548,6 +548,9 @@ i18n_register_many \
   app.cyberstrikeai.step.install_go \
   "Install Go" \
   "安装 Go" \
+  app.cyberstrikeai.warn.go_repo_install_failed \
+  "Failed to install Go from the system repository. Falling back to the official Go toolchain." \
+  "从系统软件源安装 Go 失败。将回退到官方 Go 工具链。" \
   app.cyberstrikeai.warn.go_repo_old \
   "Repository Go is still too old: %s. Installing official Go toolchain." \
   "软件源中的 Go 版本仍然过旧：%s。将安装官方 Go 工具链。" \
@@ -1064,7 +1067,9 @@ install_go_if_needed() {
     return 0
   fi
   step "$(t app.cyberstrikeai.step.install_go)"
-  apt-get install -y -qq golang-go || true
+  if ! apt-get install -y -qq golang-go; then
+    warn "$(t app.cyberstrikeai.warn.go_repo_install_failed)"
+  fi
   if command -v go >/dev/null 2>&1; then
     local ver major minor
     ver=$(go version | awk '{print $3}' | sed 's/^go//')

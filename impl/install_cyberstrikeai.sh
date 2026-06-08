@@ -127,7 +127,9 @@ install_go_if_needed() {
     return 0
   fi
   step "$(t app.cyberstrikeai.step.install_go)"
-  apt-get install -y -qq golang-go || true
+  if ! apt-get install -y -qq golang-go; then
+    warn "$(t app.cyberstrikeai.warn.go_repo_install_failed)"
+  fi
   if command -v go >/dev/null 2>&1; then
     local ver major minor
     ver=$(go version | awk '{print $3}' | sed 's/^go//')
