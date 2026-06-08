@@ -207,8 +207,8 @@ i18n_register app.blog.error.hugo_download \
   "Hugo download failed. Check the network or download it manually." \
   "Hugo 下载失败，请检查网络或手动下载。"
 i18n_register app.blog.error.hugo_install \
-  "Hugo package installation failed." \
-  "Hugo 软件包安装失败。"
+  "Hugo package installation failed. Run apt-get install -f and then dpkg -i <downloaded-hugo.deb> after fixing dependency issues." \
+  "Hugo 软件包安装失败。请先执行 apt-get install -f 修复依赖问题，再重新运行 dpkg -i <下载的-hugo.deb>。"
 i18n_register app.blog.hugo_installed \
   "Hugo installed: %s" \
   "Hugo %s 安装完成"

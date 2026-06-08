@@ -750,6 +750,32 @@ check_blog_dependency_failures_are_reported() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_blog_hugo_install_failures_are_actionable() {
+  awk '
+      /app\.blog\.error\.hugo_install/ { saw_key=1 }
+      /apt-get install -f/ { saw_fix_deps=1 }
+      /dpkg -i <downloaded-hugo\.deb>/ { saw_retry=1 }
+      END {
+        if (!(saw_key && saw_fix_deps && saw_retry)) {
+          print "Blog Hugo package install failures must explain how to repair dependencies and retry the dpkg install." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/blog.sh
+  awk '
+      /if ! dpkg -i "\$HUGO_DEB"; then/ { in_block=1; saw_error=0; next }
+      in_block && /error "\$\(t app\.blog\.error\.hugo_install\)"/ { saw_error=1 }
+      in_block && /rm -f "\$HUGO_DEB"/ { saw_cleanup=1 }
+      in_block && /^fi$/ {
+        if (!(saw_error && saw_cleanup)) {
+          printf "%s Blog Hugo package install failure must clean up and report an actionable error\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_newapi_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl ca-certificates sqlite3$' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -2679,6 +2705,7 @@ main() {
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
   check_blog_dependency_failures_are_reported
+  check_blog_hugo_install_failures_are_actionable
   check_newapi_dependency_failures_are_reported
   check_cyberstrikeai_dependency_failures_are_reported
   check_sub2api_apt_failures_are_reported
