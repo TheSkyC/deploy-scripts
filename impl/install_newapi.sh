@@ -97,11 +97,21 @@ verify_binary() {
 }
 _restore_moved_binary_backup() {
   local backup_path="$1"
+  local restore_tmp
   [[ -n "$backup_path" && -f "$backup_path" ]] || return 0
   [[ ! -e "$BIN_PATH" ]] || return 1
-  mv "$backup_path" "$BIN_PATH" || return 1
-  chmod +x "$BIN_PATH" \
-    && chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
+  restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX") || return 1
+  if ! cp "$backup_path" "$restore_tmp"; then
+    rm -f "$restore_tmp"
+    return 1
+  fi
+  if ! chmod +x "$restore_tmp" \
+      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$restore_tmp" \
+      || ! mv "$restore_tmp" "$BIN_PATH"; then
+    rm -f "$restore_tmp"
+    return 1
+  fi
+  rm -f "$backup_path"
 }
 _install_binary_candidate() {
   local tmp_bin="$1"
