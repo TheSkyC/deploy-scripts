@@ -758,6 +758,9 @@ i18n_register_many \
   app.newapi.success.systemd \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service。" \
+  app.newapi.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
   app.newapi.step.firewall \
   "Step 7  Configure firewall" \
   "Step 7  配置防火墙" \
@@ -1718,7 +1721,9 @@ do_install() {
     warn "$(t app.newapi.warn.port_release)"
   fi
   systemctl daemon-reload
-  systemctl enable "$SERVICE_NAME" --quiet
+  if ! systemctl enable "$SERVICE_NAME" --quiet; then
+    warn "$(t app.newapi.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   systemctl restart "$SERVICE_NAME"
   if wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.service_started)"

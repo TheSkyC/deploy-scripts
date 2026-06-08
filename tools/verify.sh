@@ -1318,6 +1318,20 @@ check_sub2api_enable_failures_are_reported() {
     ' apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_newapi_enable_failures_are_reported() {
+  awk '
+      /app\.newapi\.warn\.service_enable_failed/ { saw_warn_key=1 }
+      /if ! systemctl enable "\$SERVICE_NAME" --quiet; then/ { saw_enable_if=1 }
+      /warn "\$\(t app\.newapi\.warn\.service_enable_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_warn=1 }
+      END {
+        if (!(saw_warn_key && saw_enable_if && saw_warn)) {
+          print "NewAPI must warn when service enablement fails." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -1858,6 +1872,7 @@ main() {
   check_sub2api_dependency_services_start_before_success
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_enable_failures_are_reported
+  check_newapi_enable_failures_are_reported
   check_sub2api_update_rollbacks_report_restart_failures
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures

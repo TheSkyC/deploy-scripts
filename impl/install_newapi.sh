@@ -577,7 +577,9 @@ do_install() {
     warn "$(t app.newapi.warn.port_release)"
   fi
   systemctl daemon-reload
-  systemctl enable "$SERVICE_NAME" --quiet
+  if ! systemctl enable "$SERVICE_NAME" --quiet; then
+    warn "$(t app.newapi.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   systemctl restart "$SERVICE_NAME"
   if wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.service_started)"
