@@ -1293,6 +1293,39 @@ check_sub2api_nginx_install_starts_service_explicitly() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
 }
 
+check_newapi_update_rollbacks_report_restart_failures() {
+  if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
+      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+    echo "NewAPI update rollback paths must not suppress service restart failures." >&2
+    return 1
+  fi
+  awk '
+      /if ! _install_binary_candidate "\$TMP_BIN"; then/ { in_install_failure=1; saw_restore=0; saw_start_if=0; saw_warn=0; next }
+      in_install_failure && /if _restore_binary_backup "\$BAK_PATH"; then/ { saw_restore=1 }
+      in_install_failure && /if ! systemctl start "\$SERVICE_NAME"; then/ { saw_start_if=1 }
+      in_install_failure && /warn "\$\(t app\.newapi\.warn\.rollback_start_failed "\$SERVICE_NAME"\)"/ { saw_warn=1 }
+      in_install_failure && /error "\$\(t app\.newapi\.error\.binary_install "\$BIN_PATH"\)"/ {
+        if (!(saw_restore && saw_start_if && saw_warn)) {
+          printf "%s NewAPI binary-install rollback must warn when service restart fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install_failure=0
+      }
+      /warn "\$\(t app\.newapi\.warn\.update_start_failed "\$LATEST" "\$CURRENT"\)"/ { in_update_failure=1; saw_restore2=0; saw_start_if2=0; saw_wait=0; saw_warn2=0; next }
+      in_update_failure && /if ! _restore_binary_backup "\$BAK_PATH"; then/ { saw_restore2=1 }
+      in_update_failure && /if systemctl start "\$SERVICE_NAME"; then/ { saw_start_if2=1 }
+      in_update_failure && /if wait_for_service "\$SERVICE_NAME" 15; then/ { saw_wait=1 }
+      in_update_failure && /warn "\$\(t app\.newapi\.warn\.rollback_start_failed "\$SERVICE_NAME"\)"/ { saw_warn2=1 }
+      in_update_failure && saw_start_if2 && /error "\$\(t app\.newapi\.error\.update_failed "\$CURRENT" "\$SERVICE_NAME" "\$BAK_PATH"\)"/ {
+        if (!(saw_restore2 && saw_start_if2 && saw_wait && saw_warn2)) {
+          printf "%s NewAPI update rollback must branch explicitly on restart failures before reporting rollback outcome\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update_failure=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -1743,6 +1776,7 @@ main() {
   check_sub2api_postgres_rpm_setup_failures_are_explicit
   check_sub2api_dependency_services_start_before_success
   check_sub2api_nginx_install_starts_service_explicitly
+  check_newapi_update_rollbacks_report_restart_failures
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics

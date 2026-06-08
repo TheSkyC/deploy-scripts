@@ -1792,7 +1792,9 @@ do_update() {
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   if ! _install_binary_candidate "$TMP_BIN"; then
     if _restore_binary_backup "$BAK_PATH"; then
-      systemctl start "$SERVICE_NAME" 2>/dev/null || true
+      if ! systemctl start "$SERVICE_NAME"; then
+        warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
+      fi
     fi
     error "$(t app.newapi.error.binary_install "$BIN_PATH")"
   fi
@@ -1822,9 +1824,12 @@ do_update() {
       warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
       error "$(t app.newapi.error.update_failed "$CURRENT" "$SERVICE_NAME" "$BAK_PATH")"
     fi
-    systemctl start "$SERVICE_NAME" 2>/dev/null || true
-    if wait_for_service "$SERVICE_NAME" 15; then
-      success "$(t app.newapi.success.rollback "$CURRENT")"
+    if systemctl start "$SERVICE_NAME"; then
+      if wait_for_service "$SERVICE_NAME" 15; then
+        success "$(t app.newapi.success.rollback "$CURRENT")"
+      else
+        warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
+      fi
     else
       warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
     fi
