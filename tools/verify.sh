@@ -255,6 +255,37 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_config_write_failure_cleanup() {
+  local tmp_dir conf
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/deploy.conf"
+
+  cat > "${tmp_dir}/chmod" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+  chmod +x "${tmp_dir}/chmod"
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    FOO="bar"
+    PATH="$1:$PATH"
+    set +e
+    write_config_file "$2" FOO
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || { echo "write_config_file unexpectedly succeeded" >&2; exit 1; }
+    if find "$(dirname "$2")" -maxdepth 1 -name "$(basename "$2").tmp.*" -type f | grep -q .; then
+      echo "write_config_file left a temporary config file behind" >&2
+      find "$(dirname "$2")" -maxdepth 1 -name "$(basename "$2").tmp.*" -type f >&2
+      exit 1
+    fi
+  ' _ "$tmp_dir" "$conf"
+
+  rm -rf "$tmp_dir"
+}
+
 check_sub2api_codename_resolution() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -292,6 +323,7 @@ main() {
   check_safe_path_guard
   check_service_status_label
   check_config_crlf_handling
+  check_config_write_failure_cleanup
   check_sub2api_codename_resolution
   echo "Verification passed"
 }

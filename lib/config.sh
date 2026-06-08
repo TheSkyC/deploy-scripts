@@ -60,14 +60,23 @@ load_config_file() {
 write_config_file() {
   local conf_file="$1"
   shift
-  local tmp_file
-  tmp_file="$(mktemp "${conf_file}.tmp.XXXXXX")"
-  chmod 600 "$tmp_file"
+  local tmp_file=""
+  tmp_file="$(mktemp "${conf_file}.tmp.XXXXXX")" || return 1
+  if ! chmod 600 "$tmp_file"; then
+    rm -f "$tmp_file"
+    return 1
+  fi
   local key value
   for key in "$@"; do
     value="$(sanitize_conf_val "${!key:-}")"
-    printf '%s="%s"\n' "$key" "$value" >> "$tmp_file"
+    if ! printf '%s="%s"\n' "$key" "$value" >> "$tmp_file"; then
+      rm -f "$tmp_file"
+      return 1
+    fi
   done
   chown root:root "$tmp_file" 2>/dev/null || true
-  mv "$tmp_file" "$conf_file"
+  if ! mv "$tmp_file" "$conf_file"; then
+    rm -f "$tmp_file"
+    return 1
+  fi
 }
