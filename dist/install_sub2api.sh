@@ -1790,9 +1790,27 @@ NGINX
   fi
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
-      sed -i '/^http[[:space:]]*{/a\    include /etc/nginx/sites-enabled/*;' \
-        /etc/nginx/nginx.conf 2>/dev/null || \
+      local nginx_main_conf="/etc/nginx/nginx.conf"
+      local nginx_main_tmp
+      nginx_main_tmp=$(mktemp "${nginx_main_conf}.XXXXXX")
+      if awk '
+          /^[[:space:]]*http[[:space:]]*{/ && !inserted {
+            print
+            print "    include /etc/nginx/sites-enabled/*;"
+            inserted=1
+            next
+          }
+          { print }
+          END { if (!inserted) exit 1 }
+        ' "$nginx_main_conf" > "$nginx_main_tmp" 2>/dev/null \
+          && chmod 644 "$nginx_main_tmp" \
+          && chown root:root "$nginx_main_tmp" \
+          && mv "$nginx_main_tmp" "$nginx_main_conf"; then
+        :
+      else
+        rm -f "$nginx_main_tmp"
         warn "$(t app.sub2api.warn.nginx_include)"
+      fi
     fi
   fi
   if nginx -t 2>/dev/null; then

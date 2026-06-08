@@ -585,6 +585,25 @@ check_nginx_configs_are_atomic() {
       dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh
 }
 
+check_nginx_main_config_edits_are_atomic() {
+  if grep -R -nE '^[[:space:]]*sed -i ' impl dist 2>/dev/null; then
+    echo "Nginx main config edits must be staged through a temporary file before replacement." >&2
+    return 1
+  fi
+  awk '
+      /nginx_main_tmp=\$\(mktemp "\$\{nginx_main_conf\}\.XXXXXX"\)/ { saw_tmp=1 }
+      /awk .*/ { saw_render=1 }
+      /mv "\$nginx_main_tmp" "\$nginx_main_conf"/ { saw_mv=1 }
+      /rm -f "\$nginx_main_tmp"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_render && saw_mv && saw_cleanup)) {
+          print "Nginx main config edits must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_fail2ban_configs_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > /etc/fail2ban/' impl dist 2>/dev/null; then
     echo "Fail2Ban configs must be written through temporary files before replacement." >&2
@@ -699,6 +718,7 @@ main() {
   check_backup_scripts_are_atomic
   check_cron_logrotate_are_atomic
   check_nginx_configs_are_atomic
+  check_nginx_main_config_edits_are_atomic
   check_fail2ban_configs_are_atomic
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
