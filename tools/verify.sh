@@ -607,6 +607,26 @@ check_binary_replacements_handle_failure() {
   fi
 }
 
+check_binary_restores_validate_permissions() {
+  if grep -R -nE '^[[:space:]]*(chmod \+x "\$BIN_PATH"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH") 2>/dev/null \|\| true$' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Binary rollback restores must validate executable mode and ownership changes." >&2
+    return 1
+  fi
+  awk '
+      /_restore_binary_backup\(\)/ { in_func=1; saw_chmod=0; saw_chown=0; next }
+      in_func && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_chown=1 }
+      in_func && /^}/ {
+        if (!(saw_chmod && saw_chown)) {
+          printf "%s restore helper must validate restored binary mode and ownership\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+}
+
 check_download_validation_failures_cleanup() {
   awk '
       /verify_binary\(\)/ { in_func=1; saw_rm=0; next }
@@ -911,6 +931,7 @@ main() {
   check_cyberstrikeai_build_temp_cleanup
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
+  check_binary_restores_validate_permissions
   check_download_validation_failures_cleanup
   check_vaultwarden_env_file_is_atomic
   check_vaultwarden_admin_token_file_is_private
