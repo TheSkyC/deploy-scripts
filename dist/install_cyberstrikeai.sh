@@ -729,8 +729,8 @@ i18n_register_many \
   "Nginx health OK: %s HTTP %s" \
   "Nginx 健康检查正常：%s HTTP %s" \
   app.cyberstrikeai.warn.nginx_health \
-  "Nginx health returned HTTP %s" \
-  "Nginx 健康检查返回 HTTP %s" \
+  "Local Nginx probe returned HTTP %s. Check the configured server_name, local listener, and Nginx error log." \
+  "本地 Nginx 探测返回 HTTP %s。请检查配置的 server_name、本地监听状态和 Nginx 错误日志。" \
   app.cyberstrikeai.summary.title_ready \
   "CyberStrikeAI deployment complete" \
   "CyberStrikeAI 部署完成" \
@@ -1670,7 +1670,7 @@ health_check() {
   fi
   if _bool_true "$ENABLE_NGINX"; then
     public_url="http://127.0.0.1:${PUBLIC_PORT}/"
-    code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
+    code=$(curl -H "Host: ${CSAI_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
     if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
       success "$(t app.cyberstrikeai.success.nginx_health "$public_url" "$code")"
     else

@@ -2488,6 +2488,33 @@ check_cyberstrikeai_install_summary_matches_health_state() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_nginx_health_probe_matches_server_name() {
+  awk '
+      /app\.cyberstrikeai\.warn\.nginx_health/ { saw_warn=1 }
+      /Local Nginx probe returned HTTP %s/ { saw_probe_text=1 }
+      /configured server_name/ { saw_guidance=1 }
+      END {
+        if (!(saw_warn && saw_probe_text && saw_guidance)) {
+          print "CyberStrikeAI Nginx health warnings must describe the local probe and server_name guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /step "\$\(t app\.cyberstrikeai\.step\.health\)"/ { in_health=1; next }
+      in_health && /public_url="http:\/\/127\.0\.0\.1:\$\{PUBLIC_PORT\}\/"/ { saw_url=1 }
+      in_health && /curl -H "Host: \$\{CSAI_DOMAIN:-localhost\}"/ { saw_host_header=1 }
+      in_health && /warn "\$\(t app\.cyberstrikeai\.warn\.nginx_health "\$code"\)"/ { saw_warn=1 }
+      in_health && /\[\[ "\$health_pending" -eq 0 \]\]/ {
+        if (!(saw_url && saw_host_header && saw_warn)) {
+          printf "%s CyberStrikeAI local Nginx probe must send the configured Host header before warning on mismatches\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_health=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -3126,6 +3153,7 @@ main() {
   check_sub2api_install_summary_matches_runtime_state
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_cyberstrikeai_install_summary_matches_health_state
+  check_cyberstrikeai_nginx_health_probe_matches_server_name
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_summary_matches_health_state
   check_vaultwarden_install_summary_matches_health_state

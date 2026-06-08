@@ -712,7 +712,7 @@ health_check() {
   fi
   if _bool_true "$ENABLE_NGINX"; then
     public_url="http://127.0.0.1:${PUBLIC_PORT}/"
-    code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
+    code=$(curl -H "Host: ${CSAI_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
     if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
       success "$(t app.cyberstrikeai.success.nginx_health "$public_url" "$code")"
     else

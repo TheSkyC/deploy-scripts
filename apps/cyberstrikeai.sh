@@ -214,8 +214,8 @@ i18n_register_many \
   "Nginx health OK: %s HTTP %s" \
   "Nginx 健康检查正常：%s HTTP %s" \
   app.cyberstrikeai.warn.nginx_health \
-  "Nginx health returned HTTP %s" \
-  "Nginx 健康检查返回 HTTP %s" \
+  "Local Nginx probe returned HTTP %s. Check the configured server_name, local listener, and Nginx error log." \
+  "本地 Nginx 探测返回 HTTP %s。请检查配置的 server_name、本地监听状态和 Nginx 错误日志。" \
   app.cyberstrikeai.summary.title_ready \
   "CyberStrikeAI deployment complete" \
   "CyberStrikeAI 部署完成" \
