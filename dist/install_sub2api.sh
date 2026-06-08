@@ -588,6 +588,9 @@ i18n_register_many \
   app.sub2api.error.postgres_key \
   "Cannot download the PostgreSQL signing key. Check the network and retry." \
   "无法下载 PostgreSQL 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.postgres_source \
+  "PostgreSQL apt source write failed: /etc/apt/sources.list.d/pgdg.list" \
+  "PostgreSQL apt 源写入失败：/etc/apt/sources.list.d/pgdg.list。" \
   app.sub2api.success.postgres15 \
   "PostgreSQL 15 installed." \
   "PostgreSQL 15 安装完成。" \
@@ -606,6 +609,9 @@ i18n_register_many \
   app.sub2api.error.redis_key \
   "Cannot download or convert the Redis signing key. Check the network and retry." \
   "无法下载或转换 Redis 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.redis_source \
+  "Redis apt source write failed: /etc/apt/sources.list.d/redis.list" \
+  "Redis apt 源写入失败：/etc/apt/sources.list.d/redis.list。" \
   app.sub2api.success.redis7 \
   "Redis 7 installed." \
   "Redis 7 安装完成。" \
@@ -1584,10 +1590,17 @@ _install_postgres() {
     fi
     local codename
     codename="$(_apt_codename)"
-    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
-      > /etc/apt/sources.list.d/pgdg.list
-    chmod 644 /etc/apt/sources.list.d/pgdg.list
+    mkdir -p /etc/apt/sources.list.d
+    local pg_source_list="/etc/apt/sources.list.d/pgdg.list"
+    local pg_source_tmp
+    pg_source_tmp=$(mktemp "${pg_source_list}.XXXXXX")
+    if ! printf '%s\n' "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" > "$pg_source_tmp" \
+        || ! chmod 644 "$pg_source_tmp" \
+        || ! chown root:root "$pg_source_tmp" \
+        || ! mv "$pg_source_tmp" "$pg_source_list"; then
+      rm -f "$pg_source_tmp"
+      error "$(t app.sub2api.error.postgres_source)"
+    fi
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
     systemctl enable --now postgresql
@@ -1637,10 +1650,17 @@ _install_redis() {
     mv "$redis_key_tmp" "$redis_keyring"
     local codename
     codename="$(_apt_codename)"
-    echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] \
-https://packages.redis.io/deb ${codename} main" \
-      > /etc/apt/sources.list.d/redis.list
-    chmod 644 /etc/apt/sources.list.d/redis.list
+    mkdir -p /etc/apt/sources.list.d
+    local redis_source_list="/etc/apt/sources.list.d/redis.list"
+    local redis_source_tmp
+    redis_source_tmp=$(mktemp "${redis_source_list}.XXXXXX")
+    if ! printf '%s\n' "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb ${codename} main" > "$redis_source_tmp" \
+        || ! chmod 644 "$redis_source_tmp" \
+        || ! chown root:root "$redis_source_tmp" \
+        || ! mv "$redis_source_tmp" "$redis_source_list"; then
+      rm -f "$redis_source_tmp"
+      error "$(t app.sub2api.error.redis_source)"
+    fi
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y redis
     systemctl enable --now redis-server

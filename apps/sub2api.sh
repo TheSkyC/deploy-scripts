@@ -81,6 +81,9 @@ i18n_register_many \
   app.sub2api.error.postgres_key \
   "Cannot download the PostgreSQL signing key. Check the network and retry." \
   "无法下载 PostgreSQL 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.postgres_source \
+  "PostgreSQL apt source write failed: /etc/apt/sources.list.d/pgdg.list" \
+  "PostgreSQL apt 源写入失败：/etc/apt/sources.list.d/pgdg.list。" \
   app.sub2api.success.postgres15 \
   "PostgreSQL 15 installed." \
   "PostgreSQL 15 安装完成。" \
@@ -99,6 +102,9 @@ i18n_register_many \
   app.sub2api.error.redis_key \
   "Cannot download or convert the Redis signing key. Check the network and retry." \
   "无法下载或转换 Redis 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.redis_source \
+  "Redis apt source write failed: /etc/apt/sources.list.d/redis.list" \
+  "Redis apt 源写入失败：/etc/apt/sources.list.d/redis.list。" \
   app.sub2api.success.redis7 \
   "Redis 7 installed." \
   "Redis 7 安装完成。" \

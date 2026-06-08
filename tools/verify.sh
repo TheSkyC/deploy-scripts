@@ -366,6 +366,24 @@ check_keyring_writes_are_atomic() {
   fi
 }
 
+check_apt_sources_are_atomic() {
+  if grep -R -nE '^[[:space:]]*(echo|printf).*>[[:space:]]*/etc/apt/sources\.list\.d/' impl dist 2>/dev/null; then
+    echo "Apt source lists must be written through temporary files before replacement." >&2
+    return 1
+  fi
+  awk '
+      /(pg_source_tmp|redis_source_tmp)=\$\(mktemp/ { saw_tmp=1 }
+      /mv "\$(pg_source_tmp|redis_source_tmp)" "\$(pg_source_list|redis_source_list)"/ { saw_mv=1 }
+      /rm -f "\$(pg_source_tmp|redis_source_tmp)"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_mv && saw_cleanup)) {
+          print "Apt source list writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_random_head_pipelines_handle_sigpipe() {
   if grep -R -nE 'rand .*\\|.*head -c [0-9]+\\)$|tr -dc .*\\| head -c [0-9]+\\)$' impl dist 2>/dev/null; then
     echo "Random byte pipelines ending in head -c need an explicit successful terminator under pipefail." >&2
@@ -647,6 +665,7 @@ main() {
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads
   check_keyring_writes_are_atomic
+  check_apt_sources_are_atomic
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
   check_mutating_installs_acquire_locks
