@@ -302,8 +302,9 @@ do_install() {
   prompt "$(t app.vaultwarden.prompt.confirm_config)"
   read -r _c; [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
   step "$(t app.vaultwarden.step.deps)"
-  DEBIAN_FRONTEND=noninteractive apt-get update -qq \
-    || warn "$(t app.vaultwarden.warn.apt_update)"
+  if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
+    warn "$(t app.vaultwarden.warn.apt_update)"
+  fi
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \

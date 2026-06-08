@@ -661,6 +661,28 @@ check_cyberstrikeai_repo_go_install_failures_are_reported() {
     ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_vaultwarden_apt_update_failures_are_reported() {
+  if grep -R -n 'apt-get update -qq[[:space:]\\]*\\$' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null | grep '\|\| warn'; then
+    echo "Vaultwarden apt-get update failures must use an explicit conditional." >&2
+    return 1
+  fi
+  awk '
+      /app\.vaultwarden\.warn\.apt_update/ { saw_warn_key=1 }
+      /\/var\/log\/apt\/\*/ { saw_guidance=1 }
+      /step "\$\(t app\.vaultwarden\.step\.deps\)"/ { in_block=1; saw_update_if=0; saw_warn=0; next }
+      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then/ { saw_update_if=1 }
+      in_block && /warn "\$\(t app\.vaultwarden\.warn\.apt_update\)"/ { saw_warn=1 }
+      in_block && /DEBIAN_FRONTEND=noninteractive apt-get install -y -qq/ {
+        if (!(saw_warn_key && saw_guidance && saw_update_if && saw_warn)) {
+          printf "%s Vaultwarden must warn explicitly and provide follow-up guidance when apt-get update fails before dependency install\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
       /app\.newapi\.warn\.pre_backup_failed/ { saw_newapi=1 }
@@ -2256,6 +2278,7 @@ main() {
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
   check_cyberstrikeai_repo_go_install_failures_are_reported
+  check_vaultwarden_apt_update_failures_are_reported
   check_preupdate_backup_warnings_include_followup_guidance
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop

@@ -130,8 +130,8 @@ i18n_register_many \
   "Step 1  Install system dependencies" \
   "Step 1  安装系统依赖" \
   app.vaultwarden.warn.apt_update \
-  "apt-get update partially failed. Continuing install, but package versions may be affected." \
-  "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。" \
+  "apt-get update partially failed. Continuing install, but package versions may be affected. Inspect /var/log/apt/* or rerun apt-get update after fixing repository/network issues." \
+  "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。请检查 /var/log/apt/*，或在修复仓库/网络问题后重新执行 apt-get update。" \
   app.vaultwarden.success.deps \
   "System dependencies installed." \
   "系统依赖安装完成。" \
