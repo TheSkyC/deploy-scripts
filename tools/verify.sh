@@ -2409,6 +2409,20 @@ check_newapi_install_summary_matches_health_state() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_health_checks_are_nonfatal_outside_install() {
+  awk '
+      /if systemctl start "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 20; then/ { in_update=1; saw_health_if=0; next }
+      in_update && /if ! _health_check; then/ { saw_health_if=1 }
+      in_update && /echo -e "  \$\{BOLD\}\$\{GREEN\}\$\(t app\.newapi\.success\.update_done/ {
+        if (!saw_health_if) {
+          printf "%s NewAPI update must treat post-restart health warnings as nonfatal\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_vaultwarden_install_summary_matches_health_state() {
   awk '
       /app\.vaultwarden\.summary\.title_ready/ { saw_title_ready=1 }
@@ -3232,6 +3246,7 @@ main() {
   check_cyberstrikeai_health_checks_are_nonfatal_outside_install
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_summary_matches_health_state
+  check_newapi_health_checks_are_nonfatal_outside_install
   check_vaultwarden_install_summary_matches_health_state
   check_vaultwarden_status_health_guidance_matches_local_probe
   check_firewall_success_paths_validate_command_results

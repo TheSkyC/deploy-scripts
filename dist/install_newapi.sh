@@ -1851,7 +1851,9 @@ do_update() {
       rm -f "${_old_baks[@]}"
       info "$(t app.newapi.info.cleaned_old "${#_old_baks[@]}")"
     fi
-    _health_check
+    if ! _health_check; then
+      :
+    fi
     echo ""
     echo -e "  ${BOLD}${GREEN}$(t app.newapi.success.update_done "${YELLOW}${CURRENT}${GREEN}" "${YELLOW}${LATEST}${NC}")${NC}"
     echo ""
