@@ -607,6 +607,44 @@ check_binary_replacements_handle_failure() {
   fi
 }
 
+check_download_validation_failures_cleanup() {
+  awk '
+      /verify_binary\(\)/ { in_func=1; saw_rm=0; next }
+      in_func && /rm -f "\$bin"/ { saw_rm=1 }
+      in_func && /error "\$\(t app\.newapi\.error\.binary_/ {
+        if (!saw_rm) {
+          printf "%s does not remove the downloaded binary before validation failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_rm=0
+      }
+      in_func && /^}/ { in_func=0 }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /verify_checksum\(\)/ { in_checksum=1; next }
+      in_checksum && /if \[\[ "\$actual_hash" != "\$expected_hash" \]\]/ { in_sha_failure=1; saw_rm=0; next }
+      in_sha_failure && /rm -f "\$archive"/ { saw_rm=1 }
+      in_sha_failure && /error "\$\(t app\.sub2api\.error\.sha_failed/ {
+        if (!saw_rm) {
+          printf "%s does not remove the downloaded archive before checksum failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_sha_failure=0
+      }
+      in_checksum && /^}/ { in_checksum=0 }
+      /extract_and_verify\(\)/ { in_extract=1; saw_archive_rm=0; next }
+      in_extract && /rm -f "\$archive"/ { saw_archive_rm=1 }
+      in_extract && /error "\$\(t app\.sub2api\.error\.(tar_extract|archive_missing_binary|not_elf|elf_machine)/ {
+        if (!saw_archive_rm) {
+          printf "%s does not remove the downloaded archive before extraction validation failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_archive_rm=0
+      }
+      in_extract && /^}/ { in_extract=0 }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_vaultwarden_env_file_is_atomic() {
   if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden env files contain secrets and must be written through a temporary file before replacement." >&2
@@ -873,6 +911,7 @@ main() {
   check_cyberstrikeai_build_temp_cleanup
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
+  check_download_validation_failures_cleanup
   check_vaultwarden_env_file_is_atomic
   check_vaultwarden_admin_token_file_is_private
   check_systemd_units_are_atomic

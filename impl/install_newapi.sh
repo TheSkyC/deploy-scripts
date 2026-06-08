@@ -76,14 +76,20 @@ get_download_url() {
 }
 verify_binary() {
   local bin="$1"
-  [[ -s "$bin" ]] || error "$(t app.newapi.error.binary_empty)"
+  if [[ ! -s "$bin" ]]; then
+    rm -f "$bin"
+    error "$(t app.newapi.error.binary_empty)"
+  fi
   local size
   size=$(wc -c < "$bin")
-  [[ $size -lt 1048576 ]] \
-    && error "$(t app.newapi.error.binary_too_small "$size")"
+  if [[ $size -lt 1048576 ]]; then
+    rm -f "$bin"
+    error "$(t app.newapi.error.binary_too_small "$size")"
+  fi
   local magic
   magic=$(dd if="$bin" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$magic" != "7f454c46" ]]; then
+    rm -f "$bin"
     error "$(t app.newapi.error.binary_not_elf "${magic:-read failed}")"
   fi
   local size_mb=$(( size / 1024 / 1024 ))

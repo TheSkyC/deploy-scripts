@@ -1482,6 +1482,7 @@ verify_checksum() {
     return 0
   fi
   if [[ "$actual_hash" != "$expected_hash" ]]; then
+    rm -f "$archive"
     error "$(t app.sub2api.error.sha_failed "$expected_hash" "$actual_hash")"
   fi
   success "$(t app.sub2api.success.sha_ok "${actual_hash:0:16}")"
@@ -1490,24 +1491,28 @@ extract_and_verify() {
   local archive="$1" dest_dir="$2"
   local tmp_extract; tmp_extract=$(mktemp -d "${dest_dir}/sub2api-extract.XXXXXX")
   if ! tar -xzf "$archive" -C "$tmp_extract" 2>&1; then
+    rm -f "$archive"
     rm -rf "$tmp_extract"
     error "$(t app.sub2api.error.tar_extract)"
   fi
   local bin_path
   bin_path=$(find "$tmp_extract" -maxdepth 2 -name "sub2api" -type f 2>/dev/null | head -1 || true)
   if [[ -z "$bin_path" ]]; then
+    rm -f "$archive"
     rm -rf "$tmp_extract"
     error "$(t app.sub2api.error.archive_missing_binary)"
   fi
   local magic
   magic=$(dd if="$bin_path" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$magic" != "7f454c46" ]]; then
+    rm -f "$archive"
     rm -rf "$tmp_extract"
     error "$(t app.sub2api.error.not_elf "${magic:-read failed}")"
   fi
   local emachine
   emachine=$(dd if="$bin_path" bs=1 skip=18 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
   if [[ "$emachine" != "$ELF_MACHINE" ]]; then
+    rm -f "$archive"
     rm -rf "$tmp_extract"
     error "$(t app.sub2api.error.elf_machine "$emachine" "$ELF_MACHINE" "$BIN_ARCH")"
   fi
@@ -1516,6 +1521,7 @@ extract_and_verify() {
   success "$(t app.sub2api.success.elf_ok "$BIN_ARCH" "$size_mb")"
   local tmp_bin; tmp_bin=$(mktemp "${dest_dir}/sub2api.tmp.XXXXXX")
   if ! mv "$bin_path" "$tmp_bin"; then
+    rm -f "$archive"
     rm -f "$tmp_bin"
     rm -rf "$tmp_extract"
     error "$(t app.sub2api.error.archive_missing_binary)"
