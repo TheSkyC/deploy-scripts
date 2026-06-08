@@ -634,6 +634,35 @@ check_sub2api_extract_move_failure_cleanup() {
   fi
 }
 
+check_sub2api_pg_dump_errors_stay_out_of_backups() {
+  if grep -R -nE 'pg_dump "\$\{PG_DSN\}" 2>&1 \| gzip >|pg_dump "\$PG_DSN" 2>&1 \| gzip >' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API pg_dump backups must not mix stderr into compressed SQL archives." >&2
+    return 1
+  fi
+  awk '
+      /PG_DUMP_FILE="\$\{BACKUP_DIR\}\/sub2api_db_\$\{TS\}\.sql\.gz"/ { in_script=1; saw_stderr_log=0; saw_archive=0; next }
+      in_script && /pg_dump "\$\{PG_DSN\}" 2> >\(/ { saw_stderr_log=1 }
+      in_script && /gzip > "\$\{PG_DUMP_TMP\}"/ { saw_archive=1 }
+      in_script && /# ── 2\. Configuration and local data backup/ {
+        if (!(saw_stderr_log && saw_archive)) {
+          printf "%s Sub2API backup script must keep pg_dump stderr separate from SQL archive data\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_script=0
+      }
+      /do_backup\(\)/ { in_manual=1; saw_manual_archive=0; next }
+      in_manual && /pg_dump "\$\{PG_DSN\}" \| gzip > "\$PG_TMP"/ { saw_manual_archive=1 }
+      in_manual && /^}/ {
+        if (!saw_manual_archive) {
+          printf "%s Sub2API manual backup must archive only pg_dump stdout\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_manual=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_cyberstrikeai_build_temp_cleanup() {
   if grep -R -nE '^[[:space:]]*(go build|chmod 0755 "\$tmp_bin"|mv "\$tmp_bin" "\$BIN_PATH")' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI binary build must clean up the temporary binary on build, chmod, and move failures." >&2
@@ -1166,6 +1195,7 @@ main() {
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic
   check_sub2api_extract_move_failure_cleanup
+  check_sub2api_pg_dump_errors_stay_out_of_backups
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated
   check_cyberstrikeai_backups_are_atomic
