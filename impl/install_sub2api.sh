@@ -1008,7 +1008,8 @@ do_install() {
       rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
       systemctl daemon-reload 2>/dev/null || true
       if [[ -n "${OLD_BIN_BAK:-}" && -f "$OLD_BIN_BAK" ]]; then
-        _restore_binary_backup "$OLD_BIN_BAK" || true
+        _restore_binary_backup "$OLD_BIN_BAK" \
+          || error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
       else
         rm -f "$BIN_PATH"
       fi

@@ -717,6 +717,11 @@ check_binary_restores_validate_permissions() {
     echo "Binary rollback restores must validate executable mode and ownership changes." >&2
     return 1
   fi
+  if grep -R -n '_restore_binary_backup "\$OLD_BIN_BAK" || true' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Install rollback restores must not ignore backup restore failures." >&2
+    return 1
+  fi
   awk '
       /_restore_binary_backup\(\)/ { in_func=1; saw_chmod=0; saw_chown=0; next }
       in_func && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
