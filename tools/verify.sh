@@ -2667,6 +2667,31 @@ check_blog_static_deploy_swaps_tree() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_blog_static_deploy_failures_are_actionable() {
+  awk '
+      /app\.blog\.error\.static_deploy/ { saw_key=1 }
+      /previous site was kept or a restore was attempted/ { saw_state=1 }
+      /Inspect %s and retry after fixing filesystem or copy errors/ { saw_guidance=1 }
+      END {
+        if (!(saw_key && saw_state && saw_guidance)) {
+          print "Blog static deployment failures must describe preserved state and tell users how to recover." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/blog.sh
+  awk '
+      /step "\$\(t app\.blog\.step_nginx\)"/ { in_block=1; next }
+      in_block && /error "\$\(t app\.blog\.error\.static_deploy "\$NGINX_ROOT"\)"/ { saw_error=1 }
+      in_block && /success "\$\(t app\.blog\.static_deployed "\$NGINX_ROOT"\)"/ { in_block=0 }
+      END {
+        if (!saw_error) {
+          print "Blog static deployment path must pass the live Nginx root into actionable deployment failures." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_blog_site_files_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > "\$CONFIG_FILE"|^[[:space:]]*cat > "\$\{SITE_DIR\}/|^[[:space:]]*cat > "\$\{CMS_ADMIN_DIR\}/' \
       impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
@@ -2802,6 +2827,7 @@ main() {
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_vaultwarden_webvault_update_warnings_are_actionable
   check_blog_static_deploy_swaps_tree
+  check_blog_static_deploy_failures_are_actionable
   check_blog_site_files_are_atomic
   echo "Verification passed"
 }

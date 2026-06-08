@@ -436,18 +436,18 @@ if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
   if [[ -e "$NGINX_ROOT" || -L "$NGINX_ROOT" ]]; then
     if ! mv "$NGINX_ROOT" "$DEPLOY_BAK"; then
       rm -rf "$DEPLOY_TMP"
-      error "$(t app.blog.error.static_deploy)"
+      error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
     fi
   fi
   if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
     [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && rm -rf "$DEPLOY_BAK"
   else
-    restore_nginx_root_backup || error "$(t app.blog.error.static_deploy)"
-    error "$(t app.blog.error.static_deploy)"
+    restore_nginx_root_backup || error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+    error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
   fi
 else
   rm -rf "$DEPLOY_TMP"
-  error "$(t app.blog.error.static_deploy)"
+  error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
 fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 NGINX_CONF="/etc/nginx/sites-available/blog"

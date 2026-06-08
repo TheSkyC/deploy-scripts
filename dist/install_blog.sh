@@ -809,8 +809,8 @@ i18n_register app.blog.static_deployed \
   "Static files deployed to: %s" \
   "静态文件已部署到：%s"
 i18n_register app.blog.error.static_deploy \
-  "Static file deployment failed." \
-  "静态文件部署失败。"
+  "Static file deployment failed. The previous site was kept or a restore was attempted. Inspect %s and retry after fixing filesystem or copy errors." \
+  "静态文件部署失败。旧站点已保留或已尝试恢复。请检查 %s，并在修复文件系统或复制错误后重试。"
 i18n_register app.blog.error.nginx_config \
   "Nginx configuration validation failed. Check the errors above." \
   "Nginx 配置验证失败，请检查上方错误。"
@@ -1392,18 +1392,18 @@ if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
   if [[ -e "$NGINX_ROOT" || -L "$NGINX_ROOT" ]]; then
     if ! mv "$NGINX_ROOT" "$DEPLOY_BAK"; then
       rm -rf "$DEPLOY_TMP"
-      error "$(t app.blog.error.static_deploy)"
+      error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
     fi
   fi
   if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
     [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && rm -rf "$DEPLOY_BAK"
   else
-    restore_nginx_root_backup || error "$(t app.blog.error.static_deploy)"
-    error "$(t app.blog.error.static_deploy)"
+    restore_nginx_root_backup || error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+    error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
   fi
 else
   rm -rf "$DEPLOY_TMP"
-  error "$(t app.blog.error.static_deploy)"
+  error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
 fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 NGINX_CONF="/etc/nginx/sites-available/blog"
