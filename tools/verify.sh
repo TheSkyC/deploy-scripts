@@ -384,6 +384,25 @@ check_apt_sources_are_atomic() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_iptables_rules_are_atomic() {
+  if grep -R -nE '^[[:space:]]*iptables-save > /etc/iptables/rules\.v4' impl dist 2>/dev/null; then
+    echo "iptables rules must be saved to a temporary file before replacing rules.v4." >&2
+    return 1
+  fi
+  awk '
+      /iptables_tmp=\$\(mktemp "\$\{iptables_rules\}\.XXXXXX"\)/ { saw_tmp=1 }
+      /iptables-save > "\$iptables_tmp"/ { saw_save=1 }
+      /mv "\$iptables_tmp" "\$iptables_rules"/ { saw_mv=1 }
+      /rm -f "\$iptables_tmp"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_save && saw_mv && saw_cleanup)) {
+          print "iptables rules writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+}
+
 check_random_head_pipelines_handle_sigpipe() {
   if grep -R -nE 'rand .*\\|.*head -c [0-9]+\\)$|tr -dc .*\\| head -c [0-9]+\\)$' impl dist 2>/dev/null; then
     echo "Random byte pipelines ending in head -c need an explicit successful terminator under pipefail." >&2
@@ -666,6 +685,7 @@ main() {
   check_no_fixed_tmp_downloads
   check_keyring_writes_are_atomic
   check_apt_sources_are_atomic
+  check_iptables_rules_are_atomic
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
   check_mutating_installs_acquire_locks

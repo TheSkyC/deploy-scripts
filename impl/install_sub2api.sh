@@ -545,9 +545,18 @@ _configure_firewall() {
         success "$(t app.sub2api.success.iptables_saved)" || true
     elif command -v iptables-save &>/dev/null; then
       mkdir -p /etc/iptables
-      iptables-save > /etc/iptables/rules.v4 2>/dev/null && \
-        info "$(t app.sub2api.info.iptables_written)" || \
+      local iptables_rules="/etc/iptables/rules.v4"
+      local iptables_tmp
+      iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX")
+      if iptables-save > "$iptables_tmp" 2>/dev/null \
+          && chmod 644 "$iptables_tmp" \
+          && chown root:root "$iptables_tmp" \
+          && mv "$iptables_tmp" "$iptables_rules"; then
+        info "$(t app.sub2api.info.iptables_written)"
+      else
+        rm -f "$iptables_tmp"
         warn "$(t app.sub2api.warn.iptables_write_failed)"
+      fi
     else
       warn "$(t app.sub2api.warn.iptables_not_persisted)"
     fi
