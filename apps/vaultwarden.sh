@@ -513,12 +513,15 @@ i18n_register_many \
   app.vaultwarden.warn.web_vault_extract \
   "Web Vault extraction failed; trying to restore the old version..." \
   "Web Vault 解压失败，尝试恢复旧版本..." \
+  app.vaultwarden.warn.web_vault_update_extract \
+  "Web Vault update failed. The existing Web Vault was kept or a backup restore was attempted. Inspect %s and retry after fixing the archive or filesystem issue." \
+  "Web Vault 更新失败。现有 Web Vault 已保留或已尝试从备份恢复。请检查 %s，并在修复压缩包或文件系统问题后重试。" \
   app.vaultwarden.warn.web_vault_update_download \
-  "Web Vault download failed; skipping Web Vault update." \
-  "Web Vault 下载失败，跳过 Web Vault 更新。" \
+  "Web Vault download failed, so the existing Web Vault was left unchanged. Retry the update later or download the release manually from GitHub." \
+  "Web Vault 下载失败，现有 Web Vault 未变更。请稍后重试更新，或手动从 GitHub 下载发布包。" \
   app.vaultwarden.warn.web_vault_update_version \
-  "Cannot get Web Vault version; skipping Web Vault update." \
-  "无法获取 Web Vault 版本，跳过 Web Vault 更新。" \
+  "Cannot get the Web Vault version, so the existing Web Vault was left unchanged. Retry the update later after fixing network access to GitHub." \
+  "无法获取 Web Vault 版本，现有 Web Vault 未变更。请先修复到 GitHub 的网络访问，再稍后重试更新。" \
   app.vaultwarden.warn.update_port_used \
   "Port %s is still in use (%s); the service may not be able to bind to it." \
   "端口 %s 仍被占用（%s），服务可能无法绑定端口。" \

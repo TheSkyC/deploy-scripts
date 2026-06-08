@@ -2601,6 +2601,38 @@ check_vaultwarden_install_webvault_replacement_is_recoverable() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_webvault_update_warnings_are_actionable() {
+  awk '
+      /app\.vaultwarden\.warn\.web_vault_update_extract/ { saw_extract=1 }
+      /existing Web Vault was kept or a backup restore was attempted/ { saw_extract_state=1 }
+      /Inspect %s and retry after fixing the archive or filesystem issue/ { saw_extract_guidance=1 }
+      /app\.vaultwarden\.warn\.web_vault_update_download/ { saw_download=1 }
+      /existing Web Vault was left unchanged/ { saw_unchanged=1 }
+      /download the release manually from GitHub/ { saw_download_guidance=1 }
+      /app\.vaultwarden\.warn\.web_vault_update_version/ { saw_version=1 }
+      /Retry the update later after fixing network access to GitHub/ { saw_version_guidance=1 }
+      END {
+        if (!(saw_extract && saw_extract_state && saw_extract_guidance && saw_download && saw_unchanged && saw_download_guidance && saw_version && saw_version_guidance)) {
+          print "Vaultwarden Web Vault update warnings must describe the preserved state and give actionable recovery guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.update_web_vault\)"/ { in_update=1; next }
+      in_update && /warn "\$\(t app\.vaultwarden\.warn\.web_vault_update_extract "\$VW_WEB_DIR"\)"/ { saw_extract_warn=1 }
+      in_update && /warn "\$\(t app\.vaultwarden\.warn\.web_vault_update_download\)"/ { saw_download_warn=1 }
+      in_update && /warn "\$\(t app\.vaultwarden\.warn\.web_vault_update_version\)"/ { saw_version_warn=1 }
+      in_update && /if ss -ltn 2>\/dev\/null \| grep -qE/ { in_update=0 }
+      END {
+        if (!(saw_extract_warn && saw_download_warn && saw_version_warn)) {
+          print "Vaultwarden Web Vault update path must use the dedicated actionable warning messages for extract, download, and version failures." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_blog_static_deploy_swaps_tree() {
   if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not copy directly into the live Nginx root." >&2
@@ -2768,6 +2800,7 @@ main() {
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_webvault_replacements_are_atomic
   check_vaultwarden_install_webvault_replacement_is_recoverable
+  check_vaultwarden_webvault_update_warnings_are_actionable
   check_blog_static_deploy_swaps_tree
   check_blog_site_files_are_atomic
   echo "Verification passed"

@@ -1027,7 +1027,7 @@ do_update() {
     if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_bak_ts"; then
       success "$(t app.vaultwarden.success.web_vault_updated_image)"
     else
-      warn "$(t app.vaultwarden.warn.web_vault_extract)"
+      warn "$(t app.vaultwarden.warn.web_vault_update_extract "$VW_WEB_DIR")"
     fi
   else
     local _fetched_wv_ver
@@ -1043,10 +1043,10 @@ do_update() {
           if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_bak_ts"; then
             success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
           else
-            warn "$(t app.vaultwarden.warn.web_vault_extract)"
+            warn "$(t app.vaultwarden.warn.web_vault_update_extract "$VW_WEB_DIR")"
           fi
         else
-          warn "$(t app.vaultwarden.warn.web_vault_extract)"
+          warn "$(t app.vaultwarden.warn.web_vault_update_extract "$VW_WEB_DIR")"
         fi
       else
         warn "$(t app.vaultwarden.warn.web_vault_update_download)"
