@@ -813,6 +813,9 @@ i18n_register_many \
   app.vaultwarden.step.fail2ban \
   "Step 11  Configure Fail2Ban brute-force protection" \
   "Step 11  配置 Fail2Ban 防暴力破解" \
+  app.vaultwarden.error.fail2ban_write \
+  "Fail2Ban config write failed: %s" \
+  "Fail2Ban 配置写入失败：%s" \
   app.vaultwarden.success.fail2ban \
   "Fail2Ban configured (login: 5 failures/hour -> 1h ban, admin: 3 failures/day -> 24h ban)." \
   "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）。" \
@@ -1450,6 +1453,21 @@ _write_nginx_config_file() {
     error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
   fi
 }
+_write_fail2ban_config_file() {
+  local fail2ban_conf="$1"
+  local fail2ban_tmp
+  fail2ban_tmp=$(mktemp "${fail2ban_conf}.XXXXXX")
+  if ! cat > "$fail2ban_tmp"; then
+    rm -f "$fail2ban_tmp"
+    error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
+  fi
+  if ! chmod 644 "$fail2ban_tmp" \
+      || ! chown root:root "$fail2ban_tmp" \
+      || ! mv "$fail2ban_tmp" "$fail2ban_conf"; then
+    rm -f "$fail2ban_tmp"
+    error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
+  fi
+}
 do_install() {
   show_banner
   preflight_check
@@ -1966,7 +1984,8 @@ NGINX2BODY
     warn "$(t app.vaultwarden.warn.https_skipped)"
   fi
   step "$(t app.vaultwarden.step.fail2ban)"
-  cat > /etc/fail2ban/filter.d/vaultwarden.conf << F2B
+  mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
+  _write_fail2ban_config_file /etc/fail2ban/filter.d/vaultwarden.conf << F2B
 [INCLUDES]
 before = common.conf
 
@@ -1975,7 +1994,7 @@ failregex = ^.*Username or password is incorrect\. Try again\. IP: <ADDR>.*$
             ^.*TOTP, Duo or recovery code is incorrect\. Try again\. IP: <ADDR>.*$
 ignoreregex =
 F2B
-  cat > /etc/fail2ban/filter.d/vaultwarden-admin.conf << F2B2
+  _write_fail2ban_config_file /etc/fail2ban/filter.d/vaultwarden-admin.conf << F2B2
 [INCLUDES]
 before = common.conf
 
@@ -1983,7 +2002,7 @@ before = common.conf
 failregex = ^.*Invalid admin token\. IP: <ADDR>.*$
 ignoreregex =
 F2B2
-  cat > /etc/fail2ban/jail.d/vaultwarden.conf << JAIL
+  _write_fail2ban_config_file /etc/fail2ban/jail.d/vaultwarden.conf << JAIL
 [vaultwarden]
 enabled  = true
 port     = http,https

@@ -306,6 +306,9 @@ i18n_register_many \
   app.vaultwarden.step.fail2ban \
   "Step 11  Configure Fail2Ban brute-force protection" \
   "Step 11  配置 Fail2Ban 防暴力破解" \
+  app.vaultwarden.error.fail2ban_write \
+  "Fail2Ban config write failed: %s" \
+  "Fail2Ban 配置写入失败：%s" \
   app.vaultwarden.success.fail2ban \
   "Fail2Ban configured (login: 5 failures/hour -> 1h ban, admin: 3 failures/day -> 24h ban)." \
   "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）。" \
