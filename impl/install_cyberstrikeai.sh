@@ -787,10 +787,16 @@ do_update() {
     else
       warn "$(t app.cyberstrikeai.warn.update_start_failed)"
       systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-      if restore_update_backup "$bin_bak" "$config_bak" \
-          && systemctl start "$SERVICE_NAME" 2>/dev/null \
-          && wait_for_service "$SERVICE_NAME" 35; then
-        error "$(t app.cyberstrikeai.error.update_rollback_ok "$SERVICE_NAME")"
+      if restore_update_backup "$bin_bak" "$config_bak"; then
+        if systemctl start "$SERVICE_NAME"; then
+          if wait_for_service "$SERVICE_NAME" 35; then
+            error "$(t app.cyberstrikeai.error.update_rollback_ok "$SERVICE_NAME")"
+          else
+            error "$(t app.cyberstrikeai.error.update_rollback_failed "$SERVICE_NAME")"
+          fi
+        else
+          error "$(t app.cyberstrikeai.error.update_rollback_failed "$SERVICE_NAME")"
+        fi
       else
         error "$(t app.cyberstrikeai.error.update_rollback_failed "$SERVICE_NAME")"
       fi

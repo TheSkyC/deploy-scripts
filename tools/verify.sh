@@ -1359,6 +1359,29 @@ check_sub2api_update_rollbacks_report_restart_failures() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_cyberstrikeai_update_rollbacks_report_restart_failures() {
+  if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI update rollback paths must not suppress service restart diagnostics." >&2
+    return 1
+  fi
+  awk '
+      /warn "\$\(t app\.cyberstrikeai\.warn\.update_start_failed\)"/ { in_update_failure=1; saw_restore=0; saw_start_if=0; saw_wait=0; saw_ok_error=0; saw_failed_error=0; next }
+      in_update_failure && /if restore_update_backup "\$bin_bak" "\$config_bak"; then/ { saw_restore=1 }
+      in_update_failure && /if systemctl start "\$SERVICE_NAME"; then/ { saw_start_if=1 }
+      in_update_failure && /if wait_for_service "\$SERVICE_NAME" 35; then/ { saw_wait=1 }
+      in_update_failure && /error "\$\(t app\.cyberstrikeai\.error\.update_rollback_ok "\$SERVICE_NAME"\)"/ { saw_ok_error=1 }
+      in_update_failure && /error "\$\(t app\.cyberstrikeai\.error\.update_rollback_failed "\$SERVICE_NAME"\)"/ { saw_failed_error=1 }
+      in_update_failure && /^    fi$/ {
+        if (saw_restore && !(saw_start_if && saw_wait && saw_ok_error && saw_failed_error)) {
+          printf "%s CyberStrikeAI update rollback must branch explicitly on restart failures before reporting rollback outcome\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_update_failure && /^  else$/ { in_update_failure=0 }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -1810,6 +1833,7 @@ main() {
   check_sub2api_dependency_services_start_before_success
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_update_rollbacks_report_restart_failures
+  check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
