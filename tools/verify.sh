@@ -459,6 +459,25 @@ check_vaultwarden_install_webvault_replacement_is_recoverable() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_blog_static_deploy_swaps_tree() {
+  if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog static deployment must not copy directly into the live Nginx root." >&2
+    return 1
+  fi
+  awk '
+      /DEPLOY_TMP="\$\(mktemp -d/ { saw_tmp=1 }
+      /mv "\$NGINX_ROOT" "\$DEPLOY_BAK"/ { saw_backup=1 }
+      /mv "\$DEPLOY_TMP" "\$NGINX_ROOT"/ { saw_swap=1 }
+      /mv "\$DEPLOY_BAK" "\$NGINX_ROOT"/ { saw_restore=1 }
+      END {
+        if (!(saw_tmp && saw_backup && saw_swap && saw_restore)) {
+          print "Blog static deployment must stage, swap, and restore the Nginx root." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -487,6 +506,7 @@ main() {
   check_sub2api_extract_move_failure_cleanup
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
+  check_blog_static_deploy_swaps_tree
   echo "Verification passed"
 }
 

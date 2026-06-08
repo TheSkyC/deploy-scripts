@@ -363,8 +363,29 @@ hugo --destination "$PUBLIC_DIR" --gc --minify \
 PAGE_COUNT=$(find "$PUBLIC_DIR" -name "*.html" | wc -l)
 success "$(t app.blog.build_complete "$PAGE_COUNT")"
 step "$(t app.blog.step_nginx)"
-mkdir -p "$NGINX_ROOT"
-cp -a "${PUBLIC_DIR}/." "$NGINX_ROOT/"
+NGINX_ROOT_PARENT="$(dirname "$NGINX_ROOT")"
+NGINX_ROOT_NAME="$(basename "$NGINX_ROOT")"
+mkdir -p "$NGINX_ROOT_PARENT"
+DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"
+DEPLOY_BAK="${NGINX_ROOT}.bak.$(date +%Y%m%d%H%M%S)"
+if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
+  if [[ -e "$NGINX_ROOT" || -L "$NGINX_ROOT" ]]; then
+    if ! mv "$NGINX_ROOT" "$DEPLOY_BAK"; then
+      rm -rf "$DEPLOY_TMP"
+      error "$(t app.blog.error.static_deploy)"
+    fi
+  fi
+  if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
+    [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && rm -rf "$DEPLOY_BAK"
+  else
+    rm -rf "$NGINX_ROOT"
+    [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && mv "$DEPLOY_BAK" "$NGINX_ROOT" || true
+    error "$(t app.blog.error.static_deploy)"
+  fi
+else
+  rm -rf "$DEPLOY_TMP"
+  error "$(t app.blog.error.static_deploy)"
+fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 NGINX_CONF="/etc/nginx/sites-available/blog"
 cat > "$NGINX_CONF" << NGINX

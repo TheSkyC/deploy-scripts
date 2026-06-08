@@ -284,6 +284,9 @@ i18n_register app.blog.step_nginx \
 i18n_register app.blog.static_deployed \
   "Static files deployed to: %s" \
   "静态文件已部署到：%s"
+i18n_register app.blog.error.static_deploy \
+  "Static file deployment failed." \
+  "静态文件部署失败。"
 i18n_register app.blog.error.nginx_config \
   "Nginx configuration validation failed. Check the errors above." \
   "Nginx 配置验证失败，请检查上方错误。"
