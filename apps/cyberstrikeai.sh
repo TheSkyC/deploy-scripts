@@ -93,6 +93,9 @@ i18n_register_many \
   app.cyberstrikeai.success.python_requirements \
   "Python requirements installed" \
   "Python 依赖安装完成" \
+  app.cyberstrikeai.warn.pip_upgrade \
+  "Failed to upgrade pip inside the virtual environment; continuing with the existing pip version" \
+  "虚拟环境中的 pip 升级失败；将继续使用当前 pip 版本" \
   app.cyberstrikeai.warn.python_requirements \
   "Some Python requirements failed to install; continuing because several tools are optional" \
   "部分 Python 依赖安装失败；由于若干工具为可选项，将继续执行" \

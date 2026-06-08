@@ -619,6 +619,27 @@ check_cyberstrikeai_go_restore_failures_are_reported() {
     ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_pip_upgrade_failures_are_reported() {
+  if grep -R -n 'python -m pip install --index-url "\$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1 || true' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI pip upgrade failures must not be silently ignored." >&2
+    return 1
+  fi
+  awk '
+      /app\.cyberstrikeai\.warn\.pip_upgrade/ { saw_warn_key=1 }
+      /step "\$\(t app\.cyberstrikeai\.step\.python_env\)"/ { in_block=1; saw_pip_if=0; saw_warn=0; next }
+      in_block && /if ! python -m pip install --index-url "\$PIP_INDEX_URL" --upgrade pip >\/dev\/null 2>&1; then/ { saw_pip_if=1 }
+      in_block && /warn "\$\(t app\.cyberstrikeai\.warn\.pip_upgrade\)"/ { saw_warn=1 }
+      in_block && /if \[\[ -f requirements\.txt \]\]; then/ {
+        if (!(saw_warn_key && saw_pip_if && saw_warn)) {
+          printf "%s CyberStrikeAI must warn explicitly when virtualenv pip upgrade fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
       /app\.newapi\.warn\.pre_backup_failed/ { saw_newapi=1 }
@@ -2212,6 +2233,7 @@ main() {
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
+  check_cyberstrikeai_pip_upgrade_failures_are_reported
   check_preupdate_backup_warnings_include_followup_guidance
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop

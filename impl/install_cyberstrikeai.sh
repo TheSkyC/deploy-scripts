@@ -291,7 +291,9 @@ setup_python_env() {
     python3 -m venv "$VENV_DIR"
   fi
   source "$VENV_DIR/bin/activate"
-  python -m pip install --index-url "$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1 || true
+  if ! python -m pip install --index-url "$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1; then
+    warn "$(t app.cyberstrikeai.warn.pip_upgrade)"
+  fi
   if [[ -f requirements.txt ]]; then
     local pip_log
     pip_log=$(mktemp)
