@@ -78,6 +78,9 @@ i18n_register_many \
   app.cyberstrikeai.error.config_missing \
   "Missing config.yaml at %s" \
   "缺少 config.yaml：%s" \
+  app.cyberstrikeai.error.backup_write \
+  "Failed to write backup file: %s" \
+  "备份文件写入失败：%s" \
   app.cyberstrikeai.success.config_adjusted \
   "Adjusted config.yaml: local host, port %s, log file" \
   "已调整 config.yaml：本地监听、端口 %s、日志文件" \

@@ -75,6 +75,16 @@ restore_old_go_toolchain() {
   [[ ! -e /usr/local/go ]] || return 1
   mv "$old_go_backup" /usr/local/go
 }
+write_backup_file() {
+  local source_path="$1" backup_path="$2"
+  local backup_tmp
+  [[ -f "$source_path" ]] || return 0
+  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! cp "$source_path" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
+    rm -f "$backup_tmp"
+    return 1
+  fi
+}
 apt_install_base() {
   step "$(t app.cyberstrikeai.step.install_deps)"
   apt-get update -qq
@@ -198,7 +208,8 @@ clone_or_update_repo() {
 patch_config_port_and_paths() {
   [[ -f "$CONFIG_FILE" ]] || error "$(t app.cyberstrikeai.error.config_missing "$CONFIG_FILE")"
   local backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
-  cp "$CONFIG_FILE" "$backup"
+  write_backup_file "$CONFIG_FILE" "$backup" \
+    || error "$(t app.cyberstrikeai.error.backup_write "$backup")"
   python3 - "$CONFIG_FILE" "$PORT" "$LOG_DIR/cyberstrike-ai.log" "$CSAI_HTTPS" <<'PY'
 from pathlib import Path
 import re
@@ -686,8 +697,10 @@ do_update() {
   systemctl is-active --quiet "$SERVICE_NAME" && service_was_active=true
   bin_bak="${BIN_PATH}.bak.$(date +%Y%m%d_%H%M%S)"
   config_bak="${CONFIG_FILE}.preupdate.$(date +%Y%m%d_%H%M%S)"
-  [[ -f "$BIN_PATH" ]] && cp "$BIN_PATH" "$bin_bak"
-  [[ -f "$CONFIG_FILE" ]] && cp "$CONFIG_FILE" "$config_bak"
+  write_backup_file "$BIN_PATH" "$bin_bak" \
+    || error "$(t app.cyberstrikeai.error.backup_write "$bin_bak")"
+  write_backup_file "$CONFIG_FILE" "$config_bak" \
+    || error "$(t app.cyberstrikeai.error.backup_write "$config_bak")"
   step "$(t app.cyberstrikeai.step.update_source)"
   git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"
   git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"

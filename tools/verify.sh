@@ -656,6 +656,28 @@ check_cyberstrikeai_rollback_restore_is_validated() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_backups_are_atomic() {
+  if grep -R -nE '^[[:space:]]*(cp "\$CONFIG_FILE" "\$backup"|\[\[ -f "\$(BIN_PATH|CONFIG_FILE)" \]\] && cp "\$(BIN_PATH|CONFIG_FILE)")' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI rollback/config backups must copy to a temporary file before replacing the final backup path." >&2
+    return 1
+  fi
+  awk '
+      /write_backup_file\(\)/ { in_func=1; saw_tmp=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\)/ { saw_tmp=1 }
+      in_func && /cp "\$source_path" "\$backup_tmp"/ { saw_cp=1 }
+      in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
+      in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
+      in_func && /^}/ {
+        if (!(saw_tmp && saw_cp && saw_mv && saw_cleanup)) {
+          printf "%s CyberStrikeAI backup helper must stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_backup_temp_moves_handle_failure() {
   if grep -R -nE '^[[:space:]]*mv "\$[^"]*(TMP|tmp|ARCHIVE_TMP|archive_tmp|PG_TMP|pg_tmp|CONF_TMP|conf_tmp|DATA_TMP|data_tmp|DUMP_TMP|dump_tmp)[^"]*" "\$[^"]*(ARCHIVE|archive|FILE|file)' impl dist 2>/dev/null; then
     echo "Backup temporary files must be removed when the final move fails." >&2
@@ -1055,6 +1077,7 @@ main() {
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated
+  check_cyberstrikeai_backups_are_atomic
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
   check_binary_restores_validate_permissions
