@@ -541,6 +541,11 @@ check_go_tarball_failures_cleanup() {
     echo "CyberStrikeAI Go toolchain rollback must validate restoring the previous /usr/local/go." >&2
     return 1
   fi
+  if grep -R -nE '^[[:space:]]*ln -sf /usr/local/go/bin/(go|gofmt) /usr/local/bin/(go|gofmt)$' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI Go tool symlinks must be staged before replacement." >&2
+    return 1
+  fi
   awk '
       /restore_old_go_toolchain\(\)/ { in_func=1; saw_exists=0; saw_absent=0; saw_mv=0; next }
       in_func && /\[\[ -n "\$old_go_backup" && -e "\$old_go_backup" \]\]/ { saw_exists=1 }
@@ -549,6 +554,20 @@ check_go_tarball_failures_cleanup() {
       in_func && /^}/ {
         if (!(saw_exists && saw_absent && saw_mv)) {
           printf "%s Go toolchain rollback helper must validate backup existence, target absence, and restore move\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /write_tool_symlink\(\)/ { in_func=1; saw_tmp=0; saw_unlink=0; saw_ln=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /link_tmp=\$\(mktemp "\$\{link_path\}\.XXXXXX"\)/ { saw_tmp=1 }
+      in_func && /rm -f "\$link_tmp"/ { saw_unlink=1; saw_cleanup=1 }
+      in_func && /ln -s "\$target" "\$link_tmp"/ { saw_ln=1 }
+      in_func && /mv -Tf "\$link_tmp" "\$link_path"/ { saw_mv=1 }
+      in_func && /^}/ {
+        if (!(saw_tmp && saw_unlink && saw_ln && saw_mv && saw_cleanup)) {
+          printf "%s Go tool symlink helper must stage, replace, and clean up temporary symlinks\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0

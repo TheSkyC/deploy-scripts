@@ -994,6 +994,17 @@ restore_old_go_toolchain() {
   [[ ! -e /usr/local/go ]] || return 1
   mv "$old_go_backup" /usr/local/go
 }
+write_tool_symlink() {
+  local target="$1" link_path="$2"
+  local link_tmp
+  mkdir -p "$(dirname "$link_path")" || return 1
+  link_tmp=$(mktemp "${link_path}.XXXXXX") || return 1
+  rm -f "$link_tmp"
+  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
+    rm -f "$link_tmp"
+    return 1
+  fi
+}
 write_backup_file() {
   local source_path="$1" backup_path="$2"
   local backup_tmp
@@ -1096,8 +1107,10 @@ install_go_if_needed() {
   fi
   rm -rf "$extract_dir"
   [[ -n "$old_go_backup" ]] && rm -rf "$old_go_backup"
-  ln -sf /usr/local/go/bin/go /usr/local/bin/go
-  ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+  write_tool_symlink /usr/local/go/bin/go /usr/local/bin/go \
+    || error "$(t app.cyberstrikeai.error.go_failed)"
+  write_tool_symlink /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+    || error "$(t app.cyberstrikeai.error.go_failed)"
   hash -r 2>/dev/null || true
   command -v go >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.go_failed)"
   success "$(t app.cyberstrikeai.success.go_installed "$(go version)")"
