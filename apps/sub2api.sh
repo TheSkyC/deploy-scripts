@@ -304,8 +304,8 @@ i18n_register_many \
   "Config directory backup: %s (%s)." \
   "配置目录备份：%s（%s）。" \
   app.sub2api.warn.config_backup_failed \
-  "Config directory backup failed (tar error)." \
-  "配置目录备份失败（tar 报错）。" \
+  "Config directory backup failed. Inspect the tar output above; partial archives may still exist in the backup directory." \
+  "配置目录备份失败。请检查上方 tar 输出；备份目录中可能仍保留了部分归档。" \
   app.sub2api.summary.title \
   "Sub2API deployment complete!" \
   "Sub2API 部署完成！" \
@@ -594,12 +594,15 @@ i18n_register_many \
   app.sub2api.warn.config_missing \
   "Config directory does not exist (%s); skipping." \
   "配置目录不存在（%s），跳过。" \
+  app.sub2api.warn.data_missing \
+  "Data directory does not exist (%s); skipping data archive creation." \
+  "数据目录不存在（%s），跳过数据归档创建。" \
   app.sub2api.success.data_backup \
   "Data directory backup: %s (%s)." \
   "数据目录备份：%s（%s）。" \
   app.sub2api.warn.data_backup_failed \
-  "Data directory backup failed." \
-  "数据目录备份失败。" \
+  "Data directory backup failed. Inspect the tar output above; partial archives may still exist in the backup directory." \
+  "数据目录备份失败。请检查上方 tar 输出；备份目录中可能仍保留了部分归档。" \
   app.sub2api.success.backup_done \
   "Backup flow complete. Archive directory: %s" \
   "备份流程完成，归档目录：%s。" \

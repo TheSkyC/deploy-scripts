@@ -1299,6 +1299,8 @@ do_backup() {
       rm -f "$DATA_TMP"
       warn "$(t app.sub2api.warn.data_backup_failed)"
     fi
+  else
+    warn "$(t app.sub2api.warn.data_missing "$DATA_DIR")"
   fi
   release_lock
   success "$(t app.sub2api.success.backup_done "$BACKUP_DIR")"

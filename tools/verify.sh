@@ -1077,6 +1077,35 @@ check_preupdate_backup_warnings_include_followup_guidance() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_manual_backup_warnings_are_actionable() {
+  awk '
+      /app\.sub2api\.warn\.config_backup_failed/ { saw_config_fail=1 }
+      /partial archives may still exist in the backup directory/ { saw_partial=1 }
+      /app\.sub2api\.warn\.data_missing/ { saw_data_missing=1 }
+      /skipping data archive creation/ { saw_data_missing_guidance=1 }
+      /app\.sub2api\.warn\.data_backup_failed/ { saw_data_fail=1 }
+      END {
+        if (!(saw_config_fail && saw_partial && saw_data_missing && saw_data_missing_guidance && saw_data_fail)) {
+          print "Sub2API backup warnings must describe partial archive state and missing data directories." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /step "\$\(t app\.sub2api\.step\.manual_backup\)"/ { in_backup=1; next }
+      in_backup && /warn "\$\(t app\.sub2api\.warn\.config_backup_failed\)"/ { saw_config_warn=1 }
+      in_backup && /warn "\$\(t app\.sub2api\.warn\.data_backup_failed\)"/ { saw_data_warn=1 }
+      in_backup && /warn "\$\(t app\.sub2api\.warn\.data_missing "\$DATA_DIR"\)"/ { saw_data_missing_warn=1 }
+      in_backup && /success "\$\(t app\.sub2api\.success\.backup_done "\$BACKUP_DIR"\)"/ { in_backup=0 }
+      END {
+        if (!(saw_config_warn && saw_data_warn && saw_data_missing_warn)) {
+          print "Sub2API manual backup must warn explicitly for config/data archive failures and missing data directories." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_preupdate_backup_logs_match_guidance() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -2822,6 +2851,7 @@ main() {
   check_vaultwarden_fail2ban_restart_failures_are_reported
   check_vaultwarden_result_chains_are_explicit
   check_user_deletion_paths_are_explicit
+  check_sub2api_manual_backup_warnings_are_actionable
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_webvault_replacements_are_atomic
   check_vaultwarden_install_webvault_replacement_is_recoverable
