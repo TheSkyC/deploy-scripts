@@ -296,9 +296,13 @@ setup_python_env() {
   step "$(t app.cyberstrikeai.step.python_env)"
   cd "$INSTALL_DIR"
   if [[ ! -d "$VENV_DIR" ]]; then
-    python3 -m venv "$VENV_DIR"
+    if ! python3 -m venv "$VENV_DIR"; then
+      error "$(t app.cyberstrikeai.error.python_venv "$VENV_DIR")"
+    fi
   fi
-  source "$VENV_DIR/bin/activate"
+  if ! source "$VENV_DIR/bin/activate"; then
+    error "$(t app.cyberstrikeai.error.python_activate "$VENV_DIR")"
+  fi
   if ! python -m pip install --index-url "$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1; then
     warn "$(t app.cyberstrikeai.warn.pip_upgrade)"
   fi

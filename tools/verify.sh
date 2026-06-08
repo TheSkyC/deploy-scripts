@@ -640,6 +640,35 @@ check_cyberstrikeai_pip_upgrade_failures_are_reported() {
     ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_python_env_failures_are_reported() {
+  awk '
+      /app\.cyberstrikeai\.error\.python_venv/ { saw_venv_key=1 }
+      /python3-venv/ { saw_venv_guidance=1 }
+      /app\.cyberstrikeai\.error\.python_activate/ { saw_activate_key=1 }
+      /Recreate it and retry/ { saw_activate_guidance=1 }
+      END {
+        if (!(saw_venv_key && saw_venv_guidance && saw_activate_key && saw_activate_guidance)) {
+          print "CyberStrikeAI Python environment failures must provide actionable setup guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /step "\$\(t app\.cyberstrikeai\.step\.python_env\)"/ { in_block=1; saw_venv_if=0; saw_venv_error=0; saw_activate_if=0; saw_activate_error=0; next }
+      in_block && /if ! python3 -m venv "\$VENV_DIR"; then/ { saw_venv_if=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.python_venv "\$VENV_DIR"\)"/ { saw_venv_error=1 }
+      in_block && /if ! source "\$VENV_DIR\/bin\/activate"; then/ { saw_activate_if=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.python_activate "\$VENV_DIR"\)"/ { saw_activate_error=1 }
+      in_block && /if ! python -m pip install --index-url "\$PIP_INDEX_URL" --upgrade pip >\/dev\/null 2>&1; then/ {
+        if (!(saw_venv_if && saw_venv_error && saw_activate_if && saw_activate_error)) {
+          printf "%s CyberStrikeAI Python environment setup must fail explicitly when venv creation or activation fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_cyberstrikeai_repo_go_install_failures_are_reported() {
   if grep -R -n 'apt-get install -y -qq golang-go || true' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -2629,6 +2658,7 @@ main() {
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
+  check_cyberstrikeai_python_env_failures_are_reported
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
   check_blog_dependency_failures_are_reported

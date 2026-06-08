@@ -617,6 +617,12 @@ i18n_register_many \
   app.cyberstrikeai.step.python_env \
   "Prepare Python environment" \
   "准备 Python 环境" \
+  app.cyberstrikeai.error.python_venv \
+  "Failed to create the Python virtual environment at %s. Verify python3-venv is installed and retry." \
+  "无法创建 Python 虚拟环境：%s。请确认已安装 python3-venv 后重试。" \
+  app.cyberstrikeai.error.python_activate \
+  "Failed to activate the Python virtual environment at %s. Recreate it and retry." \
+  "无法激活 Python 虚拟环境：%s。请重建该虚拟环境后重试。" \
   app.cyberstrikeai.success.python_requirements \
   "Python requirements installed" \
   "Python 依赖安装完成" \
@@ -1245,9 +1251,13 @@ setup_python_env() {
   step "$(t app.cyberstrikeai.step.python_env)"
   cd "$INSTALL_DIR"
   if [[ ! -d "$VENV_DIR" ]]; then
-    python3 -m venv "$VENV_DIR"
+    if ! python3 -m venv "$VENV_DIR"; then
+      error "$(t app.cyberstrikeai.error.python_venv "$VENV_DIR")"
+    fi
   fi
-  source "$VENV_DIR/bin/activate"
+  if ! source "$VENV_DIR/bin/activate"; then
+    error "$(t app.cyberstrikeai.error.python_activate "$VENV_DIR")"
+  fi
   if ! python -m pip install --index-url "$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1; then
     warn "$(t app.cyberstrikeai.warn.pip_upgrade)"
   fi
