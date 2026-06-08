@@ -677,6 +677,9 @@ i18n_register_many \
   app.sub2api.success.nginx_fallback \
   "Nginx reverse proxy is active (fallback server_name _ -> :%s)." \
   "Nginx 反代配置已生效（兜底 server_name _ → :%s）。" \
+  app.sub2api.warn.nginx_reload_failed \
+  "Nginx config test passed, but reload failed. Inspect the error output and rerun manually: systemctl reload nginx" \
+  "Nginx 配置校验已通过，但 reload 失败。请检查错误输出后手动重试：systemctl reload nginx。" \
   app.sub2api.warn.nginx_test_failed \
   "Nginx config test failed (nginx -t). Check the config file and run manually: nginx -t && systemctl reload nginx" \
   "Nginx 配置校验失败（nginx -t），请检查配置文件后手动执行：nginx -t && systemctl reload nginx。" \
@@ -1880,11 +1883,14 @@ NGINX
     fi
   fi
   if nginx -t 2>/dev/null; then
-    systemctl reload nginx
-    if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
-      success "$(t app.sub2api.success.nginx_domain "$SUB2API_DOMAIN" "$PORT")"
+    if systemctl reload nginx; then
+      if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
+        success "$(t app.sub2api.success.nginx_domain "$SUB2API_DOMAIN" "$PORT")"
+      else
+        success "$(t app.sub2api.success.nginx_fallback "$PORT")"
+      fi
     else
-      success "$(t app.sub2api.success.nginx_fallback "$PORT")"
+      warn "$(t app.sub2api.warn.nginx_reload_failed)"
     fi
   else
     warn "$(t app.sub2api.warn.nginx_test_failed)"

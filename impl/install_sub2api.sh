@@ -526,11 +526,14 @@ NGINX
     fi
   fi
   if nginx -t 2>/dev/null; then
-    systemctl reload nginx
-    if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
-      success "$(t app.sub2api.success.nginx_domain "$SUB2API_DOMAIN" "$PORT")"
+    if systemctl reload nginx; then
+      if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
+        success "$(t app.sub2api.success.nginx_domain "$SUB2API_DOMAIN" "$PORT")"
+      else
+        success "$(t app.sub2api.success.nginx_fallback "$PORT")"
+      fi
     else
-      success "$(t app.sub2api.success.nginx_fallback "$PORT")"
+      warn "$(t app.sub2api.warn.nginx_reload_failed)"
     fi
   else
     warn "$(t app.sub2api.warn.nginx_test_failed)"

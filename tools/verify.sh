@@ -1180,6 +1180,33 @@ check_nginx_test_failures_report_diagnostics() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_nginx_reload_results_are_checked() {
+  if grep -R -n 'nginx -t 2>/dev/null; then[[:space:]]*$' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null | grep -v 'if nginx -t 2>/dev/null; then'; then
+    echo "Sub2API nginx apply path must keep the nginx test as an explicit conditional." >&2
+    return 1
+  fi
+  if grep -R -n '^[[:space:]]*systemctl reload nginx$' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API nginx apply path must validate nginx reload results." >&2
+    return 1
+  fi
+  awk '
+      /if nginx -t 2>\/dev\/null; then/ { in_block=1; saw_reload_if=0; saw_domain_success=0; saw_fallback_success=0; saw_reload_warn=0; next }
+      in_block && /if systemctl reload nginx; then/ { saw_reload_if=1 }
+      in_block && /success "\$\(t app\.sub2api\.success\.nginx_domain "\$SUB2API_DOMAIN" "\$PORT"\)"/ { saw_domain_success=1 }
+      in_block && /success "\$\(t app\.sub2api\.success\.nginx_fallback "\$PORT"\)"/ { saw_fallback_success=1 }
+      in_block && /warn "\$\(t app\.sub2api\.warn\.nginx_reload_failed\)"/ { saw_reload_warn=1 }
+      in_block && /warn "\$\(t app\.sub2api\.warn\.nginx_test_failed\)"/ {
+        if (!(saw_reload_if && saw_domain_success && saw_fallback_success && saw_reload_warn)) {
+          printf "%s Sub2API nginx apply path must branch on reload failure before reporting success\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
   if grep -R -n 'systemctl reload nginx 2>/dev/null || systemctl restart nginx' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -1546,6 +1573,7 @@ main() {
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic
   check_nginx_test_failures_report_diagnostics
+  check_sub2api_nginx_reload_results_are_checked
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
