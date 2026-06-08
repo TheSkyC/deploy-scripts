@@ -2057,6 +2057,23 @@ check_vaultwarden_enable_failures_are_reported() {
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_certbot_cron_failures_are_reported() {
+  awk '
+      /app\.vaultwarden\.error\.certbot_cron/ { saw_error_key=1 }
+      /30 2 \* \* \* certbot renew --quiet --post-hook/ { saw_guidance=1 }
+      /if crontab -l 2>\/dev\/null \| grep -q "certbot renew"; then/ { in_block=1; saw_write_if=0; saw_error=0; next }
+      in_block && /if ! \(crontab -l 2>\/dev\/null; echo "30 2 \* \* \* certbot renew --quiet --post-hook '\''systemctl reload nginx'\''"\) \| crontab -; then/ { saw_write_if=1 }
+      in_block && /error "\$\(t app\.vaultwarden\.error\.certbot_cron\)"/ { saw_error=1 }
+      in_block && /success "\$\(t app\.vaultwarden\.success\.certbot_cron\)"/ {
+        if (!(saw_error_key && saw_guidance && saw_write_if && saw_error)) {
+          printf "%s Vaultwarden must fail explicitly with manual guidance when writing the Certbot auto-renew crontab entry fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_runtime_service_starts_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl restart (nginx|fail2ban)$' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
@@ -2708,6 +2725,7 @@ main() {
   check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
   check_vaultwarden_enable_failures_are_reported
+  check_vaultwarden_certbot_cron_failures_are_reported
   check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
   check_sub2api_update_rollbacks_report_restart_failures

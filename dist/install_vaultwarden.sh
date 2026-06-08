@@ -812,6 +812,9 @@ i18n_register_many \
   app.vaultwarden.success.certbot_cron \
   "Certbot auto-renew cron entry added (daily 02:30)." \
   "Certbot 自动续签（每天 02:30）已加入 crontab。" \
+  app.vaultwarden.error.certbot_cron \
+  "Failed to write the Certbot auto-renew crontab entry. Add it manually after fixing crontab access: 30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" \
+  "写入 Certbot 自动续签 crontab 条目失败。请在修复 crontab 访问问题后手动添加：30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" \
   app.vaultwarden.warn.nginx_version \
   "Cannot detect Nginx version; using legacy http2 syntax (attached to listen lines)." \
   "无法检测 Nginx 版本，默认使用旧版 http2 语法（listen 行附加）。" \
@@ -1941,7 +1944,9 @@ NGINX
       if crontab -l 2>/dev/null | grep -q "certbot renew"; then
         success "$(t app.vaultwarden.success.certbot_cron_exists)"
       else
-        (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -
+        if ! (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -; then
+          error "$(t app.vaultwarden.error.certbot_cron)"
+        fi
         success "$(t app.vaultwarden.success.certbot_cron)"
       fi
     fi

@@ -629,7 +629,9 @@ NGINX
       if crontab -l 2>/dev/null | grep -q "certbot renew"; then
         success "$(t app.vaultwarden.success.certbot_cron_exists)"
       else
-        (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -
+        if ! (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -; then
+          error "$(t app.vaultwarden.error.certbot_cron)"
+        fi
         success "$(t app.vaultwarden.success.certbot_cron)"
       fi
     fi
