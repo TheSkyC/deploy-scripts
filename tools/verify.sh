@@ -1332,6 +1332,27 @@ check_newapi_enable_failures_are_reported() {
     ' apps/newapi.sh impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_manual_backup_wal_result_is_explicit() {
+  if grep -R -n '&& success "\$\(t app\.newapi\.success\.wal\)"' \
+      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+    echo "NewAPI manual backup WAL checkpoint must use explicit conditionals." >&2
+    return 1
+  fi
+  awk '
+      /step "\$\(t app\.newapi\.step\.manual_backup\)"/ { in_backup=1; saw_wal_if=0; saw_wal_success=0; saw_wal_warn=0; next }
+      in_backup && /if sqlite3 "\$DB_FILE" "PRAGMA wal_checkpoint\(TRUNCATE\);" 2>\/dev\/null; then/ { saw_wal_if=1 }
+      in_backup && /success "\$\(t app\.newapi\.success\.wal\)"/ { saw_wal_success=1 }
+      in_backup && /warn "\$\(t app\.newapi\.warn\.wal\)"/ { saw_wal_warn=1 }
+      in_backup && /local _ic/ {
+        if (!(saw_wal_if && saw_wal_success && saw_wal_warn)) {
+          printf "%s NewAPI manual backup WAL checkpoint result must branch explicitly before integrity checks\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_cyberstrikeai_enable_failures_are_reported() {
   awk '
       /app\.cyberstrikeai\.warn\.service_enable_failed/ { saw_warn_key=1 }
@@ -1907,6 +1928,7 @@ main() {
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_enable_failures_are_reported
   check_newapi_enable_failures_are_reported
+  check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
   check_vaultwarden_enable_failures_are_reported
   check_sub2api_update_rollbacks_report_restart_failures

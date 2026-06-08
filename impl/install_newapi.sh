@@ -708,9 +708,11 @@ do_backup() {
   mkdir -p "$BACKUP_DIR"
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
-    sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null \
-      && success "$(t app.newapi.success.wal)" \
-      || warn "$(t app.newapi.warn.wal)"
+    if sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null; then
+      success "$(t app.newapi.success.wal)"
+    else
+      warn "$(t app.newapi.warn.wal)"
+    fi
     local _ic
     _ic=$(sqlite3 "$DB_FILE" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
     if [[ "$_ic" == "ok" ]]; then
