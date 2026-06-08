@@ -703,7 +703,7 @@ do_backup() {
   info "$(t app.newapi.info.backing_up "$DATA_DIR" "$ARCHIVE")"
   if tar -czf "$ARCHIVE_TMP" \
       --exclude="*.log" --exclude="*.log.*" \
-      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1; then
+      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
     if mv "$ARCHIVE_TMP" "$ARCHIVE"; then
       local SZ; SZ=$(du -sh "$ARCHIVE" 2>/dev/null | awk '{print $1}')
       success "$(t app.newapi.success.backup_done "$ARCHIVE" "$SZ")"

@@ -2430,7 +2430,7 @@ if tar -czf "${ARCHIVE_TMP}" \
   --exclude="*.log" \
   --exclude="*.log.*" \
   -C "${DATA_PARENT}" "${DATA_BASE}" \
-  "${TAR_EXTRA[@]+"${TAR_EXTRA[@]}"}" 2>&1; then
+  "${TAR_EXTRA[@]+"${TAR_EXTRA[@]}"}" >&2; then
   if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
     ARCHIVE_SIZE=$(du -sh "${ARCHIVE}" | cut -f1)
     printf '%s  '"${MSG_SUCCESS}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${ARCHIVE}" "${ARCHIVE_SIZE}"

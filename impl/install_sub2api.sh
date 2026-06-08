@@ -136,7 +136,7 @@ verify_checksum() {
 extract_and_verify() {
   local archive="$1" dest_dir="$2"
   local tmp_extract; tmp_extract=$(mktemp -d "${dest_dir}/sub2api-extract.XXXXXX")
-  if ! tar -xzf "$archive" -C "$tmp_extract" 2>&1; then
+  if ! tar -xzf "$archive" -C "$tmp_extract" >&2; then
     rm -f "$archive"
     rm -rf "$tmp_extract"
     error "$(t app.sub2api.error.tar_extract)"
@@ -1157,7 +1157,7 @@ do_backup() {
     local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_$(date +%Y%m%d_%H%M%S).tar.gz"
     local CONF_TMP="${CONF_ARCHIVE}.tmp"
     if tar -czf "$CONF_TMP" \
-        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" 2>&1; then
+        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
       if mv "$CONF_TMP" "$CONF_ARCHIVE"; then
         local cf_sz; cf_sz=$(du -sh "$CONF_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.config_backup "$CONF_ARCHIVE" "$cf_sz")"
@@ -1177,7 +1177,7 @@ do_backup() {
     local DATA_TMP="${DATA_ARCHIVE}.tmp"
     if tar -czf "$DATA_TMP" \
         --exclude="*.log" --exclude="*.log.*" \
-        -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1; then
+        -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
       if mv "$DATA_TMP" "$DATA_ARCHIVE"; then
         local da_sz; da_sz=$(du -sh "$DATA_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.data_backup "$DATA_ARCHIVE" "$da_sz")"

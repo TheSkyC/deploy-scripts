@@ -986,6 +986,61 @@ check_silent_backup_tar_diagnostics_use_stderr() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
 }
 
+check_tar_diagnostics_use_stderr() {
+  if grep -R -nE 'tar -(czf|xzf) .*2>&1; then' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Tar diagnostics in backup and extract paths must be written to stderr." >&2
+    return 1
+  fi
+  awk '
+      /extract_and_verify\(\)/ { in_extract=1; saw_stderr=0; next }
+      in_extract && /tar -xzf "\$archive" -C "\$tmp_extract" >&2/ { saw_stderr=1 }
+      in_extract && /^}/ {
+        if (!saw_stderr) {
+          printf "%s Sub2API extract helper must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_extract=0
+      }
+      /do_backup\(\)/ { in_backup=1; saw_tar_stderr=0; next }
+      in_backup && /if tar -czf "\$ARCHIVE_TMP"/ { saw_tar_start=1 }
+      in_backup && / >&2; then/ { saw_tar_stderr=1 }
+      in_backup && /while IFS= read -r f; do/ {
+        if (saw_tar_start && !saw_tar_stderr) {
+          printf "%s manual backup helper must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /do_backup\(\)/ { in_backup=1; saw_conf_stderr=0; saw_data_stderr=0; next }
+      in_backup && /if tar -czf "\$CONF_TMP"/ { in_conf=1; next }
+      in_conf && / >&2; then/ { saw_conf_stderr=1; in_conf=0 }
+      in_backup && /if tar -czf "\$DATA_TMP"/ { in_data=1; next }
+      in_data && / >&2; then/ { saw_data_stderr=1; in_data=0 }
+      in_backup && /release_lock/ {
+        if (!(saw_conf_stderr && saw_data_stderr)) {
+          printf "%s Sub2API manual backup tar diagnostics must go to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /ARCHIVE_TMP="\$\{ARCHIVE\}\.tmp"/ { in_script=1; saw_tar_stderr=0; next }
+      in_script && /TAR_EXTRA.*>&2; then/ { saw_tar_stderr=1 }
+      in_script && /printf .*\$\{MSG_SUCCESS\}/ {
+        if (!saw_tar_stderr) {
+          printf "%s Vaultwarden backup script must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_script=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_cron_logrotate_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
     echo "cron and logrotate configs must be written through temporary files before replacement." >&2
@@ -1289,6 +1344,7 @@ main() {
   check_systemd_units_are_atomic
   check_backup_scripts_are_atomic
   check_silent_backup_tar_diagnostics_use_stderr
+  check_tar_diagnostics_use_stderr
   check_cron_logrotate_are_atomic
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic
