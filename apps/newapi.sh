@@ -228,6 +228,9 @@ i18n_register_many \
   app.newapi.step.systemd \
   "Step 6  Configure systemd service" \
   "Step 6  配置 systemd 服务" \
+  app.newapi.error.systemd_unit \
+  "systemd service file write failed: /etc/systemd/system/%s.service" \
+  "systemd 服务文件写入失败：/etc/systemd/system/%s.service。" \
   app.newapi.success.systemd \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service。" \

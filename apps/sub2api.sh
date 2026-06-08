@@ -387,6 +387,9 @@ i18n_register_many \
   app.sub2api.step.systemd \
   "Step 9  Configure systemd service" \
   "Step 9  配置 systemd 服务" \
+  app.sub2api.error.systemd_unit \
+  "systemd service file write failed: /etc/systemd/system/%s.service" \
+  "systemd 服务文件写入失败：/etc/systemd/system/%s.service" \
   app.sub2api.success.systemd_unit \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service" \

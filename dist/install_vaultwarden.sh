@@ -723,6 +723,9 @@ i18n_register_many \
   app.vaultwarden.step.systemd \
   "Step 7  Create systemd service" \
   "Step 7  创建 systemd 服务" \
+  app.vaultwarden.error.systemd \
+  "systemd service file write failed: /etc/systemd/system/vaultwarden.service" \
+  "systemd 服务文件写入失败：/etc/systemd/system/vaultwarden.service" \
   app.vaultwarden.success.systemd \
   "systemd service created and enabled at boot." \
   "systemd 服务已创建并设为开机自启。" \
@@ -1652,7 +1655,10 @@ ENV
   fi
   success "$(t app.vaultwarden.success.env_file "$VW_ENV_FILE")"
   step "$(t app.vaultwarden.step.systemd)"
-  cat > /etc/systemd/system/vaultwarden.service << UNIT
+  local unit_path="/etc/systemd/system/vaultwarden.service"
+  local unit_tmp
+  unit_tmp=$(mktemp "${unit_path}.XXXXXX")
+  if ! cat > "$unit_tmp" << UNIT
 [Unit]
 Description=Vaultwarden Password Manager (Bitwarden-compatible)
 Documentation=https://github.com/dani-garcia/vaultwarden
@@ -1699,6 +1705,16 @@ SyslogIdentifier=vaultwarden
 [Install]
 WantedBy=multi-user.target
 UNIT
+  then
+    rm -f "$unit_tmp"
+    error "$(t app.vaultwarden.error.systemd)"
+  fi
+  if ! chmod 644 "$unit_tmp" \
+      || ! chown root:root "$unit_tmp" \
+      || ! mv "$unit_tmp" "$unit_path"; then
+    rm -f "$unit_tmp"
+    error "$(t app.vaultwarden.error.systemd)"
+  fi
   systemctl daemon-reload
   systemctl enable vaultwarden --quiet
   success "$(t app.vaultwarden.success.systemd)"

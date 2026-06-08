@@ -735,6 +735,9 @@ i18n_register_many \
   app.newapi.step.systemd \
   "Step 6  Configure systemd service" \
   "Step 6  配置 systemd 服务" \
+  app.newapi.error.systemd_unit \
+  "systemd service file write failed: /etc/systemd/system/%s.service" \
+  "systemd 服务文件写入失败：/etc/systemd/system/%s.service。" \
   app.newapi.success.systemd \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service。" \
@@ -1248,7 +1251,10 @@ _health_check() {
 }
 _write_systemd_unit() {
   local session_secret="$1"
-  cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
+  local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
+  local unit_tmp
+  unit_tmp=$(mktemp "${unit_path}.XXXXXX")
+  if ! cat > "$unit_tmp" << EOF
 [Unit]
 Description=New API - LLM API Aggregation Gateway
 Documentation=https://github.com/${GITHUB_REPO}
@@ -1298,6 +1304,16 @@ SyslogIdentifier=${SERVICE_NAME}
 [Install]
 WantedBy=multi-user.target
 EOF
+  then
+    rm -f "$unit_tmp"
+    error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
+  fi
+  if ! chmod 644 "$unit_tmp" \
+      || ! chown root:root "$unit_tmp" \
+      || ! mv "$unit_tmp" "$unit_path"; then
+    rm -f "$unit_tmp"
+    error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
+  fi
 }
 _configure_firewall() {
   local FW_DONE=false

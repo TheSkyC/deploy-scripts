@@ -894,6 +894,9 @@ i18n_register_many \
   app.sub2api.step.systemd \
   "Step 9  Configure systemd service" \
   "Step 9  配置 systemd 服务" \
+  app.sub2api.error.systemd_unit \
+  "systemd service file write failed: /etc/systemd/system/%s.service" \
+  "systemd 服务文件写入失败：/etc/systemd/system/%s.service" \
   app.sub2api.success.systemd_unit \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service" \
@@ -1761,7 +1764,10 @@ NGINX
   fi
 }
 _write_systemd_unit() {
-  cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
+  local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
+  local unit_tmp
+  unit_tmp=$(mktemp "${unit_path}.XXXXXX")
+  if ! cat > "$unit_tmp" << EOF
 [Unit]
 Description=Sub2API - AI API Gateway Platform
 Documentation=https://github.com/${GITHUB_REPO}
@@ -1807,6 +1813,16 @@ SyslogIdentifier=${SERVICE_NAME}
 [Install]
 WantedBy=multi-user.target
 EOF
+  then
+    rm -f "$unit_tmp"
+    error "$(t app.sub2api.error.systemd_unit "$SERVICE_NAME")"
+  fi
+  if ! chmod 644 "$unit_tmp" \
+      || ! chown root:root "$unit_tmp" \
+      || ! mv "$unit_tmp" "$unit_path"; then
+    rm -f "$unit_tmp"
+    error "$(t app.sub2api.error.systemd_unit "$SERVICE_NAME")"
+  fi
 }
 _configure_firewall() {
   local FW_DONE=false

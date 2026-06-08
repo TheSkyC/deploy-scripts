@@ -287,7 +287,10 @@ write_systemd_unit() {
   step "$(t app.cyberstrikeai.step.systemd)"
   local https_env="false"
   _bool_true "$CSAI_HTTPS" && https_env="true"
-  cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SERVICE
+  local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
+  local unit_tmp
+  unit_tmp=$(mktemp "${unit_path}.XXXXXX")
+  if ! cat > "$unit_tmp" <<SERVICE
 [Unit]
 Description=CyberStrikeAI
 After=network-online.target
@@ -316,6 +319,16 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 SERVICE
+  then
+    rm -f "$unit_tmp"
+    error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
+  fi
+  if ! chmod 644 "$unit_tmp" \
+      || ! chown root:root "$unit_tmp" \
+      || ! mv "$unit_tmp" "$unit_path"; then
+    rm -f "$unit_tmp"
+    error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
+  fi
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" --quiet
   success "$(t app.cyberstrikeai.success.systemd "$SERVICE_NAME")"

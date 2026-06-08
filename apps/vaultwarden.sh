@@ -216,6 +216,9 @@ i18n_register_many \
   app.vaultwarden.step.systemd \
   "Step 7  Create systemd service" \
   "Step 7  创建 systemd 服务" \
+  app.vaultwarden.error.systemd \
+  "systemd service file write failed: /etc/systemd/system/vaultwarden.service" \
+  "systemd 服务文件写入失败：/etc/systemd/system/vaultwarden.service" \
   app.vaultwarden.success.systemd \
   "systemd service created and enabled at boot." \
   "systemd 服务已创建并设为开机自启。" \

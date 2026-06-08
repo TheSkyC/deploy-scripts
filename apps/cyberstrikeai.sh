@@ -114,6 +114,9 @@ i18n_register_many \
   app.cyberstrikeai.step.systemd \
   "Install systemd service" \
   "安装 systemd 服务" \
+  app.cyberstrikeai.error.systemd \
+  "systemd unit write failed: %s" \
+  "systemd 单元写入失败：%s" \
   app.cyberstrikeai.success.systemd \
   "systemd unit installed: %s" \
   "systemd 单元已安装：%s" \
