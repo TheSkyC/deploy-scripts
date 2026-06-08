@@ -1018,6 +1018,20 @@ _write_blog_file() {
   fi
 }
 
+wait_for_service() {
+  local service="$1"
+  local timeout="${2:-10}"
+  local elapsed=0
+  while (( elapsed < timeout )); do
+    if systemctl is-active --quiet "$service"; then
+      return 0
+    fi
+    sleep 1
+    elapsed=$(( elapsed + 1 ))
+  done
+  systemctl is-active --quiet "$service"
+}
+
 do_install() {
 echo -e "\n${BOLD}${CYAN}"
 cat << 'EOF'
@@ -1507,10 +1521,7 @@ step "$(t app.blog.step_start_nginx)"
 if ! systemctl enable nginx --quiet; then
   warn "$(t app.blog.warn.service_enable_failed "nginx" "nginx")"
 fi
-if systemctl restart nginx; then
-  sleep 1
-fi
-if systemctl is-active --quiet nginx; then
+if systemctl restart nginx && wait_for_service nginx 10; then
   success "$(t app.blog.nginx_started)"
 else
   error "$(t app.blog.error.nginx_start)"
