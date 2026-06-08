@@ -1293,6 +1293,31 @@ check_sub2api_nginx_install_starts_service_explicitly() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_enable_failures_are_reported() {
+  if grep -R -nE 'systemctl enable postgresql 2>/dev/null \|\| true|systemctl enable postgresql-15 2>/dev/null \|\| true|systemctl enable "postgresql-\$\{pg_ver\}" 2>/dev/null \|\| true' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API service enable failures must not be silently ignored." >&2
+    return 1
+  fi
+  awk '
+      /app\.sub2api\.warn\.service_enable_failed/ { saw_warn_key=1 }
+      /if ! systemctl enable postgresql 2>\/dev\/null &&/ { saw_existing_pg=1 }
+      /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "postgresql-\$\{pg_ver\}" "postgresql-\$\{pg_ver\}"\)"/ { saw_existing_pg_warn=1 }
+      /if ! systemctl enable postgresql 2>\/dev\/null; then/ { saw_apt_pg=1 }
+      /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "postgresql" "postgresql"\)"/ { saw_apt_pg_warn=1 }
+      /if ! systemctl enable postgresql-15 2>\/dev\/null; then/ { saw_rpm_pg=1 }
+      /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "postgresql-15" "postgresql-15"\)"/ { saw_rpm_pg_warn=1 }
+      /if ! systemctl enable nginx; then/ { saw_nginx=1 }
+      /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "nginx" "nginx"\)"/ { saw_nginx_warn=1 }
+      END {
+        if (!(saw_warn_key && saw_existing_pg && saw_existing_pg_warn && saw_apt_pg && saw_apt_pg_warn && saw_rpm_pg && saw_rpm_pg_warn && saw_nginx && saw_nginx_warn)) {
+          print "Sub2API must warn when service enablement fails for PostgreSQL or Nginx." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -1832,6 +1857,7 @@ main() {
   check_sub2api_postgres_rpm_setup_failures_are_explicit
   check_sub2api_dependency_services_start_before_success
   check_sub2api_nginx_install_starts_service_explicitly
+  check_sub2api_enable_failures_are_reported
   check_sub2api_update_rollbacks_report_restart_failures
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures

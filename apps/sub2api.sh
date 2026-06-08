@@ -126,6 +126,9 @@ i18n_register_many \
   app.sub2api.warn.postgres_not_running \
   "PostgreSQL service is not running; trying to start it..." \
   "PostgreSQL 服务未运行，尝试启动..." \
+  app.sub2api.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
   app.sub2api.error.postgres_start \
   "Cannot start PostgreSQL service. Inspect: journalctl -u postgresql -n 30" \
   "无法启动 PostgreSQL 服务，请检查：journalctl -u postgresql -n 30" \

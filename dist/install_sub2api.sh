@@ -641,6 +641,9 @@ i18n_register_many \
   app.sub2api.warn.postgres_not_running \
   "PostgreSQL service is not running; trying to start it..." \
   "PostgreSQL 服务未运行，尝试启动..." \
+  app.sub2api.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
   app.sub2api.error.postgres_start \
   "Cannot start PostgreSQL service. Inspect: journalctl -u postgresql -n 30" \
   "无法启动 PostgreSQL 服务，请检查：journalctl -u postgresql -n 30" \
@@ -1648,8 +1651,10 @@ _install_postgres() {
     local pg_ver
     pg_ver=$(psql --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo "0")
     if [[ "$pg_ver" -ge 15 ]]; then
-      systemctl enable postgresql 2>/dev/null || \
-        systemctl enable "postgresql-${pg_ver}" 2>/dev/null || true
+      if ! systemctl enable postgresql 2>/dev/null && \
+          ! systemctl enable "postgresql-${pg_ver}" 2>/dev/null; then
+        warn "$(t app.sub2api.warn.service_enable_failed "postgresql-${pg_ver}" "postgresql-${pg_ver}")"
+      fi
       _ensure_postgres_running "$pg_ver"
       success "$(t app.sub2api.success.postgres_exists "$pg_ver")"
       return 0
@@ -1685,7 +1690,9 @@ _install_postgres() {
     fi
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15
-    systemctl enable postgresql 2>/dev/null || true
+    if ! systemctl enable postgresql 2>/dev/null; then
+      warn "$(t app.sub2api.warn.service_enable_failed "postgresql" "postgresql")"
+    fi
     _ensure_postgres_running "15"
     success "$(t app.sub2api.success.postgres15)"
   elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
@@ -1705,7 +1712,9 @@ _install_postgres() {
     if [[ ! -f "$pg_data_version" ]]; then
       /usr/pgsql-15/bin/postgresql-15-setup initdb || error "$(t app.sub2api.error.postgres_initdb)"
     fi
-    systemctl enable postgresql-15 2>/dev/null || true
+    if ! systemctl enable postgresql-15 2>/dev/null; then
+      warn "$(t app.sub2api.warn.service_enable_failed "postgresql-15" "postgresql-15")"
+    fi
     _ensure_postgres_running "15"
     success "$(t app.sub2api.success.postgres15)"
   fi
@@ -1834,7 +1843,9 @@ _install_nginx() {
       yum install -y nginx
     fi
   fi
-  systemctl enable nginx
+  if ! systemctl enable nginx; then
+    warn "$(t app.sub2api.warn.service_enable_failed "nginx" "nginx")"
+  fi
   _ensure_nginx_running
   success "$(t app.sub2api.success.nginx_installed)"
 }
