@@ -123,6 +123,9 @@ i18n_register_many \
   app.cyberstrikeai.success.systemd \
   "systemd unit installed: %s" \
   "systemd 单元已安装：%s" \
+  app.cyberstrikeai.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
   app.cyberstrikeai.step.nginx \
   "Configure Nginx reverse proxy" \
   "配置 Nginx 反向代理" \

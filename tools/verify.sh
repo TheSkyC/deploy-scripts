@@ -1332,6 +1332,40 @@ check_newapi_enable_failures_are_reported() {
     ' apps/newapi.sh impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_cyberstrikeai_enable_failures_are_reported() {
+  awk '
+      /app\.cyberstrikeai\.warn\.service_enable_failed/ { saw_warn_key=1 }
+      /if ! systemctl enable "\$SERVICE_NAME" --quiet; then/ { saw_service_if=1 }
+      /warn "\$\(t app\.cyberstrikeai\.warn\.service_enable_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_service_warn=1 }
+      /if ! systemctl enable nginx --quiet; then/ { saw_nginx_if=1 }
+      /warn "\$\(t app\.cyberstrikeai\.warn\.service_enable_failed "nginx" "nginx"\)"/ { saw_nginx_warn=1 }
+      END {
+        if (!(saw_warn_key && saw_service_if && saw_service_warn && saw_nginx_if && saw_nginx_warn)) {
+          print "CyberStrikeAI must warn when service enablement fails for the app service or Nginx." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
+check_vaultwarden_enable_failures_are_reported() {
+  awk '
+      /app\.vaultwarden\.warn\.service_enable_failed/ { saw_warn_key=1 }
+      /if ! systemctl enable vaultwarden --quiet; then/ { saw_service_if=1 }
+      /warn "\$\(t app\.vaultwarden\.warn\.service_enable_failed "vaultwarden" "vaultwarden"\)"/ { saw_service_warn=1 }
+      /if ! systemctl enable nginx --quiet; then/ { saw_nginx_if=1 }
+      /warn "\$\(t app\.vaultwarden\.warn\.service_enable_failed "nginx" "nginx"\)"/ { saw_nginx_warn=1 }
+      /if ! systemctl enable fail2ban --quiet; then/ { saw_fail2ban_if=1 }
+      /warn "\$\(t app\.vaultwarden\.warn\.service_enable_failed "fail2ban" "fail2ban"\)"/ { saw_fail2ban_warn=1 }
+      END {
+        if (!(saw_warn_key && saw_service_if && saw_service_warn && saw_nginx_if && saw_nginx_warn && saw_fail2ban_if && saw_fail2ban_warn)) {
+          print "Vaultwarden must warn when service enablement fails for Vaultwarden, Nginx, or Fail2ban." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -1873,6 +1907,8 @@ main() {
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_enable_failures_are_reported
   check_newapi_enable_failures_are_reported
+  check_cyberstrikeai_enable_failures_are_reported
+  check_vaultwarden_enable_failures_are_reported
   check_sub2api_update_rollbacks_report_restart_failures
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures

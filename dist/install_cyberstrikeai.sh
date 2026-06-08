@@ -638,6 +638,9 @@ i18n_register_many \
   app.cyberstrikeai.success.systemd \
   "systemd unit installed: %s" \
   "systemd 单元已安装：%s" \
+  app.cyberstrikeai.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
   app.cyberstrikeai.step.nginx \
   "Configure Nginx reverse proxy" \
   "配置 Nginx 反向代理" \
@@ -1328,7 +1331,9 @@ SERVICE
     error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
   fi
   systemctl daemon-reload
-  systemctl enable "$SERVICE_NAME" --quiet
+  if ! systemctl enable "$SERVICE_NAME" --quiet; then
+    warn "$(t app.cyberstrikeai.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   success "$(t app.cyberstrikeai.success.systemd "$SERVICE_NAME")"
 }
 _write_nginx_site_link() {
@@ -1410,7 +1415,9 @@ NGINX
   _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
     || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
   nginx -t
-  systemctl enable nginx --quiet
+  if ! systemctl enable nginx --quiet; then
+    warn "$(t app.cyberstrikeai.warn.service_enable_failed "nginx" "nginx")"
+  fi
   if ! systemctl reload nginx; then
     systemctl restart nginx
   fi

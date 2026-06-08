@@ -539,7 +539,9 @@ UNIT
     error "$(t app.vaultwarden.error.systemd)"
   fi
   systemctl daemon-reload
-  systemctl enable vaultwarden --quiet
+  if ! systemctl enable vaultwarden --quiet; then
+    warn "$(t app.vaultwarden.warn.service_enable_failed "vaultwarden" "vaultwarden")"
+  fi
   success "$(t app.vaultwarden.success.systemd)"
   step "$(t app.vaultwarden.step.start_service)"
   if ss -ltn 2>/dev/null | grep -qE ":${VW_PORT}[[:space:]]"; then
@@ -599,7 +601,9 @@ NGINX
   nginx -t || error "$(t app.vaultwarden.error.nginx_http_test)"
   success "$(t app.vaultwarden.success.nginx_http)"
   step "$(t app.vaultwarden.step.certbot)"
-  systemctl enable nginx --quiet
+  if ! systemctl enable nginx --quiet; then
+    warn "$(t app.vaultwarden.warn.service_enable_failed "nginx" "nginx")"
+  fi
   systemctl restart nginx
   if ! wait_for_service nginx 10; then
     error "$(t app.vaultwarden.error.nginx_start)"
@@ -806,7 +810,9 @@ maxretry = 3
 bantime  = 86400
 findtime = 86400
 JAIL
-  systemctl enable fail2ban --quiet
+  if ! systemctl enable fail2ban --quiet; then
+    warn "$(t app.vaultwarden.warn.service_enable_failed "fail2ban" "fail2ban")"
+  fi
   systemctl restart fail2ban
   success "$(t app.vaultwarden.success.fail2ban)"
   step "$(t app.vaultwarden.step.logrotate)"

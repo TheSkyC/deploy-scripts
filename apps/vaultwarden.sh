@@ -223,8 +223,11 @@ i18n_register_many \
   "systemd service file write failed: /etc/systemd/system/vaultwarden.service" \
   "systemd 服务文件写入失败：/etc/systemd/system/vaultwarden.service" \
   app.vaultwarden.success.systemd \
-  "systemd service created and enabled at boot." \
-  "systemd 服务已创建并设为开机自启。" \
+  "systemd service created." \
+  "systemd 服务已创建。" \
+  app.vaultwarden.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
   app.vaultwarden.step.start_service \
   "Step 8  Start Vaultwarden service" \
   "Step 8  启动 Vaultwarden 服务" \

@@ -406,7 +406,9 @@ SERVICE
     error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
   fi
   systemctl daemon-reload
-  systemctl enable "$SERVICE_NAME" --quiet
+  if ! systemctl enable "$SERVICE_NAME" --quiet; then
+    warn "$(t app.cyberstrikeai.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   success "$(t app.cyberstrikeai.success.systemd "$SERVICE_NAME")"
 }
 _write_nginx_site_link() {
@@ -488,7 +490,9 @@ NGINX
   _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
     || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
   nginx -t
-  systemctl enable nginx --quiet
+  if ! systemctl enable nginx --quiet; then
+    warn "$(t app.cyberstrikeai.warn.service_enable_failed "nginx" "nginx")"
+  fi
   if ! systemctl reload nginx; then
     systemctl restart nginx
   fi
