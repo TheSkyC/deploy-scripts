@@ -305,11 +305,13 @@ do_install() {
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
   fi
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \
     sqlite3 argon2 openssl fail2ban \
-    logrotate
+    logrotate; then
+    error "$(t app.vaultwarden.error.deps_install)"
+  fi
   success "$(t app.vaultwarden.success.deps)"
   step "$(t app.vaultwarden.step.user_dirs)"
   if ! id "$VW_USER" &>/dev/null; then

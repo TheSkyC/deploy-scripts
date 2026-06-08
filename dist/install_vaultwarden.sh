@@ -647,6 +647,9 @@ i18n_register_many \
   app.vaultwarden.warn.apt_update \
   "apt-get update partially failed. Continuing install, but package versions may be affected. Inspect /var/log/apt/* or rerun apt-get update after fixing repository/network issues." \
   "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。请检查 /var/log/apt/*，或在修复仓库/网络问题后重新执行 apt-get update。" \
+  app.vaultwarden.error.deps_install \
+  "Dependency installation failed. Run apt-get install -y curl wget ca-certificates nginx certbot python3-certbot-nginx sqlite3 argon2 openssl fail2ban logrotate after fixing the package manager state." \
+  "依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl wget ca-certificates nginx certbot python3-certbot-nginx sqlite3 argon2 openssl fail2ban logrotate。" \
   app.vaultwarden.success.deps \
   "System dependencies installed." \
   "系统依赖安装完成。" \
@@ -1614,11 +1617,13 @@ do_install() {
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
   fi
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \
     sqlite3 argon2 openssl fail2ban \
-    logrotate
+    logrotate; then
+    error "$(t app.vaultwarden.error.deps_install)"
+  fi
   success "$(t app.vaultwarden.success.deps)"
   step "$(t app.vaultwarden.step.user_dirs)"
   if ! id "$VW_USER" &>/dev/null; then
