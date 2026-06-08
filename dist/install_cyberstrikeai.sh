@@ -572,6 +572,9 @@ i18n_register_many \
   app.cyberstrikeai.error.go_failed \
   "Go installation failed. Please install Go 1.21+ manually." \
   "Go 安装失败，请手动安装 Go 1.21 或更高版本。" \
+  app.cyberstrikeai.warn.go_restore_failed \
+  "Go installation failed and the previous Go toolchain could not be restored automatically. Please repair /usr/local/go manually." \
+  "Go 安装失败，且旧 Go 工具链未能自动恢复。请手动修复 /usr/local/go。" \
   app.cyberstrikeai.success.go_installed \
   "Go installed: %s" \
   "Go 已安装：%s" \
@@ -1111,8 +1114,9 @@ install_go_if_needed() {
   fi
   if ! mv "$extract_dir/go" /usr/local/go; then
     if [[ -n "$old_go_backup" && -e "$old_go_backup" && ! -e /usr/local/go ]]; then
-      restore_old_go_toolchain "$old_go_backup" \
-        || warn "$(t app.cyberstrikeai.error.go_failed)"
+      if ! restore_old_go_toolchain "$old_go_backup"; then
+        warn "$(t app.cyberstrikeai.warn.go_restore_failed)"
+      fi
     fi
     rm -rf "$extract_dir"
     error "$(t app.cyberstrikeai.error.go_failed)"

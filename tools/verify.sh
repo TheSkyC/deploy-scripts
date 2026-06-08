@@ -598,6 +598,27 @@ check_go_tarball_failures_cleanup() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_go_restore_failures_are_reported() {
+  if grep -R -n 'warn "\$\(t app\.cyberstrikeai\.error\.go_failed\)"' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI Go restore failures must not reuse the generic install failure message as a warning." >&2
+    return 1
+  fi
+  awk '
+      /app\.cyberstrikeai\.warn\.go_restore_failed/ { saw_warn_key=1 }
+      /if ! mv "\$extract_dir\/go" \/usr\/local\/go; then/ { in_block=1; saw_restore_if=0; saw_warn=0; next }
+      in_block && /if ! restore_old_go_toolchain "\$old_go_backup"; then/ { saw_restore_if=1 }
+      in_block && /warn "\$\(t app\.cyberstrikeai\.warn\.go_restore_failed\)"/ { saw_warn=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.go_failed\)"/ {
+        if (!(saw_warn_key && saw_restore_if && saw_warn)) {
+          printf "%s CyberStrikeAI must warn explicitly when restoring the previous Go toolchain fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_mutating_installs_acquire_locks() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -2140,6 +2161,7 @@ main() {
   check_iptables_rules_are_atomic
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
+  check_cyberstrikeai_go_restore_failures_are_reported
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic

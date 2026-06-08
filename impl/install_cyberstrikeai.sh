@@ -180,8 +180,9 @@ install_go_if_needed() {
   fi
   if ! mv "$extract_dir/go" /usr/local/go; then
     if [[ -n "$old_go_backup" && -e "$old_go_backup" && ! -e /usr/local/go ]]; then
-      restore_old_go_toolchain "$old_go_backup" \
-        || warn "$(t app.cyberstrikeai.error.go_failed)"
+      if ! restore_old_go_toolchain "$old_go_backup"; then
+        warn "$(t app.cyberstrikeai.warn.go_restore_failed)"
+      fi
     fi
     rm -rf "$extract_dir"
     error "$(t app.cyberstrikeai.error.go_failed)"
