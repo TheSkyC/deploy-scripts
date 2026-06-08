@@ -161,7 +161,11 @@ extract_and_verify() {
   local size_mb=$(( size / 1024 / 1024 ))
   success "$(t app.sub2api.success.elf_ok "$BIN_ARCH" "$size_mb")"
   local tmp_bin; tmp_bin=$(mktemp "${dest_dir}/sub2api.tmp.XXXXXX")
-  mv "$bin_path" "$tmp_bin"
+  if ! mv "$bin_path" "$tmp_bin"; then
+    rm -f "$tmp_bin"
+    rm -rf "$tmp_extract"
+    error "$(t app.sub2api.error.archive_missing_binary)"
+  fi
   rm -rf "$tmp_extract"
   echo "$tmp_bin"
 }

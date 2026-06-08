@@ -412,6 +412,13 @@ check_update_backs_up_before_stop() {
   done
 }
 
+check_sub2api_extract_move_failure_cleanup() {
+  if grep -R -n '^[[:space:]]*mv "$bin_path" "$tmp_bin"$' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "sub2api extraction must clean up temporary files if moving the binary fails." >&2
+    return 1
+  fi
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -437,6 +444,7 @@ main() {
   check_go_tarball_failures_cleanup
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
+  check_sub2api_extract_move_failure_cleanup
   echo "Verification passed"
 }
 
