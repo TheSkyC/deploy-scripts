@@ -1216,6 +1216,34 @@ check_preupdate_backup_logs_match_guidance() {
   '
 }
 
+check_cyberstrikeai_runtime_dir_failures_are_explicit() {
+  awk '
+      /app\.cyberstrikeai\.error\.runtime_dirs/ { saw_error_key=1 }
+      /Check permissions for %s and %s, then retry/ { saw_guidance=1 }
+      END {
+        if (!(saw_error_key && saw_guidance)) {
+          print "CyberStrikeAI runtime directory failures must explain which paths to inspect." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /install_runtime_dirs\(\)/ { in_func=1; saw_mkdir_if=0; saw_chown_if=0; saw_mode_if=0; saw_child_mode_if=0; saw_error=0; next }
+      in_func && /if ! mkdir -p "\$LOG_DIR" "\$INSTALL_DIR\/data" "\$INSTALL_DIR\/tmp" "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
+      in_func && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR" "\$BACKUP_DIR"; then/ { saw_chown_if=1 }
+      in_func && /if ! chmod 750 "\$INSTALL_DIR" "\$BACKUP_DIR"; then/ { saw_mode_if=1 }
+      in_func && /if ! chmod 750 "\$LOG_DIR" "\$INSTALL_DIR\/data" "\$INSTALL_DIR\/tmp"; then/ { saw_child_mode_if=1 }
+      in_func && /error "\$\(t app\.cyberstrikeai\.error\.runtime_dirs "\$INSTALL_DIR" "\$BACKUP_DIR"\)"/ { saw_error=1 }
+      in_func && /success "\$\(t app\.cyberstrikeai\.success\.runtime_dirs\)"/ {
+        if (!(saw_mkdir_if && saw_chown_if && saw_mode_if && saw_child_mode_if && saw_error)) {
+          printf "%s CyberStrikeAI runtime directory setup must fail explicitly on mkdir, chown, and chmod errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_mutating_installs_acquire_locks() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -3263,6 +3291,7 @@ main() {
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic
   check_sub2api_extract_move_failure_cleanup
+  check_cyberstrikeai_runtime_dir_failures_are_explicit
   check_sub2api_pg_dump_errors_stay_out_of_backups
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated

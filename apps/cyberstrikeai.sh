@@ -135,6 +135,9 @@ i18n_register_many \
   app.cyberstrikeai.step.runtime_dirs \
   "Prepare runtime directories" \
   "准备运行目录" \
+  app.cyberstrikeai.error.runtime_dirs \
+  "Runtime directory setup failed. Check permissions for %s and %s, then retry." \
+  "运行目录初始化失败。请检查 %s 和 %s 的权限后重试。" \
   app.cyberstrikeai.success.runtime_dirs \
   "Runtime directories prepared" \
   "运行目录已准备完成" \

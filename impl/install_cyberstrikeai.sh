@@ -368,10 +368,18 @@ restore_update_backup() {
 }
 install_runtime_dirs() {
   step "$(t app.cyberstrikeai.step.runtime_dirs)"
-  mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$BACKUP_DIR"
-  chmod 750 "$INSTALL_DIR" "$BACKUP_DIR"
-  chmod 750 "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp"
+  if ! mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"; then
+    error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
+  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$BACKUP_DIR"; then
+    error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
+  if ! chmod 750 "$INSTALL_DIR" "$BACKUP_DIR"; then
+    error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
+  if ! chmod 750 "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp"; then
+    error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
   success "$(t app.cyberstrikeai.success.runtime_dirs)"
 }
 write_systemd_unit() {
