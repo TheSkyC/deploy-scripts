@@ -1571,11 +1571,14 @@ BKSH_BODY
 }
 _backup_silent() {
   local label="${1:-manual}"
+  local backup_log="${BACKUP_DIR}/backup.log"
+  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
+  mkdir -p "$BACKUP_DIR"
   if [[ ! -d "$DATA_DIR" ]]; then
+    _log_backup_helper "$(t app.newapi.backup.log.data_missing "$DATA_DIR")"
     warn "$(t app.newapi.warn.silent_data_missing "$DATA_DIR")"
     return 1
   fi
-  mkdir -p "$BACKUP_DIR"
   local archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   local DB_FILE="${DATA_DIR}/one-api.db"
@@ -1583,7 +1586,10 @@ _backup_silent() {
     sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
     local _ic
     _ic=$(sqlite3 "$DB_FILE" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    [[ "$_ic" != "ok" ]] && warn "$(t app.newapi.warn.sqlite_integrity "$_ic")"
+    if [[ "$_ic" != "ok" ]]; then
+      _log_backup_helper "$(t app.newapi.backup.log.integrity_warn "$_ic")"
+      warn "$(t app.newapi.warn.sqlite_integrity "$_ic")"
+    fi
   fi
   if tar -czf "$archive_tmp" \
       --exclude="*.log" --exclude="*.log.*" \
@@ -1593,11 +1599,13 @@ _backup_silent() {
       success "$(t app.newapi.success.silent_backup "$archive" "$sz")"
     else
       rm -f "$archive_tmp"
+      _log_backup_helper "$(t app.newapi.backup.log.tar_failed)"
       warn "$(t app.newapi.warn.silent_backup_failed)"
       return 1
     fi
   else
     rm -f "$archive_tmp"
+    _log_backup_helper "$(t app.newapi.backup.log.tar_failed)"
     warn "$(t app.newapi.warn.silent_backup_failed)"
     return 1
   fi

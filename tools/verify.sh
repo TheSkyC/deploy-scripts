@@ -760,17 +760,71 @@ check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
       /_backup_silent\(\)/ { in_helper=1; saw_failed_flag=0; saw_pg_fail=0; saw_config_fail=0; saw_return=0; next }
       in_helper && /local backup_failed=0/ { saw_failed_flag=1 }
+      in_helper && /_log_backup_helper "\$\(t app\.sub2api\.backup\.log\.pg_dump_failed\)"/ { saw_pg_fail_log=1 }
       in_helper && /warn "\$\(t app\.sub2api\.warn\.pg_dump_failed\)"/ { saw_pg_fail=1 }
+      in_helper && /_log_backup_helper "\$\(t app\.sub2api\.backup\.log\.config_failed\)"/ { saw_config_fail_log=1 }
       in_helper && /warn "\$\(t app\.sub2api\.warn\.config_backup_failed\)"/ { saw_config_fail=1 }
       in_helper && /\[\[ "\$backup_failed" -eq 0 \]\]/ { saw_return=1 }
       in_helper && /^}/ {
-        if (!(saw_failed_flag && saw_pg_fail && saw_config_fail && saw_return)) {
-          printf "%s Sub2API silent backup helper must propagate backup failure after warning\n", FILENAME > "/dev/stderr"
+        if (!(saw_failed_flag && saw_pg_fail_log && saw_pg_fail && saw_config_fail_log && saw_config_fail && saw_return)) {
+          printf "%s Sub2API silent backup helper must log backup failures and propagate them after warning\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_helper=0
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
+check_preupdate_backup_logs_match_guidance() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    for file in impl/install_newapi.sh dist/install_newapi.sh; do
+      block=$(sed -n "/^_backup_silent()/,/^_print_install_summary()/p" "$file")
+      grep -Fq '\''local backup_log="${BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
+        echo "$file NewAPI silent backup helper must declare backup.log output" >&2
+        exit 1
+      }
+      grep -Fq "_log_backup_helper()" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must define a backup log helper" >&2
+        exit 1
+      }
+      grep -Fq ">> \"\$backup_log\"" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must append lines to backup.log" >&2
+        exit 1
+      }
+      grep -Fq "_log_backup_helper \"\$(t app.newapi.backup.log.data_missing \"\$DATA_DIR\")\"" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must log missing data directory failures" >&2
+        exit 1
+      }
+      grep -Fq "_log_backup_helper \"\$(t app.newapi.backup.log.tar_failed)\"" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must log tar failures" >&2
+        exit 1
+      }
+    done
+    for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+      block=$(sed -n "/^_backup_silent()/,/^do_backup()/p" "$file")
+      grep -Fq '\''local backup_log="${VW_BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must declare backup.log output" >&2
+        exit 1
+      }
+      grep -Fq "_log_backup_helper()" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must define a backup log helper" >&2
+        exit 1
+      }
+      grep -Fq ">> \"\$backup_log\"" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must append lines to backup.log" >&2
+        exit 1
+      }
+      grep -Fq "_log_backup_helper \"\$(t app.vaultwarden.backup.script.data_missing \"\$VW_DATA_DIR\")\"" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must log missing data directory failures" >&2
+        exit 1
+      }
+      grep -Fq "_log_backup_helper \"\$(t app.vaultwarden.backup.script.failed)\"" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must log archive failures" >&2
+        exit 1
+      }
+    done
+  '
 }
 
 check_mutating_installs_acquire_locks() {
@@ -2321,6 +2375,7 @@ main() {
   check_vaultwarden_apt_update_failures_are_reported
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
+  check_preupdate_backup_logs_match_guidance
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic

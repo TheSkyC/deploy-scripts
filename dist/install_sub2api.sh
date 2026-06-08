@@ -2283,6 +2283,8 @@ BKSH_BODY
 _backup_silent() {
   local label="${1:-manual}"
   local backup_failed=0
+  local backup_log="${BACKUP_DIR}/backup.log"
+  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
   mkdir -p "$BACKUP_DIR"
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
@@ -2293,15 +2295,18 @@ _backup_silent() {
         success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
       else
         rm -f "$pg_tmp"
+        _log_backup_helper "$(t app.sub2api.backup.log.pg_dump_failed)"
         warn "$(t app.sub2api.warn.pg_dump_failed)"
         backup_failed=1
       fi
     else
       rm -f "$pg_tmp"
+      _log_backup_helper "$(t app.sub2api.backup.log.pg_dump_failed)"
       warn "$(t app.sub2api.warn.pg_dump_failed)"
       backup_failed=1
     fi
   else
+    _log_backup_helper "$(t app.sub2api.backup.log.pg_dump_missing)"
     warn "$(t app.sub2api.warn.pg_snapshot_skip)"
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
@@ -2314,11 +2319,13 @@ _backup_silent() {
         success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
       else
         rm -f "$conf_tmp"
+        _log_backup_helper "$(t app.sub2api.backup.log.config_failed)"
         warn "$(t app.sub2api.warn.config_backup_failed)"
         backup_failed=1
       fi
     else
       rm -f "$conf_tmp"
+      _log_backup_helper "$(t app.sub2api.backup.log.config_failed)"
       warn "$(t app.sub2api.warn.config_backup_failed)"
       backup_failed=1
     fi

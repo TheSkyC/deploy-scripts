@@ -2512,10 +2512,13 @@ BKSH
 }
 _backup_silent() {
   local label="${1:-manual}"
+  local backup_log="${VW_BACKUP_DIR}/backup.log"
+  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
   mkdir -p "$VW_BACKUP_DIR"
   local archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
+    _log_backup_helper "$(t app.vaultwarden.backup.script.data_missing "$VW_DATA_DIR")"
     warn "$(t app.vaultwarden.warn.backup_data_missing "$VW_DATA_DIR")"
     return 1
   fi
@@ -2523,7 +2526,10 @@ _backup_silent() {
     sqlite3 "${VW_DATA_DIR}/db.sqlite3" "PRAGMA wal_checkpoint(FULL);" 2>/dev/null || true
     local _ic
     _ic=$(sqlite3 "${VW_DATA_DIR}/db.sqlite3" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    [[ "$_ic" != "ok" ]] && warn "$(t app.vaultwarden.warn.sqlite_integrity "$_ic")"
+    if [[ "$_ic" != "ok" ]]; then
+      _log_backup_helper "$(t app.vaultwarden.backup.script.sqlite_warning "$_ic")"
+      warn "$(t app.vaultwarden.warn.sqlite_integrity "$_ic")"
+    fi
   fi
   local tar_extra=()
   [[ -f "$VW_ENV_FILE" ]] && tar_extra=(-C / "${VW_ENV_FILE#/}")
@@ -2534,11 +2540,13 @@ _backup_silent() {
       success "$(t app.vaultwarden.success.backup_created "$archive")"
     else
       rm -f "$archive_tmp"
+      _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
       warn "$(t app.vaultwarden.warn.backup_failed_continue)"
       return 1
     fi
   else
     rm -f "$archive_tmp"
+    _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"
     return 1
   fi
