@@ -290,6 +290,9 @@ i18n_register app.blog.error.static_deploy \
 i18n_register app.blog.error.nginx_config \
   "Nginx configuration validation failed. Check the errors above." \
   "Nginx 配置验证失败，请检查上方错误。"
+i18n_register app.blog.error.nginx_write \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s"
 i18n_register app.blog.nginx_configured \
   "Nginx configured." \
   "Nginx 配置完成"

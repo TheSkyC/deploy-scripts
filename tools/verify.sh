@@ -527,6 +527,27 @@ check_cron_logrotate_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
 }
 
+check_nginx_configs_are_atomic() {
+  if grep -R -nE '^[[:space:]]*cat > (/etc/nginx/sites-available/|"\$NGINX_CONF")|^[[:space:]]*} >> "\$NGINX_CONF"' \
+      impl dist 2>/dev/null; then
+    echo "Nginx site configs must be written through temporary files before replacement." >&2
+    return 1
+  fi
+  awk '
+      /(nginx_tmp|NGINX_TMP)=\$\(mktemp/ { saw_tmp=1 }
+      /mv "\$(nginx_tmp|NGINX_TMP)" "\$(nginx_conf|NGINX_CONF)"/ { saw_mv=1 }
+      /rm -f "\$(nginx_tmp|NGINX_TMP)"/ { saw_cleanup=1 }
+      /_write_nginx_config_file "\$NGINX_CONF"/ { saw_helper=1 }
+      END {
+        if (!(saw_tmp && saw_mv && saw_cleanup && saw_helper)) {
+          print "Nginx site config writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
+      dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   awk '
       /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
@@ -619,6 +640,7 @@ main() {
   check_systemd_units_are_atomic
   check_backup_scripts_are_atomic
   check_cron_logrotate_are_atomic
+  check_nginx_configs_are_atomic
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree

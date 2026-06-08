@@ -340,7 +340,10 @@ write_nginx_config() {
   [[ -n "$CSAI_DOMAIN" ]] && server_name="$CSAI_DOMAIN"
   local upstream_scheme="http"
   _bool_true "$CSAI_HTTPS" && upstream_scheme="https"
-  cat > "$NGINX_CONF" <<NGINX
+  mkdir -p "$(dirname "$NGINX_CONF")" "$(dirname "$NGINX_LINK")"
+  local nginx_tmp
+  nginx_tmp=$(mktemp "${NGINX_CONF}.XXXXXX")
+  if ! cat > "$nginx_tmp" <<NGINX
 server {
     listen ${PUBLIC_PORT};
     listen [::]:${PUBLIC_PORT};
@@ -385,6 +388,16 @@ server {
     error_log  /var/log/nginx/cyberstrike-ai_error.log;
 }
 NGINX
+  then
+    rm -f "$nginx_tmp"
+    error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
+  fi
+  if ! chmod 644 "$nginx_tmp" \
+      || ! chown root:root "$nginx_tmp" \
+      || ! mv "$nginx_tmp" "$NGINX_CONF"; then
+    rm -f "$nginx_tmp"
+    error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
+  fi
   ln -sf "$NGINX_CONF" "$NGINX_LINK"
   nginx -t
   systemctl enable nginx --quiet

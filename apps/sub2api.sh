@@ -144,6 +144,9 @@ i18n_register_many \
   app.sub2api.success.nginx_installed \
   "Nginx installed." \
   "Nginx 安装完成。" \
+  app.sub2api.error.nginx_config_write \
+  "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
+  "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \
   app.sub2api.warn.nginx_include \
   "Cannot update /etc/nginx/nginx.conf automatically. Add this inside http {} manually: include /etc/nginx/sites-enabled/*;" \
   "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;" \

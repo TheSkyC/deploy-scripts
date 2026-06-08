@@ -797,6 +797,9 @@ i18n_register app.blog.error.static_deploy \
 i18n_register app.blog.error.nginx_config \
   "Nginx configuration validation failed. Check the errors above." \
   "Nginx 配置验证失败，请检查上方错误。"
+i18n_register app.blog.error.nginx_write \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s"
 i18n_register app.blog.nginx_configured \
   "Nginx configured." \
   "Nginx 配置完成"
@@ -1318,7 +1321,8 @@ else
 fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 NGINX_CONF="/etc/nginx/sites-available/blog"
-cat > "$NGINX_CONF" << NGINX
+NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX")
+if ! cat > "$NGINX_TMP" << NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -1376,6 +1380,16 @@ server {
     error_log  /var/log/nginx/blog_error.log;
 }
 NGINX
+then
+  rm -f "$NGINX_TMP"
+  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+fi
+if ! chmod 644 "$NGINX_TMP" \
+    || ! chown root:root "$NGINX_TMP" \
+    || ! mv "$NGINX_TMP" "$NGINX_CONF"; then
+  rm -f "$NGINX_TMP"
+  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+fi
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/blog
 rm -f /etc/nginx/sites-enabled/default
 nginx -t || error "$(t app.blog.error.nginx_config)"

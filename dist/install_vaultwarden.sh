@@ -756,6 +756,9 @@ i18n_register_many \
   app.vaultwarden.warn.default_site_removed \
   "Removed the default Nginx site (/etc/nginx/sites-enabled/default). Restore it manually if another site depends on it." \
   "已移除 Nginx 默认站点（/etc/nginx/sites-enabled/default）。如有其他站点依赖它，请手动恢复。" \
+  app.vaultwarden.error.nginx_write \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s" \
   app.vaultwarden.error.nginx_http_test \
   "Nginx config validation failed (HTTP phase)." \
   "Nginx 配置验证失败（HTTP 阶段）。" \
@@ -1432,6 +1435,21 @@ extract_binary() {
   echo "$webvault_path" > "${workdir}/.webvault_path"
   echo "$bin_path"
 }
+_write_nginx_config_file() {
+  local nginx_conf="$1"
+  local nginx_tmp
+  nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX")
+  if ! cat > "$nginx_tmp"; then
+    rm -f "$nginx_tmp"
+    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
+  fi
+  if ! chmod 644 "$nginx_tmp" \
+      || ! chown root:root "$nginx_tmp" \
+      || ! mv "$nginx_tmp" "$nginx_conf"; then
+    rm -f "$nginx_tmp"
+    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
+  fi
+}
 do_install() {
   show_banner
   preflight_check
@@ -1749,8 +1767,8 @@ UNIT
   fi
   step "$(t app.vaultwarden.step.nginx_http)"
   local NGINX_CONF="/etc/nginx/sites-available/vaultwarden"
-  mkdir -p /var/www/certbot
-  cat > "$NGINX_CONF" << NGINX
+  mkdir -p /var/www/certbot /etc/nginx/sites-available /etc/nginx/sites-enabled
+  _write_nginx_config_file "$NGINX_CONF" << NGINX
 # Vaultwarden reverse proxy configuration for the HTTP bootstrap phase.
 server {
     listen 80;
@@ -1837,7 +1855,8 @@ NGINX
         _http2_directive=""
         _listen_https="    listen 443 ssl http2;\n    listen [::]:443 ssl http2;"
       fi
-      cat > "$NGINX_CONF" << NGINX2
+      {
+        cat << NGINX2
 # Vaultwarden reverse proxy configuration for HTTP to HTTPS redirect.
 server {
     listen 80;
@@ -1853,7 +1872,6 @@ server {
 }
 
 NGINX2
-      {
         echo "server {"
         printf '%b\n' "$_listen_https"
         [[ -n "$_http2_directive" ]] && echo "$_http2_directive"
@@ -1937,7 +1955,7 @@ NGINX2
     error_log  /var/log/nginx/vaultwarden_error.log;
 }
 NGINX2BODY
-      } >> "$NGINX_CONF"
+      } | _write_nginx_config_file "$NGINX_CONF"
       nginx -t && systemctl reload nginx \
         && success "$(t app.vaultwarden.success.nginx_https)" \
         || warn "$(t app.vaultwarden.warn.nginx_https_test)"

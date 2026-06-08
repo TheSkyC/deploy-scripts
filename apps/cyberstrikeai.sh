@@ -123,6 +123,9 @@ i18n_register_many \
   app.cyberstrikeai.step.nginx \
   "Configure Nginx reverse proxy" \
   "配置 Nginx 反向代理" \
+  app.cyberstrikeai.error.nginx \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s" \
   app.cyberstrikeai.success.nginx \
   "Nginx reverse proxy installed" \
   "Nginx 反向代理已安装" \

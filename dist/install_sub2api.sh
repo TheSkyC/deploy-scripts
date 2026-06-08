@@ -651,6 +651,9 @@ i18n_register_many \
   app.sub2api.success.nginx_installed \
   "Nginx installed." \
   "Nginx 安装完成。" \
+  app.sub2api.error.nginx_config_write \
+  "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
+  "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \
   app.sub2api.warn.nginx_include \
   "Cannot update /etc/nginx/nginx.conf automatically. Add this inside http {} manually: include /etc/nginx/sites-enabled/*;" \
   "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;" \
@@ -1717,7 +1720,10 @@ _write_nginx_config() {
     server_name_line="    server_name _;"
   fi
   mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-  cat > /etc/nginx/sites-available/sub2api << NGINX
+  local nginx_conf="/etc/nginx/sites-available/sub2api"
+  local nginx_tmp
+  nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX")
+  if ! cat > "$nginx_tmp" << NGINX
 server {
     listen 80;
 ${server_name_line}
@@ -1749,9 +1755,18 @@ ${server_name_line}
     }
 }
 NGINX
-  chmod 644 /etc/nginx/sites-available/sub2api
+  then
+    rm -f "$nginx_tmp"
+    error "$(t app.sub2api.error.nginx_config_write)"
+  fi
+  if ! chmod 644 "$nginx_tmp" \
+      || ! chown root:root "$nginx_tmp" \
+      || ! mv "$nginx_tmp" "$nginx_conf"; then
+    rm -f "$nginx_tmp"
+    error "$(t app.sub2api.error.nginx_config_write)"
+  fi
   if [[ ! -L /etc/nginx/sites-enabled/sub2api ]]; then
-    ln -s /etc/nginx/sites-available/sub2api /etc/nginx/sites-enabled/sub2api
+    ln -s "$nginx_conf" /etc/nginx/sites-enabled/sub2api
   fi
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then

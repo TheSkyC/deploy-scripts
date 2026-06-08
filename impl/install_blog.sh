@@ -388,7 +388,8 @@ else
 fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 NGINX_CONF="/etc/nginx/sites-available/blog"
-cat > "$NGINX_CONF" << NGINX
+NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX")
+if ! cat > "$NGINX_TMP" << NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -446,6 +447,16 @@ server {
     error_log  /var/log/nginx/blog_error.log;
 }
 NGINX
+then
+  rm -f "$NGINX_TMP"
+  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+fi
+if ! chmod 644 "$NGINX_TMP" \
+    || ! chown root:root "$NGINX_TMP" \
+    || ! mv "$NGINX_TMP" "$NGINX_CONF"; then
+  rm -f "$NGINX_TMP"
+  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+fi
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/blog
 rm -f /etc/nginx/sites-enabled/default
 nginx -t || error "$(t app.blog.error.nginx_config)"
