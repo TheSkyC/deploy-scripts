@@ -687,6 +687,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_download \
   "Web Vault download failed." \
   "Web Vault 下载失败。" \
+  app.vaultwarden.error.web_vault_install \
+  "Web Vault installation failed." \
+  "Web Vault 安装失败。" \
   app.vaultwarden.success.web_vault_version \
   "Web Vault v%s installed." \
   "Web Vault v%s 已安装。" \
@@ -1515,11 +1518,22 @@ do_install() {
   VW_VER=$("$VW_BIN" --version 2>/dev/null || echo "unknown")
   info "$(t app.vaultwarden.info.version "$VW_VER")"
   step "$(t app.vaultwarden.step.web_vault)"
+  local _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+  mkdir -p "$(dirname "$VW_WEB_DIR")"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     info "$(t app.vaultwarden.info.web_vault_image)"
-    rm -rf "$VW_WEB_DIR"
-    cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR"
-    success "$(t app.vaultwarden.success.web_vault_image)"
+    [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_install_bak"
+    if cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR" \
+        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
+        && chmod -R 750 "$VW_WEB_DIR"; then
+      [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
+      success "$(t app.vaultwarden.success.web_vault_image)"
+    else
+      warn "$(t app.vaultwarden.warn.web_vault_extract)"
+      rm -rf "$VW_WEB_DIR"
+      [[ -d "$_wv_install_bak" ]] && mv "$_wv_install_bak" "$VW_WEB_DIR" || true
+      error "$(t app.vaultwarden.error.web_vault_install)"
+    fi
   else
     info "$(t app.vaultwarden.info.web_vault_github)"
     local _wv_ver="${WEB_VAULT_VER:-}"
@@ -1532,13 +1546,19 @@ do_install() {
     info "$(t app.vaultwarden.info.download "$WV_URL")"
     wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
       || error "$(t app.vaultwarden.error.web_vault_download)"
-    rm -rf "$VW_WEB_DIR"
-    mkdir -p "$(dirname "$VW_WEB_DIR")"
-    tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")"
-    success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
+    [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_install_bak"
+    if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")" \
+        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
+        && chmod -R 750 "$VW_WEB_DIR"; then
+      [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
+      success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
+    else
+      warn "$(t app.vaultwarden.warn.web_vault_extract)"
+      rm -rf "$VW_WEB_DIR"
+      [[ -d "$_wv_install_bak" ]] && mv "$_wv_install_bak" "$VW_WEB_DIR" || true
+      error "$(t app.vaultwarden.error.web_vault_install)"
+    fi
   fi
-  chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"
-  chmod -R 750 "$VW_WEB_DIR"
   info "$(t app.vaultwarden.info.web_vault_path "$VW_WEB_DIR")"
   step "$(t app.vaultwarden.step.admin_token)"
   local ADMIN_PLAIN ADMIN_HASH SALT

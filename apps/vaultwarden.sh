@@ -180,6 +180,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_download \
   "Web Vault download failed." \
   "Web Vault 下载失败。" \
+  app.vaultwarden.error.web_vault_install \
+  "Web Vault installation failed." \
+  "Web Vault 安装失败。" \
   app.vaultwarden.success.web_vault_version \
   "Web Vault v%s installed." \
   "Web Vault v%s 已安装。" \
