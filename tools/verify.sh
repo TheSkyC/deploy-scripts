@@ -1009,6 +1009,36 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
         in_update=0
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+  awk '
+      /app\.vaultwarden\.error\.manual_backup_failed/ { saw_error_key=1 }
+      /\/opt\/vaultwarden-backups\/backup\.log/ { saw_log_guidance=1 }
+      /review the existing backups above/ { saw_existing_guidance=1 }
+      END {
+        if (!(saw_error_key && saw_log_guidance && saw_existing_guidance)) {
+          print "Vaultwarden manual backup failures must point to backup.log and the existing backup list." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.manual_backup\)"/ { in_backup=1; saw_if=0; saw_flag=0; saw_error=0; next }
+      in_backup && /local _backup_failed=0/ { saw_flag=1 }
+      in_backup && /if ! _backup_silent "manual"; then/ { saw_if=1 }
+      in_backup && /error "\$\(t app\.vaultwarden\.error\.manual_backup_failed\)"/ {
+        saw_error=1
+        if (!(saw_if && saw_flag)) {
+          printf "%s Vaultwarden manual backup must handle silent-backup failures explicitly before exiting\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_backup && /release_lock/ {
+        if (!saw_error) {
+          printf "%s Vaultwarden manual backup must fail explicitly after printing backup context\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
 check_preupdate_backup_warnings_include_followup_guidance() {

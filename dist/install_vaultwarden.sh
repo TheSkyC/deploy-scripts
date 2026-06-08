@@ -1100,6 +1100,9 @@ i18n_register_many \
   app.vaultwarden.warn.backup_failed_continue \
   "Backup failed; temporary file removed. Continuing. Inspect /opt/vaultwarden-backups/backup.log or run /usr/local/bin/vaultwarden-backup manually before proceeding further." \
   "备份失败，临时文件已清理，继续执行。请检查 /opt/vaultwarden-backups/backup.log，或先手动执行 /usr/local/bin/vaultwarden-backup 再继续后续操作。" \
+  app.vaultwarden.error.manual_backup_failed \
+  "Manual backup did not complete successfully. Inspect /opt/vaultwarden-backups/backup.log, review the existing backups above, and retry after fixing the archive or filesystem issue." \
+  "手动备份未成功完成。请检查 /opt/vaultwarden-backups/backup.log，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
   app.vaultwarden.error.backup_script \
   "Backup script write failed: /usr/local/bin/vaultwarden-backup" \
   "备份脚本写入失败：/usr/local/bin/vaultwarden-backup" \
@@ -2582,7 +2585,10 @@ do_backup() {
   acquire_lock
   step "$(t app.vaultwarden.step.manual_backup)"
   [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
-  _backup_silent "manual"
+  local _backup_failed=0
+  if ! _backup_silent "manual"; then
+    _backup_failed=1
+  fi
   echo ""
   info "$(t app.vaultwarden.info.backup_list)"
   mapfile -t _bak_list < <(
@@ -2603,6 +2609,9 @@ do_backup() {
   _total=$(find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | wc -l)
   _total_size=$(du -sh "${VW_BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "0")
   info "$(t app.vaultwarden.info.backup_total "$_total" "$_total_size")"
+  if [[ "$_backup_failed" -ne 0 ]]; then
+    error "$(t app.vaultwarden.error.manual_backup_failed)"
+  fi
   release_lock
 }
 do_status() {

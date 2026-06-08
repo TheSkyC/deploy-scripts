@@ -1261,7 +1261,10 @@ do_backup() {
   acquire_lock
   step "$(t app.vaultwarden.step.manual_backup)"
   [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
-  _backup_silent "manual"
+  local _backup_failed=0
+  if ! _backup_silent "manual"; then
+    _backup_failed=1
+  fi
   echo ""
   info "$(t app.vaultwarden.info.backup_list)"
   mapfile -t _bak_list < <(
@@ -1282,6 +1285,9 @@ do_backup() {
   _total=$(find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | wc -l)
   _total_size=$(du -sh "${VW_BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "0")
   info "$(t app.vaultwarden.info.backup_total "$_total" "$_total_size")"
+  if [[ "$_backup_failed" -ne 0 ]]; then
+    error "$(t app.vaultwarden.error.manual_backup_failed)"
+  fi
   release_lock
 }
 do_status() {
