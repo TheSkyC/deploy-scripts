@@ -620,6 +620,9 @@ i18n_register_many \
   app.newapi.warn.silent_data_missing \
   "_backup_silent: data directory does not exist (%s); skipping backup." \
   "_backup_silent: 数据目录不存在（%s），跳过备份。" \
+  app.newapi.warn.silent_backup_dir_failed \
+  "_backup_silent: cannot create backup directory (%s); skipping backup." \
+  "_backup_silent: 无法创建备份目录（%s），跳过备份。" \
   app.newapi.warn.sqlite_integrity \
   "SQLite integrity_check warning (%s); backup continues." \
   "SQLite integrity_check 警告（%s），备份继续。" \
@@ -1583,8 +1586,14 @@ BKSH_BODY
 _backup_silent() {
   local label="${1:-manual}"
   local backup_log="${BACKUP_DIR}/backup.log"
-  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
-  mkdir -p "$BACKUP_DIR"
+  _log_backup_helper() {
+    [[ -d "$BACKUP_DIR" ]] || return 1
+    printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
+  }
+  if ! mkdir -p "$BACKUP_DIR"; then
+    warn "$(t app.newapi.warn.silent_backup_dir_failed "$BACKUP_DIR")"
+    return 1
+  fi
   if [[ ! -d "$DATA_DIR" ]]; then
     _log_backup_helper "$(t app.newapi.backup.log.data_missing "$DATA_DIR")"
     warn "$(t app.newapi.warn.silent_data_missing "$DATA_DIR")"

@@ -1058,6 +1058,9 @@ i18n_register_many \
   app.sub2api.warn.pre_update_backup \
   "Pre-update backup failed; continuing the update. Inspect /opt/sub2api-backups/backup.log or run /usr/local/bin/sub2api-backup manually before proceeding further." \
   "更新前备份失败，继续执行更新。请检查 /opt/sub2api-backups/backup.log，或先手动执行 /usr/local/bin/sub2api-backup 再继续后续操作。" \
+  app.sub2api.warn.backup_dir_unwritable \
+  "Backup directory could not be created (%s); backup outputs were skipped." \
+  "无法创建备份目录（%s），已跳过备份输出。" \
   app.sub2api.step.download_update \
   "Download new version (%s -> %s)" \
   "下载新版本（%s → %s）" \
@@ -2339,8 +2342,14 @@ _backup_silent() {
   local label="${1:-manual}"
   local backup_failed=0
   local backup_log="${BACKUP_DIR}/backup.log"
-  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
-  mkdir -p "$BACKUP_DIR"
+  _log_backup_helper() {
+    [[ -d "$BACKUP_DIR" ]] || return 1
+    printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
+  }
+  if ! mkdir -p "$BACKUP_DIR"; then
+    warn "$(t app.sub2api.warn.backup_dir_unwritable "$BACKUP_DIR")"
+    return 1
+  fi
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"

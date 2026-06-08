@@ -105,6 +105,9 @@ i18n_register_many \
   app.newapi.warn.silent_data_missing \
   "_backup_silent: data directory does not exist (%s); skipping backup." \
   "_backup_silent: 数据目录不存在（%s），跳过备份。" \
+  app.newapi.warn.silent_backup_dir_failed \
+  "_backup_silent: cannot create backup directory (%s); skipping backup." \
+  "_backup_silent: 无法创建备份目录（%s），跳过备份。" \
   app.newapi.warn.sqlite_integrity \
   "SQLite integrity_check warning (%s); backup continues." \
   "SQLite integrity_check 警告（%s），备份继续。" \

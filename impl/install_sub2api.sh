@@ -922,8 +922,14 @@ _backup_silent() {
   local label="${1:-manual}"
   local backup_failed=0
   local backup_log="${BACKUP_DIR}/backup.log"
-  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
-  mkdir -p "$BACKUP_DIR"
+  _log_backup_helper() {
+    [[ -d "$BACKUP_DIR" ]] || return 1
+    printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
+  }
+  if ! mkdir -p "$BACKUP_DIR"; then
+    warn "$(t app.sub2api.warn.backup_dir_unwritable "$BACKUP_DIR")"
+    return 1
+  fi
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"

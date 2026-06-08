@@ -1091,6 +1091,8 @@ check_preupdate_backup_warnings_include_followup_guidance() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh
   awk '
       /_backup_silent\(\)/ { in_helper=1; saw_failed_flag=0; saw_pg_fail=0; saw_config_fail=0; saw_return=0; next }
+      in_helper && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
+      in_helper && /warn "\$\(t app\.sub2api\.warn\.backup_dir_unwritable "\$BACKUP_DIR"\)"/ { saw_mkdir_warn=1 }
       in_helper && /local backup_failed=0/ { saw_failed_flag=1 }
       in_helper && /_log_backup_helper "\$\(t app\.sub2api\.backup\.log\.pg_dump_failed\)"/ { saw_pg_fail_log=1 }
       in_helper && /warn "\$\(t app\.sub2api\.warn\.pg_dump_failed\)"/ { saw_pg_fail=1 }
@@ -1098,8 +1100,8 @@ check_preupdate_backup_warnings_include_followup_guidance() {
       in_helper && /warn "\$\(t app\.sub2api\.warn\.config_backup_failed\)"/ { saw_config_fail=1 }
       in_helper && /\[\[ "\$backup_failed" -eq 0 \]\]/ { saw_return=1 }
       in_helper && /^}/ {
-        if (!(saw_failed_flag && saw_pg_fail_log && saw_pg_fail && saw_config_fail_log && saw_config_fail && saw_return)) {
-          printf "%s Sub2API silent backup helper must log backup failures and propagate them after warning\n", FILENAME > "/dev/stderr"
+        if (!(saw_mkdir_if && saw_mkdir_warn && saw_failed_flag && saw_pg_fail_log && saw_pg_fail && saw_config_fail_log && saw_config_fail && saw_return)) {
+          printf "%s Sub2API silent backup helper must handle backup-directory creation failures, log backup failures, and propagate them after warning\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_helper=0
@@ -1149,6 +1151,18 @@ check_preupdate_backup_logs_match_guidance() {
         echo "$file NewAPI silent backup helper must define a backup log helper" >&2
         exit 1
       }
+      grep -Fq "[[ -d \"\$BACKUP_DIR\" ]] || return 1" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must guard log writes when the backup directory cannot be created" >&2
+        exit 1
+      }
+      grep -Fq "if ! mkdir -p \"\$BACKUP_DIR\"; then" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must handle backup directory creation failures explicitly" >&2
+        exit 1
+      }
+      grep -Fq "warn \"\$(t app.newapi.warn.silent_backup_dir_failed \"\$BACKUP_DIR\")\"" <<<"$block" || {
+        echo "$file NewAPI silent backup helper must warn explicitly when the backup directory cannot be created" >&2
+        exit 1
+      }
       grep -Fq ">> \"\$backup_log\"" <<<"$block" || {
         echo "$file NewAPI silent backup helper must append lines to backup.log" >&2
         exit 1
@@ -1170,6 +1184,18 @@ check_preupdate_backup_logs_match_guidance() {
       }
       grep -Fq "_log_backup_helper()" <<<"$block" || {
         echo "$file Vaultwarden silent backup helper must define a backup log helper" >&2
+        exit 1
+      }
+      grep -Fq "[[ -d \"\$VW_BACKUP_DIR\" ]] || return 1" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must guard log writes when the backup directory cannot be created" >&2
+        exit 1
+      }
+      grep -Fq "if ! mkdir -p \"\$VW_BACKUP_DIR\"; then" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must handle backup directory creation failures explicitly" >&2
+        exit 1
+      }
+      grep -Fq "warn \"\$(t app.vaultwarden.warn.backup_dir_failed \"\$VW_BACKUP_DIR\")\"" <<<"$block" || {
+        echo "$file Vaultwarden silent backup helper must warn explicitly when the backup directory cannot be created" >&2
         exit 1
       }
       grep -Fq ">> \"\$backup_log\"" <<<"$block" || {

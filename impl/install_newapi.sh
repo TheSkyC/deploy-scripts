@@ -430,8 +430,14 @@ BKSH_BODY
 _backup_silent() {
   local label="${1:-manual}"
   local backup_log="${BACKUP_DIR}/backup.log"
-  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
-  mkdir -p "$BACKUP_DIR"
+  _log_backup_helper() {
+    [[ -d "$BACKUP_DIR" ]] || return 1
+    printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
+  }
+  if ! mkdir -p "$BACKUP_DIR"; then
+    warn "$(t app.newapi.warn.silent_backup_dir_failed "$BACKUP_DIR")"
+    return 1
+  fi
   if [[ ! -d "$DATA_DIR" ]]; then
     _log_backup_helper "$(t app.newapi.backup.log.data_missing "$DATA_DIR")"
     warn "$(t app.newapi.warn.silent_data_missing "$DATA_DIR")"

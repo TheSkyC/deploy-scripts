@@ -543,6 +543,9 @@ i18n_register_many \
   app.sub2api.warn.pre_update_backup \
   "Pre-update backup failed; continuing the update. Inspect /opt/sub2api-backups/backup.log or run /usr/local/bin/sub2api-backup manually before proceeding further." \
   "更新前备份失败，继续执行更新。请检查 /opt/sub2api-backups/backup.log，或先手动执行 /usr/local/bin/sub2api-backup 再继续后续操作。" \
+  app.sub2api.warn.backup_dir_unwritable \
+  "Backup directory could not be created (%s); backup outputs were skipped." \
+  "无法创建备份目录（%s），已跳过备份输出。" \
   app.sub2api.step.download_update \
   "Download new version (%s -> %s)" \
   "下载新版本（%s → %s）" \

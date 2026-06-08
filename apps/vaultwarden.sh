@@ -576,6 +576,9 @@ i18n_register_many \
   app.vaultwarden.warn.backup_data_missing \
   "Backup skipped: data directory does not exist (%s)." \
   "备份跳过：数据目录不存在（%s）。" \
+  app.vaultwarden.warn.backup_dir_failed \
+  "Backup skipped: cannot create backup directory (%s)." \
+  "备份跳过：无法创建备份目录（%s）。" \
   app.vaultwarden.warn.sqlite_integrity \
   "SQLite integrity check warning (%s). Backup continues, but the database may be corrupted." \
   "SQLite 完整性校验警告（%s），备份继续但数据库可能已损坏。" \

@@ -1216,8 +1216,14 @@ BKSH
 _backup_silent() {
   local label="${1:-manual}"
   local backup_log="${VW_BACKUP_DIR}/backup.log"
-  _log_backup_helper() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"; }
-  mkdir -p "$VW_BACKUP_DIR"
+  _log_backup_helper() {
+    [[ -d "$VW_BACKUP_DIR" ]] || return 1
+    printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
+  }
+  if ! mkdir -p "$VW_BACKUP_DIR"; then
+    warn "$(t app.vaultwarden.warn.backup_dir_failed "$VW_BACKUP_DIR")"
+    return 1
+  fi
   local archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
