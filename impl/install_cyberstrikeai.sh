@@ -582,10 +582,17 @@ CONFIG_FILE="${CONFIG_FILE}"
 BACKUP_DIR="${BACKUP_DIR}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 SERVICE_NAME="${SERVICE_NAME}"
+LOG_FILE="${LOG_DIR}/backup.log"
+MSG_INSTALL_MISSING="${msg_install_missing}"
+MSG_SQLITE_INTEGRITY="${msg_sqlite_integrity}"
+MSG_BACKUP_CREATED="${msg_backup_created}"
+
+_log() { echo "\$(date '+%F %T') \$*" >> "\$LOG_FILE"; }
 
 mkdir -p "\$BACKUP_DIR"
 if [[ ! -d "\$INSTALL_DIR" ]]; then
-  printf "\$(date '+%F %T') [ERROR] ${msg_install_missing}\n" "\$INSTALL_DIR" >&2
+  _log "[ERROR] \$(printf "\$MSG_INSTALL_MISSING" "\$INSTALL_DIR")"
+  printf "\$(date '+%F %T') [ERROR] %s\n" "\$(printf "\$MSG_INSTALL_MISSING" "\$INSTALL_DIR")" >&2
   exit 1
 fi
 
@@ -593,7 +600,10 @@ if command -v sqlite3 >/dev/null 2>&1; then
   find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f 2>/dev/null | while read -r db; do
     sqlite3 "\$db" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1 || true
     integrity=\$(sqlite3 "\$db" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    [[ "\$integrity" == "ok" ]] || printf "\$(date '+%F %T') [WARN] ${msg_sqlite_integrity}\n" "\$db" "\$integrity" >&2
+    if [[ "\$integrity" != "ok" ]]; then
+      _log "[WARN] \$(printf "\$MSG_SQLITE_INTEGRITY" "\$db" "\$integrity")"
+      printf "\$(date '+%F %T') [WARN] %s\n" "\$(printf "\$MSG_SQLITE_INTEGRITY" "\$db" "\$integrity")" >&2
+    fi
   done
 fi
 
@@ -621,7 +631,8 @@ if [[ "\$KEEP_DAYS" -gt 0 ]]; then
   find "\$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -mtime "+\$KEEP_DAYS" -delete 2>/dev/null || true
 fi
 
-printf "\$(date '+%F %T') [OK] ${msg_backup_created}\n" "\$archive"
+_log "[OK] \$(printf "\$MSG_BACKUP_CREATED" "\$archive")"
+printf "\$(date '+%F %T') [OK] %s\n" "\$(printf "\$MSG_BACKUP_CREATED" "\$archive")"
 BACKUP
   then
     rm -f "$backup_tmp"
