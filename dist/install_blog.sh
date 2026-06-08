@@ -942,6 +942,7 @@ CMS_BACKEND="github"
 CMS_REPO="TheSkyC/my-hugo-blog"
 CMS_BRANCH="main"
 CMS_SITE_URL="https://${BLOG_DOMAIN}"
+LOCK_FILE="/var/lock/blog-deploy.lock"
 
 do_install() {
 echo -e "\n${BOLD}${CYAN}"
@@ -965,6 +966,7 @@ case $ARCH in
   aarch64) DEB_ARCH="arm64" ;;
   *)       error "$(t app.blog.error.arch "$ARCH")" ;;
 esac
+acquire_lock
 step "$(t app.blog.step_install_deps)"
 apt-get update -qq
 apt-get install -y -qq curl wget git nginx ca-certificates

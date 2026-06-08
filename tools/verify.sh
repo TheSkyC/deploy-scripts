@@ -380,6 +380,18 @@ check_go_tarball_failures_cleanup() {
   fi
 }
 
+check_mutating_installs_acquire_locks() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    for file in impl/install_*.sh; do
+      if grep -q "do_install()" "$file" && ! grep -q "acquire_lock" "$file"; then
+        echo "Install script does not acquire a deployment lock: $file" >&2
+        exit 1
+      fi
+    done
+  '
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -403,6 +415,7 @@ main() {
   check_keyring_writes_are_atomic
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
+  check_mutating_installs_acquire_locks
   echo "Verification passed"
 }
 
