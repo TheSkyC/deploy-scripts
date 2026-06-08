@@ -606,6 +606,9 @@ i18n_register_many \
   app.cyberstrikeai.error.binary_empty \
   "Built binary is empty" \
   "构建出的二进制为空" \
+  app.cyberstrikeai.error.binary_build \
+  "Binary build failed" \
+  "二进制构建失败" \
   app.cyberstrikeai.success.binary_built \
   "Built binary: %s" \
   "二进制已构建：%s" \
@@ -1147,10 +1150,22 @@ build_binary() {
   export GOPROXY="$GOPROXY"
   go mod download
   local tmp_bin="${BIN_PATH}.tmp.$$"
-  go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go
-  [[ -s "$tmp_bin" ]] || error "$(t app.cyberstrikeai.error.binary_empty)"
-  chmod 0755 "$tmp_bin"
-  mv "$tmp_bin" "$BIN_PATH"
+  if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go; then
+    rm -f "$tmp_bin"
+    error "$(t app.cyberstrikeai.error.binary_build)"
+  fi
+  if [[ ! -s "$tmp_bin" ]]; then
+    rm -f "$tmp_bin"
+    error "$(t app.cyberstrikeai.error.binary_empty)"
+  fi
+  if ! chmod 0755 "$tmp_bin"; then
+    rm -f "$tmp_bin"
+    error "$(t app.cyberstrikeai.error.binary_build)"
+  fi
+  if ! mv "$tmp_bin" "$BIN_PATH"; then
+    rm -f "$tmp_bin"
+    error "$(t app.cyberstrikeai.error.binary_build)"
+  fi
   success "$(t app.cyberstrikeai.success.binary_built "$BIN_PATH")"
 }
 install_runtime_dirs() {

@@ -99,6 +99,9 @@ i18n_register_many \
   app.cyberstrikeai.error.binary_empty \
   "Built binary is empty" \
   "构建出的二进制为空" \
+  app.cyberstrikeai.error.binary_build \
+  "Binary build failed" \
+  "二进制构建失败" \
   app.cyberstrikeai.success.binary_built \
   "Built binary: %s" \
   "二进制已构建：%s" \

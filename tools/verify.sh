@@ -419,6 +419,24 @@ check_sub2api_extract_move_failure_cleanup() {
   fi
 }
 
+check_cyberstrikeai_build_temp_cleanup() {
+  if grep -R -nE '^[[:space:]]*(go build|chmod 0755 "\$tmp_bin"|mv "\$tmp_bin" "\$BIN_PATH")' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI binary build must clean up the temporary binary on build, chmod, and move failures." >&2
+    return 1
+  fi
+  awk '
+      /if ! go build .*"\$tmp_bin"/ { in_block=1; saw_build_cleanup=0; next }
+      in_block && /rm -f "\$tmp_bin"/ { saw_build_cleanup=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ {
+        if (!saw_build_cleanup) {
+          print "CyberStrikeAI build failure does not clean up the temporary binary." > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   awk '
       /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
@@ -504,6 +522,7 @@ main() {
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
   check_sub2api_extract_move_failure_cleanup
+  check_cyberstrikeai_build_temp_cleanup
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree
