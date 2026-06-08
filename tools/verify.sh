@@ -1050,6 +1050,24 @@ check_nginx_main_config_edits_are_atomic() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_nginx_test_failures_report_diagnostics() {
+  if grep -R -n 'nginx -t >&2 2>/dev/null' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API nginx test failures must preserve diagnostic stderr output." >&2
+    return 1
+  fi
+  awk '
+      /warn "\$\(t app\.sub2api\.warn\.nginx_test_failed\)"/ { in_block=1; saw_diag=0; next }
+      in_block && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /^  fi$/ {
+        if (!saw_diag) {
+          printf "%s Sub2API nginx failure path must emit nginx -t diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_fail2ban_configs_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > /etc/fail2ban/' impl dist 2>/dev/null; then
     echo "Fail2Ban configs must be written through temporary files before replacement." >&2
@@ -1235,6 +1253,7 @@ main() {
   check_cron_logrotate_are_atomic
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic
+  check_nginx_test_failures_report_diagnostics
   check_fail2ban_configs_are_atomic
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable

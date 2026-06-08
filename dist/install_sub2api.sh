@@ -1888,7 +1888,7 @@ NGINX
     fi
   else
     warn "$(t app.sub2api.warn.nginx_test_failed)"
-    nginx -t >&2 2>/dev/null || true
+    nginx -t >&2 || true
   fi
 }
 _write_systemd_unit() {
