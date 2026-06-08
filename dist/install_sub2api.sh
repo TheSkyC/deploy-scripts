@@ -1591,9 +1591,15 @@ _install_postgres() {
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "$(t app.sub2api.info.postgres_apt_source)"
     install -d /usr/share/postgresql-common/pgdg
-    if ! curl -fsSL --max-time 30 \
-        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-        "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
+    local pg_keyring pg_key_tmp
+    pg_keyring="/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc"
+    pg_key_tmp="$(mktemp "${pg_keyring}.XXXXXX")"
+    if ! curl -fsSL --max-time 30 -o "$pg_key_tmp" \
+        "https://www.postgresql.org/media/keys/ACCC4CF8.asc" \
+        || ! chmod 644 "$pg_key_tmp" \
+        || ! chown root:root "$pg_key_tmp" \
+        || ! mv "$pg_key_tmp" "$pg_keyring"; then
+      rm -f "$pg_key_tmp"
       error "$(t app.sub2api.error.postgres_key)"
     fi
     local codename
@@ -1646,6 +1652,7 @@ _install_redis() {
   fi
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "$(t app.sub2api.info.redis_apt_source)"
+    install -d /usr/share/keyrings
     local redis_keyring redis_key_tmp
     redis_keyring="/usr/share/keyrings/redis-archive-keyring.gpg"
     redis_key_tmp="$(mktemp "${redis_keyring}.tmp.XXXXXX")"
@@ -1654,8 +1661,12 @@ _install_redis() {
       rm -f "$redis_key_tmp"
       error "$(t app.sub2api.error.redis_key)"
     fi
-    chmod 644 "$redis_key_tmp"
-    mv "$redis_key_tmp" "$redis_keyring"
+    if ! chmod 644 "$redis_key_tmp" \
+        || ! chown root:root "$redis_key_tmp" \
+        || ! mv "$redis_key_tmp" "$redis_keyring"; then
+      rm -f "$redis_key_tmp"
+      error "$(t app.sub2api.error.redis_key)"
+    fi
     local codename
     codename="$(_apt_codename)"
     mkdir -p /etc/apt/sources.list.d

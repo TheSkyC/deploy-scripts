@@ -466,10 +466,22 @@ check_no_fixed_tmp_downloads() {
 }
 
 check_keyring_writes_are_atomic() {
-  if grep -R -nE 'gpg .*--dearmor -o /usr/share/keyrings/' impl dist 2>/dev/null; then
+  if grep -R -nE '(^[[:space:]]*-o /usr/share/postgresql-common/pgdg/|gpg .*--dearmor -o /usr/share/keyrings/)' impl dist 2>/dev/null; then
     echo "Write apt keyrings to a temporary file before replacing the final keyring." >&2
     return 1
   fi
+  awk '
+      /(pg_key_tmp|redis_key_tmp)="?\$\(mktemp/ { saw_tmp=1 }
+      /(curl .* -o "\$pg_key_tmp"|gpg .* --dearmor -o "\$redis_key_tmp")/ { saw_write=1 }
+      /mv "\$(pg_key_tmp|redis_key_tmp)" "\$(pg_keyring|redis_keyring)"/ { saw_mv=1 }
+      /rm -f "\$(pg_key_tmp|redis_key_tmp)"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_write && saw_mv && saw_cleanup)) {
+          print "Apt keyring writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
 check_apt_sources_are_atomic() {
