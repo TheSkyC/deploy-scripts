@@ -81,15 +81,33 @@ i18n_register_many \
   app.cyberstrikeai.step.fetch_source \
   "Fetch CyberStrikeAI source" \
   "获取 CyberStrikeAI 源码" \
+  app.cyberstrikeai.error.source_parent_dir \
+  "Failed to prepare the source parent directory for %s. Check filesystem permissions and retry." \
+  "无法为 %s 准备源码父目录。请检查文件系统权限后重试。" \
   app.cyberstrikeai.info.repo_fetch \
   "Repository exists, fetching latest branch: %s" \
   "仓库已存在，正在获取最新分支：%s" \
+  app.cyberstrikeai.error.repo_fetch \
+  "Failed to fetch branch %s in %s. Run git -C %s fetch --prune origin %s after fixing network or repository access." \
+  "无法在 %s 中获取分支 %s。请在修复网络或仓库访问问题后执行 git -C %s fetch --prune origin %s。" \
+  app.cyberstrikeai.error.repo_checkout \
+  "Failed to switch %s to branch %s. Inspect local changes and branch state, then run git -C %s checkout %s." \
+  "无法将 %s 切换到分支 %s。请检查本地改动和分支状态，然后执行 git -C %s checkout %s。" \
+  app.cyberstrikeai.error.repo_pull \
+  "Failed to fast-forward %s on branch %s. Resolve local repository issues, then run git -C %s pull --ff-only origin %s." \
+  "无法在分支 %s 上快进更新 %s。请先处理本地仓库问题，然后执行 git -C %s pull --ff-only origin %s。" \
+  app.cyberstrikeai.error.repo_clone \
+  "Failed to clone %s into %s. Remove any partial checkout, then retry: git clone --depth 1 --branch %s https://github.com/%s.git %s" \
+  "无法将 %s 克隆到 %s。请移除任何不完整的检出目录后重试：git clone --depth 1 --branch %s https://github.com/%s.git %s" \
   app.cyberstrikeai.error.nonempty_dir \
   "%s exists and is not an empty git checkout" \
   "%s 已存在且不是空的 Git 检出目录" \
   app.cyberstrikeai.success.source_ready \
   "Source ready: %s" \
   "源码已就绪：%s" \
+  app.cyberstrikeai.error.install_dir_missing \
+  "Install directory is unavailable: %s. Recreate it or rerun the source fetch step." \
+  "安装目录不可用：%s。请重新创建该目录，或重新执行源码获取步骤。" \
   app.cyberstrikeai.error.config_missing \
   "Missing config.yaml at %s" \
   "缺少 config.yaml：%s" \
@@ -123,6 +141,9 @@ i18n_register_many \
   app.cyberstrikeai.step.build \
   "Build Go binary" \
   "构建 Go 二进制" \
+  app.cyberstrikeai.error.go_modules \
+  "Failed to download Go modules in %s. Check GOPROXY or network access, then retry: go mod download" \
+  "无法在 %s 中下载 Go 模块。请检查 GOPROXY 或网络访问，然后重试：go mod download" \
   app.cyberstrikeai.error.binary_empty \
   "Built binary is empty" \
   "构建出的二进制为空" \
@@ -156,6 +177,9 @@ i18n_register_many \
   app.cyberstrikeai.step.nginx \
   "Configure Nginx reverse proxy" \
   "配置 Nginx 反向代理" \
+  app.cyberstrikeai.error.nginx_dirs \
+  "Failed to prepare the Nginx config directories for %s. Check filesystem permissions and retry." \
+  "无法为 %s 准备 Nginx 配置目录。请检查文件系统权限后重试。" \
   app.cyberstrikeai.error.nginx \
   "Nginx config write failed: %s" \
   "Nginx 配置写入失败：%s" \
@@ -195,6 +219,9 @@ i18n_register_many \
   app.cyberstrikeai.step.start \
   "Start CyberStrikeAI" \
   "启动 CyberStrikeAI" \
+  app.cyberstrikeai.error.install_dir_owner \
+  "Failed to reset ownership under %s to %s. Check filesystem permissions and retry." \
+  "无法将 %s 下的所有权重置为 %s。请检查文件系统权限后重试。" \
   app.cyberstrikeai.warn.port_in_use \
   "Port %s appears to be in use:" \
   "端口 %s 似乎已被占用：" \

@@ -1244,6 +1244,103 @@ check_cyberstrikeai_runtime_dir_failures_are_explicit() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
+  awk '
+      /app\.cyberstrikeai\.error\.source_parent_dir/ { saw_parent_key=1 }
+      /app\.cyberstrikeai\.error\.repo_fetch/ { saw_fetch_key=1 }
+      /git -C %s fetch --prune origin %s/ { saw_fetch_guidance=1 }
+      /app\.cyberstrikeai\.error\.repo_checkout/ { saw_checkout_key=1 }
+      /git -C %s checkout %s/ { saw_checkout_guidance=1 }
+      /app\.cyberstrikeai\.error\.repo_pull/ { saw_pull_key=1 }
+      /git -C %s pull --ff-only origin %s/ { saw_pull_guidance=1 }
+      /app\.cyberstrikeai\.error\.repo_clone/ { saw_clone_key=1 }
+      /git clone --depth 1 --branch %s https:\/\/github.com\/%s\.git %s/ { saw_clone_guidance=1 }
+      /app\.cyberstrikeai\.error\.install_dir_missing/ { saw_dir_key=1 }
+      /app\.cyberstrikeai\.error\.go_modules/ { saw_mod_key=1 }
+      /go mod download/ { saw_mod_guidance=1 }
+      /app\.cyberstrikeai\.error\.nginx_dirs/ { saw_nginx_key=1 }
+      /app\.cyberstrikeai\.error\.install_dir_owner/ { saw_owner_key=1 }
+      END {
+        if (!(saw_parent_key && saw_fetch_key && saw_fetch_guidance && saw_checkout_key && saw_checkout_guidance && saw_pull_key && saw_pull_guidance && saw_clone_key && saw_clone_guidance && saw_dir_key && saw_mod_key && saw_mod_guidance && saw_nginx_key && saw_owner_key)) {
+          print "CyberStrikeAI source and build-prep failures must provide actionable recovery guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /sync_repo_branch\(\)/ { in_sync=1; saw_fetch_if=0; saw_fetch_error=0; saw_checkout_if=0; saw_checkout_error=0; saw_pull_if=0; saw_pull_error=0; next }
+      in_sync && /if ! git -C "\$INSTALL_DIR" fetch --prune origin "\$GITHUB_BRANCH"; then/ { saw_fetch_if=1 }
+      in_sync && /error "\$\(t app\.cyberstrikeai\.error\.repo_fetch "\$GITHUB_BRANCH" "\$INSTALL_DIR" "\$INSTALL_DIR" "\$GITHUB_BRANCH"\)"/ { saw_fetch_error=1 }
+      in_sync && /if ! git -C "\$INSTALL_DIR" checkout -q "\$GITHUB_BRANCH"; then/ { saw_checkout_if=1 }
+      in_sync && /error "\$\(t app\.cyberstrikeai\.error\.repo_checkout "\$INSTALL_DIR" "\$GITHUB_BRANCH" "\$INSTALL_DIR" "\$GITHUB_BRANCH"\)"/ { saw_checkout_error=1 }
+      in_sync && /if ! git -C "\$INSTALL_DIR" pull --ff-only origin "\$GITHUB_BRANCH"; then/ { saw_pull_if=1 }
+      in_sync && /error "\$\(t app\.cyberstrikeai\.error\.repo_pull "\$INSTALL_DIR" "\$GITHUB_BRANCH" "\$INSTALL_DIR" "\$GITHUB_BRANCH"\)"/ { saw_pull_error=1 }
+      in_sync && /^}/ {
+        if (!(saw_fetch_if && saw_fetch_error && saw_checkout_if && saw_checkout_error && saw_pull_if && saw_pull_error)) {
+          printf "%s CyberStrikeAI git fetch, checkout, and pull steps must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_sync=0
+      }
+      /clone_or_update_repo\(\)/ { in_clone=1; saw_parent_if=0; saw_parent_error=0; saw_sync_call=0; saw_clone_if=0; saw_clone_error=0; next }
+      in_clone && /if ! mkdir -p "\$\(dirname "\$INSTALL_DIR"\)"; then/ { saw_parent_if=1 }
+      in_clone && /error "\$\(t app\.cyberstrikeai\.error\.source_parent_dir "\$INSTALL_DIR"\)"/ { saw_parent_error=1 }
+      in_clone && /sync_repo_branch/ { saw_sync_call=1 }
+      in_clone && /if ! git clone --depth 1 --branch "\$GITHUB_BRANCH" "https:\/\/github.com\/\$\{GITHUB_REPO\}\.git" "\$INSTALL_DIR"; then/ { saw_clone_if=1 }
+      in_clone && /error "\$\(t app\.cyberstrikeai\.error\.repo_clone "\$GITHUB_REPO" "\$INSTALL_DIR" "\$GITHUB_BRANCH" "\$GITHUB_REPO" "\$INSTALL_DIR"\)"/ { saw_clone_error=1 }
+      in_clone && /success "\$\(t app\.cyberstrikeai\.success\.source_ready "\$INSTALL_DIR"\)"/ {
+        if (!(saw_parent_if && saw_parent_error && saw_sync_call && saw_clone_if && saw_clone_error)) {
+          printf "%s CyberStrikeAI source checkout must fail explicitly when preparing directories or cloning the repository\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_clone=0
+      }
+      /setup_python_env\(\)/ { in_python=1; saw_python_cd_if=0; saw_python_cd_error=0; next }
+      in_python && /if ! cd "\$INSTALL_DIR"; then/ { saw_python_cd_if=1 }
+      in_python && /error "\$\(t app\.cyberstrikeai\.error\.install_dir_missing "\$INSTALL_DIR"\)"/ { saw_python_cd_error=1 }
+      in_python && /if \[\[ ! -d "\$VENV_DIR" \]\]; then/ {
+        if (!(saw_python_cd_if && saw_python_cd_error)) {
+          printf "%s CyberStrikeAI Python setup must guard install-directory access explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_python=0
+      }
+      /build_binary\(\)/ { in_build=1; saw_build_cd_if=0; saw_build_cd_error=0; saw_mod_if=0; saw_mod_error=0; next }
+      in_build && /if ! cd "\$INSTALL_DIR"; then/ { saw_build_cd_if=1 }
+      in_build && /error "\$\(t app\.cyberstrikeai\.error\.install_dir_missing "\$INSTALL_DIR"\)"/ { saw_build_cd_error=1 }
+      in_build && /if ! go mod download; then/ { saw_mod_if=1 }
+      in_build && /error "\$\(t app\.cyberstrikeai\.error\.go_modules "\$INSTALL_DIR"\)"/ { saw_mod_error=1 }
+      in_build && /local tmp_bin="\$\{BIN_PATH\}\.tmp\.\$\$"/ {
+        if (!(saw_build_cd_if && saw_build_cd_error && saw_mod_if && saw_mod_error)) {
+          printf "%s CyberStrikeAI build prep must fail explicitly when the checkout is missing or Go modules cannot be downloaded\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_build=0
+      }
+      /write_nginx_config\(\)/ { in_nginx=1; saw_nginx_mkdir_if=0; saw_nginx_error=0; next }
+      in_nginx && /if ! mkdir -p "\$\(dirname "\$NGINX_CONF"\)" "\$\(dirname "\$NGINX_LINK"\)"; then/ { saw_nginx_mkdir_if=1 }
+      in_nginx && /error "\$\(t app\.cyberstrikeai\.error\.nginx_dirs "\$NGINX_CONF"\)"/ { saw_nginx_error=1 }
+      in_nginx && /local nginx_tmp/ {
+        if (!(saw_nginx_mkdir_if && saw_nginx_error)) {
+          printf "%s CyberStrikeAI Nginx setup must guard directory creation explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_nginx=0
+      }
+      /step "\$\(t app\.cyberstrikeai\.step\.update_source\)"/ { in_update=1; saw_update_sync=0; saw_owner_if=0; saw_owner_error=0; next }
+      in_update && /sync_repo_branch/ { saw_update_sync=1 }
+      in_update && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"; then/ { saw_owner_if=1 }
+      in_update && /error "\$\(t app\.cyberstrikeai\.error\.install_dir_owner "\$INSTALL_DIR" "\$SERVICE_USER"\)"/ { saw_owner_error=1 }
+      in_update && /if \$service_was_active; then/ {
+        if (!(saw_update_sync && saw_owner_if && saw_owner_error)) {
+          printf "%s CyberStrikeAI update prep must guard repository sync and ownership repair explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_mutating_installs_acquire_locks() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -3292,6 +3389,7 @@ main() {
   check_update_binary_backups_are_atomic
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_runtime_dir_failures_are_explicit
+  check_cyberstrikeai_source_and_build_prep_failures_are_explicit
   check_sub2api_pg_dump_errors_stay_out_of_backups
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated

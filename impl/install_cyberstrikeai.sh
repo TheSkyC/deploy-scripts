@@ -211,19 +211,33 @@ ensure_service_user() {
     success "$(t app.cyberstrikeai.success.user_created "$SERVICE_USER")"
   fi
 }
+sync_repo_branch() {
+  if ! git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"; then
+    error "$(t app.cyberstrikeai.error.repo_fetch "$GITHUB_BRANCH" "$INSTALL_DIR" "$INSTALL_DIR" "$GITHUB_BRANCH")"
+  fi
+  if ! git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"; then
+    error "$(t app.cyberstrikeai.error.repo_checkout "$INSTALL_DIR" "$GITHUB_BRANCH" "$INSTALL_DIR" "$GITHUB_BRANCH")"
+  fi
+  if ! git -C "$INSTALL_DIR" pull --ff-only origin "$GITHUB_BRANCH"; then
+    error "$(t app.cyberstrikeai.error.repo_pull "$INSTALL_DIR" "$GITHUB_BRANCH" "$INSTALL_DIR" "$GITHUB_BRANCH")"
+  fi
+}
 clone_or_update_repo() {
   step "$(t app.cyberstrikeai.step.fetch_source)"
-  mkdir -p "$(dirname "$INSTALL_DIR")"
+  if ! mkdir -p "$(dirname "$INSTALL_DIR")"; then
+    error "$(t app.cyberstrikeai.error.source_parent_dir "$INSTALL_DIR")"
+  fi
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     info "$(t app.cyberstrikeai.info.repo_fetch "$GITHUB_BRANCH")"
-    git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"
-    git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"
-    git -C "$INSTALL_DIR" pull --ff-only origin "$GITHUB_BRANCH"
+    sync_repo_branch
   elif [[ -d "$INSTALL_DIR" && -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
     error "$(t app.cyberstrikeai.error.nonempty_dir "$INSTALL_DIR")"
   else
     safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
-    git clone --depth 1 --branch "$GITHUB_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"
+    if ! git clone --depth 1 --branch "$GITHUB_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"; then
+      safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
+      error "$(t app.cyberstrikeai.error.repo_clone "$GITHUB_REPO" "$INSTALL_DIR" "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR")"
+    fi
   fi
   success "$(t app.cyberstrikeai.success.source_ready "$INSTALL_DIR")"
 }
@@ -294,7 +308,9 @@ PY
 }
 setup_python_env() {
   step "$(t app.cyberstrikeai.step.python_env)"
-  cd "$INSTALL_DIR"
+  if ! cd "$INSTALL_DIR"; then
+    error "$(t app.cyberstrikeai.error.install_dir_missing "$INSTALL_DIR")"
+  fi
   if [[ ! -d "$VENV_DIR" ]]; then
     if ! python3 -m venv "$VENV_DIR"; then
       error "$(t app.cyberstrikeai.error.python_venv "$VENV_DIR")"
@@ -322,9 +338,13 @@ setup_python_env() {
 }
 build_binary() {
   step "$(t app.cyberstrikeai.step.build)"
-  cd "$INSTALL_DIR"
+  if ! cd "$INSTALL_DIR"; then
+    error "$(t app.cyberstrikeai.error.install_dir_missing "$INSTALL_DIR")"
+  fi
   export GOPROXY="$GOPROXY"
-  go mod download
+  if ! go mod download; then
+    error "$(t app.cyberstrikeai.error.go_modules "$INSTALL_DIR")"
+  fi
   local tmp_bin="${BIN_PATH}.tmp.$$"
   if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go; then
     rm -f "$tmp_bin"
@@ -452,7 +472,9 @@ write_nginx_config() {
   [[ -n "$CSAI_DOMAIN" ]] && server_name="$CSAI_DOMAIN"
   local upstream_scheme="http"
   _bool_true "$CSAI_HTTPS" && upstream_scheme="https"
-  mkdir -p "$(dirname "$NGINX_CONF")" "$(dirname "$NGINX_LINK")"
+  if ! mkdir -p "$(dirname "$NGINX_CONF")" "$(dirname "$NGINX_LINK")"; then
+    error "$(t app.cyberstrikeai.error.nginx_dirs "$NGINX_CONF")"
+  fi
   local nginx_tmp
   nginx_tmp=$(mktemp "${NGINX_CONF}.XXXXXX")
   if ! cat > "$nginx_tmp" <<NGINX
@@ -775,7 +797,6 @@ do_install() {
   install_go_if_needed
   ensure_service_user
   clone_or_update_repo
-  mkdir -p "$LOG_DIR"
   patch_config_port_and_paths
   setup_python_env
   build_binary
@@ -832,14 +853,14 @@ do_update() {
   write_backup_file "$CONFIG_FILE" "$config_bak" \
     || error "$(t app.cyberstrikeai.error.backup_write "$config_bak")"
   step "$(t app.cyberstrikeai.step.update_source)"
-  git -C "$INSTALL_DIR" fetch --prune origin "$GITHUB_BRANCH"
-  git -C "$INSTALL_DIR" checkout -q "$GITHUB_BRANCH"
-  git -C "$INSTALL_DIR" pull --ff-only origin "$GITHUB_BRANCH"
+  sync_repo_branch
   new_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
   setup_python_env
   patch_config_port_and_paths
   build_binary
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
+  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"; then
+    error "$(t app.cyberstrikeai.error.install_dir_owner "$INSTALL_DIR" "$SERVICE_USER")"
+  fi
   if $service_was_active; then
     step "$(t app.cyberstrikeai.step.restart_updated)"
     if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
