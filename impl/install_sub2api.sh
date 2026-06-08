@@ -1262,7 +1262,9 @@ do_backup() {
   load_config
   acquire_lock
   step "$(t app.sub2api.step.manual_backup)"
-  mkdir -p "$BACKUP_DIR"
+  if ! mkdir -p "$BACKUP_DIR"; then
+    error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
+  fi
   if [[ -n "${PG_DSN:-}" ]]; then
     if command -v pg_dump &>/dev/null; then
       local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_$(date +%Y%m%d_%H%M%S).sql.gz"

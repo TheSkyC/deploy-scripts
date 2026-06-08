@@ -737,7 +737,9 @@ do_backup() {
   [[ ! -d "$DATA_DIR" ]] \
     && error "$(t app.newapi.error.data_missing_install "$DATA_DIR")"
   step "$(t app.newapi.step.manual_backup)"
-  mkdir -p "$BACKUP_DIR"
+  if ! mkdir -p "$BACKUP_DIR"; then
+    error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
+  fi
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
     if sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null; then

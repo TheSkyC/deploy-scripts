@@ -387,6 +387,9 @@ i18n_register_many \
   app.newapi.success.backup_done \
   "Backup complete: %s (%s)." \
   "备份完成：%s（%s）。" \
+  app.newapi.error.backup_dir_create \
+  "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
+  "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
   app.newapi.error.backup_failed \
   "Backup failed. Check disk space on the disk containing %s." \
   "备份失败，请检查磁盘空间（%s 所在磁盘）。" \

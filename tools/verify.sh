@@ -1125,13 +1125,15 @@ check_sub2api_manual_backup_warnings_are_actionable() {
     ' apps/sub2api.sh
   awk '
       /step "\$\(t app\.sub2api\.step\.manual_backup\)"/ { in_backup=1; next }
+      in_backup && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_dir_if=1 }
+      in_backup && /error "\$\(t app\.sub2api\.error\.backup_dir_create "\$BACKUP_DIR"\)"/ { saw_dir_error=1 }
       in_backup && /warn "\$\(t app\.sub2api\.warn\.config_backup_failed\)"/ { saw_config_warn=1 }
       in_backup && /warn "\$\(t app\.sub2api\.warn\.data_backup_failed\)"/ { saw_data_warn=1 }
       in_backup && /warn "\$\(t app\.sub2api\.warn\.data_missing "\$DATA_DIR"\)"/ { saw_data_missing_warn=1 }
       in_backup && /success "\$\(t app\.sub2api\.success\.backup_done "\$BACKUP_DIR"\)"/ { in_backup=0 }
       END {
-        if (!(saw_config_warn && saw_data_warn && saw_data_missing_warn)) {
-          print "Sub2API manual backup must warn explicitly for config/data archive failures and missing data directories." > "/dev/stderr"
+        if (!(saw_dir_if && saw_dir_error && saw_config_warn && saw_data_warn && saw_data_missing_warn)) {
+          print "Sub2API manual backup must fail explicitly when the backup directory cannot be created, and warn for config/data archive failures and missing data directories." > "/dev/stderr"
           exit 1
         }
       }
@@ -2150,13 +2152,15 @@ check_newapi_manual_backup_wal_result_is_explicit() {
     return 1
   fi
   awk '
-      /step "\$\(t app\.newapi\.step\.manual_backup\)"/ { in_backup=1; saw_wal_if=0; saw_wal_success=0; saw_wal_warn=0; next }
+      /step "\$\(t app\.newapi\.step\.manual_backup\)"/ { in_backup=1; saw_dir_if=0; saw_dir_error=0; saw_wal_if=0; saw_wal_success=0; saw_wal_warn=0; next }
+      in_backup && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_dir_if=1 }
+      in_backup && /error "\$\(t app\.newapi\.error\.backup_dir_create "\$BACKUP_DIR"\)"/ { saw_dir_error=1 }
       in_backup && /if sqlite3 "\$DB_FILE" "PRAGMA wal_checkpoint\(TRUNCATE\);" 2>\/dev\/null; then/ { saw_wal_if=1 }
       in_backup && /success "\$\(t app\.newapi\.success\.wal\)"/ { saw_wal_success=1 }
       in_backup && /warn "\$\(t app\.newapi\.warn\.wal\)"/ { saw_wal_warn=1 }
       in_backup && /local _ic/ {
-        if (!(saw_wal_if && saw_wal_success && saw_wal_warn)) {
-          printf "%s NewAPI manual backup WAL checkpoint result must branch explicitly before integrity checks\n", FILENAME > "/dev/stderr"
+        if (!(saw_dir_if && saw_dir_error && saw_wal_if && saw_wal_success && saw_wal_warn)) {
+          printf "%s NewAPI manual backup must fail explicitly when the backup directory cannot be created, and must branch on WAL checkpoint results before integrity checks\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_backup=0

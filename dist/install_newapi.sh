@@ -902,6 +902,9 @@ i18n_register_many \
   app.newapi.success.backup_done \
   "Backup complete: %s (%s)." \
   "备份完成：%s（%s）。" \
+  app.newapi.error.backup_dir_create \
+  "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
+  "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
   app.newapi.error.backup_failed \
   "Backup failed. Check disk space on the disk containing %s." \
   "备份失败，请检查磁盘空间（%s 所在磁盘）。" \
@@ -1893,7 +1896,9 @@ do_backup() {
   [[ ! -d "$DATA_DIR" ]] \
     && error "$(t app.newapi.error.data_missing_install "$DATA_DIR")"
   step "$(t app.newapi.step.manual_backup)"
-  mkdir -p "$BACKUP_DIR"
+  if ! mkdir -p "$BACKUP_DIR"; then
+    error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
+  fi
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
     if sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null; then

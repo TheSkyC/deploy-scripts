@@ -1130,6 +1130,9 @@ i18n_register_many \
   app.sub2api.success.backup_done \
   "Backup flow complete. Archive directory: %s" \
   "备份流程完成，归档目录：%s。" \
+  app.sub2api.error.backup_dir_create \
+  "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
+  "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
   app.sub2api.step.status \
   "Sub2API runtime status" \
   "Sub2API 运行状态" \
@@ -2682,7 +2685,9 @@ do_backup() {
   load_config
   acquire_lock
   step "$(t app.sub2api.step.manual_backup)"
-  mkdir -p "$BACKUP_DIR"
+  if ! mkdir -p "$BACKUP_DIR"; then
+    error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
+  fi
   if [[ -n "${PG_DSN:-}" ]]; then
     if command -v pg_dump &>/dev/null; then
       local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_$(date +%Y%m%d_%H%M%S).sql.gz"
