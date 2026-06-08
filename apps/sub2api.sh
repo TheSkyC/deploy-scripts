@@ -162,6 +162,9 @@ i18n_register_many \
   app.sub2api.success.nginx_installed \
   "Nginx installed." \
   "Nginx 安装完成。" \
+  app.sub2api.error.nginx_start \
+  "Cannot start Nginx service. Inspect: journalctl -u nginx -n 30" \
+  "无法启动 Nginx 服务，请检查：journalctl -u nginx -n 30" \
   app.sub2api.error.nginx_config_write \
   "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
   "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \

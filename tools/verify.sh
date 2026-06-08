@@ -1271,6 +1271,28 @@ check_sub2api_dependency_services_start_before_success() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_nginx_install_starts_service_explicitly() {
+  if grep -R -n 'systemctl start nginx 2>/dev/null || true' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API nginx installation must not suppress nginx start failures." >&2
+    return 1
+  fi
+  awk '
+      /_ensure_nginx_running\(\)/ { saw_helper=1 }
+      /app\.sub2api\.error\.nginx_start/ { saw_error=1 }
+      /_install_nginx\(\)/ { in_block=1; saw_ensure=0; saw_success=0; next }
+      in_block && /_ensure_nginx_running/ { saw_ensure=1 }
+      in_block && /success "\$\(t app\.sub2api\.success\.nginx_installed\)"/ { saw_success=1 }
+      in_block && /^}/ {
+        if (!(saw_helper && saw_error && saw_ensure && saw_success)) {
+          printf "%s Sub2API nginx installation must ensure the service starts before reporting success\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -1720,6 +1742,7 @@ main() {
   check_sub2api_nginx_reload_results_are_checked
   check_sub2api_postgres_rpm_setup_failures_are_explicit
   check_sub2api_dependency_services_start_before_success
+  check_sub2api_nginx_install_starts_service_explicitly
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics

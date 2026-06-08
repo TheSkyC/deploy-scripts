@@ -677,6 +677,9 @@ i18n_register_many \
   app.sub2api.success.nginx_installed \
   "Nginx installed." \
   "Nginx 安装完成。" \
+  app.sub2api.error.nginx_start \
+  "Cannot start Nginx service. Inspect: journalctl -u nginx -n 30" \
+  "无法启动 Nginx 服务，请检查：journalctl -u nginx -n 30" \
   app.sub2api.error.nginx_config_write \
   "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
   "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \
@@ -1771,6 +1774,13 @@ _install_redis() {
     success "$(t app.sub2api.success.redis)"
   fi
 }
+_ensure_nginx_running() {
+  if systemctl is-active --quiet nginx 2>/dev/null; then
+    return 0
+  fi
+  systemctl start nginx 2>/dev/null || error "$(t app.sub2api.error.nginx_start)"
+  systemctl is-active --quiet nginx 2>/dev/null || error "$(t app.sub2api.error.nginx_start)"
+}
 _setup_postgres() {
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
@@ -1823,10 +1833,10 @@ _install_nginx() {
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
       yum install -y nginx
     fi
-    success "$(t app.sub2api.success.nginx_installed)"
   fi
   systemctl enable nginx
-  systemctl start nginx 2>/dev/null || true
+  _ensure_nginx_running
+  success "$(t app.sub2api.success.nginx_installed)"
 }
 _write_nginx_site_link() {
   local target="$1" link_path="$2"

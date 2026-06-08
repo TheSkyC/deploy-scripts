@@ -399,6 +399,13 @@ _install_redis() {
     success "$(t app.sub2api.success.redis)"
   fi
 }
+_ensure_nginx_running() {
+  if systemctl is-active --quiet nginx 2>/dev/null; then
+    return 0
+  fi
+  systemctl start nginx 2>/dev/null || error "$(t app.sub2api.error.nginx_start)"
+  systemctl is-active --quiet nginx 2>/dev/null || error "$(t app.sub2api.error.nginx_start)"
+}
 _setup_postgres() {
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
@@ -451,10 +458,10 @@ _install_nginx() {
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
       yum install -y nginx
     fi
-    success "$(t app.sub2api.success.nginx_installed)"
   fi
   systemctl enable nginx
-  systemctl start nginx 2>/dev/null || true
+  _ensure_nginx_running
+  success "$(t app.sub2api.success.nginx_installed)"
 }
 _write_nginx_site_link() {
   local target="$1" link_path="$2"
