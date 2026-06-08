@@ -32,7 +32,8 @@ ensure_bundled_app_impl_script() {
   local script_path tmp_path
   ensure_bundled_impl_dir
   script_path="$(app_impl_script_path)"
-  tmp_path="${script_path}.$$"
+  tmp_path="$(mktemp "${script_path}.XXXXXX")" \
+    || error "Failed to create bundled app implementation payload"
   if ! awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$tmp_path"; then
     rm -f "$tmp_path"
     cleanup_bundled_app_impl_script

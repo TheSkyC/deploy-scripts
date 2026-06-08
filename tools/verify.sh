@@ -173,6 +173,24 @@ check_release_build_outputs_are_atomic() {
     ' tools/build-release.sh
 }
 
+check_bundled_impl_temp_names_are_random() {
+  if grep -R -n 'tmp_path="\${script_path}\.\$\$"' lib dist 2>/dev/null; then
+    echo "Bundled implementation extraction must use mktemp instead of a pid-derived temporary path." >&2
+    return 1
+  fi
+  awk '
+      /tmp_path="\$\(mktemp "\$\{script_path\}\.XXXXXX"\)"/ { saw_tmp=1 }
+      /rm -f "\$tmp_path"/ { saw_cleanup=1 }
+      /mv "\$tmp_path" "\$script_path"/ { saw_mv=1 }
+      END {
+        if (!(saw_tmp && saw_cleanup && saw_mv)) {
+          print "Bundled implementation extraction must stage, replace, and clean up a mktemp file." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/app_loader.sh dist/install_newapi.sh
+}
+
 check_bundled_impl_cleanup() {
   local tmp_root
   tmp_root="$(mktemp -d)"
@@ -762,6 +780,7 @@ main() {
   check_no_chinese_comments
   check_no_release_temp_files
   check_release_build_outputs_are_atomic
+  check_bundled_impl_temp_names_are_random
   check_bundled_impl_cleanup
   check_bundled_impl_failure_cleanup
   check_safe_path_guard
