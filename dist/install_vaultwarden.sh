@@ -1457,6 +1457,33 @@ restore_web_vault_backup() {
   chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" || return 1
   chmod -R 750 "$VW_WEB_DIR" || return 1
 }
+deploy_web_vault_from_dir() {
+  local source_dir="$1" backup_dir="$2"
+  local staged_dir
+  [[ -d "$source_dir" ]] || return 1
+  mkdir -p "$(dirname "$VW_WEB_DIR")" || return 1
+  staged_dir=$(mktemp -d "${VW_WEB_DIR}.new.XXXXXX") || return 1
+  if ! cp -a "${source_dir}/." "$staged_dir/" \
+      || ! chown -R "${VW_USER}:${VW_GROUP}" "$staged_dir" \
+      || ! chmod -R 750 "$staged_dir"; then
+    rm -rf "$staged_dir"
+    return 1
+  fi
+  if [[ -e "$VW_WEB_DIR" || -L "$VW_WEB_DIR" ]]; then
+    if ! mv "$VW_WEB_DIR" "$backup_dir"; then
+      rm -rf "$staged_dir"
+      return 1
+    fi
+  fi
+  if mv "$staged_dir" "$VW_WEB_DIR"; then
+    return 0
+  fi
+  rm -rf "$staged_dir"
+  if [[ -d "$backup_dir" ]]; then
+    restore_web_vault_backup "$backup_dir" || return 1
+  fi
+  return 1
+}
 install_vaultwarden_binary() {
   local source_bin="$1"
   local bin_tmp
@@ -1620,23 +1647,13 @@ do_install() {
   info "$(t app.vaultwarden.info.version "$VW_VER")"
   step "$(t app.vaultwarden.step.web_vault)"
   local _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
-  mkdir -p "$(dirname "$VW_WEB_DIR")"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     info "$(t app.vaultwarden.info.web_vault_image)"
-    [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_install_bak"
-    if cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR" \
-        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
-        && chmod -R 750 "$VW_WEB_DIR"; then
+    if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_install_bak"; then
       [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
       success "$(t app.vaultwarden.success.web_vault_image)"
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
-      if [[ -d "$_wv_install_bak" ]]; then
-        restore_web_vault_backup "$_wv_install_bak" \
-          || error "$(t app.vaultwarden.error.web_vault_install)"
-      else
-        rm -rf "$VW_WEB_DIR"
-      fi
       error "$(t app.vaultwarden.error.web_vault_install)"
     fi
   else
@@ -1651,20 +1668,20 @@ do_install() {
     info "$(t app.vaultwarden.info.download "$WV_URL")"
     wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
       || error "$(t app.vaultwarden.error.web_vault_download)"
-    [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_install_bak"
-    if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")" \
-        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
-        && chmod -R 750 "$VW_WEB_DIR"; then
-      [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
-      success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
+    local _wv_extract_root="${WORK_DIR}/web-vault-extract"
+    mkdir -p "$_wv_extract_root"
+    if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
+      local _wv_source_dir
+      _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
+      if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_install_bak"; then
+        [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
+        success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
+      else
+        warn "$(t app.vaultwarden.warn.web_vault_extract)"
+        error "$(t app.vaultwarden.error.web_vault_install)"
+      fi
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
-      if [[ -d "$_wv_install_bak" ]]; then
-        restore_web_vault_backup "$_wv_install_bak" \
-          || error "$(t app.vaultwarden.error.web_vault_install)"
-      else
-        rm -rf "$VW_WEB_DIR"
-      fi
       error "$(t app.vaultwarden.error.web_vault_install)"
     fi
   fi
@@ -2260,19 +2277,10 @@ do_update() {
   step "$(t app.vaultwarden.step.update_web_vault)"
   local _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
-    [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_bak_ts"
-    if cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR" \
-        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
-        && chmod -R 750 "$VW_WEB_DIR"; then
+    if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_bak_ts"; then
       success "$(t app.vaultwarden.success.web_vault_updated_image)"
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
-      if [[ -d "$_wv_bak_ts" ]]; then
-        restore_web_vault_backup "$_wv_bak_ts" \
-          || error "$(t app.vaultwarden.error.web_vault_install)"
-      else
-        rm -rf "$VW_WEB_DIR"
-      fi
     fi
   else
     local _fetched_wv_ver
@@ -2280,19 +2288,18 @@ do_update() {
     if [[ -n "$_fetched_wv_ver" ]]; then
       local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_fetched_wv_ver}/bw_web_v${_fetched_wv_ver}.tar.gz"
       if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
-        [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_bak_ts"
-        if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")" \
-            && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
-            && chmod -R 750 "$VW_WEB_DIR"; then
-          success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
+        local _wv_extract_root="${WORK_DIR}/web-vault-extract"
+        mkdir -p "$_wv_extract_root"
+        if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
+          local _wv_source_dir
+          _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
+          if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_bak_ts"; then
+            success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
+          else
+            warn "$(t app.vaultwarden.warn.web_vault_extract)"
+          fi
         else
           warn "$(t app.vaultwarden.warn.web_vault_extract)"
-          if [[ -d "$_wv_bak_ts" ]]; then
-            restore_web_vault_backup "$_wv_bak_ts" \
-              || error "$(t app.vaultwarden.error.web_vault_install)"
-          else
-            rm -rf "$VW_WEB_DIR"
-          fi
         fi
       else
         warn "$(t app.vaultwarden.warn.web_vault_update_download)"

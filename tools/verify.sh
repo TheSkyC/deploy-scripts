@@ -1109,6 +1109,31 @@ check_vaultwarden_webvault_restore_cleans_partial() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_webvault_replacements_are_atomic() {
+  if grep -R -nE 'cp -a "\$EXTRACTED_WEBVAULT_PATH" "\$VW_WEB_DIR"|tar -xzf "\$\{WORK_DIR\}/web-vault\.tar\.gz" -C "\$\(dirname "\$VW_WEB_DIR"\)"' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden Web Vault installs and updates must stage replacement trees before swapping them live." >&2
+    return 1
+  fi
+  awk '
+      /deploy_web_vault_from_dir\(\)/ { in_helper=1; saw_tmp=0; saw_copy=0; saw_chown=0; saw_chmod=0; saw_backup=0; saw_swap=0; saw_cleanup=0; next }
+      in_helper && /staged_dir=\$\(mktemp -d "\$\{VW_WEB_DIR\}\.new\.XXXXXX"\)/ { saw_tmp=1 }
+      in_helper && /cp -a "\$\{source_dir\}\/\." "\$staged_dir\/"/ { saw_copy=1 }
+      in_helper && /chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$staged_dir"/ { saw_chown=1 }
+      in_helper && /chmod -R 750 "\$staged_dir"/ { saw_chmod=1 }
+      in_helper && /mv "\$VW_WEB_DIR" "\$backup_dir"/ { saw_backup=1 }
+      in_helper && /mv "\$staged_dir" "\$VW_WEB_DIR"/ { saw_swap=1 }
+      in_helper && /rm -rf "\$staged_dir"/ { saw_cleanup=1 }
+      in_helper && /^}/ {
+        if (!(saw_tmp && saw_copy && saw_chown && saw_chmod && saw_backup && saw_swap && saw_cleanup)) {
+          printf "%s Vaultwarden Web Vault replacement helper must stage, permission, back up, and atomically swap trees\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_helper=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_install_webvault_replacement_is_recoverable() {
   awk '
       /step "\$\(t app\.vaultwarden\.step\.web_vault\)"/ {
@@ -1256,6 +1281,7 @@ main() {
   check_nginx_test_failures_report_diagnostics
   check_fail2ban_configs_are_atomic
   check_vaultwarden_webvault_restore_cleans_partial
+  check_vaultwarden_webvault_replacements_are_atomic
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree
   check_blog_site_files_are_atomic
