@@ -537,6 +537,23 @@ check_go_tarball_failures_cleanup() {
     echo "Do not remove the existing Go toolchain before the replacement archive is extracted." >&2
     return 1
   fi
+  if grep -R -n 'mv "$old_go_backup" /usr/local/go 2>/dev/null || true' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI Go toolchain rollback must validate restoring the previous /usr/local/go." >&2
+    return 1
+  fi
+  awk '
+      /restore_old_go_toolchain\(\)/ { in_func=1; saw_exists=0; saw_absent=0; saw_mv=0; next }
+      in_func && /\[\[ -n "\$old_go_backup" && -e "\$old_go_backup" \]\]/ { saw_exists=1 }
+      in_func && /\[\[ ! -e \/usr\/local\/go \]\]/ { saw_absent=1 }
+      in_func && /mv "\$old_go_backup" \/usr\/local\/go/ { saw_mv=1 }
+      in_func && /^}/ {
+        if (!(saw_exists && saw_absent && saw_mv)) {
+          printf "%s Go toolchain rollback helper must validate backup existence, target absence, and restore move\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
 check_mutating_installs_acquire_locks() {

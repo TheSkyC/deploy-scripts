@@ -985,6 +985,12 @@ check_connectivity() {
     "https://objects.githubusercontent.com" && return 0
   error "$(t app.cyberstrikeai.error.github_unreachable)"
 }
+restore_old_go_toolchain() {
+  local old_go_backup="$1"
+  [[ -n "$old_go_backup" && -e "$old_go_backup" ]] || return 0
+  [[ ! -e /usr/local/go ]] || return 1
+  mv "$old_go_backup" /usr/local/go
+}
 apt_install_base() {
   step "$(t app.cyberstrikeai.step.install_deps)"
   apt-get update -qq
@@ -1069,7 +1075,8 @@ install_go_if_needed() {
   fi
   if ! mv "$extract_dir/go" /usr/local/go; then
     if [[ -n "$old_go_backup" && -e "$old_go_backup" && ! -e /usr/local/go ]]; then
-      mv "$old_go_backup" /usr/local/go 2>/dev/null || true
+      restore_old_go_toolchain "$old_go_backup" \
+        || warn "$(t app.cyberstrikeai.error.go_failed)"
     fi
     rm -rf "$extract_dir"
     error "$(t app.cyberstrikeai.error.go_failed)"
