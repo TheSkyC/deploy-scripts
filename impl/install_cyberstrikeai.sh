@@ -836,7 +836,9 @@ do_update() {
     step "$(t app.cyberstrikeai.step.restart_updated)"
     if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
       success "$(t app.cyberstrikeai.success.update_complete "$old_rev" "$new_rev")"
-      health_check
+      if ! health_check; then
+        :
+      fi
     else
       warn "$(t app.cyberstrikeai.warn.update_start_failed)"
       systemctl stop "$SERVICE_NAME" 2>/dev/null || true
@@ -899,7 +901,9 @@ do_status() {
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.process):" "$(t app.cyberstrikeai.status.not_running)"
   fi
   step "$(t app.cyberstrikeai.step.health)"
-  health_check
+  if ! health_check; then
+    :
+  fi
   step "$(t app.cyberstrikeai.step.nginx)"
   if _bool_true "$ENABLE_NGINX"; then
     if command -v nginx >/dev/null 2>&1; then

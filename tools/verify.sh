@@ -2540,6 +2540,29 @@ check_cyberstrikeai_nginx_health_probe_matches_server_name() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_health_checks_are_nonfatal_outside_install() {
+  awk '
+      /success "\$\(t app\.cyberstrikeai\.success\.update_complete "\$old_rev" "\$new_rev"\)"/ { in_update=1; saw_health_if=0; next }
+      in_update && /if ! health_check; then/ { saw_health_if=1 }
+      in_update && /warn "\$\(t app\.cyberstrikeai\.warn\.update_start_failed\)"/ {
+        if (!saw_health_if) {
+          printf "%s CyberStrikeAI update must treat post-restart health warnings as nonfatal\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+      /step "\$\(t app\.cyberstrikeai\.step\.health\)"/ { in_status=1; saw_status_if=0; next }
+      in_status && /if ! health_check; then/ { saw_status_if=1 }
+      in_status && /step "\$\(t app\.cyberstrikeai\.step\.nginx\)"/ {
+        if (!saw_status_if) {
+          printf "%s CyberStrikeAI status must keep reporting after local health warnings\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -3179,6 +3202,7 @@ main() {
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_cyberstrikeai_install_summary_matches_health_state
   check_cyberstrikeai_nginx_health_probe_matches_server_name
+  check_cyberstrikeai_health_checks_are_nonfatal_outside_install
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_summary_matches_health_state
   check_vaultwarden_install_summary_matches_health_state
