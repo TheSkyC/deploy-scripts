@@ -1800,8 +1800,12 @@ _ensure_nginx_running() {
   if systemctl is-active --quiet nginx 2>/dev/null; then
     return 0
   fi
-  systemctl start nginx 2>/dev/null || error "$(t app.sub2api.error.nginx_start)"
-  systemctl is-active --quiet nginx 2>/dev/null || error "$(t app.sub2api.error.nginx_start)"
+  if ! systemctl start nginx 2>/dev/null; then
+    error "$(t app.sub2api.error.nginx_start)"
+  fi
+  if ! systemctl is-active --quiet nginx 2>/dev/null; then
+    error "$(t app.sub2api.error.nginx_start)"
+  fi
 }
 _setup_postgres() {
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
