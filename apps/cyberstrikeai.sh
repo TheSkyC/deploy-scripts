@@ -144,6 +144,9 @@ i18n_register_many \
   app.cyberstrikeai.success.iptables \
   "iptables allows port: %s/tcp" \
   "iptables 已放行端口：%s/tcp" \
+  app.cyberstrikeai.warn.firewall_config_failed \
+  "Automatic firewall configuration failed for port %s/tcp. Open it manually or retry after fixing the firewall service." \
+  "端口 %s/tcp 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.cyberstrikeai.warn.no_firewall \
   "No active ufw/iptables detected. Cloud security groups may still need manual rules." \
   "未检测到活跃的 ufw/iptables。云安全组可能仍需手动配置规则。" \

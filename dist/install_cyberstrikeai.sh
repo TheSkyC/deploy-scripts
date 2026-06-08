@@ -659,6 +659,9 @@ i18n_register_many \
   app.cyberstrikeai.success.iptables \
   "iptables allows port: %s/tcp" \
   "iptables 已放行端口：%s/tcp" \
+  app.cyberstrikeai.warn.firewall_config_failed \
+  "Automatic firewall configuration failed for port %s/tcp. Open it manually or retry after fixing the firewall service." \
+  "端口 %s/tcp 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.cyberstrikeai.warn.no_firewall \
   "No active ufw/iptables detected. Cloud security groups may still need manual rules." \
   "未检测到活跃的 ufw/iptables。云安全组可能仍需手动配置规则。" \
@@ -1416,26 +1419,33 @@ NGINX
 open_firewall_ports() {
   _bool_true "$OPEN_FIREWALL" || return 0
   step "$(t app.cyberstrikeai.step.firewall)"
+  local port_to_open="$PORT"
+  local fw_error=false
+  _bool_true "$ENABLE_NGINX" && port_to_open="$PUBLIC_PORT"
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if _bool_true "$ENABLE_NGINX"; then
-      ufw allow "${PUBLIC_PORT}/tcp" >/dev/null 2>&1 || true
-      success "$(t app.cyberstrikeai.success.ufw "$PUBLIC_PORT")"
-    else
-      ufw allow "${PORT}/tcp" >/dev/null 2>&1 || true
-      success "$(t app.cyberstrikeai.success.ufw_backend "$PORT")"
+    if ufw allow "${port_to_open}/tcp" >/dev/null 2>&1; then
+      if _bool_true "$ENABLE_NGINX"; then
+        success "$(t app.cyberstrikeai.success.ufw "$PUBLIC_PORT")"
+      else
+        success "$(t app.cyberstrikeai.success.ufw_backend "$PORT")"
+      fi
+      return 0
     fi
-    return 0
+    fw_error=true
   fi
   if command -v iptables >/dev/null 2>&1; then
-    local port_to_open="$PORT"
-    _bool_true "$ENABLE_NGINX" && port_to_open="$PUBLIC_PORT"
-    if ! iptables -C INPUT -p tcp --dport "$port_to_open" -j ACCEPT 2>/dev/null; then
-      iptables -A INPUT -p tcp --dport "$port_to_open" -j ACCEPT
+    if iptables -C INPUT -p tcp --dport "$port_to_open" -j ACCEPT 2>/dev/null \
+        || iptables -A INPUT -p tcp --dport "$port_to_open" -j ACCEPT; then
+      success "$(t app.cyberstrikeai.success.iptables "$port_to_open")"
+      return 0
     fi
-    success "$(t app.cyberstrikeai.success.iptables "$port_to_open")"
-    return 0
+    fw_error=true
   fi
-  warn "$(t app.cyberstrikeai.warn.no_firewall)"
+  if $fw_error; then
+    warn "$(t app.cyberstrikeai.warn.firewall_config_failed "$port_to_open")"
+  else
+    warn "$(t app.cyberstrikeai.warn.no_firewall)"
+  fi
 }
 write_logrotate() {
   local logrotate_tmp

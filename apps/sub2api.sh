@@ -174,6 +174,9 @@ i18n_register_many \
   app.sub2api.success.firewalld_port \
   "firewalld allows port %s." \
   "firewalld 已放行端口 %s。" \
+  app.sub2api.warn.firewall_config_failed \
+  "Automatic firewall configuration failed for port %s. Open it manually or retry after fixing the firewall service." \
+  "端口 %s 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.sub2api.success.iptables_saved \
   "iptables rules persisted with netfilter-persistent." \
   "iptables 规则已持久化（netfilter-persistent）。" \

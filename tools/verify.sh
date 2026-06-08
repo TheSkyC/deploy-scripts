@@ -1207,6 +1207,42 @@ check_sub2api_nginx_reload_results_are_checked() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_firewall_success_paths_validate_command_results() {
+  if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
+      impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
+      dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "Firewall success paths must not ignore command failures." >&2
+    return 1
+  fi
+  awk '
+      /_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_firewalld_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
+      in_block && /if ufw allow "\$\{PORT\}\/tcp" comment "Sub2API" > \/dev\/null; then/ { saw_ufw_if=1 }
+      in_block && /if firewall-cmd --permanent --add-port="\$\{PORT\}\/tcp" >\/dev\/null 2>&1/ { saw_firewalld_if=1 }
+      in_block && /if iptables -C INPUT -p tcp --dport "\$PORT" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
+      in_block && /warn "\$\(t app\.sub2api\.warn\.firewall_config_failed "\$PORT"\)"/ { saw_failure_warn=1 }
+      in_block && /^}/ {
+        if (!(saw_ufw_if && saw_firewalld_if && saw_iptables_if && saw_failure_warn)) {
+          printf "%s Sub2API firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /open_firewall_ports\(\)/ { in_block=1; saw_ufw_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
+      in_block && /if ufw allow "\$\{port_to_open\}\/tcp" >\/dev\/null 2>&1; then/ { saw_ufw_if=1 }
+      in_block && /if iptables -C INPUT -p tcp --dport "\$port_to_open" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
+      in_block && /warn "\$\(t app\.cyberstrikeai\.warn\.firewall_config_failed "\$port_to_open"\)"/ { saw_failure_warn=1 }
+      in_block && /^}/ {
+        if (!(saw_ufw_if && saw_iptables_if && saw_failure_warn)) {
+          printf "%s CyberStrikeAI firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
   if grep -R -n 'systemctl reload nginx 2>/dev/null || systemctl restart nginx' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -1574,6 +1610,7 @@ main() {
   check_nginx_main_config_edits_are_atomic
   check_nginx_test_failures_report_diagnostics
   check_sub2api_nginx_reload_results_are_checked
+  check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic

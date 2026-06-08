@@ -689,6 +689,9 @@ i18n_register_many \
   app.sub2api.success.firewalld_port \
   "firewalld allows port %s." \
   "firewalld 已放行端口 %s。" \
+  app.sub2api.warn.firewall_config_failed \
+  "Automatic firewall configuration failed for port %s. Open it manually or retry after fixing the firewall service." \
+  "端口 %s 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.sub2api.success.iptables_saved \
   "iptables rules persisted with netfilter-persistent." \
   "iptables 规则已持久化（netfilter-persistent）。" \
@@ -1960,49 +1963,64 @@ EOF
 }
 _configure_firewall() {
   local FW_DONE=false
+  local FW_ERROR=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    ufw allow "${PORT}/tcp" comment "Sub2API" > /dev/null
-    success "$(t app.sub2api.success.ufw_port "$PORT")"
-    FW_DONE=true
+    if ufw allow "${PORT}/tcp" comment "Sub2API" > /dev/null; then
+      success "$(t app.sub2api.success.ufw_port "$PORT")"
+      FW_DONE=true
+    else
+      FW_ERROR=true
+    fi
   fi
   if ! $FW_DONE && command -v firewall-cmd &>/dev/null && \
       firewall-cmd --state &>/dev/null; then
-    firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1 || true
-    firewall-cmd --reload >/dev/null 2>&1 || true
-    success "$(t app.sub2api.success.firewalld_port "$PORT")"
-    FW_DONE=true
+    if firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1 \
+        && firewall-cmd --reload >/dev/null 2>&1; then
+      success "$(t app.sub2api.success.firewalld_port "$PORT")"
+      FW_DONE=true
+    else
+      FW_ERROR=true
+    fi
   fi
   if ! $FW_DONE && command -v iptables &>/dev/null; then
-    if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
-      iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
-    fi
-    if command -v netfilter-persistent &>/dev/null; then
-      if netfilter-persistent save 2>/dev/null; then
-        success "$(t app.sub2api.success.iptables_saved)"
+    if iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null \
+        || iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT; then
+      if command -v netfilter-persistent &>/dev/null; then
+        if netfilter-persistent save 2>/dev/null; then
+          success "$(t app.sub2api.success.iptables_saved)"
+        else
+          warn "$(t app.sub2api.warn.iptables_not_persisted)"
+        fi
+      elif command -v iptables-save &>/dev/null; then
+        mkdir -p /etc/iptables
+        local iptables_rules="/etc/iptables/rules.v4"
+        local iptables_tmp
+        iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX")
+        if iptables-save > "$iptables_tmp" 2>/dev/null \
+            && chmod 644 "$iptables_tmp" \
+            && chown root:root "$iptables_tmp" \
+            && mv "$iptables_tmp" "$iptables_rules"; then
+          info "$(t app.sub2api.info.iptables_written)"
+        else
+          rm -f "$iptables_tmp"
+          warn "$(t app.sub2api.warn.iptables_write_failed)"
+        fi
       else
         warn "$(t app.sub2api.warn.iptables_not_persisted)"
       fi
-    elif command -v iptables-save &>/dev/null; then
-      mkdir -p /etc/iptables
-      local iptables_rules="/etc/iptables/rules.v4"
-      local iptables_tmp
-      iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX")
-      if iptables-save > "$iptables_tmp" 2>/dev/null \
-          && chmod 644 "$iptables_tmp" \
-          && chown root:root "$iptables_tmp" \
-          && mv "$iptables_tmp" "$iptables_rules"; then
-        info "$(t app.sub2api.info.iptables_written)"
-      else
-        rm -f "$iptables_tmp"
-        warn "$(t app.sub2api.warn.iptables_write_failed)"
-      fi
+      success "$(t app.sub2api.success.iptables_port "$PORT")"
+      FW_DONE=true
     else
-      warn "$(t app.sub2api.warn.iptables_not_persisted)"
+      FW_ERROR=true
     fi
-    success "$(t app.sub2api.success.iptables_port "$PORT")"
-    FW_DONE=true
   fi
-  $FW_DONE || warn "$(t app.sub2api.warn.no_firewall "$PORT")"
+  if ! $FW_DONE; then
+    if $FW_ERROR; then
+      warn "$(t app.sub2api.warn.firewall_config_failed "$PORT")"
+    else
+      warn "$(t app.sub2api.warn.no_firewall "$PORT")"
+    fi
+  fi
 }
 _write_logrotate() {
   local logrotate_file="/etc/logrotate.d/sub2api"
