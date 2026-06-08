@@ -222,6 +222,9 @@ i18n_register_many \
   app.sub2api.success.backup_script \
   "Backup script written: /usr/local/bin/sub2api-backup" \
   "备份脚本已写入：/usr/local/bin/sub2api-backup。" \
+  app.sub2api.error.backup_script \
+  "Backup script write failed: /usr/local/bin/sub2api-backup" \
+  "备份脚本写入失败：/usr/local/bin/sub2api-backup。" \
   app.sub2api.success.silent_pg_dump \
   "Silent pg_dump backup: %s (%s)." \
   "静默 pg_dump 备份：%s（%s）。" \

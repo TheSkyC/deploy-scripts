@@ -1053,6 +1053,9 @@ i18n_register_many \
   app.vaultwarden.warn.backup_failed_continue \
   "Backup failed; temporary file removed. Continuing..." \
   "备份失败，临时文件已清理，继续..." \
+  app.vaultwarden.error.backup_script \
+  "Backup script write failed: /usr/local/bin/vaultwarden-backup" \
+  "备份脚本写入失败：/usr/local/bin/vaultwarden-backup" \
   app.vaultwarden.step.manual_backup \
   "Manual Vaultwarden backup" \
   "手动备份 Vaultwarden" \
@@ -2223,13 +2226,20 @@ do_update() {
   save_config
 }
 _write_backup_script() {
-  cat > /usr/local/bin/vaultwarden-backup << 'BKSH'
+  local backup_script="/usr/local/bin/vaultwarden-backup"
+  local backup_tmp
+  backup_tmp=$(mktemp "${backup_script}.XXXXXX")
+  if ! cat > "$backup_tmp" << 'BKSH'
 #!/bin/bash
 # Auto-generated Vaultwarden backup script.
 set -euo pipefail
 umask 077   # Backup files include secrets and must be root-readable only.
 BKSH
-  cat >> /usr/local/bin/vaultwarden-backup << BKSH_VARS
+  then
+    rm -f "$backup_tmp"
+    error "$(t app.vaultwarden.error.backup_script)"
+  fi
+  if ! cat >> "$backup_tmp" << BKSH_VARS
 BACKUP_DIR="${VW_BACKUP_DIR}"
 DATA_DIR="${VW_DATA_DIR}"
 ENV_FILE="${VW_ENV_FILE}"
@@ -2240,7 +2250,11 @@ MSG_SUCCESS="$(t app.vaultwarden.backup.script.success)"
 MSG_FAILED="$(t app.vaultwarden.backup.script.failed)"
 MSG_CLEANED="$(t app.vaultwarden.backup.script.cleaned)"
 BKSH_VARS
-  cat >> /usr/local/bin/vaultwarden-backup << 'BKSH'
+  then
+    rm -f "$backup_tmp"
+    error "$(t app.vaultwarden.error.backup_script)"
+  fi
+  if ! cat >> "$backup_tmp" << 'BKSH'
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
@@ -2296,7 +2310,16 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   [[ "${REMOVED}" -gt 0 ]] && printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
 fi
 BKSH
-  chmod +x /usr/local/bin/vaultwarden-backup
+  then
+    rm -f "$backup_tmp"
+    error "$(t app.vaultwarden.error.backup_script)"
+  fi
+  if ! chmod 750 "$backup_tmp" \
+      || ! chown root:root "$backup_tmp" \
+      || ! mv "$backup_tmp" "$backup_script"; then
+    rm -f "$backup_tmp"
+    error "$(t app.vaultwarden.error.backup_script)"
+  fi
 }
 _backup_silent() {
   local label="${1:-manual}"

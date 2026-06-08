@@ -433,7 +433,9 @@ write_backup_script() {
   msg_install_missing="$(t app.cyberstrikeai.backup.error.install_missing '%s')"
   msg_sqlite_integrity="$(t app.cyberstrikeai.backup.warn.sqlite_integrity '%s' '%s')"
   msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
-  cat > "$BACKUP_SCRIPT" <<BACKUP
+  local backup_tmp
+  backup_tmp=$(mktemp "${BACKUP_SCRIPT}.XXXXXX")
+  if ! cat > "$backup_tmp" <<BACKUP
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
@@ -484,7 +486,16 @@ fi
 
 printf "\$(date '+%F %T') [OK] ${msg_backup_created}\n" "\$archive"
 BACKUP
-  chmod 755 "$BACKUP_SCRIPT"
+  then
+    rm -f "$backup_tmp"
+    error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
+  fi
+  if ! chmod 750 "$backup_tmp" \
+      || ! chown root:root "$backup_tmp" \
+      || ! mv "$backup_tmp" "$BACKUP_SCRIPT"; then
+    rm -f "$backup_tmp"
+    error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
+  fi
   cat > "$CRON_FILE" <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

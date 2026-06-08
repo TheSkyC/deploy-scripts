@@ -546,6 +546,9 @@ i18n_register_many \
   app.vaultwarden.warn.backup_failed_continue \
   "Backup failed; temporary file removed. Continuing..." \
   "备份失败，临时文件已清理，继续..." \
+  app.vaultwarden.error.backup_script \
+  "Backup script write failed: /usr/local/bin/vaultwarden-backup" \
+  "备份脚本写入失败：/usr/local/bin/vaultwarden-backup" \
   app.vaultwarden.step.manual_backup \
   "Manual Vaultwarden backup" \
   "手动备份 Vaultwarden" \

@@ -216,6 +216,9 @@ i18n_register_many \
   app.cyberstrikeai.backup.ok.created \
   "backup created: %s" \
   "备份已创建：%s" \
+  app.cyberstrikeai.error.backup_script \
+  "Backup script write failed: %s" \
+  "备份脚本写入失败：%s" \
   app.cyberstrikeai.error.not_git \
   "%s is not a git checkout. Run install first." \
   "%s 不是 Git 检出目录。请先执行 install。" \

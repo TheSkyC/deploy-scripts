@@ -93,6 +93,9 @@ i18n_register_many \
   app.newapi.success.backup_script \
   "Backup script written: /usr/local/bin/new-api-backup" \
   "备份脚本已写入：/usr/local/bin/new-api-backup。" \
+  app.newapi.error.backup_script \
+  "Backup script write failed: /usr/local/bin/new-api-backup" \
+  "备份脚本写入失败：/usr/local/bin/new-api-backup。" \
   app.newapi.warn.silent_data_missing \
   "_backup_silent: data directory does not exist (%s); skipping backup." \
   "_backup_silent: 数据目录不存在（%s），跳过备份。" \
