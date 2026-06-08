@@ -53,10 +53,16 @@ HUGO_VER=$(curl -fsSL --max-time 15 \
 success "$(t app.blog.latest_version "$HUGO_VER")"
 DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"
 info "$(t app.blog.download_url "$DEB_URL")"
-wget -q --show-progress -O /tmp/hugo.deb "$DEB_URL" \
-  || error "$(t app.blog.error.hugo_download)"
-dpkg -i /tmp/hugo.deb
-rm -f /tmp/hugo.deb
+HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"
+if ! wget -q --show-progress -O "$HUGO_DEB" "$DEB_URL"; then
+  rm -f "$HUGO_DEB"
+  error "$(t app.blog.error.hugo_download)"
+fi
+if ! dpkg -i "$HUGO_DEB"; then
+  rm -f "$HUGO_DEB"
+  error "$(t app.blog.error.hugo_install)"
+fi
+rm -f "$HUGO_DEB"
 success "$(t app.blog.hugo_installed "$(hugo version | head -1)")"
 step "$(t app.blog.step_init_site)"
 mkdir -p "$(dirname "$SITE_DIR")"

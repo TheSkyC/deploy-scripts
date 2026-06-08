@@ -200,6 +200,9 @@ i18n_register app.blog.download_url \
 i18n_register app.blog.error.hugo_download \
   "Hugo download failed. Check the network or download it manually." \
   "Hugo 下载失败，请检查网络或手动下载。"
+i18n_register app.blog.error.hugo_install \
+  "Hugo package installation failed." \
+  "Hugo 软件包安装失败。"
 i18n_register app.blog.hugo_installed \
   "Hugo installed: %s" \
   "Hugo %s 安装完成"

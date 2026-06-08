@@ -350,6 +350,13 @@ check_no_unsupported_systemctl_options() {
   fi
 }
 
+check_no_fixed_tmp_downloads() {
+  if grep -R -n '/tmp/hugo\.deb' impl dist 2>/dev/null; then
+    echo "Use mktemp for Hugo package downloads instead of a fixed /tmp path." >&2
+    return 1
+  fi
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -369,6 +376,7 @@ main() {
   check_config_write_failure_cleanup
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
+  check_no_fixed_tmp_downloads
   echo "Verification passed"
 }
 
