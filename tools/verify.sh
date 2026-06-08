@@ -701,6 +701,31 @@ check_cyberstrikeai_backups_are_atomic() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_config_patch_is_atomic() {
+  if grep -R -n 'path.write_text(text, encoding="utf-8")' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI config patching must write via a staged temporary file and atomic replace." >&2
+    return 1
+  fi
+  awk '
+      /patch_config_port_and_paths\(\)/ { in_func=1; saw_stat=0; saw_tmpfile=0; saw_fsync=0; saw_chmod=0; saw_chown=0; saw_replace=0; saw_cleanup=0; next }
+      in_func && /file_stat = path\.stat\(\)/ { saw_stat=1 }
+      in_func && /tempfile\.NamedTemporaryFile\(/ { saw_tmpfile=1 }
+      in_func && /os\.fsync\(handle\.fileno\(\)\)/ { saw_fsync=1 }
+      in_func && /os\.chmod\(tmp_path, file_stat\.st_mode & 0o777\)/ { saw_chmod=1 }
+      in_func && /os\.chown\(tmp_path, file_stat\.st_uid, file_stat\.st_gid\)/ { saw_chown=1 }
+      in_func && /os\.replace\(tmp_path, path\)/ { saw_replace=1 }
+      in_func && /Path\(tmp_path\)\.unlink\(missing_ok=True\)/ { saw_cleanup=1 }
+      in_func && /^}/ {
+        if (!(saw_stat && saw_tmpfile && saw_fsync && saw_chmod && saw_chown && saw_replace && saw_cleanup)) {
+          printf "%s CyberStrikeAI config patch helper must stage writes and atomically replace the config file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_backup_temp_moves_handle_failure() {
   if grep -R -nE '^[[:space:]]*mv "\$[^"]*(TMP|tmp|ARCHIVE_TMP|archive_tmp|PG_TMP|pg_tmp|CONF_TMP|conf_tmp|DATA_TMP|data_tmp|DUMP_TMP|dump_tmp)[^"]*" "\$[^"]*(ARCHIVE|archive|FILE|file)' impl dist 2>/dev/null; then
     echo "Backup temporary files must be removed when the final move fails." >&2
@@ -1144,6 +1169,7 @@ main() {
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated
   check_cyberstrikeai_backups_are_atomic
+  check_cyberstrikeai_config_patch_is_atomic
   check_backup_temp_moves_handle_failure
   check_binary_replacements_handle_failure
   check_binary_restores_validate_permissions

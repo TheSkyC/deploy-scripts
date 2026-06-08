@@ -1143,15 +1143,18 @@ patch_config_port_and_paths() {
   write_backup_file "$CONFIG_FILE" "$backup" \
     || error "$(t app.cyberstrikeai.error.backup_write "$backup")"
   python3 - "$CONFIG_FILE" "$PORT" "$LOG_DIR/cyberstrike-ai.log" "$CSAI_HTTPS" <<'PY'
+import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 
 path = Path(sys.argv[1])
 port = sys.argv[2]
 log_file = sys.argv[3]
 https_enabled = sys.argv[4].strip().lower() in {"1", "true", "yes", "y", "on"}
 text = path.read_text(encoding="utf-8")
+file_stat = path.stat()
 
 def replace_in_section(src, section, key, value):
     pattern = re.compile(
@@ -1175,7 +1178,27 @@ text = replace_in_section(text, "server", "tls_enabled", "true" if https_enabled
 text = replace_in_section(text, "server", "tls_auto_self_sign", "true" if https_enabled else "false")
 text = replace_in_section(text, "log", "output", log_file)
 
-path.write_text(text, encoding="utf-8")
+tmp_path = None
+try:
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        prefix=f".{path.name}.tmp.",
+        delete=False,
+    ) as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+        tmp_path = handle.name
+    os.chmod(tmp_path, file_stat.st_mode & 0o777)
+    if hasattr(os, "chown"):
+        os.chown(tmp_path, file_stat.st_uid, file_stat.st_gid)
+    os.replace(tmp_path, path)
+except Exception:
+    if tmp_path:
+        Path(tmp_path).unlink(missing_ok=True)
+    raise
 PY
   success "$(t app.cyberstrikeai.success.config_adjusted "$PORT")"
 }
