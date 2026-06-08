@@ -378,6 +378,10 @@ check_go_tarball_failures_cleanup() {
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
     return 1
   fi
+  if grep -R -n 'rm -rf /usr/local/go' impl dist 2>/dev/null; then
+    echo "Do not remove the existing Go toolchain before the replacement archive is extracted." >&2
+    return 1
+  fi
 }
 
 check_mutating_installs_acquire_locks() {

@@ -1002,7 +1002,7 @@ install_go_if_needed() {
     fi
     warn "$(t app.cyberstrikeai.warn.go_repo_old "$ver")"
   fi
-  local arch go_arch latest_json version tarball url tmp
+  local arch go_arch latest_json version tarball url tmp extract_dir old_go_backup
   arch=$(uname -m)
   case "$arch" in
     x86_64) go_arch="amd64" ;;
@@ -1025,12 +1025,31 @@ install_go_if_needed() {
     rm -f "$tmp"
     error "$(t app.cyberstrikeai.error.go_empty)"
   fi
-  rm -rf /usr/local/go
-  if ! tar -C /usr/local -xzf "$tmp"; then
+  extract_dir=$(mktemp -d /usr/local/go.extract.XXXXXX)
+  if ! tar -C "$extract_dir" -xzf "$tmp" || [[ ! -d "$extract_dir/go" ]]; then
     rm -f "$tmp"
+    rm -rf "$extract_dir"
     error "$(t app.cyberstrikeai.error.go_extract)"
   fi
   rm -f "$tmp"
+  old_go_backup=""
+  if [[ -e /usr/local/go ]]; then
+    old_go_backup=$(mktemp -d /usr/local/go.previous.XXXXXX)
+    rmdir "$old_go_backup"
+    if ! mv /usr/local/go "$old_go_backup"; then
+      rm -rf "$extract_dir"
+      error "$(t app.cyberstrikeai.error.go_failed)"
+    fi
+  fi
+  if ! mv "$extract_dir/go" /usr/local/go; then
+    if [[ -n "$old_go_backup" && -e "$old_go_backup" && ! -e /usr/local/go ]]; then
+      mv "$old_go_backup" /usr/local/go 2>/dev/null || true
+    fi
+    rm -rf "$extract_dir"
+    error "$(t app.cyberstrikeai.error.go_failed)"
+  fi
+  rm -rf "$extract_dir"
+  [[ -n "$old_go_backup" ]] && rm -rf "$old_go_backup"
   ln -sf /usr/local/go/bin/go /usr/local/bin/go
   ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
   hash -r 2>/dev/null || true
