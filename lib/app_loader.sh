@@ -33,10 +33,26 @@ ensure_bundled_app_impl_script() {
   ensure_bundled_impl_dir
   script_path="$(app_impl_script_path)"
   tmp_path="${script_path}.$$"
-  awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$tmp_path"
-  [[ -s "$tmp_path" ]] || error "Bundled app implementation payload is empty"
-  chmod 700 "$tmp_path"
-  mv "$tmp_path" "$script_path"
+  if ! awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$tmp_path"; then
+    rm -f "$tmp_path"
+    cleanup_bundled_app_impl_script
+    error "Failed to extract bundled app implementation payload"
+  fi
+  if [[ ! -s "$tmp_path" ]]; then
+    rm -f "$tmp_path"
+    cleanup_bundled_app_impl_script
+    error "Bundled app implementation payload is empty"
+  fi
+  if ! chmod 700 "$tmp_path"; then
+    rm -f "$tmp_path"
+    cleanup_bundled_app_impl_script
+    error "Failed to secure bundled app implementation payload"
+  fi
+  if ! mv "$tmp_path" "$script_path"; then
+    rm -f "$tmp_path"
+    cleanup_bundled_app_impl_script
+    error "Failed to install bundled app implementation payload"
+  fi
 }
 
 cleanup_bundled_app_impl_script() {

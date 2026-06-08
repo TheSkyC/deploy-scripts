@@ -164,6 +164,41 @@ check_bundled_impl_cleanup() {
   rm -rf "$tmp_root"
 }
 
+check_bundled_impl_failure_cleanup() {
+  local tmp_root stub_dir
+  tmp_root="$(mktemp -d)"
+  stub_dir="$(mktemp -d)"
+
+  cat > "${stub_dir}/chmod" <<'STUB'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  case "$arg" in
+    */deploy-scripts.*/*_impl.sh.*) exit 1 ;;
+  esac
+done
+exec /usr/bin/chmod "$@"
+STUB
+  chmod +x "${stub_dir}/chmod"
+
+  set +e
+  TMPDIR="$tmp_root" PATH="${stub_dir}:$PATH" DEPLOY_LANG=en "$BASH_BIN" dist/install_newapi.sh not-a-command >/dev/null 2>&1
+  status=$?
+  set -e
+
+  [[ "$status" -ne 0 ]] || {
+    echo "Expected bundled script to fail while chmod was stubbed" >&2
+    rm -rf "$tmp_root" "$stub_dir"
+    return 1
+  }
+  if find "$tmp_root" -name 'install_*_impl.sh*' -type f | grep -q .; then
+    echo "Bundled implementation payload was left behind after extraction failure" >&2
+    find "$tmp_root" -name 'install_*_impl.sh*' -type f >&2
+    rm -rf "$tmp_root" "$stub_dir"
+    return 1
+  fi
+  rm -rf "$tmp_root" "$stub_dir"
+}
+
 check_safe_path_guard() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -320,6 +355,7 @@ main() {
   check_no_chinese_comments
   check_no_release_temp_files
   check_bundled_impl_cleanup
+  check_bundled_impl_failure_cleanup
   check_safe_path_guard
   check_service_status_label
   check_config_crlf_handling
