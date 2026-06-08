@@ -195,6 +195,17 @@ _write_nginx_config_file() {
     error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
   fi
 }
+_write_nginx_site_link() {
+  local target="$1" link_path="$2"
+  local link_tmp
+  mkdir -p "$(dirname "$link_path")" || return 1
+  link_tmp=$(mktemp "${link_path}.XXXXXX") || return 1
+  rm -f "$link_tmp"
+  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
+    rm -f "$link_tmp"
+    return 1
+  fi
+}
 _write_fail2ban_config_file() {
   local fail2ban_conf="$1"
   local fail2ban_tmp
@@ -562,7 +573,8 @@ server {
     }
 }
 NGINX
-  ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden
+  _write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden \
+    || error "$(t app.vaultwarden.error.nginx_write "$NGINX_CONF")"
   if [[ -L /etc/nginx/sites-enabled/default ]]; then
     warn "$(t app.vaultwarden.warn.default_site_removed)"
     rm -f /etc/nginx/sites-enabled/default

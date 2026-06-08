@@ -1281,6 +1281,17 @@ SERVICE
   systemctl enable "$SERVICE_NAME" --quiet
   success "$(t app.cyberstrikeai.success.systemd "$SERVICE_NAME")"
 }
+_write_nginx_site_link() {
+  local target="$1" link_path="$2"
+  local link_tmp
+  mkdir -p "$(dirname "$link_path")" || return 1
+  link_tmp=$(mktemp "${link_path}.XXXXXX") || return 1
+  rm -f "$link_tmp"
+  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
+    rm -f "$link_tmp"
+    return 1
+  fi
+}
 write_nginx_config() {
   _bool_true "$ENABLE_NGINX" || return 0
   step "$(t app.cyberstrikeai.step.nginx)"
@@ -1346,7 +1357,8 @@ NGINX
     rm -f "$nginx_tmp"
     error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
   fi
-  ln -sf "$NGINX_CONF" "$NGINX_LINK"
+  _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
+    || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
   nginx -t
   systemctl enable nginx --quiet
   systemctl reload nginx 2>/dev/null || systemctl restart nginx

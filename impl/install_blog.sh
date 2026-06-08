@@ -33,6 +33,18 @@ backup_blog_file() {
   fi
 }
 
+_write_nginx_site_link() {
+  local target="$1" link_path="$2"
+  local link_tmp
+  mkdir -p "$(dirname "$link_path")" || return 1
+  link_tmp=$(mktemp "${link_path}.XXXXXX") || return 1
+  rm -f "$link_tmp"
+  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
+    rm -f "$link_tmp"
+    return 1
+  fi
+}
+
 _write_blog_file() {
   local target_path="$1"
   local target_dir target_tmp
@@ -490,7 +502,8 @@ if ! chmod 644 "$NGINX_TMP" \
   rm -f "$NGINX_TMP"
   error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
 fi
-ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/blog
+_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog \
+  || error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
 rm -f /etc/nginx/sites-enabled/default
 nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"

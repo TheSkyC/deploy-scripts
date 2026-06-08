@@ -890,6 +890,10 @@ check_nginx_configs_are_atomic() {
     echo "Nginx site configs must be written through temporary files before replacement." >&2
     return 1
   fi
+  if grep -R -nE '^[[:space:]]*ln -s[f]? .*sites-enabled' impl dist 2>/dev/null; then
+    echo "Nginx sites-enabled symlinks must be staged before replacement." >&2
+    return 1
+  fi
   awk '
       /(nginx_tmp|NGINX_TMP)=\$\(mktemp/ { saw_tmp=1 }
       /mv "\$(nginx_tmp|NGINX_TMP)" "\$(nginx_conf|NGINX_CONF)"/ { saw_mv=1 }
@@ -900,6 +904,21 @@ check_nginx_configs_are_atomic() {
           print "Nginx site config writes must stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
+      }
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
+      dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh
+  awk '
+      /_write_nginx_site_link\(\)/ { in_func=1; saw_tmp=0; saw_unlink=0; saw_ln=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /link_tmp=\$\(mktemp "\$\{link_path\}\.XXXXXX"\)/ { saw_tmp=1 }
+      in_func && /rm -f "\$link_tmp"/ { saw_unlink=1; saw_cleanup=1 }
+      in_func && /ln -s "\$target" "\$link_tmp"/ { saw_ln=1 }
+      in_func && /mv -Tf "\$link_tmp" "\$link_path"/ { saw_mv=1 }
+      in_func && /^}/ {
+        if (!(saw_tmp && saw_unlink && saw_ln && saw_mv && saw_cleanup)) {
+          printf "%s Nginx site link helper must stage, replace, and clean up temporary symlinks\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
       }
     ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
       dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh

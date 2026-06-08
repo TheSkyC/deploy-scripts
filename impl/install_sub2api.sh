@@ -427,6 +427,17 @@ _install_nginx() {
   systemctl enable nginx
   systemctl start nginx 2>/dev/null || true
 }
+_write_nginx_site_link() {
+  local target="$1" link_path="$2"
+  local link_tmp
+  mkdir -p "$(dirname "$link_path")" || return 1
+  link_tmp=$(mktemp "${link_path}.XXXXXX") || return 1
+  rm -f "$link_tmp"
+  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
+    rm -f "$link_tmp"
+    return 1
+  fi
+}
 _write_nginx_config() {
   local server_name_line
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
@@ -480,9 +491,8 @@ NGINX
     rm -f "$nginx_tmp"
     error "$(t app.sub2api.error.nginx_config_write)"
   fi
-  if [[ ! -L /etc/nginx/sites-enabled/sub2api ]]; then
-    ln -s "$nginx_conf" /etc/nginx/sites-enabled/sub2api
-  fi
+  _write_nginx_site_link "$nginx_conf" /etc/nginx/sites-enabled/sub2api \
+    || error "$(t app.sub2api.error.nginx_config_write)"
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
       local nginx_main_conf="/etc/nginx/nginx.conf"
