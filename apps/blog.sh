@@ -179,6 +179,12 @@ i18n_register app.blog.step_install_deps \
 i18n_register app.blog.deps_installed \
   "Dependencies installed: curl / wget / git / nginx" \
   "依赖安装完成（curl / wget / git / nginx）"
+i18n_register app.blog.error.apt_update \
+  "apt-get update failed. Check /var/log/apt/*, fix repository or network issues, and retry the installation." \
+  "apt-get update 失败。请检查 /var/log/apt/*，修复软件源或网络问题后重新执行安装。"
+i18n_register app.blog.error.deps_install \
+  "Dependency installation failed. Run apt-get install -y curl wget git nginx ca-certificates after fixing the package manager state." \
+  "依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl wget git nginx ca-certificates。"
 i18n_register app.blog.step_install_hugo \
   "Step 2  Install Hugo Extended" \
   "Step 2  安装 Hugo Extended"

@@ -86,8 +86,12 @@ case $ARCH in
 esac
 acquire_lock
 step "$(t app.blog.step_install_deps)"
-apt-get update -qq
-apt-get install -y -qq curl wget git nginx ca-certificates
+if ! apt-get update -qq; then
+  error "$(t app.blog.error.apt_update)"
+fi
+if ! apt-get install -y -qq curl wget git nginx ca-certificates; then
+  error "$(t app.blog.error.deps_install)"
+fi
 success "$(t app.blog.deps_installed)"
 step "$(t app.blog.step_install_hugo)"
 info "$(t app.blog.query_hugo)"

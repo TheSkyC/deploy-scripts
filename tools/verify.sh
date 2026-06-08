@@ -683,6 +683,40 @@ check_vaultwarden_apt_update_failures_are_reported() {
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_blog_dependency_failures_are_reported() {
+  if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl wget git nginx ca-certificates$' \
+      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog dependency installation must use explicit conditionals with actionable errors." >&2
+    return 1
+  fi
+  awk '
+      /app\.blog\.error\.apt_update/ { saw_update_key=1 }
+      /\/var\/log\/apt\/\*/ { saw_update_guidance=1 }
+      /app\.blog\.error\.deps_install/ { saw_install_key=1 }
+      /apt-get install -y curl wget git nginx ca-certificates/ { saw_install_guidance=1 }
+      END {
+        if (!(saw_update_key && saw_update_guidance && saw_install_key && saw_install_guidance)) {
+          print "Blog dependency failures must tell users how to inspect apt logs and retry package installation." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/blog.sh
+  awk '
+      /step "\$\(t app\.blog\.step_install_deps\)"/ { in_block=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; next }
+      in_block && /if ! apt-get update -qq; then/ { saw_update_if=1 }
+      in_block && /error "\$\(t app\.blog\.error\.apt_update\)"/ { saw_update_error=1 }
+      in_block && /if ! apt-get install -y -qq curl wget git nginx ca-certificates; then/ { saw_install_if=1 }
+      in_block && /error "\$\(t app\.blog\.error\.deps_install\)"/ { saw_install_error=1 }
+      in_block && /success "\$\(t app\.blog\.deps_installed\)"/ {
+        if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error)) {
+          printf "%s Blog dependency installation must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_vaultwarden_backup_failures_include_followup_guidance() {
   awk '
       /app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn_key=1 }
@@ -2384,6 +2418,7 @@ main() {
   check_cyberstrikeai_pip_upgrade_failures_are_reported
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
+  check_blog_dependency_failures_are_reported
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance
