@@ -3038,14 +3038,15 @@ check_blog_static_deploy_swaps_tree() {
         }
         in_helper=0
       }
-      /step "\$\(t app\.blog\.step_nginx\)"/ { in_deploy=1; saw_tmp=0; saw_backup=0; saw_swap=0; saw_restore_call=0; next }
+      /step "\$\(t app\.blog\.step_nginx\)"/ { in_deploy=1; saw_tmp=0; saw_backup=0; saw_swap=0; saw_tmp_cleanup=0; saw_restore_call=0; next }
       in_deploy && /DEPLOY_TMP="\$\(mktemp -d/ { saw_tmp=1 }
       in_deploy && /mv "\$NGINX_ROOT" "\$DEPLOY_BAK"/ { saw_backup=1 }
       in_deploy && /mv "\$DEPLOY_TMP" "\$NGINX_ROOT"/ { saw_swap=1 }
+      in_deploy && /rm -rf "\$DEPLOY_TMP"/ { saw_tmp_cleanup=1 }
       in_deploy && /restore_nginx_root_backup/ { saw_restore_call=1 }
       in_deploy && /success "\$\(t app\.blog\.static_deployed "\$NGINX_ROOT"\)"/ {
-        if (!(saw_tmp && saw_backup && saw_swap && saw_restore_call)) {
-          print "Blog static deployment must stage, swap, and restore the Nginx root." > "/dev/stderr"
+        if (!(saw_tmp && saw_backup && saw_swap && saw_tmp_cleanup && saw_restore_call)) {
+          print "Blog static deployment must stage, swap, clean up failed staging directories, and restore the Nginx root." > "/dev/stderr"
           exit 1
         }
         in_deploy=0
@@ -3159,15 +3160,16 @@ check_blog_publish_guidance_uses_staging_output() {
 check_blog_publish_helper_is_atomic() {
   awk '
       /_write_publish_script\(\)/ { saw_helper=1; next }
-      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_restore=0; next }
+      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_tmp_cleanup=0; saw_restore=0; next }
       in_heredoc && /DEPLOY_TMP="\\\$\(mktemp -d/ { saw_tmp=1 }
       in_heredoc && /cp -a "\\\$\{PUBLIC_DIR\}\/\." "\\\$DEPLOY_TMP\/"/ { saw_copy=1 }
       in_heredoc && /mv "\\\$NGINX_ROOT" "\\\$DEPLOY_BAK"/ { saw_backup=1 }
       in_heredoc && /mv "\\\$DEPLOY_TMP" "\\\$NGINX_ROOT"/ { saw_swap=1 }
+      in_heredoc && /rm -rf "\\\$DEPLOY_TMP"/ { saw_tmp_cleanup=1 }
       in_heredoc && /restore_nginx_root_backup\(\)/ { saw_restore=1 }
       in_heredoc && /^BKSH$/ {
-        if (!(saw_tmp && saw_copy && saw_backup && saw_swap && saw_restore)) {
-          printf "%s Blog publish helper must stage output, back up the live root, and restore on failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_tmp && saw_copy && saw_backup && saw_swap && saw_tmp_cleanup && saw_restore)) {
+          printf "%s Blog publish helper must stage output, clean up failed staging directories, back up the live root, and restore on failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_heredoc=0
