@@ -956,6 +956,18 @@ i18n_register_many \
   app.sub2api.info.user_exists \
   "User %s already exists; skipping creation." \
   "用户 %s 已存在，跳过创建。" \
+  app.sub2api.error.user_create \
+  "Failed to create system user %s. Check useradd output and retry." \
+  "创建系统用户 %s 失败。请检查 useradd 输出后重试。" \
+  app.sub2api.error.dir_create \
+  "Failed to create one or more runtime directories. Check permissions for %s and %s, then retry." \
+  "创建运行目录失败。请检查 %s 和 %s 的权限后重试。" \
+  app.sub2api.error.dir_owner \
+  "Failed to apply ownership %s to %s. Check filesystem permissions and retry." \
+  "无法将 %s 的所有权设置到 %s。请检查文件系统权限后重试。" \
+  app.sub2api.error.config_dir_mode \
+  "Failed to set directory mode 750 on %s. Check filesystem permissions and retry." \
+  "无法将 %s 的目录权限设置为 750。请检查文件系统权限后重试。" \
   app.sub2api.success.dirs_created \
   "Directories created." \
   "目录创建完成。" \
@@ -2497,14 +2509,22 @@ do_install() {
   _setup_postgres
   step "$(t app.sub2api.step.user_dirs)"
   if ! id "$SERVICE_USER" &>/dev/null; then
-    useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"
+    if ! useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"; then
+      error "$(t app.sub2api.error.user_create "$SERVICE_USER")"
+    fi
     success "$(t app.sub2api.success.user_created "$SERVICE_USER")"
   else
     info "$(t app.sub2api.info.user_exists "$SERVICE_USER")"
   fi
-  mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"
-  chmod 750 "$CONFIG_DIR"
+  if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"; then
+    error "$(t app.sub2api.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
+  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"; then
+    error "$(t app.sub2api.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
+  fi
+  if ! chmod 750 "$CONFIG_DIR"; then
+    error "$(t app.sub2api.error.config_dir_mode "$CONFIG_DIR")"
+  fi
   success "$(t app.sub2api.success.dirs_created)"
   step "$(t app.sub2api.step.download_binary "$BIN_ARCH")"
   local TMP_ARCHIVE; TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz")

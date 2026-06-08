@@ -552,13 +552,19 @@ do_install() {
   success "$(t app.newapi.success.deps)"
   step "$(t app.newapi.step.user_dirs)"
   if ! id "$SERVICE_USER" &>/dev/null; then
-    useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"
+    if ! useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"; then
+      error "$(t app.newapi.error.user_create "$SERVICE_USER")"
+    fi
     success "$(t app.newapi.success.user_created "$SERVICE_USER")"
   else
     info "$(t app.newapi.info.user_exists "$SERVICE_USER")"
   fi
-  mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$BACKUP_DIR"
+  if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
+    error "$(t app.newapi.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
+  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
+    error "$(t app.newapi.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
+  fi
   success "$(t app.newapi.success.dirs "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR")"
   step "$(t app.newapi.step.download "$BIN_ARCH")"
   info "$(t app.newapi.info.download_url "$DOWNLOAD_URL")"
@@ -580,7 +586,9 @@ do_install() {
   if [[ -n "$OLD_BIN_BAK" ]]; then
     warn "$(t app.newapi.warn.old_binary_backup "$(basename "$OLD_BIN_BAK")")"
   fi
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
+  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"; then
+    error "$(t app.newapi.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
+  fi
   success "$(t app.newapi.success.binary_installed "$BIN_PATH")"
   step "$(t app.newapi.step.secret)"
   local SESSION_SECRET

@@ -810,6 +810,48 @@ check_newapi_dependency_failures_are_reported() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_runtime_dir_failures_are_explicit() {
+  awk '
+      /app\.newapi\.error\.user_create/ { saw_user_key=1 }
+      /app\.newapi\.error\.dir_create/ { saw_dir_key=1 }
+      /Check permissions for %s and %s, then retry/ { saw_dir_guidance=1 }
+      /app\.newapi\.error\.dir_owner/ { saw_owner_key=1 }
+      /Check filesystem permissions and retry/ { saw_owner_guidance=1 }
+      END {
+        if (!(saw_user_key && saw_dir_key && saw_dir_guidance && saw_owner_key && saw_owner_guidance)) {
+          print "NewAPI runtime directory failures must provide actionable user, mkdir, and chown guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /step "\$\(t app\.newapi\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_chown_if=0; saw_chown_error=0; next }
+      in_dirs && /if ! useradd -r -s \/usr\/sbin\/nologin -d "\$INSTALL_DIR" "\$SERVICE_USER"; then/ { saw_user_if=1 }
+      in_dirs && /error "\$\(t app\.newapi\.error\.user_create "\$SERVICE_USER"\)"/ { saw_user_error=1 }
+      in_dirs && /if ! mkdir -p "\$INSTALL_DIR" "\$DATA_DIR" "\$LOG_DIR" "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
+      in_dirs && /error "\$\(t app\.newapi\.error\.dir_create "\$INSTALL_DIR" "\$BACKUP_DIR"\)"/ { saw_mkdir_error=1 }
+      in_dirs && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR" "\$LOG_DIR" "\$BACKUP_DIR"; then/ { saw_chown_if=1 }
+      in_dirs && /error "\$\(t app\.newapi\.error\.dir_owner "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"\)"/ { saw_chown_error=1 }
+      in_dirs && /success "\$\(t app\.newapi\.success\.dirs "\$INSTALL_DIR" "\$DATA_DIR" "\$LOG_DIR"\)"/ {
+        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_chown_if && saw_chown_error)) {
+          printf "%s NewAPI install must fail explicitly when user creation, directory creation, or directory ownership setup fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_dirs=0
+      }
+      /if \[\[ -n "\$OLD_BIN_BAK" \]\]; then/ { in_binary=1; saw_binary_chown_if=0; saw_binary_chown_error=0; next }
+      in_binary && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"; then/ { saw_binary_chown_if=1 }
+      in_binary && /error "\$\(t app\.newapi\.error\.dir_owner "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"\)"/ { saw_binary_chown_error=1 }
+      in_binary && /success "\$\(t app\.newapi\.success\.binary_installed "\$BIN_PATH"\)"/ {
+        if (!(saw_binary_chown_if && saw_binary_chown_error)) {
+          printf "%s NewAPI binary install must fail explicitly when ownership repair fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_binary=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_cyberstrikeai_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -970,6 +1012,41 @@ check_sub2api_rpm_dependency_failures_are_reported() {
           exit 1
         }
         in_redis_yum=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
+check_sub2api_runtime_dir_failures_are_explicit() {
+  awk '
+      /app\.sub2api\.error\.user_create/ { saw_user_key=1 }
+      /app\.sub2api\.error\.dir_create/ { saw_dir_key=1 }
+      /Check permissions for %s and %s, then retry/ { saw_dir_guidance=1 }
+      /app\.sub2api\.error\.dir_owner/ { saw_owner_key=1 }
+      /app\.sub2api\.error\.config_dir_mode/ { saw_mode_key=1 }
+      /directory mode 750/ { saw_mode_guidance=1 }
+      END {
+        if (!(saw_user_key && saw_dir_key && saw_dir_guidance && saw_owner_key && saw_mode_key && saw_mode_guidance)) {
+          print "Sub2API runtime directory failures must provide actionable user, mkdir, chown, and chmod guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /step "\$\(t app\.sub2api\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_chown_if=0; saw_chown_error=0; saw_chmod_if=0; saw_chmod_error=0; next }
+      in_dirs && /if ! useradd -r -s \/usr\/sbin\/nologin -d "\$INSTALL_DIR" "\$SERVICE_USER"; then/ { saw_user_if=1 }
+      in_dirs && /error "\$\(t app\.sub2api\.error\.user_create "\$SERVICE_USER"\)"/ { saw_user_error=1 }
+      in_dirs && /if ! mkdir -p "\$INSTALL_DIR" "\$DATA_DIR" "\$LOG_DIR" "\$CONFIG_DIR" "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
+      in_dirs && /error "\$\(t app\.sub2api\.error\.dir_create "\$INSTALL_DIR" "\$BACKUP_DIR"\)"/ { saw_mkdir_error=1 }
+      in_dirs && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR" "\$LOG_DIR" "\$CONFIG_DIR"; then/ { saw_chown_if=1 }
+      in_dirs && /error "\$\(t app\.sub2api\.error\.dir_owner "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"\)"/ { saw_chown_error=1 }
+      in_dirs && /if ! chmod 750 "\$CONFIG_DIR"; then/ { saw_chmod_if=1 }
+      in_dirs && /error "\$\(t app\.sub2api\.error\.config_dir_mode "\$CONFIG_DIR"\)"/ { saw_chmod_error=1 }
+      in_dirs && /success "\$\(t app\.sub2api\.success\.dirs_created\)"/ {
+        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_chown_if && saw_chown_error && saw_chmod_if && saw_chmod_error)) {
+          printf "%s Sub2API install must fail explicitly when user creation, directory creation, ownership setup, or config-dir chmod fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_dirs=0
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
@@ -3378,9 +3455,11 @@ main() {
   check_blog_dependency_failures_are_reported
   check_blog_hugo_install_failures_are_actionable
   check_newapi_dependency_failures_are_reported
+  check_newapi_runtime_dir_failures_are_explicit
   check_cyberstrikeai_dependency_failures_are_reported
   check_sub2api_apt_failures_are_reported
   check_sub2api_rpm_dependency_failures_are_reported
+  check_sub2api_runtime_dir_failures_are_explicit
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance

@@ -1074,14 +1074,22 @@ do_install() {
   _setup_postgres
   step "$(t app.sub2api.step.user_dirs)"
   if ! id "$SERVICE_USER" &>/dev/null; then
-    useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"
+    if ! useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"; then
+      error "$(t app.sub2api.error.user_create "$SERVICE_USER")"
+    fi
     success "$(t app.sub2api.success.user_created "$SERVICE_USER")"
   else
     info "$(t app.sub2api.info.user_exists "$SERVICE_USER")"
   fi
-  mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"
-  chmod 750 "$CONFIG_DIR"
+  if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"; then
+    error "$(t app.sub2api.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
+  fi
+  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"; then
+    error "$(t app.sub2api.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
+  fi
+  if ! chmod 750 "$CONFIG_DIR"; then
+    error "$(t app.sub2api.error.config_dir_mode "$CONFIG_DIR")"
+  fi
   success "$(t app.sub2api.success.dirs_created)"
   step "$(t app.sub2api.step.download_binary "$BIN_ARCH")"
   local TMP_ARCHIVE; TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz")

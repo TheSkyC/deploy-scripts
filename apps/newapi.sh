@@ -219,6 +219,15 @@ i18n_register_many \
   app.newapi.info.user_exists \
   "User %s already exists; skipping creation." \
   "用户 %s 已存在，跳过创建。" \
+  app.newapi.error.user_create \
+  "Failed to create system user %s. Check useradd output and retry." \
+  "创建系统用户 %s 失败。请检查 useradd 输出后重试。" \
+  app.newapi.error.dir_create \
+  "Failed to create one or more runtime directories. Check permissions for %s and %s, then retry." \
+  "创建运行目录失败。请检查 %s 和 %s 的权限后重试。" \
+  app.newapi.error.dir_owner \
+  "Failed to apply ownership %s to %s. Check filesystem permissions and retry." \
+  "无法将 %s 的所有权设置到 %s。请检查文件系统权限后重试。" \
   app.newapi.success.dirs \
   "Directories created: %s / %s / %s." \
   "目录创建完成：%s / %s / %s。" \
