@@ -152,6 +152,14 @@ extract_binary() {
   echo "$webvault_path" > "${workdir}/.webvault_path"
   echo "$bin_path"
 }
+restore_web_vault_backup() {
+  local backup_dir="$1"
+  [[ -d "$backup_dir" ]] || return 1
+  rm -rf "$VW_WEB_DIR" || return 1
+  mv "$backup_dir" "$VW_WEB_DIR" || return 1
+  chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" || return 1
+  chmod -R 750 "$VW_WEB_DIR" || return 1
+}
 _write_nginx_config_file() {
   local nginx_conf="$1"
   local nginx_tmp
@@ -295,8 +303,12 @@ do_install() {
       success "$(t app.vaultwarden.success.web_vault_image)"
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
-      rm -rf "$VW_WEB_DIR"
-      [[ -d "$_wv_install_bak" ]] && mv "$_wv_install_bak" "$VW_WEB_DIR" || true
+      if [[ -d "$_wv_install_bak" ]]; then
+        restore_web_vault_backup "$_wv_install_bak" \
+          || error "$(t app.vaultwarden.error.web_vault_install)"
+      else
+        rm -rf "$VW_WEB_DIR"
+      fi
       error "$(t app.vaultwarden.error.web_vault_install)"
     fi
   else
@@ -319,8 +331,12 @@ do_install() {
       success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
-      rm -rf "$VW_WEB_DIR"
-      [[ -d "$_wv_install_bak" ]] && mv "$_wv_install_bak" "$VW_WEB_DIR" || true
+      if [[ -d "$_wv_install_bak" ]]; then
+        restore_web_vault_backup "$_wv_install_bak" \
+          || error "$(t app.vaultwarden.error.web_vault_install)"
+      else
+        rm -rf "$VW_WEB_DIR"
+      fi
       error "$(t app.vaultwarden.error.web_vault_install)"
     fi
   fi
@@ -916,12 +932,17 @@ do_update() {
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_bak_ts"
     if cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR" \
-        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"; then
+        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
+        && chmod -R 750 "$VW_WEB_DIR"; then
       success "$(t app.vaultwarden.success.web_vault_updated_image)"
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
-      rm -rf "$VW_WEB_DIR"
-      [[ -d "$_wv_bak_ts" ]] && mv "$_wv_bak_ts" "$VW_WEB_DIR" || true
+      if [[ -d "$_wv_bak_ts" ]]; then
+        restore_web_vault_backup "$_wv_bak_ts" \
+          || error "$(t app.vaultwarden.error.web_vault_install)"
+      else
+        rm -rf "$VW_WEB_DIR"
+      fi
     fi
   else
     local _fetched_wv_ver
@@ -931,12 +952,17 @@ do_update() {
       if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
         [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_bak_ts"
         if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")" \
-            && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"; then
+            && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" \
+            && chmod -R 750 "$VW_WEB_DIR"; then
           success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
         else
           warn "$(t app.vaultwarden.warn.web_vault_extract)"
-          rm -rf "$VW_WEB_DIR"
-          [[ -d "$_wv_bak_ts" ]] && mv "$_wv_bak_ts" "$VW_WEB_DIR" || true
+          if [[ -d "$_wv_bak_ts" ]]; then
+            restore_web_vault_backup "$_wv_bak_ts" \
+              || error "$(t app.vaultwarden.error.web_vault_install)"
+          else
+            rm -rf "$VW_WEB_DIR"
+          fi
         fi
       else
         warn "$(t app.vaultwarden.warn.web_vault_update_download)"
@@ -966,10 +992,8 @@ do_update() {
     if [[ -n "$NEWEST_BAK" ]]; then
       install -m 755 -o root -g root "$NEWEST_BAK" "$VW_BIN"
       if [[ -d "$_wv_bak_ts" ]]; then
-        rm -rf "$VW_WEB_DIR"
-        mv "$_wv_bak_ts" "$VW_WEB_DIR"
-        chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"
-        chmod -R 750 "$VW_WEB_DIR"
+        restore_web_vault_backup "$_wv_bak_ts" \
+          || error "$(t app.vaultwarden.error.rollback_start_failed)"
         warn "$(t app.vaultwarden.warn.web_vault_rolled_back)"
       fi
       systemctl start vaultwarden

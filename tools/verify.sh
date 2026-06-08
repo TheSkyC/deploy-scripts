@@ -842,15 +842,23 @@ check_fail2ban_configs_are_atomic() {
 }
 
 check_vaultwarden_webvault_restore_cleans_partial() {
+  if grep -R -nE '^[[:space:]]*\[\[ -d "\$_wv_(bak_ts|install_bak)" \]\] && mv "\$_wv_(bak_ts|install_bak)" "\$VW_WEB_DIR" \|\| true' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden Web Vault backup restores must validate replacement and permissions." >&2
+    return 1
+  fi
   awk '
-      /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
-      in_restore && /rm -rf "\$VW_WEB_DIR"/ { saw_rm=1 }
-      in_restore && /mv "\$_wv_bak_ts" "\$VW_WEB_DIR"/ {
-        if (!saw_rm) {
-          printf "%s restores Web Vault backup without removing the partial directory first\n", FILENAME > "/dev/stderr"
+      /restore_web_vault_backup\(\)/ { in_helper=1; saw_rm=0; saw_mv=0; saw_chown=0; saw_chmod=0; next }
+      in_helper && /rm -rf "\$VW_WEB_DIR"/ { saw_rm=1 }
+      in_helper && /mv "\$backup_dir" "\$VW_WEB_DIR"/ { saw_mv=1 }
+      in_helper && /chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_WEB_DIR"/ { saw_chown=1 }
+      in_helper && /chmod -R 750 "\$VW_WEB_DIR"/ { saw_chmod=1 }
+      in_helper && /^}/ {
+        if (!(saw_rm && saw_mv && saw_chown && saw_chmod)) {
+          printf "%s restore helper must validate Web Vault replacement, ownership, and mode\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_restore=0
+        in_helper=0
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
@@ -860,7 +868,6 @@ check_vaultwarden_install_webvault_replacement_is_recoverable() {
       /step "\$\(t app\.vaultwarden\.step\.web_vault\)"/ {
         in_install=1
         saw_backup=0
-        saw_restore_rm=0
         next
       }
       in_install && /mv "\$VW_WEB_DIR" "\$_wv_install_bak"/ { saw_backup=1 }
@@ -869,11 +876,10 @@ check_vaultwarden_install_webvault_replacement_is_recoverable() {
           printf "%s removes the existing Web Vault before backing it up during install\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        saw_restore_rm=1
       }
-      in_install && /mv "\$_wv_install_bak" "\$VW_WEB_DIR"/ {
-        if (!saw_restore_rm) {
-          printf "%s restores the install Web Vault backup without removing the partial directory first\n", FILENAME > "/dev/stderr"
+      in_install && /restore_web_vault_backup "\$_wv_install_bak"/ {
+        if (!saw_backup) {
+          printf "%s restores the install Web Vault backup without backing it up first\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
