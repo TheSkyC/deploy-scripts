@@ -2636,7 +2636,13 @@ do_uninstall() {
   find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -delete 2>/dev/null || true
   success "$(t app.vaultwarden.success.removed_binary)"
   rm -f /etc/nginx/sites-enabled/vaultwarden /etc/nginx/sites-available/vaultwarden
-  nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || nginx -t >&2 || true
+    else
+      nginx -t >&2 || true
+    fi
+  fi
   success "$(t app.vaultwarden.success.removed_nginx)"
   rm -f /etc/fail2ban/filter.d/vaultwarden.conf \
         /etc/fail2ban/filter.d/vaultwarden-admin.conf \

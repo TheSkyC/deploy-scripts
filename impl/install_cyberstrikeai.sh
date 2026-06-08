@@ -899,8 +899,12 @@ do_uninstall() {
   systemctl daemon-reload
   success "$(t app.cyberstrikeai.success.removed_systemd)"
   rm -f "$NGINX_LINK" "$NGINX_CONF"
-  if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
-    systemctl reload nginx 2>/dev/null || true
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || nginx -t >&2 || true
+    else
+      nginx -t >&2 || true
+    fi
   fi
   success "$(t app.cyberstrikeai.success.removed_nginx)"
   rm -f "$LOGROTATE_FILE" "$CRON_FILE" "$BACKUP_SCRIPT" "$CONF_FILE"

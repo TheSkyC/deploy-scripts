@@ -2748,9 +2748,18 @@ do_uninstall() {
   success "$(t app.sub2api.success.removed_binary)"
   rm -f /etc/nginx/sites-enabled/sub2api
   rm -f /etc/nginx/sites-available/sub2api
-  if command -v nginx &>/dev/null && nginx -t 2>/dev/null; then
-    systemctl reload nginx 2>/dev/null || true
-    success "$(t app.sub2api.success.removed_nginx_reload)"
+  if command -v nginx &>/dev/null; then
+    if nginx -t >/dev/null 2>&1; then
+      if systemctl reload nginx >/dev/null 2>&1; then
+        success "$(t app.sub2api.success.removed_nginx_reload)"
+      else
+        nginx -t >&2 || true
+        success "$(t app.sub2api.success.removed_nginx)"
+      fi
+    else
+      nginx -t >&2 || true
+      success "$(t app.sub2api.success.removed_nginx)"
+    fi
   else
     success "$(t app.sub2api.success.removed_nginx)"
   fi

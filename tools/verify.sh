@@ -1137,6 +1137,57 @@ check_nginx_test_failures_report_diagnostics() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_uninstall_nginx_paths_preserve_diagnostics() {
+  if grep -R -nE 'nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null \|\| true|systemctl reload nginx 2>/dev/null \|\| true$' \
+      impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
+      dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Uninstall-time nginx cleanup must preserve nginx test/reload diagnostics." >&2
+    return 1
+  fi
+  awk '
+      /rm -f \/etc\/nginx\/sites-enabled\/sub2api/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; saw_fallback=0; next }
+      in_block && /if nginx -t >\/dev\/null 2>&1; then/ { saw_test=1 }
+      in_block && /if systemctl reload nginx >\/dev\/null 2>&1; then/ { saw_reload=1 }
+      in_block && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /success "\$\(t app\.sub2api\.success\.removed_nginx\)"/ { saw_fallback=1 }
+      in_block && /rm -f \/etc\/cron\.d\/sub2api-backup/ {
+        if (!(saw_test && saw_reload && saw_diag && saw_fallback)) {
+          printf "%s Sub2API uninstall nginx cleanup must validate reloads and emit diagnostics on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /rm -f "\$NGINX_LINK" "\$NGINX_CONF"/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; next }
+      in_block && /if nginx -t >\/dev\/null 2>&1; then/ { saw_test=1 }
+      in_block && /systemctl reload nginx >\/dev\/null 2>&1 \|\| nginx -t >&2 \|\| true/ { saw_reload=1; saw_diag=1 }
+      in_block && /^    else$/ { saw_else=1 }
+      in_block && saw_else && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /success "\$\(t app\.cyberstrikeai\.success\.removed_nginx\)"/ {
+        if (!(saw_test && saw_reload && saw_diag)) {
+          printf "%s CyberStrikeAI uninstall nginx cleanup must emit diagnostics when validation or reload fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /rm -f \/etc\/nginx\/sites-enabled\/vaultwarden \/etc\/nginx\/sites-available\/vaultwarden/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; next }
+      in_block && /if nginx -t >\/dev\/null 2>&1; then/ { saw_test=1 }
+      in_block && /systemctl reload nginx >\/dev\/null 2>&1 \|\| nginx -t >&2 \|\| true/ { saw_reload=1; saw_diag=1 }
+      in_block && /^    else$/ { saw_else=1 }
+      in_block && saw_else && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /success "\$\(t app\.vaultwarden\.success\.removed_nginx\)"/ {
+        if (!(saw_test && saw_reload && saw_diag)) {
+          printf "%s Vaultwarden uninstall nginx cleanup must emit diagnostics when validation or reload fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_fail2ban_configs_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > /etc/fail2ban/' impl dist 2>/dev/null; then
     echo "Fail2Ban configs must be written through temporary files before replacement." >&2
@@ -1349,6 +1400,7 @@ main() {
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic
   check_nginx_test_failures_report_diagnostics
+  check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_webvault_replacements_are_atomic
