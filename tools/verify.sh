@@ -343,6 +343,13 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_no_unsupported_systemctl_options() {
+  if grep -R -nE 'systemctl[[:space:]]+stop[[:space:]][^;&|]*--timeout' impl lib dist 2>/dev/null; then
+    echo "systemctl stop does not support --timeout; use the default blocking stop behavior." >&2
+    return 1
+  fi
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -361,6 +368,7 @@ main() {
   check_config_crlf_handling
   check_config_write_failure_cleanup
   check_sub2api_codename_resolution
+  check_no_unsupported_systemctl_options
   echo "Verification passed"
 }
 

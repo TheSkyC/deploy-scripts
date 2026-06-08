@@ -2053,7 +2053,7 @@ do_update() {
     warn "$(t app.vaultwarden.warn.pre_update_existing_error)"
   fi
   info "$(t app.vaultwarden.info.stop_service)"
-  systemctl stop --timeout=30 vaultwarden 2>/dev/null || true
+  systemctl stop vaultwarden 2>/dev/null || true
   case $ARCH in
     x86_64)  PLATFORM="linux/amd64"  ;;
     aarch64) PLATFORM="linux/arm64"  ;;
