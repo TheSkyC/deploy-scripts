@@ -2282,6 +2282,7 @@ BKSH_BODY
 }
 _backup_silent() {
   local label="${1:-manual}"
+  local backup_failed=0
   mkdir -p "$BACKUP_DIR"
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
@@ -2293,10 +2294,12 @@ _backup_silent() {
       else
         rm -f "$pg_tmp"
         warn "$(t app.sub2api.warn.pg_dump_failed)"
+        backup_failed=1
       fi
     else
       rm -f "$pg_tmp"
       warn "$(t app.sub2api.warn.pg_dump_failed)"
+      backup_failed=1
     fi
   else
     warn "$(t app.sub2api.warn.pg_snapshot_skip)"
@@ -2312,12 +2315,15 @@ _backup_silent() {
       else
         rm -f "$conf_tmp"
         warn "$(t app.sub2api.warn.config_backup_failed)"
+        backup_failed=1
       fi
     else
       rm -f "$conf_tmp"
       warn "$(t app.sub2api.warn.config_backup_failed)"
+      backup_failed=1
     fi
   fi
+  [[ "$backup_failed" -eq 0 ]]
 }
 _print_install_summary() {
   local version="$1"

@@ -757,6 +757,20 @@ check_preupdate_backup_warnings_include_followup_guidance() {
       }
     ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh
+  awk '
+      /_backup_silent\(\)/ { in_helper=1; saw_failed_flag=0; saw_pg_fail=0; saw_config_fail=0; saw_return=0; next }
+      in_helper && /local backup_failed=0/ { saw_failed_flag=1 }
+      in_helper && /warn "\$\(t app\.sub2api\.warn\.pg_dump_failed\)"/ { saw_pg_fail=1 }
+      in_helper && /warn "\$\(t app\.sub2api\.warn\.config_backup_failed\)"/ { saw_config_fail=1 }
+      in_helper && /\[\[ "\$backup_failed" -eq 0 \]\]/ { saw_return=1 }
+      in_helper && /^}/ {
+        if (!(saw_failed_flag && saw_pg_fail && saw_config_fail && saw_return)) {
+          printf "%s Sub2API silent backup helper must propagate backup failure after warning\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_helper=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
 check_mutating_installs_acquire_locks() {
