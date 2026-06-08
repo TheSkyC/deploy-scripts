@@ -2410,6 +2410,31 @@ check_vaultwarden_install_summary_matches_health_state() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_status_health_guidance_matches_local_probe() {
+  awk '
+      /app\.vaultwarden\.status\.local_response_warn/ { saw_warn=1 }
+      /still initializing/ { saw_init=1 }
+      END {
+        if (!(saw_warn && saw_init)) {
+          print "Vaultwarden status health warnings must acknowledge local initialization as a possible cause." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /app\.vaultwarden\.status\.http_health/ { in_status=1; next }
+      in_status && /HTTP_CODE=\$\(curl -o \/dev\/null -s -w "%\{http_code\}" --max-time 5 "http:\/\/127\.0\.0\.1:\$\{VW_PORT\}\// { saw_local_probe=1 }
+      in_status && /app\.vaultwarden\.status\.local_response_warn/ { saw_warn=1 }
+      in_status && /echo -e "\\n\$\{BOLD\}\[\$\(t app\.vaultwarden\.status\.tls\)\]\$\{NC\}"/ {
+        if (!(saw_local_probe && saw_warn)) {
+          printf "%s Vaultwarden status must pair the local 127.0.0.1 probe with the matching local-response warning\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_cyberstrikeai_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -3157,6 +3182,7 @@ main() {
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_summary_matches_health_state
   check_vaultwarden_install_summary_matches_health_state
+  check_vaultwarden_status_health_guidance_matches_local_probe
   check_firewall_success_paths_validate_command_results
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics

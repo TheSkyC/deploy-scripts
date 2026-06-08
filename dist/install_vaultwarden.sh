@@ -1191,8 +1191,8 @@ i18n_register_many \
   "Local endpoint response: HTTP %s" \
   "本地接口响应：HTTP %s" \
   app.vaultwarden.status.local_response_warn \
-  "Local endpoint response: HTTP %s (service not running or wrong port?)" \
-  "本地接口响应：HTTP %s（服务未运行或端口错误？）" \
+  "Local endpoint response: HTTP %s (service not running, wrong port, or still initializing?)" \
+  "本地接口响应：HTTP %s（服务未运行、端口错误或仍在初始化？）" \
   app.vaultwarden.status.tls \
   "TLS certificate" \
   "TLS 证书" \
