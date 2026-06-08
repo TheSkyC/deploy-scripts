@@ -488,11 +488,13 @@ _install_nginx() {
   else
     info "$(t app.sub2api.info.install_nginx)"
     if [[ "$PKG_MANAGER" == "apt" ]]; then
-      DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
+      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y nginx; then
+        error "$(t app.sub2api.error.nginx_install)"
+      fi
     elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-      dnf install -y nginx
+      dnf install -y nginx || error "$(t app.sub2api.error.nginx_install)"
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
-      yum install -y nginx
+      yum install -y nginx || error "$(t app.sub2api.error.nginx_install)"
     fi
   fi
   if ! systemctl enable nginx; then

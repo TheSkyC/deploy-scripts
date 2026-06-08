@@ -180,6 +180,9 @@ i18n_register_many \
   app.sub2api.info.install_nginx \
   "Installing Nginx..." \
   "安装 Nginx..." \
+  app.sub2api.error.nginx_install \
+  "Nginx installation failed. Repair the package manager state, then run apt-get install -y nginx, dnf install -y nginx, or yum install -y nginx as appropriate." \
+  "Nginx 安装失败。请先修复包管理器状态，再按当前系统执行 apt-get install -y nginx、dnf install -y nginx 或 yum install -y nginx。" \
   app.sub2api.success.nginx_installed \
   "Nginx installed." \
   "Nginx 安装完成。" \
