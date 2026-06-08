@@ -628,6 +628,24 @@ check_binary_replacements_handle_failure() {
     echo "Binary replacements must clean up candidates and restore backups on move, chmod, and chown failures." >&2
     return 1
   fi
+  if grep -R -n 'mv "$backup_path" "$BIN_PATH" 2>/dev/null || true' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Binary candidate installs must validate moving backups back into place." >&2
+    return 1
+  fi
+  awk '
+      /_restore_moved_binary_backup\(\)/ { in_func=1; saw_mv=0; saw_chmod=0; saw_chown=0; next }
+      in_func && /mv "\$backup_path" "\$BIN_PATH"/ { saw_mv=1 }
+      in_func && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_chown=1 }
+      in_func && /^}/ {
+        if (!(saw_mv && saw_chmod && saw_chown)) {
+          printf "%s moved binary backup restores must validate move, mode, and ownership\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
 }
 
 check_binary_restores_validate_permissions() {

@@ -1233,6 +1233,14 @@ verify_binary() {
   local size_mb=$(( size / 1024 / 1024 ))
   success "$(t app.newapi.success.binary_verified "$size_mb")"
 }
+_restore_moved_binary_backup() {
+  local backup_path="$1"
+  [[ -n "$backup_path" && -f "$backup_path" ]] || return 0
+  [[ ! -e "$BIN_PATH" ]] || return 1
+  mv "$backup_path" "$BIN_PATH" || return 1
+  chmod +x "$BIN_PATH" \
+    && chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
+}
 _install_binary_candidate() {
   local tmp_bin="$1"
   local backup_path="${2:-}"
@@ -1244,14 +1252,12 @@ _install_binary_candidate() {
   fi
   if ! mv "$tmp_bin" "$BIN_PATH"; then
     rm -f "$tmp_bin"
-    [[ -n "$backup_path" && -f "$backup_path" && ! -e "$BIN_PATH" ]] \
-      && mv "$backup_path" "$BIN_PATH" 2>/dev/null || true
+    _restore_moved_binary_backup "$backup_path" || return 1
     return 1
   fi
   if ! chmod +x "$BIN_PATH" || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"; then
     rm -f "$BIN_PATH"
-    [[ -n "$backup_path" && -f "$backup_path" ]] \
-      && mv "$backup_path" "$BIN_PATH" 2>/dev/null || true
+    _restore_moved_binary_backup "$backup_path" || return 1
     return 1
   fi
 }
