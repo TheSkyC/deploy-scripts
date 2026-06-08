@@ -2802,6 +2802,40 @@ check_blog_site_files_are_atomic() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_blog_publish_guidance_uses_staging_output() {
+  awk '
+      /app\.blog\.workflow_publish/ { saw_publish=1 }
+      /staging directory, then sync to Nginx/ { saw_publish_guidance=1 }
+      /app\.blog\.rebuild_hint/ { saw_rebuild=1 }
+      /then sync the output to Nginx/ { saw_rebuild_guidance=1 }
+      END {
+        if (!(saw_publish && saw_publish_guidance && saw_rebuild && saw_rebuild_guidance)) {
+          print "Blog publish guidance must direct users through staged output before Nginx sync." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/blog.sh
+  awk '
+      /# \$\(t app\.blog\.workflow_publish\)/ { in_publish=1; saw_build=0; saw_sync=0; next }
+      in_publish && /hugo --destination \$\{PUBLIC_DIR\} --gc --minify/ { saw_build=1 }
+      in_publish && /rsync -a --delete \$\{PUBLIC_DIR\}\/ \$\{NGINX_ROOT\}\// { saw_sync=1 }
+      in_publish && /^echo ""$/ {
+        if (!(saw_build && saw_sync)) {
+          printf "%s Blog publish guidance must build into PUBLIC_DIR and sync that output into NGINX_ROOT\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_publish=0
+      }
+      /rebuild_hint "\$PUBLIC_DIR"/ { saw_hint_target=1 }
+      END {
+        if (!saw_hint_target) {
+          print "Blog rebuild hint must point to the staging PUBLIC_DIR, not the live Nginx root." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -2905,6 +2939,7 @@ main() {
   check_blog_static_deploy_swaps_tree
   check_blog_static_deploy_failures_are_actionable
   check_blog_site_files_are_atomic
+  check_blog_publish_guidance_uses_staging_output
   echo "Verification passed"
 }
 

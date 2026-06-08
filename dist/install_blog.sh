@@ -896,8 +896,8 @@ i18n_register app.blog.workflow_visit \
   "Visit: http://%s:1313" \
   "访问：http://%s:1313"
 i18n_register app.blog.workflow_publish \
-  "3. Build and publish to Nginx" \
-  "3. 构建并发布到 Nginx"
+  "3. Build to the staging directory, then sync to Nginx" \
+  "3. 先构建到暂存目录，再同步到 Nginx"
 i18n_register app.blog.cms_usage \
   "Decap CMS usage:" \
   "Decap CMS 使用："
@@ -938,8 +938,8 @@ i18n_register app.blog.theme_docs \
   "Theme docs:" \
   "主题文档："
 i18n_register app.blog.rebuild_hint \
-  "Rebuild after changing config: hugo --destination %s --gc --minify" \
-  "修改配置后需重新构建：hugo --destination %s --gc --minify"
+  "Rebuild after changing config: hugo --destination %s --gc --minify, then sync the output to Nginx." \
+  "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再将输出同步到 Nginx。"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
@@ -1566,7 +1566,8 @@ echo -e "  hugo server -D --bind 0.0.0.0 --port 1313"
 echo -e "  # $(t app.blog.workflow_visit "$INTERNAL_IP")"
 echo ""
 echo -e "  ${CYAN}# $(t app.blog.workflow_publish)${NC}"
-echo -e "  hugo --destination ${NGINX_ROOT} --gc --minify"
+echo -e "  hugo --destination ${PUBLIC_DIR} --gc --minify"
+echo -e "  rsync -a --delete ${PUBLIC_DIR}/ ${NGINX_ROOT}/"
 echo ""
 if [[ "$ENABLE_CMS" == "true" ]]; then
 echo -e "  ${BOLD}$(t app.blog.cms_usage)${NC}"
@@ -1591,6 +1592,6 @@ echo ""
 echo -e "  ${BOLD}$(t app.blog.theme_docs)${NC}  https://stack.jimmycai.com"
 echo -e "  ${BOLD}📖  Decap CMS：${NC} https://decapcms.org/docs/"
 echo ""
-echo -e "  ${YELLOW}${BOLD}[i]${NC} $(t app.blog.rebuild_hint "$NGINX_ROOT")"
+echo -e "  ${YELLOW}${BOLD}[i]${NC} $(t app.blog.rebuild_hint "$PUBLIC_DIR")"
 echo ""
 }

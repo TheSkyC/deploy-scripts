@@ -381,8 +381,8 @@ i18n_register app.blog.workflow_visit \
   "Visit: http://%s:1313" \
   "访问：http://%s:1313"
 i18n_register app.blog.workflow_publish \
-  "3. Build and publish to Nginx" \
-  "3. 构建并发布到 Nginx"
+  "3. Build to the staging directory, then sync to Nginx" \
+  "3. 先构建到暂存目录，再同步到 Nginx"
 i18n_register app.blog.cms_usage \
   "Decap CMS usage:" \
   "Decap CMS 使用："
@@ -423,8 +423,8 @@ i18n_register app.blog.theme_docs \
   "Theme docs:" \
   "主题文档："
 i18n_register app.blog.rebuild_hint \
-  "Rebuild after changing config: hugo --destination %s --gc --minify" \
-  "修改配置后需重新构建：hugo --destination %s --gc --minify"
+  "Rebuild after changing config: hugo --destination %s --gc --minify, then sync the output to Nginx." \
+  "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再将输出同步到 Nginx。"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
