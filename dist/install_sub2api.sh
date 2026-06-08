@@ -2186,7 +2186,7 @@ _backup_silent() {
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"
-    if pg_dump "${PG_DSN}" 2>/dev/null | gzip > "$pg_tmp"; then
+    if pg_dump "${PG_DSN}" 2> >(sed 's/^/  /' >&2) | gzip > "$pg_tmp"; then
       if mv "$pg_tmp" "$pg_archive"; then
         local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
