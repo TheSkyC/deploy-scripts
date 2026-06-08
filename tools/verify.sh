@@ -191,6 +191,46 @@ check_bundled_impl_temp_names_are_random() {
     ' lib/app_loader.sh dist/install_newapi.sh
 }
 
+check_bundled_impl_dir_security_failure_cleanup() {
+  if grep -R -n 'chmod 700 "\$DEPLOY_BUNDLED_IMPL_DIR".*|| true' lib dist 2>/dev/null; then
+    echo "Bundled implementation directory permission failures must stop extraction." >&2
+    return 1
+  fi
+
+  local tmp_root stub_dir
+  tmp_root="$(mktemp -d)"
+  stub_dir="$(mktemp -d)"
+
+  cat > "${stub_dir}/chmod" <<'STUB'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  case "$arg" in
+    */deploy-scripts.*) exit 1 ;;
+  esac
+done
+exec /usr/bin/chmod "$@"
+STUB
+  chmod +x "${stub_dir}/chmod"
+
+  set +e
+  TMPDIR="$tmp_root" PATH="${stub_dir}:$PATH" DEPLOY_LANG=en "$BASH_BIN" dist/install_newapi.sh not-a-command >/dev/null 2>&1
+  status=$?
+  set -e
+
+  [[ "$status" -ne 0 ]] || {
+    echo "Expected bundled script to fail when implementation directory chmod fails" >&2
+    rm -rf "$tmp_root" "$stub_dir"
+    return 1
+  }
+  if find "$tmp_root" -maxdepth 1 -name 'deploy-scripts.*' -type d | grep -q .; then
+    echo "Bundled implementation directory was left behind after chmod failure" >&2
+    find "$tmp_root" -maxdepth 1 -name 'deploy-scripts.*' -type d >&2
+    rm -rf "$tmp_root" "$stub_dir"
+    return 1
+  fi
+  rm -rf "$tmp_root" "$stub_dir"
+}
+
 check_bundled_impl_cleanup() {
   local tmp_root
   tmp_root="$(mktemp -d)"
@@ -781,6 +821,7 @@ main() {
   check_no_release_temp_files
   check_release_build_outputs_are_atomic
   check_bundled_impl_temp_names_are_random
+  check_bundled_impl_dir_security_failure_cleanup
   check_bundled_impl_cleanup
   check_bundled_impl_failure_cleanup
   check_safe_path_guard

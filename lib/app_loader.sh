@@ -9,7 +9,11 @@ ensure_bundled_impl_dir() {
   tmp_root="${tmp_root%/}"
   DEPLOY_BUNDLED_IMPL_DIR="$(mktemp -d "${tmp_root}/deploy-scripts.${APP_ID:-app}.XXXXXX")" \
     || error "Failed to create bundled implementation directory"
-  chmod 700 "$DEPLOY_BUNDLED_IMPL_DIR" 2>/dev/null || true
+  if ! chmod 700 "$DEPLOY_BUNDLED_IMPL_DIR"; then
+    safe_rm_dir "$DEPLOY_BUNDLED_IMPL_DIR" "bundled implementation directory"
+    unset DEPLOY_BUNDLED_IMPL_DIR
+    error "Failed to secure bundled implementation directory"
+  fi
 }
 
 app_impl_script_path() {
