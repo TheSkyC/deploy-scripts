@@ -1594,8 +1594,7 @@ check_port_conflict() {
 start_service() {
   step "$(t app.cyberstrikeai.step.start)"
   check_port_conflict "$PORT"
-  systemctl restart "$SERVICE_NAME"
-  if wait_for_service "$SERVICE_NAME" 35; then
+  if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
     success "$(t app.cyberstrikeai.success.running "$SERVICE_NAME")"
   else
     journalctl -u "$SERVICE_NAME" -n 40 --no-pager >&2 || true
@@ -1726,8 +1725,7 @@ do_update() {
   chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
   if $service_was_active; then
     step "$(t app.cyberstrikeai.step.restart_updated)"
-    systemctl restart "$SERVICE_NAME"
-    if wait_for_service "$SERVICE_NAME" 35; then
+    if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
       success "$(t app.cyberstrikeai.success.update_complete "$old_rev" "$new_rev")"
       health_check
     else

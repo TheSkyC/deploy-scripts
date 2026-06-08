@@ -1322,6 +1322,34 @@ check_newapi_service_start_paths_are_explicit() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_cyberstrikeai_service_start_paths_are_explicit() {
+  if grep -R -nE '^[[:space:]]*systemctl restart "\$SERVICE_NAME"$' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI service restart paths must branch explicitly on command failure." >&2
+    return 1
+  fi
+  awk '
+      /step "\$\(t app\.cyberstrikeai\.step\.start\)"/ { in_start=1; saw_restart_wait=0; next }
+      in_start && /if systemctl restart "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 35; then/ { saw_restart_wait=1 }
+      in_start && /journalctl -u "\$SERVICE_NAME" -n 40 --no-pager >&2 \|\| true/ {
+        if (!saw_restart_wait) {
+          printf "%s CyberStrikeAI startup must gate success on an explicit restart-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_start=0
+      }
+      /step "\$\(t app\.cyberstrikeai\.step\.restart_updated\)"/ { in_update=1; saw_restart_wait2=0; next }
+      in_update && /if systemctl restart "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 35; then/ { saw_restart_wait2=1 }
+      in_update && /warn "\$\(t app\.cyberstrikeai\.warn\.update_start_failed\)"/ {
+        if (!saw_restart_wait2) {
+          printf "%s CyberStrikeAI update must gate service success on an explicit restart-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_sub2api_enable_failures_are_reported() {
   if grep -R -nE 'systemctl enable postgresql 2>/dev/null \|\| true|systemctl enable postgresql-15 2>/dev/null \|\| true|systemctl enable "postgresql-\$\{pg_ver\}" 2>/dev/null \|\| true' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
@@ -1480,6 +1508,40 @@ check_vaultwarden_enable_failures_are_reported() {
         }
       }
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
+check_vaultwarden_service_start_paths_are_explicit() {
+  if grep -R -nE '^[[:space:]]*systemctl start vaultwarden$' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden service start paths must branch explicitly on command failure." >&2
+    return 1
+  fi
+  awk '
+      /warn "\$\(t app\.vaultwarden\.warn\.port_hint\)"/ { in_install=1; saw_start_wait=0; next }
+      in_install && /if systemctl start vaultwarden && wait_for_service vaultwarden 20; then/ { saw_start_wait=1 }
+      in_install && /warn "\$\(t app\.vaultwarden\.warn\.service_cleanup\)"/ {
+        if (!saw_start_wait) {
+          printf "%s Vaultwarden install must gate service success on an explicit start-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      /warn "\$\(t app\.vaultwarden\.warn\.update_port_used "\$VW_PORT" "\$_port_owner_upd"\)"/ { in_update=1; saw_start_wait2=0; saw_start_wait3=0; next }
+      in_update && /if systemctl start vaultwarden && wait_for_service vaultwarden 20; then/ {
+        if (!saw_start_wait2) {
+          saw_start_wait2=1
+        } else {
+          saw_start_wait3=1
+        }
+      }
+      in_update && /error "\$\(t app\.vaultwarden\.error\.update_rolled_back "\$OLD_VER" "\$_backup_kept"\)"/ {
+        if (!(saw_start_wait2 && saw_start_wait3)) {
+          printf "%s Vaultwarden update must gate both primary restart and rollback restart on explicit start-and-wait branches\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
 check_newapi_update_rollbacks_report_restart_failures() {
@@ -2046,6 +2108,7 @@ main() {
   check_sub2api_postgres_rpm_setup_failures_are_explicit
   check_sub2api_dependency_services_start_before_success
   check_newapi_service_start_paths_are_explicit
+  check_cyberstrikeai_service_start_paths_are_explicit
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_service_start_paths_are_explicit
   check_sub2api_enable_failures_are_reported
@@ -2055,6 +2118,7 @@ main() {
   check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
   check_vaultwarden_enable_failures_are_reported
+  check_vaultwarden_service_start_paths_are_explicit
   check_sub2api_update_rollbacks_report_restart_failures
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures

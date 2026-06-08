@@ -550,8 +550,7 @@ UNIT
     warn "$(t app.vaultwarden.warn.port_used "$VW_PORT" "$_port_owner")"
     warn "$(t app.vaultwarden.warn.port_hint)"
   fi
-  systemctl start vaultwarden
-  if wait_for_service vaultwarden 20; then
+  if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
     success "$(t app.vaultwarden.success.service_started)"
     systemctl status vaultwarden --no-pager -l | head -12 | sed 's/^/  /'
   else
@@ -1053,8 +1052,7 @@ do_update() {
     _port_owner_upd=$(ss -ltnp 2>/dev/null | grep ":${VW_PORT}" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
     warn "$(t app.vaultwarden.warn.update_port_used "$VW_PORT" "$_port_owner_upd")"
   fi
-  systemctl start vaultwarden
-  if wait_for_service vaultwarden 20; then
+  if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
     success "$(t app.vaultwarden.success.restart)"
     if [[ "$OLD_VER" != "$NEW_VER" ]]; then
       success "$(t app.vaultwarden.success.version_updated "$OLD_VER" "$NEW_VER")"
@@ -1074,8 +1072,7 @@ do_update() {
           || error "$(t app.vaultwarden.error.rollback_start_failed)"
         warn "$(t app.vaultwarden.warn.web_vault_rolled_back)"
       fi
-      systemctl start vaultwarden
-      if wait_for_service vaultwarden 20; then
+      if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
         success "$(t app.vaultwarden.success.rollback "$OLD_VER")"
         local _backup_kept
         _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f | sort -r | head -1 || t app.vaultwarden.status.not_installed)
