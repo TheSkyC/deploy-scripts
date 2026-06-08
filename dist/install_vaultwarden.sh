@@ -2140,7 +2140,11 @@ LOGR
     done
     success "$(t app.vaultwarden.success.iptables)" && FW_DONE=true
     if command -v netfilter-persistent &>/dev/null; then
-      netfilter-persistent save 2>/dev/null && success "$(t app.vaultwarden.success.iptables_saved)" || true
+      if netfilter-persistent save 2>/dev/null; then
+        success "$(t app.vaultwarden.success.iptables_saved)"
+      else
+        warn "$(t app.vaultwarden.warn.iptables_not_persisted)"
+      fi
     else
       warn "$(t app.vaultwarden.warn.iptables_not_persisted)"
     fi

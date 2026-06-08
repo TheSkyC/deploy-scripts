@@ -521,6 +521,29 @@ check_iptables_rules_are_atomic() {
     ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
 }
 
+check_netfilter_persistent_save_reports_failures() {
+  if grep -R -nE 'netfilter-persistent save 2>/dev/null( && success .*\\|\\| true|[[:space:]]*\\[?;?)' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "netfilter-persistent save failures must not be silently ignored." >&2
+    return 1
+  fi
+  awk '
+      /if command -v netfilter-persistent &>\/dev\/null; then/ { in_block=1; saw_save=0; saw_success=0; saw_warn=0; next }
+      in_block && /if netfilter-persistent save 2>\/dev\/null; then/ { saw_save=1 }
+      in_block && /success "\$\(t app\.(newapi|sub2api|vaultwarden)\.success\.iptables_saved\)"/ { saw_success=1 }
+      in_block && /warn "\$\(t app\.(newapi|sub2api|vaultwarden)\.warn\.iptables_not_persisted\)"/ { saw_warn=1 }
+      in_block && /elif command -v iptables-save &>\/dev\/null; then|else$/ {
+        if (!(saw_save && saw_success && saw_warn)) {
+          printf "%s netfilter-persistent save must report both success and failure outcomes\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+}
+
 check_random_head_pipelines_handle_sigpipe() {
   if grep -R -nE 'rand .*\\|.*head -c [0-9]+\\)$|tr -dc .*\\| head -c [0-9]+\\)$' impl dist 2>/dev/null; then
     echo "Random byte pipelines ending in head -c need an explicit successful terminator under pipefail." >&2

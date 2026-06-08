@@ -243,8 +243,11 @@ _configure_firewall() {
       iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
     fi
     if command -v netfilter-persistent &>/dev/null; then
-      netfilter-persistent save 2>/dev/null \
-        && success "$(t app.newapi.success.iptables_saved)" || true
+      if netfilter-persistent save 2>/dev/null; then
+        success "$(t app.newapi.success.iptables_saved)"
+      else
+        warn "$(t app.newapi.warn.iptables_not_persisted)"
+      fi
     elif command -v iptables-save &>/dev/null; then
       mkdir -p /etc/iptables
       local iptables_rules="/etc/iptables/rules.v4"
