@@ -892,11 +892,26 @@ check_blog_static_deploy_swaps_tree() {
     echo "Blog static deployment must not copy directly into the live Nginx root." >&2
     return 1
   fi
+  if grep -R -n '^[[:space:]]*\[\[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" \]\] && mv "\$DEPLOY_BAK" "\$NGINX_ROOT" || true' \
+      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog static deployment rollback must validate restoring the Nginx root." >&2
+    return 1
+  fi
   awk '
+      /restore_nginx_root_backup\(\)/ { in_helper=1; saw_rm=0; saw_restore=0; next }
+      in_helper && /rm -rf "\$NGINX_ROOT"/ { saw_rm=1 }
+      in_helper && /mv "\$DEPLOY_BAK" "\$NGINX_ROOT"/ { saw_restore=1 }
+      in_helper && /^}/ {
+        if (!(saw_rm && saw_restore)) {
+          print "Blog static deployment restore helper must remove partial output and restore the previous root." > "/dev/stderr"
+          exit 1
+        }
+        in_helper=0
+      }
       /DEPLOY_TMP="\$\(mktemp -d/ { saw_tmp=1 }
       /mv "\$NGINX_ROOT" "\$DEPLOY_BAK"/ { saw_backup=1 }
       /mv "\$DEPLOY_TMP" "\$NGINX_ROOT"/ { saw_swap=1 }
-      /mv "\$DEPLOY_BAK" "\$NGINX_ROOT"/ { saw_restore=1 }
+      /restore_nginx_root_backup/ { saw_restore=1 }
       END {
         if (!(saw_tmp && saw_backup && saw_swap && saw_restore)) {
           print "Blog static deployment must stage, swap, and restore the Nginx root." > "/dev/stderr"

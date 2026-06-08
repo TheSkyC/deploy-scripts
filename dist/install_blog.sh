@@ -961,6 +961,12 @@ CMS_BRANCH="main"
 CMS_SITE_URL="https://${BLOG_DOMAIN}"
 LOCK_FILE="/var/lock/blog-deploy.lock"
 
+restore_nginx_root_backup() {
+  [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] || return 0
+  rm -rf "$NGINX_ROOT" || return 1
+  mv "$DEPLOY_BAK" "$NGINX_ROOT" || return 1
+}
+
 _write_blog_file() {
   local target_path="$1"
   local target_dir target_tmp
@@ -1339,8 +1345,7 @@ if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
   if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
     [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && rm -rf "$DEPLOY_BAK"
   else
-    rm -rf "$NGINX_ROOT"
-    [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && mv "$DEPLOY_BAK" "$NGINX_ROOT" || true
+    restore_nginx_root_backup || error "$(t app.blog.error.static_deploy)"
     error "$(t app.blog.error.static_deploy)"
   fi
 else
