@@ -449,14 +449,21 @@ ts=\$(date +%Y%m%d_%H%M%S)
 archive="\$BACKUP_DIR/cyberstrike-ai_\${ts}.tar.gz"
 tmp="\${archive}.tmp"
 
-tar -czf "\$tmp" \
+if tar -czf "\$tmp" \
   --exclude=".git" \
   --exclude="venv" \
   --exclude="cyberstrike-ai" \
   --exclude="*.tmp" \
   --exclude="logs/*.log" \
-  -C "\$(dirname "\$INSTALL_DIR")" "\$(basename "\$INSTALL_DIR")"
-mv "\$tmp" "\$archive"
+  -C "\$(dirname "\$INSTALL_DIR")" "\$(basename "\$INSTALL_DIR")"; then
+  if ! mv "\$tmp" "\$archive"; then
+    rm -f "\$tmp"
+    exit 1
+  fi
+else
+  rm -f "\$tmp"
+  exit 1
+fi
 
 if [[ "\$KEEP_DAYS" -gt 0 ]]; then
   find "\$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -mtime "+\$KEEP_DAYS" -delete 2>/dev/null || true

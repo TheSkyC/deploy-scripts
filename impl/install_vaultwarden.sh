@@ -982,9 +982,14 @@ if tar -czf "${ARCHIVE_TMP}" \
   --exclude="*.log.*" \
   -C "${DATA_PARENT}" "${DATA_BASE}" \
   "${TAR_EXTRA[@]+"${TAR_EXTRA[@]}"}" 2>&1; then
-  mv "${ARCHIVE_TMP}" "${ARCHIVE}"
-  ARCHIVE_SIZE=$(du -sh "${ARCHIVE}" | cut -f1)
-  printf '%s  '"${MSG_SUCCESS}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${ARCHIVE}" "${ARCHIVE_SIZE}"
+  if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+    ARCHIVE_SIZE=$(du -sh "${ARCHIVE}" | cut -f1)
+    printf '%s  '"${MSG_SUCCESS}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${ARCHIVE}" "${ARCHIVE_SIZE}"
+  else
+    rm -f "${ARCHIVE_TMP}"
+    printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${MSG_FAILED}"
+    exit 1
+  fi
 else
   rm -f "${ARCHIVE_TMP}"
   printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${MSG_FAILED}"
@@ -1019,8 +1024,12 @@ _backup_silent() {
   if tar -czf "$archive_tmp" --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
     "${tar_extra[@]+"${tar_extra[@]}"}" 2>&1 >&2; then
-    mv "$archive_tmp" "$archive"
-    success "$(t app.vaultwarden.success.backup_created "$archive")"
+    if mv "$archive_tmp" "$archive"; then
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    else
+      rm -f "$archive_tmp"
+      warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+    fi
   else
     rm -f "$archive_tmp"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"

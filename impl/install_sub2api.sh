@@ -569,9 +569,13 @@ mkdir -p "${BACKUP_DIR}"
 if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
   _log "${MSG_PG_DUMP_START}"
   if pg_dump "${PG_DSN}" 2>&1 | gzip > "${PG_DUMP_TMP}"; then
-    mv "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"
-    DB_SIZE=$(du -sh "${PG_DUMP_FILE}" 2>/dev/null | awk '{print $1}')
-    _log "$(printf "$MSG_PG_DUMP_OK" "$PG_DUMP_FILE" "$DB_SIZE")"
+    if mv "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"; then
+      DB_SIZE=$(du -sh "${PG_DUMP_FILE}" 2>/dev/null | awk '{print $1}')
+      _log "$(printf "$MSG_PG_DUMP_OK" "$PG_DUMP_FILE" "$DB_SIZE")"
+    else
+      rm -f "${PG_DUMP_TMP}"
+      _log "${MSG_PG_DUMP_FAILED}"
+    fi
   else
     rm -f "${PG_DUMP_TMP}"
     _log "${MSG_PG_DUMP_FAILED}"
@@ -596,8 +600,12 @@ if [[ -d "${CONFIG_DIR}" ]]; then
   if tar -czf "${EXTRA_CONF_TMP}" \
       -C "$(dirname "${CONFIG_DIR}")" "$(basename "${CONFIG_DIR}")" 2>&1 | \
       while IFS= read -r line; do _log "[TAR-CONF] ${line}"; done; then
-    mv "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"
-    _log "$(printf "$MSG_CONFIG_OK" "$EXTRA_CONF_ARCHIVE")"
+    if mv "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"; then
+      _log "$(printf "$MSG_CONFIG_OK" "$EXTRA_CONF_ARCHIVE")"
+    else
+      rm -f "${EXTRA_CONF_TMP}"
+      _log "${MSG_CONFIG_FAILED}"
+    fi
   else
     rm -f "${EXTRA_CONF_TMP}"
     _log "${MSG_CONFIG_FAILED}"
@@ -609,9 +617,13 @@ if [[ ${#TAR_ARGS[@]} -gt 0 ]]; then
       --exclude="*.log" --exclude="*.log.*" \
       "${TAR_ARGS[@]}" 2>&1 | \
       while IFS= read -r line; do _log "[TAR] ${line}"; done; then
-    mv "${ARCHIVE_TMP}" "${ARCHIVE}"
-    SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
-    _log "$(printf "$MSG_DATA_OK" "$ARCHIVE" "$SIZE")"
+    if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+      SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
+      _log "$(printf "$MSG_DATA_OK" "$ARCHIVE" "$SIZE")"
+    else
+      rm -f "${ARCHIVE_TMP}"
+      _log "${MSG_DATA_FAILED}"
+    fi
   else
     rm -f "${ARCHIVE_TMP}"
     _log "${MSG_DATA_FAILED}"
@@ -642,9 +654,13 @@ _backup_silent() {
     local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"
     if pg_dump "${PG_DSN}" 2>/dev/null | gzip > "$pg_tmp"; then
-      mv "$pg_tmp" "$pg_archive"
-      local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
-      success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
+      if mv "$pg_tmp" "$pg_archive"; then
+        local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
+        success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
+      else
+        rm -f "$pg_tmp"
+        warn "$(t app.sub2api.warn.pg_dump_failed)"
+      fi
     else
       rm -f "$pg_tmp"
       warn "$(t app.sub2api.warn.pg_dump_failed)"
@@ -657,9 +673,13 @@ _backup_silent() {
     local conf_tmp="${conf_archive}.tmp"
     if tar -czf "$conf_tmp" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" 2>&1 >&2; then
-      mv "$conf_tmp" "$conf_archive"
-      local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
-      success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
+      if mv "$conf_tmp" "$conf_archive"; then
+        local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
+        success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
+      else
+        rm -f "$conf_tmp"
+        warn "$(t app.sub2api.warn.config_backup_failed)"
+      fi
     else
       rm -f "$conf_tmp"
       warn "$(t app.sub2api.warn.config_backup_failed)"
@@ -917,9 +937,13 @@ do_backup() {
       local PG_TMP="${PG_ARCHIVE}.tmp"
       info "$(t app.sub2api.info.pg_dump)"
       if pg_dump "${PG_DSN}" 2>&1 | gzip > "$PG_TMP"; then
-        mv "$PG_TMP" "$PG_ARCHIVE"
-        local pg_sz; pg_sz=$(du -sh "$PG_ARCHIVE" 2>/dev/null | awk '{print $1}')
-        success "$(t app.sub2api.success.db_backup "$PG_ARCHIVE" "$pg_sz")"
+        if mv "$PG_TMP" "$PG_ARCHIVE"; then
+          local pg_sz; pg_sz=$(du -sh "$PG_ARCHIVE" 2>/dev/null | awk '{print $1}')
+          success "$(t app.sub2api.success.db_backup "$PG_ARCHIVE" "$pg_sz")"
+        else
+          rm -f "$PG_TMP"
+          warn "$(t app.sub2api.warn.pg_dump_check_dsn)"
+        fi
       else
         rm -f "$PG_TMP"
         warn "$(t app.sub2api.warn.pg_dump_check_dsn)"
@@ -935,9 +959,13 @@ do_backup() {
     local CONF_TMP="${CONF_ARCHIVE}.tmp"
     if tar -czf "$CONF_TMP" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" 2>&1; then
-      mv "$CONF_TMP" "$CONF_ARCHIVE"
-      local cf_sz; cf_sz=$(du -sh "$CONF_ARCHIVE" 2>/dev/null | awk '{print $1}')
-      success "$(t app.sub2api.success.config_backup "$CONF_ARCHIVE" "$cf_sz")"
+      if mv "$CONF_TMP" "$CONF_ARCHIVE"; then
+        local cf_sz; cf_sz=$(du -sh "$CONF_ARCHIVE" 2>/dev/null | awk '{print $1}')
+        success "$(t app.sub2api.success.config_backup "$CONF_ARCHIVE" "$cf_sz")"
+      else
+        rm -f "$CONF_TMP"
+        warn "$(t app.sub2api.warn.config_backup_failed)"
+      fi
     else
       rm -f "$CONF_TMP"
       warn "$(t app.sub2api.warn.config_backup_failed)"
@@ -951,9 +979,13 @@ do_backup() {
     if tar -czf "$DATA_TMP" \
         --exclude="*.log" --exclude="*.log.*" \
         -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1; then
-      mv "$DATA_TMP" "$DATA_ARCHIVE"
-      local da_sz; da_sz=$(du -sh "$DATA_ARCHIVE" 2>/dev/null | awk '{print $1}')
-      success "$(t app.sub2api.success.data_backup "$DATA_ARCHIVE" "$da_sz")"
+      if mv "$DATA_TMP" "$DATA_ARCHIVE"; then
+        local da_sz; da_sz=$(du -sh "$DATA_ARCHIVE" 2>/dev/null | awk '{print $1}')
+        success "$(t app.sub2api.success.data_backup "$DATA_ARCHIVE" "$da_sz")"
+      else
+        rm -f "$DATA_TMP"
+        warn "$(t app.sub2api.warn.data_backup_failed)"
+      fi
     else
       rm -f "$DATA_TMP"
       warn "$(t app.sub2api.warn.data_backup_failed)"

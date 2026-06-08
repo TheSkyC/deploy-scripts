@@ -1387,9 +1387,14 @@ if tar -czf "${ARCHIVE_TMP}" \
     --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "${DATA_DIR}")" "$(basename "${DATA_DIR}")" 2>&1 | \
     while IFS= read -r line; do _log "[TAR] ${line}"; done; then
-  mv "${ARCHIVE_TMP}" "${ARCHIVE}"
-  SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
-  _log "$(printf "$MSG_BACKUP_OK" "$ARCHIVE" "$SIZE")"
+  if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+    SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
+    _log "$(printf "$MSG_BACKUP_OK" "$ARCHIVE" "$SIZE")"
+  else
+    rm -f "${ARCHIVE_TMP}"
+    _log "$MSG_TAR_FAILED"
+    exit 1
+  fi
 else
   rm -f "${ARCHIVE_TMP}"
   _log "$MSG_TAR_FAILED"
@@ -1429,9 +1434,14 @@ _backup_silent() {
   if tar -czf "$archive_tmp" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1 >&2; then
-    mv "$archive_tmp" "$archive"
-    local sz; sz=$(du -sh "$archive" 2>/dev/null | awk '{print $1}')
-    success "$(t app.newapi.success.silent_backup "$archive" "$sz")"
+    if mv "$archive_tmp" "$archive"; then
+      local sz; sz=$(du -sh "$archive" 2>/dev/null | awk '{print $1}')
+      success "$(t app.newapi.success.silent_backup "$archive" "$sz")"
+    else
+      rm -f "$archive_tmp"
+      warn "$(t app.newapi.warn.silent_backup_failed)"
+      return 1
+    fi
   else
     rm -f "$archive_tmp"
     warn "$(t app.newapi.warn.silent_backup_failed)"
@@ -1678,9 +1688,13 @@ do_backup() {
   if tar -czf "$ARCHIVE_TMP" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1; then
-    mv "$ARCHIVE_TMP" "$ARCHIVE"
-    local SZ; SZ=$(du -sh "$ARCHIVE" 2>/dev/null | awk '{print $1}')
-    success "$(t app.newapi.success.backup_done "$ARCHIVE" "$SZ")"
+    if mv "$ARCHIVE_TMP" "$ARCHIVE"; then
+      local SZ; SZ=$(du -sh "$ARCHIVE" 2>/dev/null | awk '{print $1}')
+      success "$(t app.newapi.success.backup_done "$ARCHIVE" "$SZ")"
+    else
+      rm -f "$ARCHIVE_TMP"
+      error "$(t app.newapi.error.backup_failed "$BACKUP_DIR")"
+    fi
   else
     rm -f "$ARCHIVE_TMP"
     error "$(t app.newapi.error.backup_failed "$BACKUP_DIR")"

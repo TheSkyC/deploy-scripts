@@ -437,6 +437,13 @@ check_cyberstrikeai_build_temp_cleanup() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_backup_temp_moves_handle_failure() {
+  if grep -R -nE '^[[:space:]]*mv "\$[^"]*(TMP|tmp|ARCHIVE_TMP|archive_tmp|PG_TMP|pg_tmp|CONF_TMP|conf_tmp|DATA_TMP|data_tmp|DUMP_TMP|dump_tmp)[^"]*" "\$[^"]*(ARCHIVE|archive|FILE|file)' impl dist 2>/dev/null; then
+    echo "Backup temporary files must be removed when the final move fails." >&2
+    return 1
+  fi
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   awk '
       /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
@@ -523,6 +530,7 @@ main() {
   check_update_backs_up_before_stop
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_build_temp_cleanup
+  check_backup_temp_moves_handle_failure
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree
