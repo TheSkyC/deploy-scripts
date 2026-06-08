@@ -213,6 +213,9 @@ i18n_register_many \
   app.newapi.warn.old_binary_backup \
   "Backed up old binary -> %s" \
   "已备份旧二进制 → %s。" \
+  app.newapi.error.binary_install \
+  "Failed to install binary: %s" \
+  "二进制安装失败：%s。" \
   app.newapi.success.binary_installed \
   "Binary installed: %s" \
   "二进制安装完成：%s。" \

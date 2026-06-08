@@ -885,6 +885,9 @@ i18n_register_many \
   app.sub2api.warn.old_binary_backup \
   "Old binary backed up -> %s" \
   "已备份旧二进制 → %s" \
+  app.sub2api.error.binary_install \
+  "Failed to install binary: %s" \
+  "二进制安装失败：%s" \
   app.sub2api.success.binary_installed \
   "Binary installed: %s" \
   "二进制安装完成：%s" \
@@ -1490,6 +1493,28 @@ extract_and_verify() {
   fi
   rm -rf "$tmp_extract"
   echo "$tmp_bin"
+}
+_install_binary_candidate() {
+  local tmp_bin="$1"
+  local backup_path="${2:-}"
+  if [[ -n "$backup_path" && -f "$BIN_PATH" ]]; then
+    if ! mv "$BIN_PATH" "$backup_path"; then
+      rm -f "$tmp_bin"
+      return 1
+    fi
+  fi
+  if ! mv "$tmp_bin" "$BIN_PATH"; then
+    rm -f "$tmp_bin"
+    [[ -n "$backup_path" && -f "$backup_path" && ! -e "$BIN_PATH" ]] \
+      && mv "$backup_path" "$BIN_PATH" 2>/dev/null || true
+    return 1
+  fi
+  if ! chmod +x "$BIN_PATH" || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"; then
+    rm -f "$BIN_PATH"
+    [[ -n "$backup_path" && -f "$backup_path" ]] \
+      && mv "$backup_path" "$BIN_PATH" 2>/dev/null || true
+    return 1
+  fi
 }
 _health_check() {
   local elapsed=0 HTTP_CODE
@@ -2106,14 +2131,17 @@ do_install() {
   local TMP_BIN
   TMP_BIN=$(extract_and_verify "$TMP_ARCHIVE" "$INSTALL_DIR")
   rm -f "$TMP_ARCHIVE"
+  local OLD_BIN_BAK=""
   if [[ -f "$BIN_PATH" ]]; then
     local OLD_TS; OLD_TS=$(date +%Y%m%d_%H%M%S)
-    mv "$BIN_PATH" "${INSTALL_DIR}/sub2api.bak.${OLD_TS}"
-    warn "$(t app.sub2api.warn.old_binary_backup "sub2api.bak.${OLD_TS}")"
+    OLD_BIN_BAK="${INSTALL_DIR}/sub2api.bak.${OLD_TS}"
   fi
-  mv "$TMP_BIN" "$BIN_PATH"
-  chmod +x "$BIN_PATH"
-  chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
+  if ! _install_binary_candidate "$TMP_BIN" "$OLD_BIN_BAK"; then
+    error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
+  fi
+  if [[ -n "$OLD_BIN_BAK" ]]; then
+    warn "$(t app.sub2api.warn.old_binary_backup "$(basename "$OLD_BIN_BAK")")"
+  fi
   success "$(t app.sub2api.success.binary_installed "$BIN_PATH")"
   step "$(t app.sub2api.step.systemd)"
   _write_systemd_unit
@@ -2151,7 +2179,14 @@ do_install() {
       systemctl disable "$SERVICE_NAME" 2>/dev/null || true
       rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
       systemctl daemon-reload 2>/dev/null || true
-      rm -f "$BIN_PATH"
+      if [[ -n "${OLD_BIN_BAK:-}" && -f "$OLD_BIN_BAK" ]]; then
+        rm -f "$BIN_PATH"
+        mv "$OLD_BIN_BAK" "$BIN_PATH" 2>/dev/null || true
+        chmod +x "$BIN_PATH" 2>/dev/null || true
+        chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" 2>/dev/null || true
+      else
+        rm -f "$BIN_PATH"
+      fi
       error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
     else
       warn "$(t app.sub2api.warn.waiting_deps)"
@@ -2209,9 +2244,13 @@ do_update() {
   info "$(t app.sub2api.info.old_binary_backup "$BAK_PATH")"
   info "$(t app.sub2api.info.stopping_service)"
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-  mv "$TMP_BIN" "$BIN_PATH"
-  chmod +x "$BIN_PATH"
-  chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
+  if ! _install_binary_candidate "$TMP_BIN"; then
+    [[ -f "$BAK_PATH" ]] && cp "$BAK_PATH" "$BIN_PATH" 2>/dev/null || true
+    chmod +x "$BIN_PATH" 2>/dev/null || true
+    chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" 2>/dev/null || true
+    systemctl start "$SERVICE_NAME" 2>/dev/null || true
+    error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
+  fi
   systemctl daemon-reload
   systemctl start "$SERVICE_NAME"
   if wait_for_service "$SERVICE_NAME" 25; then
@@ -2234,9 +2273,12 @@ do_update() {
   else
     warn "$(t app.sub2api.warn.new_version_failed "$LATEST" "$CURRENT")"
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    mv "$BAK_PATH" "$BIN_PATH"
-    chmod +x "$BIN_PATH"
-    chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
+    if ! mv "$BAK_PATH" "$BIN_PATH"; then
+      warn "$(t app.sub2api.warn.rollback_start_failed "$SERVICE_NAME")"
+      error "$(t app.sub2api.error.update_failed "$CURRENT" "$SERVICE_NAME")"
+    fi
+    chmod +x "$BIN_PATH" 2>/dev/null || true
+    chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" 2>/dev/null || true
     systemctl start "$SERVICE_NAME" 2>/dev/null || true
     if wait_for_service "$SERVICE_NAME" 15; then
       success "$(t app.sub2api.success.rollback "$CURRENT")"

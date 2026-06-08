@@ -444,6 +444,14 @@ check_backup_temp_moves_handle_failure() {
   fi
 }
 
+check_binary_replacements_handle_failure() {
+  if grep -R -nE '^[[:space:]]*(mv "\$TMP_(BIN|ARCHIVE)" "\$BIN_PATH"|chmod \+x "\$BIN_PATH"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH")$' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Binary replacements must clean up candidates and restore backups on move, chmod, and chown failures." >&2
+    return 1
+  fi
+}
+
 check_vaultwarden_webvault_restore_cleans_partial() {
   awk '
       /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
@@ -531,6 +539,7 @@ main() {
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_build_temp_cleanup
   check_backup_temp_moves_handle_failure
+  check_binary_replacements_handle_failure
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree

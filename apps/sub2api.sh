@@ -378,6 +378,9 @@ i18n_register_many \
   app.sub2api.warn.old_binary_backup \
   "Old binary backed up -> %s" \
   "已备份旧二进制 → %s" \
+  app.sub2api.error.binary_install \
+  "Failed to install binary: %s" \
+  "二进制安装失败：%s" \
   app.sub2api.success.binary_installed \
   "Binary installed: %s" \
   "二进制安装完成：%s" \
