@@ -147,6 +147,30 @@ check_no_release_temp_files() {
     find dist -maxdepth 1 -name '*_impl.sh' -type f >&2
     return 1
   fi
+  if find dist -maxdepth 1 -name 'install_*.sh.*' -type f | grep -q .; then
+    echo "Unexpected release build temporary file in dist/" >&2
+    find dist -maxdepth 1 -name 'install_*.sh.*' -type f >&2
+    return 1
+  fi
+}
+
+check_release_build_outputs_are_atomic() {
+  if grep -n '^[[:space:]]*} > "\$output"$' tools/build-release.sh 2>/dev/null; then
+    echo "Release scripts must be generated to a temporary file before replacement." >&2
+    return 1
+  fi
+  awk '
+      /output_tmp="\$\(mktemp "\$\{output\}\.XXXXXX"\)"/ { saw_tmp=1 }
+      /} > "\$output_tmp"/ { saw_write=1 }
+      /mv "\$output_tmp" "\$output"/ { saw_mv=1 }
+      /rm -f "\$output_tmp"/ { saw_cleanup=1 }
+      END {
+        if (!(saw_tmp && saw_write && saw_mv && saw_cleanup)) {
+          print "Release script generation must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' tools/build-release.sh
 }
 
 check_bundled_impl_cleanup() {
@@ -737,6 +761,7 @@ main() {
   check_no_hardcoded_chinese_impl
   check_no_chinese_comments
   check_no_release_temp_files
+  check_release_build_outputs_are_atomic
   check_bundled_impl_cleanup
   check_bundled_impl_failure_cleanup
   check_safe_path_guard

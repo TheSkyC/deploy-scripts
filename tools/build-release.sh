@@ -37,7 +37,7 @@ emit_without_shebang() {
 
 build_one() {
   local app="$1"
-  local app_file impl_file output commit built_at
+  local app_file impl_file output output_tmp commit built_at
   app_file="$(app_file_for "$app")" || {
     usage
     exit 1
@@ -56,7 +56,8 @@ build_one() {
   fi
 
   mkdir -p "$DIST_DIR"
-  {
+  output_tmp="$(mktemp "${output}.XXXXXX")"
+  if ! {
     echo '#!/usr/bin/env bash'
     echo 'set -euo pipefail'
     echo
@@ -105,9 +106,15 @@ build_one() {
     echo 'exit 0'
     echo '__DEPLOY_APP_IMPL_SCRIPT__'
     cat "${ROOT_DIR}/${impl_file}"
-  } > "$output"
+  } > "$output_tmp"; then
+    rm -f "$output_tmp"
+    return 1
+  fi
 
-  chmod 755 "$output"
+  if ! chmod 755 "$output_tmp" || ! mv "$output_tmp" "$output"; then
+    rm -f "$output_tmp"
+    return 1
+  fi
   echo "Built ${output}"
 }
 
