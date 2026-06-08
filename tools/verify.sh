@@ -776,6 +776,106 @@ check_blog_hugo_install_failures_are_actionable() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_blog_site_setup_failures_are_explicit() {
+  awk '
+      /app\.blog\.error\.site_parent_dir/ { saw_parent_key=1 }
+      /site parent directory/ { saw_parent_guidance=1 }
+      /app\.blog\.error\.site_create/ { saw_site_create_key=1 }
+      /hugo new site %s --format toml/ { saw_site_create_guidance=1 }
+      /app\.blog\.error\.git_init/ { saw_git_init_key=1 }
+      /git -C %s init -q/ { saw_git_init_guidance=1 }
+      /app\.blog\.error\.git_config/ { saw_git_config_key=1 }
+      /app\.blog\.error\.theme_install/ { saw_theme_key=1 }
+      /partial theme directory/ { saw_theme_guidance=1 }
+      /app\.blog\.error\.content_dirs/ { saw_content_key=1 }
+      /content directories under %s/ { saw_content_guidance=1 }
+      /app\.blog\.error\.cms_admin_dir/ { saw_cms_key=1 }
+      /CMS admin directory/ { saw_cms_guidance=1 }
+      /app\.blog\.error\.public_dir/ { saw_public_key=1 }
+      /build output directory/ { saw_public_guidance=1 }
+      /app\.blog\.error\.site_access/ { saw_access_key=1 }
+      /rerun the initialization step/ { saw_access_guidance=1 }
+      /app\.blog\.error\.nginx_root_parent/ { saw_nginx_parent_key=1 }
+      /site root parent directory/ { saw_nginx_parent_guidance=1 }
+      END {
+        if (!(saw_parent_key && saw_parent_guidance && saw_site_create_key && saw_site_create_guidance && saw_git_init_key && saw_git_init_guidance && saw_git_config_key && saw_theme_key && saw_theme_guidance && saw_content_key && saw_content_guidance && saw_cms_key && saw_cms_guidance && saw_public_key && saw_public_guidance && saw_access_key && saw_access_guidance && saw_nginx_parent_key && saw_nginx_parent_guidance)) {
+          print "Blog site setup failures must provide actionable initialization, Git, theme, content, CMS, build, and Nginx root guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/blog.sh
+  awk '
+      /step "\$\(t app\.blog\.step_init_site\)"/ { in_init=1; saw_parent_if=0; saw_parent_error=0; saw_hugo_if=0; saw_hugo_error=0; saw_git_init_if=0; saw_git_init_error=0; saw_git_cfg_if=0; saw_git_cfg_error=0; next }
+      in_init && /if ! mkdir -p "\$\(dirname "\$SITE_DIR"\)"; then/ { saw_parent_if=1 }
+      in_init && /error "\$\(t app\.blog\.error\.site_parent_dir "\$SITE_DIR"\)"/ { saw_parent_error=1 }
+      in_init && /if ! hugo new site "\$SITE_DIR" --format toml; then/ { saw_hugo_if=1 }
+      in_init && /error "\$\(t app\.blog\.error\.site_create "\$SITE_DIR" "\$SITE_DIR"\)"/ { saw_hugo_error=1 }
+      in_init && /if ! git -C "\$SITE_DIR" init -q; then/ { saw_git_init_if=1 }
+      in_init && /error "\$\(t app\.blog\.error\.git_init "\$SITE_DIR" "\$SITE_DIR"\)"/ { saw_git_init_error=1 }
+      in_init && /if ! git -C "\$SITE_DIR" config user.email "blog@localhost" \\/ { saw_git_cfg_if=1 }
+      in_init && /error "\$\(t app\.blog\.error\.git_config "\$SITE_DIR"\)"/ { saw_git_cfg_error=1 }
+      in_init && /success "\$\(t app\.blog\.git_initialized\)"/ {
+        if (!(saw_parent_if && saw_parent_error && saw_hugo_if && saw_hugo_error && saw_git_init_if && saw_git_init_error && saw_git_cfg_if && saw_git_cfg_error)) {
+          printf "%s Blog site initialization must fail explicitly when parent-dir creation, hugo new site, git init, or git config fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_init=0
+      }
+      /step "\$\(t app\.blog\.step_theme\)"/ { in_theme=1; saw_theme_clone_if=0; saw_theme_error=0; next }
+      in_theme && /if ! git -C "\$SITE_DIR" submodule add --depth 1 "\$THEME_REPO" "themes\/\$\{THEME_NAME\}" 2>\/dev\/null; then/ { saw_theme_clone_if=1 }
+      in_theme && /error "\$\(t app\.blog\.error\.theme_install "\$THEME_DIR"\)"/ { saw_theme_error=1 }
+      in_theme && /success "\$\(t app\.blog\.theme_installed\)"/ {
+        if (!(saw_theme_clone_if && saw_theme_error)) {
+          printf "%s Blog theme install must fail explicitly when both submodule and clone paths fail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_theme=0
+      }
+      /step "\$\(t app\.blog\.step_content\)"/ { in_content=1; saw_content_mkdir_if=0; saw_content_error=0; next }
+      in_content && /if ! mkdir -p \\/ { saw_content_mkdir_if=1 }
+      in_content && /error "\$\(t app\.blog\.error\.content_dirs "\$SITE_DIR"\)"/ { saw_content_error=1 }
+      in_content && /if \[\[ ! -f "\$\{SITE_DIR\}\/content\/post\/hello-world\/index\.md" \]\]; then/ {
+        if (!(saw_content_mkdir_if && saw_content_error)) {
+          printf "%s Blog content setup must fail explicitly when sample content directories cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_content=0
+      }
+      /step "\$\(t app\.blog\.step_cms\)"/ { in_cms=1; saw_cms_if=0; saw_cms_error=0; next }
+      in_cms && /if ! mkdir -p "\$CMS_ADMIN_DIR"; then/ { saw_cms_if=1 }
+      in_cms && /error "\$\(t app\.blog\.error\.cms_admin_dir "\$CMS_ADMIN_DIR"\)"/ { saw_cms_error=1 }
+      in_cms && /_write_blog_file "\$\{CMS_ADMIN_DIR\}\/index\.html"/ {
+        if (!(saw_cms_if && saw_cms_error)) {
+          printf "%s Blog CMS setup must fail explicitly when the admin directory cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_cms=0
+      }
+      /step "\$\(t app\.blog\.step_build\)"/ { in_build=1; saw_public_if=0; saw_public_error=0; saw_cd_if=0; saw_cd_error=0; next }
+      in_build && /if ! mkdir -p "\$PUBLIC_DIR"; then/ { saw_public_if=1 }
+      in_build && /error "\$\(t app\.blog\.error\.public_dir "\$PUBLIC_DIR"\)"/ { saw_public_error=1 }
+      in_build && /if ! cd "\$SITE_DIR"; then/ { saw_cd_if=1 }
+      in_build && /error "\$\(t app\.blog\.error\.site_access "\$SITE_DIR"\)"/ { saw_cd_error=1 }
+      in_build && /git add -A/ {
+        if (!(saw_public_if && saw_public_error && saw_cd_if && saw_cd_error)) {
+          printf "%s Blog build prep must fail explicitly when the public dir cannot be created or the site dir cannot be accessed\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_build=0
+      }
+      /step "\$\(t app\.blog\.step_nginx\)"/ { in_nginx=1; saw_nginx_parent_if=0; saw_nginx_parent_error=0; next }
+      in_nginx && /if ! mkdir -p "\$NGINX_ROOT_PARENT"; then/ { saw_nginx_parent_if=1 }
+      in_nginx && /error "\$\(t app\.blog\.error\.nginx_root_parent "\$NGINX_ROOT_PARENT"\)"/ { saw_nginx_parent_error=1 }
+      in_nginx && /DEPLOY_TMP=\$\(mktemp -d "\$\{NGINX_ROOT_PARENT\}\/\.\$\{NGINX_ROOT_NAME\}\.new\.XXXXXX"\)/ {
+        if (!(saw_nginx_parent_if && saw_nginx_parent_error)) {
+          printf "%s Blog Nginx deployment prep must fail explicitly when the site-root parent directory cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_nginx=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_newapi_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl ca-certificates sqlite3$' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -3500,6 +3600,7 @@ main() {
   check_vaultwarden_apt_update_failures_are_reported
   check_blog_dependency_failures_are_reported
   check_blog_hugo_install_failures_are_actionable
+  check_blog_site_setup_failures_are_explicit
   check_newapi_dependency_failures_are_reported
   check_newapi_runtime_dir_failures_are_explicit
   check_cyberstrikeai_dependency_failures_are_reported

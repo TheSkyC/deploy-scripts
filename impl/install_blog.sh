@@ -188,17 +188,25 @@ fi
 rm -f "$HUGO_DEB"
 success "$(t app.blog.hugo_installed "$(hugo version | head -1)")"
 step "$(t app.blog.step_init_site)"
-mkdir -p "$(dirname "$SITE_DIR")"
+if ! mkdir -p "$(dirname "$SITE_DIR")"; then
+  error "$(t app.blog.error.site_parent_dir "$SITE_DIR")"
+fi
 if [[ -d "$SITE_DIR" ]]; then
   warn "$(t app.blog.site_exists "$SITE_DIR")"
 else
-  hugo new site "$SITE_DIR" --format toml
+  if ! hugo new site "$SITE_DIR" --format toml; then
+    error "$(t app.blog.error.site_create "$SITE_DIR" "$SITE_DIR")"
+  fi
   success "$(t app.blog.site_created "$SITE_DIR")"
 fi
 if [[ ! -d "${SITE_DIR}/.git" ]]; then
-  git -C "$SITE_DIR" init -q
-  git -C "$SITE_DIR" config user.email "blog@localhost"
-  git -C "$SITE_DIR" config user.name "${BLOG_AUTHOR}"
+  if ! git -C "$SITE_DIR" init -q; then
+    error "$(t app.blog.error.git_init "$SITE_DIR" "$SITE_DIR")"
+  fi
+  if ! git -C "$SITE_DIR" config user.email "blog@localhost" \
+      || ! git -C "$SITE_DIR" config user.name "${BLOG_AUTHOR}"; then
+    error "$(t app.blog.error.git_config "$SITE_DIR")"
+  fi
   success "$(t app.blog.git_initialized)"
 fi
 step "$(t app.blog.step_theme)"
@@ -208,8 +216,12 @@ if [[ -d "$THEME_DIR" && -f "$THEME_DIR/theme.toml" ]]; then
   success "$(t app.blog.theme_current)"
 else
   info "$(t app.blog.clone_theme)"
-  git -C "$SITE_DIR" submodule add --depth 1 "$THEME_REPO" "themes/${THEME_NAME}" 2>/dev/null \
-    || { git clone --depth 1 "$THEME_REPO" "$THEME_DIR" && rm -rf "$THEME_DIR/.git"; }
+  if ! git -C "$SITE_DIR" submodule add --depth 1 "$THEME_REPO" "themes/${THEME_NAME}" 2>/dev/null; then
+    if ! git clone --depth 1 "$THEME_REPO" "$THEME_DIR"; then
+      error "$(t app.blog.error.theme_install "$THEME_DIR")"
+    fi
+    rm -rf "$THEME_DIR/.git"
+  fi
   success "$(t app.blog.theme_installed)"
 fi
 step "$(t app.blog.step_config)"
@@ -296,10 +308,13 @@ enableGitInfo = true
 TOML
 success "$(t app.blog.config_written "$CONFIG_FILE")"
 step "$(t app.blog.step_content)"
-mkdir -p "${SITE_DIR}/content/post/hello-world"
-mkdir -p "${SITE_DIR}/content/page/about"
-mkdir -p "${SITE_DIR}/content/page/archives"
-mkdir -p "${SITE_DIR}/static/img"
+if ! mkdir -p \
+  "${SITE_DIR}/content/post/hello-world" \
+  "${SITE_DIR}/content/page/about" \
+  "${SITE_DIR}/content/page/archives" \
+  "${SITE_DIR}/static/img"; then
+  error "$(t app.blog.error.content_dirs "$SITE_DIR")"
+fi
 if [[ ! -f "${SITE_DIR}/content/post/hello-world/index.md" ]]; then
 _write_blog_file "${SITE_DIR}/content/post/hello-world/index.md" << MD
 +++
@@ -370,7 +385,9 @@ if [[ "$ENABLE_CMS" != "true" ]]; then
   warn "$(t app.blog.cms_skipped)"
 else
   CMS_ADMIN_DIR="${SITE_DIR}/static/admin"
-  mkdir -p "$CMS_ADMIN_DIR"
+  if ! mkdir -p "$CMS_ADMIN_DIR"; then
+    error "$(t app.blog.error.cms_admin_dir "$CMS_ADMIN_DIR")"
+  fi
   _write_blog_file "${CMS_ADMIN_DIR}/index.html" << HTML
 <!doctype html>
 <html>
@@ -475,8 +492,12 @@ YAML
   info "$(t app.blog.cms_admin_url "$CMS_SITE_URL")"
 fi
 step "$(t app.blog.step_build)"
-mkdir -p "$PUBLIC_DIR"
-cd "$SITE_DIR"
+if ! mkdir -p "$PUBLIC_DIR"; then
+  error "$(t app.blog.error.public_dir "$PUBLIC_DIR")"
+fi
+if ! cd "$SITE_DIR"; then
+  error "$(t app.blog.error.site_access "$SITE_DIR")"
+fi
 git add -A
 git diff --cached --quiet || git commit -q -m "init: add site content"
 info "$(t app.blog.git_committed)"
@@ -487,7 +508,9 @@ success "$(t app.blog.build_complete "$PAGE_COUNT")"
 step "$(t app.blog.step_nginx)"
 NGINX_ROOT_PARENT="$(dirname "$NGINX_ROOT")"
 NGINX_ROOT_NAME="$(basename "$NGINX_ROOT")"
-mkdir -p "$NGINX_ROOT_PARENT"
+if ! mkdir -p "$NGINX_ROOT_PARENT"; then
+  error "$(t app.blog.error.nginx_root_parent "$NGINX_ROOT_PARENT")"
+fi
 DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"
 DEPLOY_BAK="${NGINX_ROOT}.bak.$(date +%Y%m%d%H%M%S)"
 if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then

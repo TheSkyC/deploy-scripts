@@ -730,12 +730,24 @@ i18n_register app.blog.hugo_installed \
 i18n_register app.blog.step_init_site \
   "Step 3  Initialize Hugo blog project" \
   "Step 3  初始化 Hugo 博客项目"
+i18n_register app.blog.error.site_parent_dir \
+  "Failed to prepare the site parent directory for %s. Check filesystem permissions and retry." \
+  "无法为 %s 准备站点父目录。请检查文件系统权限后重试。"
+i18n_register app.blog.error.site_create \
+  "Failed to create the Hugo site at %s. Inspect the target path and retry: hugo new site %s --format toml" \
+  "无法在 %s 创建 Hugo 站点。请检查目标路径后重试：hugo new site %s --format toml"
 i18n_register app.blog.site_exists \
   "Site directory already exists, keeping current content: %s" \
   "目录 %s 已存在，跳过初始化（保留现有内容）"
 i18n_register app.blog.site_created \
   "Hugo project created at: %s" \
   "Hugo 项目创建于：%s"
+i18n_register app.blog.error.git_init \
+  "Failed to initialize the Git repository in %s. Check filesystem permissions and retry: git -C %s init -q" \
+  "无法在 %s 中初始化 Git 仓库。请检查文件系统权限后重试：git -C %s init -q"
+i18n_register app.blog.error.git_config \
+  "Failed to write Git config in %s. Inspect the repository state, then retry the git config commands manually." \
+  "无法在 %s 中写入 Git 配置。请检查仓库状态后手动重试 git config 命令。"
 i18n_register app.blog.git_initialized \
   "Git repository initialized." \
   "Git 仓库已初始化"
@@ -751,6 +763,9 @@ i18n_register app.blog.theme_current \
 i18n_register app.blog.clone_theme \
   "Cloning theme repository. This may take a moment..." \
   "克隆主题仓库（首次可能需要一点时间）..."
+i18n_register app.blog.error.theme_install \
+  "Failed to install the theme into %s. Check Git/network access or remove the partial theme directory and retry." \
+  "无法将主题安装到 %s。请检查 Git/网络访问，或删除不完整的主题目录后重试。"
 i18n_register app.blog.theme_installed \
   "Theme installed." \
   "主题安装完成"
@@ -769,6 +784,9 @@ i18n_register app.blog.error.file_write \
 i18n_register app.blog.step_content \
   "Step 6  Create sample post and pages" \
   "Step 6  创建示例文章与页面"
+i18n_register app.blog.error.content_dirs \
+  "Failed to prepare content directories under %s. Check filesystem permissions and retry." \
+  "无法准备 %s 下的内容目录。请检查文件系统权限后重试。"
 i18n_register app.blog.sample_post_created \
   "Sample post created." \
   "示例文章已创建"
@@ -784,6 +802,9 @@ i18n_register app.blog.step_cms \
 i18n_register app.blog.cms_skipped \
   "ENABLE_CMS=false; skipping Decap CMS installation." \
   "ENABLE_CMS=false，跳过 Decap CMS 安装"
+i18n_register app.blog.error.cms_admin_dir \
+  "Failed to prepare the CMS admin directory: %s. Check filesystem permissions and retry." \
+  "无法准备 CMS 管理目录：%s。请检查文件系统权限后重试。"
 i18n_register app.blog.cms_config_created \
   "Decap CMS config created: %s" \
   "Decap CMS 配置文件已创建：%s"
@@ -793,6 +814,12 @@ i18n_register app.blog.cms_admin_url \
 i18n_register app.blog.step_build \
   "Step 8  Build static site with CMS admin files" \
   "Step 8  构建静态网站（含 CMS admin 文件）"
+i18n_register app.blog.error.public_dir \
+  "Failed to prepare the Hugo build output directory: %s. Check filesystem permissions and retry." \
+  "无法准备 Hugo 构建输出目录：%s。请检查文件系统权限后重试。"
+i18n_register app.blog.error.site_access \
+  "Cannot access the Hugo site directory: %s. Recreate the site or rerun the initialization step." \
+  "无法访问 Hugo 站点目录：%s。请重新创建站点，或重新执行初始化步骤。"
 i18n_register app.blog.git_committed \
   "Git commit complete; Hugo can read file modification times." \
   "Git 提交完成，Hugo 可读取文件修改时间"
@@ -805,6 +832,9 @@ i18n_register app.blog.build_complete \
 i18n_register app.blog.step_nginx \
   "Step 9  Configure Nginx" \
   "Step 9  配置 Nginx"
+i18n_register app.blog.error.nginx_root_parent \
+  "Failed to prepare the Nginx site root parent directory: %s. Check filesystem permissions and retry." \
+  "无法准备 Nginx 站点根目录的父目录：%s。请检查文件系统权限后重试。"
 i18n_register app.blog.static_deployed \
   "Static files deployed to: %s" \
   "静态文件已部署到：%s"
@@ -1153,17 +1183,25 @@ fi
 rm -f "$HUGO_DEB"
 success "$(t app.blog.hugo_installed "$(hugo version | head -1)")"
 step "$(t app.blog.step_init_site)"
-mkdir -p "$(dirname "$SITE_DIR")"
+if ! mkdir -p "$(dirname "$SITE_DIR")"; then
+  error "$(t app.blog.error.site_parent_dir "$SITE_DIR")"
+fi
 if [[ -d "$SITE_DIR" ]]; then
   warn "$(t app.blog.site_exists "$SITE_DIR")"
 else
-  hugo new site "$SITE_DIR" --format toml
+  if ! hugo new site "$SITE_DIR" --format toml; then
+    error "$(t app.blog.error.site_create "$SITE_DIR" "$SITE_DIR")"
+  fi
   success "$(t app.blog.site_created "$SITE_DIR")"
 fi
 if [[ ! -d "${SITE_DIR}/.git" ]]; then
-  git -C "$SITE_DIR" init -q
-  git -C "$SITE_DIR" config user.email "blog@localhost"
-  git -C "$SITE_DIR" config user.name "${BLOG_AUTHOR}"
+  if ! git -C "$SITE_DIR" init -q; then
+    error "$(t app.blog.error.git_init "$SITE_DIR" "$SITE_DIR")"
+  fi
+  if ! git -C "$SITE_DIR" config user.email "blog@localhost" \
+      || ! git -C "$SITE_DIR" config user.name "${BLOG_AUTHOR}"; then
+    error "$(t app.blog.error.git_config "$SITE_DIR")"
+  fi
   success "$(t app.blog.git_initialized)"
 fi
 step "$(t app.blog.step_theme)"
@@ -1173,8 +1211,12 @@ if [[ -d "$THEME_DIR" && -f "$THEME_DIR/theme.toml" ]]; then
   success "$(t app.blog.theme_current)"
 else
   info "$(t app.blog.clone_theme)"
-  git -C "$SITE_DIR" submodule add --depth 1 "$THEME_REPO" "themes/${THEME_NAME}" 2>/dev/null \
-    || { git clone --depth 1 "$THEME_REPO" "$THEME_DIR" && rm -rf "$THEME_DIR/.git"; }
+  if ! git -C "$SITE_DIR" submodule add --depth 1 "$THEME_REPO" "themes/${THEME_NAME}" 2>/dev/null; then
+    if ! git clone --depth 1 "$THEME_REPO" "$THEME_DIR"; then
+      error "$(t app.blog.error.theme_install "$THEME_DIR")"
+    fi
+    rm -rf "$THEME_DIR/.git"
+  fi
   success "$(t app.blog.theme_installed)"
 fi
 step "$(t app.blog.step_config)"
@@ -1261,10 +1303,13 @@ enableGitInfo = true
 TOML
 success "$(t app.blog.config_written "$CONFIG_FILE")"
 step "$(t app.blog.step_content)"
-mkdir -p "${SITE_DIR}/content/post/hello-world"
-mkdir -p "${SITE_DIR}/content/page/about"
-mkdir -p "${SITE_DIR}/content/page/archives"
-mkdir -p "${SITE_DIR}/static/img"
+if ! mkdir -p \
+  "${SITE_DIR}/content/post/hello-world" \
+  "${SITE_DIR}/content/page/about" \
+  "${SITE_DIR}/content/page/archives" \
+  "${SITE_DIR}/static/img"; then
+  error "$(t app.blog.error.content_dirs "$SITE_DIR")"
+fi
 if [[ ! -f "${SITE_DIR}/content/post/hello-world/index.md" ]]; then
 _write_blog_file "${SITE_DIR}/content/post/hello-world/index.md" << MD
 +++
@@ -1335,7 +1380,9 @@ if [[ "$ENABLE_CMS" != "true" ]]; then
   warn "$(t app.blog.cms_skipped)"
 else
   CMS_ADMIN_DIR="${SITE_DIR}/static/admin"
-  mkdir -p "$CMS_ADMIN_DIR"
+  if ! mkdir -p "$CMS_ADMIN_DIR"; then
+    error "$(t app.blog.error.cms_admin_dir "$CMS_ADMIN_DIR")"
+  fi
   _write_blog_file "${CMS_ADMIN_DIR}/index.html" << HTML
 <!doctype html>
 <html>
@@ -1440,8 +1487,12 @@ YAML
   info "$(t app.blog.cms_admin_url "$CMS_SITE_URL")"
 fi
 step "$(t app.blog.step_build)"
-mkdir -p "$PUBLIC_DIR"
-cd "$SITE_DIR"
+if ! mkdir -p "$PUBLIC_DIR"; then
+  error "$(t app.blog.error.public_dir "$PUBLIC_DIR")"
+fi
+if ! cd "$SITE_DIR"; then
+  error "$(t app.blog.error.site_access "$SITE_DIR")"
+fi
 git add -A
 git diff --cached --quiet || git commit -q -m "init: add site content"
 info "$(t app.blog.git_committed)"
@@ -1452,7 +1503,9 @@ success "$(t app.blog.build_complete "$PAGE_COUNT")"
 step "$(t app.blog.step_nginx)"
 NGINX_ROOT_PARENT="$(dirname "$NGINX_ROOT")"
 NGINX_ROOT_NAME="$(basename "$NGINX_ROOT")"
-mkdir -p "$NGINX_ROOT_PARENT"
+if ! mkdir -p "$NGINX_ROOT_PARENT"; then
+  error "$(t app.blog.error.nginx_root_parent "$NGINX_ROOT_PARENT")"
+fi
 DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"
 DEPLOY_BAK="${NGINX_ROOT}.bak.$(date +%Y%m%d%H%M%S)"
 if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
