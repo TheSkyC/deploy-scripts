@@ -919,9 +919,11 @@ do_uninstall() {
     info "$(t app.newapi.info.kept_backup "$BACKUP_DIR")"
   fi
   if $DELETE_DATA && id "$SERVICE_USER" &>/dev/null; then
-    userdel "$SERVICE_USER" 2>/dev/null \
-      && success "$(t app.newapi.success.deleted_user "$SERVICE_USER")" \
-      || warn "$(t app.newapi.warn.delete_user "$SERVICE_USER")"
+    if userdel "$SERVICE_USER" 2>/dev/null; then
+      success "$(t app.newapi.success.deleted_user "$SERVICE_USER")"
+    else
+      warn "$(t app.newapi.warn.delete_user "$SERVICE_USER")"
+    fi
   fi
   echo ""
   echo -e "${BOLD}${GREEN}  $(t app.newapi.success.uninstalled)${NC}"

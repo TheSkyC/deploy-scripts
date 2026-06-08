@@ -1251,9 +1251,9 @@ check_fail2ban_configs_are_atomic() {
 }
 
 check_vaultwarden_result_chains_are_explicit() {
-  if grep -R -nE 'nginx -t && systemctl reload nginx[[:space:]\\]*$|userdel "\$VW_USER" 2>/dev/null && success .* \|\| true' \
+  if grep -R -nE 'nginx -t && systemctl reload nginx[[:space:]\\]*$' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
-    echo "Vaultwarden must use explicit conditionals for nginx reload and user deletion outcomes." >&2
+    echo "Vaultwarden must use explicit conditionals for nginx reload outcomes." >&2
     return 1
   fi
   awk '
@@ -1269,11 +1269,61 @@ check_vaultwarden_result_chains_are_explicit() {
         }
         in_https=0
       }
-      /if \$DELETE_DATA && id "\$VW_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_userdel_success=0; next }
-      in_userdel && /if userdel "\$VW_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
-      in_userdel && /success "\$\(t app\.vaultwarden\.success\.deleted_user "\$VW_USER"\)"/ { saw_userdel_success=1 }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
+check_user_deletion_paths_are_explicit() {
+  if grep -R -nE 'userdel "\$(SERVICE_USER|VW_USER)" 2>/dev/null[[:space:]\\]*&& success .* \|\| (warn|true)' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "User deletion paths must use explicit conditionals for userdel outcomes." >&2
+    return 1
+  fi
+  awk '
+      /if \$DELETE_DATA && id "\$SERVICE_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
+      in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
+      in_userdel && /success "\$\(t app\.newapi\.success\.deleted_user "\$SERVICE_USER"\)"/ { saw_success=1 }
+      in_userdel && /warn "\$\(t app\.newapi\.warn\.delete_user "\$SERVICE_USER"\)"/ { saw_warn=1 }
       in_userdel && /^  fi$/ {
-        if (!(saw_userdel_if && saw_userdel_success)) {
+        if (!(saw_userdel_if && saw_success && saw_warn)) {
+          printf "%s NewAPI uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_userdel=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /if \$DELETE_DATA && \$DELETE_CONF && id "\$SERVICE_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
+      in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
+      in_userdel && /success "\$\(t app\.sub2api\.success\.deleted_user "\$SERVICE_USER"\)"/ { saw_success=1 }
+      in_userdel && /warn "\$\(t app\.sub2api\.warn\.delete_user "\$SERVICE_USER"\)"/ { saw_warn=1 }
+      in_userdel && /^  fi$/ {
+        if (!(saw_userdel_if && saw_success && saw_warn)) {
+          printf "%s Sub2API uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_userdel=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /if \[\[ "\$\{del_install,,\}" == "y" \]\] && id "\$SERVICE_USER" >\/dev\/null 2>&1; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
+      in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
+      in_userdel && /success "\$\(t app\.cyberstrikeai\.success\.deleted_user "\$SERVICE_USER"\)"/ { saw_success=1 }
+      in_userdel && /warn "\$\(t app\.cyberstrikeai\.warn\.delete_user "\$SERVICE_USER"\)"/ { saw_warn=1 }
+      in_userdel && /^  fi$/ {
+        if (!(saw_userdel_if && saw_success && saw_warn)) {
+          printf "%s CyberStrikeAI uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_userdel=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /if \$DELETE_DATA && id "\$VW_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; next }
+      in_userdel && /if userdel "\$VW_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
+      in_userdel && /success "\$\(t app\.vaultwarden\.success\.deleted_user "\$VW_USER"\)"/ { saw_success=1 }
+      in_userdel && /^  fi$/ {
+        if (!(saw_userdel_if && saw_success)) {
           printf "%s Vaultwarden uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -1478,6 +1528,7 @@ main() {
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
   check_vaultwarden_result_chains_are_explicit
+  check_user_deletion_paths_are_explicit
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_webvault_replacements_are_atomic
   check_vaultwarden_install_webvault_replacement_is_recoverable

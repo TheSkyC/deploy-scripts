@@ -922,9 +922,11 @@ do_uninstall() {
     info "$(t app.cyberstrikeai.info.kept_backup "$BACKUP_DIR")"
   fi
   if [[ "${del_install,,}" == "y" ]] && id "$SERVICE_USER" >/dev/null 2>&1; then
-    userdel "$SERVICE_USER" 2>/dev/null \
-      && success "$(t app.cyberstrikeai.success.deleted_user "$SERVICE_USER")" \
-      || warn "$(t app.cyberstrikeai.warn.delete_user "$SERVICE_USER")"
+    if userdel "$SERVICE_USER" 2>/dev/null; then
+      success "$(t app.cyberstrikeai.success.deleted_user "$SERVICE_USER")"
+    else
+      warn "$(t app.cyberstrikeai.warn.delete_user "$SERVICE_USER")"
+    fi
   fi
   echo ""
   success "$(t app.cyberstrikeai.success.uninstalled)"

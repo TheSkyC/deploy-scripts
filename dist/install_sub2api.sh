@@ -2801,9 +2801,11 @@ do_uninstall() {
     info "$(t app.sub2api.info.kept_backup "$BACKUP_DIR")"
   fi
   if $DELETE_DATA && $DELETE_CONF && id "$SERVICE_USER" &>/dev/null; then
-    userdel "$SERVICE_USER" 2>/dev/null \
-      && success "$(t app.sub2api.success.deleted_user "$SERVICE_USER")" \
-      || warn "$(t app.sub2api.warn.delete_user "$SERVICE_USER")"
+    if userdel "$SERVICE_USER" 2>/dev/null; then
+      success "$(t app.sub2api.success.deleted_user "$SERVICE_USER")"
+    else
+      warn "$(t app.sub2api.warn.delete_user "$SERVICE_USER")"
+    fi
   fi
   echo ""
   echo -e "${BOLD}${GREEN}  $(t app.sub2api.success.uninstalled)${NC}"
