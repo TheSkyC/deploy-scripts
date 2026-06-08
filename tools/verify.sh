@@ -1225,7 +1225,7 @@ check_sub2api_postgres_rpm_setup_failures_are_explicit() {
           printf "%s Sub2API PostgreSQL RPM setup must fail explicitly when repository install or initdb fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        if (FILENAME ~ /install_sub2api\.sh$/ && /dnf/ && !saw_module) {
+        if (!saw_module) {
           printf "%s Sub2API dnf path must fail explicitly when module disable fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
