@@ -255,9 +255,9 @@ _install_base_deps() {
       error "$(t app.sub2api.error.base_deps_install)"
     fi
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-    dnf install -y -q curl ca-certificates
+    dnf install -y -q curl ca-certificates || error "$(t app.sub2api.error.base_deps_install_pkg)"
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
-    yum install -y -q curl ca-certificates
+    yum install -y -q curl ca-certificates || error "$(t app.sub2api.error.base_deps_install_pkg)"
   fi
   success "$(t app.sub2api.success.base_deps)"
 }
@@ -338,10 +338,10 @@ _install_postgres() {
     if [[ "$PKG_MANAGER" == "dnf" ]]; then
       dnf install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
       dnf -qy module disable postgresql || error "$(t app.sub2api.error.postgres_module)"
-      dnf install -y postgresql15-server postgresql15-contrib
+      dnf install -y postgresql15-server postgresql15-contrib || error "$(t app.sub2api.error.postgres_rpm_install)"
     else
       yum install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
-      yum install -y postgresql15-server postgresql15-contrib
+      yum install -y postgresql15-server postgresql15-contrib || error "$(t app.sub2api.error.postgres_rpm_install)"
     fi
     if [[ ! -f "$pg_data_version" ]]; then
       /usr/pgsql-15/bin/postgresql-15-setup initdb || error "$(t app.sub2api.error.postgres_initdb)"
@@ -421,11 +421,11 @@ _install_redis() {
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis7)"
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-    dnf install -y redis
+    dnf install -y redis || error "$(t app.sub2api.error.redis_pkg_install)"
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis)"
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
-    yum install -y redis
+    yum install -y redis || error "$(t app.sub2api.error.redis_pkg_install)"
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis)"
   fi

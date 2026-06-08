@@ -72,6 +72,9 @@ i18n_register_many \
   app.sub2api.error.base_deps_install \
   "Base dependency installation failed. Run apt-get install -y curl ca-certificates gnupg lsb-release after fixing the package manager state." \
   "基础依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl ca-certificates gnupg lsb-release。" \
+  app.sub2api.error.base_deps_install_pkg \
+  "Base dependency installation failed. Install curl and ca-certificates with dnf or yum after fixing the package manager state." \
+  "基础依赖安装失败。请在修复软件包管理器状态后使用 dnf 或 yum 安装 curl 和 ca-certificates。" \
   app.sub2api.success.base_deps \
   "Base dependencies installed." \
   "基础依赖安装完成。" \
@@ -111,6 +114,9 @@ i18n_register_many \
   app.sub2api.error.postgres_initdb \
   "PostgreSQL 15 database initialization failed. Inspect: journalctl -u postgresql-15 -n 30" \
   "PostgreSQL 15 数据目录初始化失败，请检查：journalctl -u postgresql-15 -n 30" \
+  app.sub2api.error.postgres_rpm_install \
+  "PostgreSQL 15 package installation failed. Repair the package manager state, then run dnf install -y postgresql15-server postgresql15-contrib or yum install -y postgresql15-server postgresql15-contrib." \
+  "PostgreSQL 15 软件包安装失败。请先修复包管理器状态，再执行 dnf install -y postgresql15-server postgresql15-contrib 或 yum install -y postgresql15-server postgresql15-contrib。" \
   app.sub2api.success.redis_exists \
   "Redis %s is already installed; skipping installation." \
   "Redis %s 已安装，跳过安装。" \
@@ -132,6 +138,9 @@ i18n_register_many \
   app.sub2api.error.redis_apt_install \
   "Redis installation failed. Run apt-get install -y redis after fixing the package manager state." \
   "Redis 安装失败。请在修复软件包管理器状态后执行 apt-get install -y redis。" \
+  app.sub2api.error.redis_pkg_install \
+  "Redis installation failed. Repair the package manager state, then run dnf install -y redis or yum install -y redis." \
+  "Redis 安装失败。请先修复包管理器状态，再执行 dnf install -y redis 或 yum install -y redis。" \
   app.sub2api.success.redis7 \
   "Redis 7 installed." \
   "Redis 7 安装完成。" \

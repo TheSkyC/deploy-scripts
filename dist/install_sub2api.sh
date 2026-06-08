@@ -587,6 +587,9 @@ i18n_register_many \
   app.sub2api.error.base_deps_install \
   "Base dependency installation failed. Run apt-get install -y curl ca-certificates gnupg lsb-release after fixing the package manager state." \
   "基础依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl ca-certificates gnupg lsb-release。" \
+  app.sub2api.error.base_deps_install_pkg \
+  "Base dependency installation failed. Install curl and ca-certificates with dnf or yum after fixing the package manager state." \
+  "基础依赖安装失败。请在修复软件包管理器状态后使用 dnf 或 yum 安装 curl 和 ca-certificates。" \
   app.sub2api.success.base_deps \
   "Base dependencies installed." \
   "基础依赖安装完成。" \
@@ -626,6 +629,9 @@ i18n_register_many \
   app.sub2api.error.postgres_initdb \
   "PostgreSQL 15 database initialization failed. Inspect: journalctl -u postgresql-15 -n 30" \
   "PostgreSQL 15 数据目录初始化失败，请检查：journalctl -u postgresql-15 -n 30" \
+  app.sub2api.error.postgres_rpm_install \
+  "PostgreSQL 15 package installation failed. Repair the package manager state, then run dnf install -y postgresql15-server postgresql15-contrib or yum install -y postgresql15-server postgresql15-contrib." \
+  "PostgreSQL 15 软件包安装失败。请先修复包管理器状态，再执行 dnf install -y postgresql15-server postgresql15-contrib 或 yum install -y postgresql15-server postgresql15-contrib。" \
   app.sub2api.success.redis_exists \
   "Redis %s is already installed; skipping installation." \
   "Redis %s 已安装，跳过安装。" \
@@ -647,6 +653,9 @@ i18n_register_many \
   app.sub2api.error.redis_apt_install \
   "Redis installation failed. Run apt-get install -y redis after fixing the package manager state." \
   "Redis 安装失败。请在修复软件包管理器状态后执行 apt-get install -y redis。" \
+  app.sub2api.error.redis_pkg_install \
+  "Redis installation failed. Repair the package manager state, then run dnf install -y redis or yum install -y redis." \
+  "Redis 安装失败。请先修复包管理器状态，再执行 dnf install -y redis 或 yum install -y redis。" \
   app.sub2api.success.redis7 \
   "Redis 7 installed." \
   "Redis 7 安装完成。" \
@@ -1654,9 +1663,9 @@ _install_base_deps() {
       error "$(t app.sub2api.error.base_deps_install)"
     fi
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-    dnf install -y -q curl ca-certificates
+    dnf install -y -q curl ca-certificates || error "$(t app.sub2api.error.base_deps_install_pkg)"
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
-    yum install -y -q curl ca-certificates
+    yum install -y -q curl ca-certificates || error "$(t app.sub2api.error.base_deps_install_pkg)"
   fi
   success "$(t app.sub2api.success.base_deps)"
 }
@@ -1737,10 +1746,10 @@ _install_postgres() {
     if [[ "$PKG_MANAGER" == "dnf" ]]; then
       dnf install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
       dnf -qy module disable postgresql || error "$(t app.sub2api.error.postgres_module)"
-      dnf install -y postgresql15-server postgresql15-contrib
+      dnf install -y postgresql15-server postgresql15-contrib || error "$(t app.sub2api.error.postgres_rpm_install)"
     else
       yum install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
-      yum install -y postgresql15-server postgresql15-contrib
+      yum install -y postgresql15-server postgresql15-contrib || error "$(t app.sub2api.error.postgres_rpm_install)"
     fi
     if [[ ! -f "$pg_data_version" ]]; then
       /usr/pgsql-15/bin/postgresql-15-setup initdb || error "$(t app.sub2api.error.postgres_initdb)"
@@ -1820,11 +1829,11 @@ _install_redis() {
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis7)"
   elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-    dnf install -y redis
+    dnf install -y redis || error "$(t app.sub2api.error.redis_pkg_install)"
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis)"
   elif [[ "$PKG_MANAGER" == "yum" ]]; then
-    yum install -y redis
+    yum install -y redis || error "$(t app.sub2api.error.redis_pkg_install)"
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
     success "$(t app.sub2api.success.redis)"
   fi

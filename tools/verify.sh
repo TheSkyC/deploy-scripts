@@ -866,6 +866,59 @@ check_sub2api_apt_failures_are_reported() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_rpm_dependency_failures_are_reported() {
+  awk '
+      /app\.sub2api\.error\.base_deps_install_pkg/ { saw_base_key=1 }
+      /dnf or yum/ { saw_base_guidance=1 }
+      /app\.sub2api\.error\.postgres_rpm_install/ { saw_pg_key=1 }
+      /dnf install -y postgresql15-server postgresql15-contrib/ { saw_pg_dnf_guidance=1 }
+      /yum install -y postgresql15-server postgresql15-contrib/ { saw_pg_yum_guidance=1 }
+      /app\.sub2api\.error\.redis_pkg_install/ { saw_redis_key=1 }
+      /dnf install -y redis/ { saw_redis_dnf_guidance=1 }
+      /yum install -y redis/ { saw_redis_yum_guidance=1 }
+      END {
+        if (!(saw_base_key && saw_base_guidance && saw_pg_key && saw_pg_dnf_guidance && saw_pg_yum_guidance && saw_redis_key && saw_redis_dnf_guidance && saw_redis_yum_guidance)) {
+          print "Sub2API RPM/dnf/yum failures must tell users how to retry package installation." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /_install_base_deps\(\)/ { in_base=1; saw_dnf_base=0; saw_yum_base=0; next }
+      in_base && /dnf install -y -q curl ca-certificates \|\| error "\$\(t app\.sub2api\.error\.base_deps_install_pkg\)"/ { saw_dnf_base=1 }
+      in_base && /yum install -y -q curl ca-certificates \|\| error "\$\(t app\.sub2api\.error\.base_deps_install_pkg\)"/ { saw_yum_base=1 }
+      in_base && /success "\$\(t app\.sub2api\.success\.base_deps\)"/ {
+        if (!(saw_dnf_base && saw_yum_base)) {
+          printf "%s Sub2API RPM base dependency installation must fail explicitly with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_base=0
+      }
+      /\[\[ "\$PKG_MANAGER" == "dnf" \|\| "\$PKG_MANAGER" == "yum" \]\]/ { in_pg=1; saw_dnf_pg=0; saw_yum_pg=0; next }
+      in_pg && /dnf install -y postgresql15-server postgresql15-contrib \|\| error "\$\(t app\.sub2api\.error\.postgres_rpm_install\)"/ { saw_dnf_pg=1 }
+      in_pg && /yum install -y postgresql15-server postgresql15-contrib \|\| error "\$\(t app\.sub2api\.error\.postgres_rpm_install\)"/ { saw_yum_pg=1 }
+      in_pg && /success "\$\(t app\.sub2api\.success\.postgres15\)"/ {
+        if (!(saw_dnf_pg && saw_yum_pg)) {
+          printf "%s Sub2API PostgreSQL RPM package installation must fail explicitly with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_pg=0
+      }
+      /_install_redis\(\)/ { in_redis_func=1; next }
+      in_redis_func && /elif \[\[ "\$PKG_MANAGER" == "dnf" \]\]; then/ { in_redis_dnf=1; in_redis_func=0; next }
+      in_redis_dnf && /dnf install -y redis \|\| error "\$\(t app\.sub2api\.error\.redis_pkg_install\)"/ { saw_dnf_redis=1 }
+      /elif \[\[ "\$PKG_MANAGER" == "yum" \]\]; then/ { if (in_redis_dnf) { in_redis_yum=1; in_redis_dnf=0; next } }
+      in_redis_yum && /yum install -y redis \|\| error "\$\(t app\.sub2api\.error\.redis_pkg_install\)"/ { saw_yum_redis=1 }
+      in_redis_yum && /success "\$\(t app\.sub2api\.success\.redis\)"/ {
+        if (!(saw_dnf_redis && saw_yum_redis)) {
+          printf "%s Sub2API Redis RPM package installation must fail explicitly with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_redis_yum=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_vaultwarden_backup_failures_include_followup_guidance() {
   awk '
       /app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn_key=1 }
@@ -2579,6 +2632,7 @@ main() {
   check_newapi_dependency_failures_are_reported
   check_cyberstrikeai_dependency_failures_are_reported
   check_sub2api_apt_failures_are_reported
+  check_sub2api_rpm_dependency_failures_are_reported
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance
