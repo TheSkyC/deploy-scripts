@@ -357,6 +357,13 @@ check_no_fixed_tmp_downloads() {
   fi
 }
 
+check_keyring_writes_are_atomic() {
+  if grep -R -nE 'gpg .*--dearmor -o /usr/share/keyrings/' impl dist 2>/dev/null; then
+    echo "Write apt keyrings to a temporary file before replacing the final keyring." >&2
+    return 1
+  fi
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -377,6 +384,7 @@ main() {
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads
+  check_keyring_writes_are_atomic
   echo "Verification passed"
 }
 

@@ -259,9 +259,16 @@ _install_redis() {
   fi
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "$(t app.sub2api.info.redis_apt_source)"
-    curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
-      | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
-    chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+    local redis_keyring redis_key_tmp
+    redis_keyring="/usr/share/keyrings/redis-archive-keyring.gpg"
+    redis_key_tmp="$(mktemp "${redis_keyring}.tmp.XXXXXX")"
+    if ! curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
+        | gpg --batch --yes --dearmor -o "$redis_key_tmp"; then
+      rm -f "$redis_key_tmp"
+      error "$(t app.sub2api.error.redis_key)"
+    fi
+    chmod 644 "$redis_key_tmp"
+    mv "$redis_key_tmp" "$redis_keyring"
     local codename
     codename="$(_apt_codename)"
     echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] \

@@ -96,6 +96,9 @@ i18n_register_many \
   app.sub2api.info.redis_apt_source \
   "Adding the official Redis apt repository..." \
   "添加 Redis 官方 apt 源..." \
+  app.sub2api.error.redis_key \
+  "Cannot download or convert the Redis signing key. Check the network and retry." \
+  "无法下载或转换 Redis 签名密钥，请检查网络后重试。" \
   app.sub2api.success.redis7 \
   "Redis 7 installed." \
   "Redis 7 安装完成。" \
