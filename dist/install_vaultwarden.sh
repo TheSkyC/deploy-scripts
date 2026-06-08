@@ -1086,8 +1086,8 @@ i18n_register_many \
   "Backup created: %s" \
   "备份已创建：%s" \
   app.vaultwarden.warn.backup_failed_continue \
-  "Backup failed; temporary file removed. Continuing..." \
-  "备份失败，临时文件已清理，继续..." \
+  "Backup failed; temporary file removed. Continuing. Inspect /opt/vaultwarden-backups/backup.log or run /usr/local/bin/vaultwarden-backup manually before proceeding further." \
+  "备份失败，临时文件已清理，继续执行。请检查 /opt/vaultwarden-backups/backup.log，或先手动执行 /usr/local/bin/vaultwarden-backup 再继续后续操作。" \
   app.vaultwarden.error.backup_script \
   "Backup script write failed: /usr/local/bin/vaultwarden-backup" \
   "备份脚本写入失败：/usr/local/bin/vaultwarden-backup" \
@@ -2535,10 +2535,12 @@ _backup_silent() {
     else
       rm -f "$archive_tmp"
       warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+      return 1
     fi
   else
     rm -f "$archive_tmp"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+    return 1
   fi
 }
 do_backup() {

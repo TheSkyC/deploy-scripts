@@ -1226,10 +1226,12 @@ _backup_silent() {
     else
       rm -f "$archive_tmp"
       warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+      return 1
     fi
   else
     rm -f "$archive_tmp"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+    return 1
   fi
 }
 do_backup() {

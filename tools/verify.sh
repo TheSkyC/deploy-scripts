@@ -683,6 +683,32 @@ check_vaultwarden_apt_update_failures_are_reported() {
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_backup_failures_include_followup_guidance() {
+  awk '
+      /app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn_key=1 }
+      /\/opt\/vaultwarden-backups\/backup\.log/ { saw_log_guidance=1 }
+      /\/usr\/local\/bin\/vaultwarden-backup/ { saw_cmd_guidance=1 }
+      END {
+        if (!(saw_warn_key && saw_log_guidance && saw_cmd_guidance)) {
+          print "Vaultwarden backup failure warnings must point to backup.log and the manual backup command." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /_backup_silent\(\)/ { in_block=1; saw_warn=0; saw_return=0; next }
+      in_block && /warn "\$\(t app\.vaultwarden\.warn\.backup_failed_continue\)"/ { saw_warn=1 }
+      in_block && /return 1/ { saw_return=1 }
+      in_block && /^}/ {
+        if (!(saw_warn && saw_return)) {
+          printf "%s Vaultwarden silent backup helper must return failure after warning about backup creation failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
       /app\.newapi\.warn\.pre_backup_failed/ { saw_newapi=1 }
@@ -2279,6 +2305,7 @@ main() {
   check_cyberstrikeai_pip_upgrade_failures_are_reported
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
+  check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
