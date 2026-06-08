@@ -1909,7 +1909,7 @@ NGINX
       -d "$VW_DOMAIN" \
       --email "$CERTBOT_EMAIL" \
       --agree-tos \
-      --non-interactive 2>&1; then
+      --non-interactive >&2; then
       success "$(t app.vaultwarden.success.certbot)"
     else
       warn "$(t app.vaultwarden.warn.certbot_failed)"

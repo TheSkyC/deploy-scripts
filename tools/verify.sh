@@ -1064,6 +1064,26 @@ check_tar_diagnostics_use_stderr() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_certbot_diagnostics_use_stderr() {
+  if grep -R -n 'certbot certonly .*2>&1; then' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden certbot diagnostics must be written to stderr." >&2
+    return 1
+  fi
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.certbot\)"/ { in_block=1; saw_certbot=0; saw_stderr=0; next }
+      in_block && /if certbot certonly --webroot/ { saw_certbot=1 }
+      in_block && /--non-interactive >&2; then/ { saw_stderr=1 }
+      in_block && /if systemctl list-timers certbot/ {
+        if (!(saw_certbot && saw_stderr)) {
+          printf "%s Vaultwarden certbot flow must send diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_cron_logrotate_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
     echo "cron and logrotate configs must be written through temporary files before replacement." >&2
