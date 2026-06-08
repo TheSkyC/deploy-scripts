@@ -518,8 +518,12 @@ do_install() {
   local DOWNLOAD_URL
   DOWNLOAD_URL=$(get_download_url "$LATEST")
   step "$(t app.newapi.step.deps)"
-  apt-get update -qq
-  apt-get install -y -qq curl ca-certificates sqlite3
+  if ! apt-get update -qq; then
+    error "$(t app.newapi.error.apt_update)"
+  fi
+  if ! apt-get install -y -qq curl ca-certificates sqlite3; then
+    error "$(t app.newapi.error.deps_install)"
+  fi
   success "$(t app.newapi.success.deps)"
   step "$(t app.newapi.step.user_dirs)"
   if ! id "$SERVICE_USER" &>/dev/null; then

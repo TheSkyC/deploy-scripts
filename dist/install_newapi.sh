@@ -707,6 +707,12 @@ i18n_register_many \
   app.newapi.success.latest \
   "Latest version: %s" \
   "最新版本：%s" \
+  app.newapi.error.apt_update \
+  "apt-get update failed. Check /var/log/apt/*, fix repository or network issues, and retry the installation." \
+  "apt-get update 失败。请检查 /var/log/apt/*，修复软件源或网络问题后重新执行安装。" \
+  app.newapi.error.deps_install \
+  "Dependency installation failed. Run apt-get install -y curl ca-certificates sqlite3 after fixing the package manager state." \
+  "依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl ca-certificates sqlite3。" \
   app.newapi.step.deps \
   "Step 2  Install system dependencies" \
   "Step 2  安装系统依赖" \
@@ -1662,8 +1668,12 @@ do_install() {
   local DOWNLOAD_URL
   DOWNLOAD_URL=$(get_download_url "$LATEST")
   step "$(t app.newapi.step.deps)"
-  apt-get update -qq
-  apt-get install -y -qq curl ca-certificates sqlite3
+  if ! apt-get update -qq; then
+    error "$(t app.newapi.error.apt_update)"
+  fi
+  if ! apt-get install -y -qq curl ca-certificates sqlite3; then
+    error "$(t app.newapi.error.deps_install)"
+  fi
   success "$(t app.newapi.success.deps)"
   step "$(t app.newapi.step.user_dirs)"
   if ! id "$SERVICE_USER" &>/dev/null; then

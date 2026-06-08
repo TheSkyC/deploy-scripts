@@ -98,13 +98,19 @@ write_backup_file() {
 }
 apt_install_base() {
   step "$(t app.cyberstrikeai.step.install_deps)"
-  apt-get update -qq
-  apt-get install -y -qq \
+  if ! apt-get update -qq; then
+    error "$(t app.cyberstrikeai.error.apt_update)"
+  fi
+  if ! apt-get install -y -qq \
     ca-certificates curl git build-essential \
     python3 python3-venv python3-pip \
-    sqlite3 tar gzip openssl lsof
+    sqlite3 tar gzip openssl lsof; then
+    error "$(t app.cyberstrikeai.error.deps_install)"
+  fi
   if _bool_true "$ENABLE_NGINX"; then
-    apt-get install -y -qq nginx
+    if ! apt-get install -y -qq nginx; then
+      error "$(t app.cyberstrikeai.error.nginx_deps_install)"
+    fi
   fi
   success "$(t app.cyberstrikeai.success.deps)"
 }

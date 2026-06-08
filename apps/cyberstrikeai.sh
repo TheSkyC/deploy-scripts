@@ -18,6 +18,15 @@ i18n_register_many \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
+  app.cyberstrikeai.error.apt_update \
+  "apt-get update failed. Check /var/log/apt/*, fix repository or network issues, and retry the installation." \
+  "apt-get update 失败。请检查 /var/log/apt/*，修复软件源或网络问题后重新执行安装。" \
+  app.cyberstrikeai.error.deps_install \
+  "Base dependency installation failed. Run apt-get install -y ca-certificates curl git build-essential python3 python3-venv python3-pip sqlite3 tar gzip openssl lsof after fixing the package manager state." \
+  "基础依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y ca-certificates curl git build-essential python3 python3-venv python3-pip sqlite3 tar gzip openssl lsof。" \
+  app.cyberstrikeai.error.nginx_deps_install \
+  "Nginx installation failed. Run apt-get install -y nginx after fixing the package manager state." \
+  "Nginx 安装失败。请在修复软件包管理器状态后执行 apt-get install -y nginx。" \
   app.cyberstrikeai.step.install_deps \
   "Install system dependencies" \
   "安装系统依赖" \

@@ -717,6 +717,83 @@ check_blog_dependency_failures_are_reported() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_newapi_dependency_failures_are_reported() {
+  if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl ca-certificates sqlite3$' \
+      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+    echo "NewAPI dependency installation must use explicit conditionals with actionable errors." >&2
+    return 1
+  fi
+  awk '
+      /app\.newapi\.error\.apt_update/ { saw_update_key=1 }
+      /\/var\/log\/apt\/\*/ { saw_update_guidance=1 }
+      /app\.newapi\.error\.deps_install/ { saw_install_key=1 }
+      /apt-get install -y curl ca-certificates sqlite3/ { saw_install_guidance=1 }
+      END {
+        if (!(saw_update_key && saw_update_guidance && saw_install_key && saw_install_guidance)) {
+          print "NewAPI dependency failures must tell users how to inspect apt logs and retry package installation." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /step "\$\(t app\.newapi\.step\.deps\)"/ { in_block=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; next }
+      in_block && /if ! apt-get update -qq; then/ { saw_update_if=1 }
+      in_block && /error "\$\(t app\.newapi\.error\.apt_update\)"/ { saw_update_error=1 }
+      in_block && /if ! apt-get install -y -qq curl ca-certificates sqlite3; then/ { saw_install_if=1 }
+      in_block && /error "\$\(t app\.newapi\.error\.deps_install\)"/ { saw_install_error=1 }
+      in_block && /success "\$\(t app\.newapi\.success\.deps\)"/ {
+        if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error)) {
+          printf "%s NewAPI dependency installation must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
+check_cyberstrikeai_dependency_failures_are_reported() {
+  if grep -R -nE '^[[:space:]]*apt-get update -qq$' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI dependency installation must use an explicit conditional for apt-get update." >&2
+    return 1
+  fi
+  if grep -R -nE '^[[:space:]]*apt-get install -y -qq nginx$' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI nginx installation must use an explicit conditional with an actionable error." >&2
+    return 1
+  fi
+  awk '
+      /app\.cyberstrikeai\.error\.apt_update/ { saw_update_key=1 }
+      /\/var\/log\/apt\/\*/ { saw_update_guidance=1 }
+      /app\.cyberstrikeai\.error\.deps_install/ { saw_install_key=1 }
+      /apt-get install -y ca-certificates curl git build-essential python3 python3-venv python3-pip sqlite3 tar gzip openssl lsof/ { saw_install_guidance=1 }
+      /app\.cyberstrikeai\.error\.nginx_deps_install/ { saw_nginx_key=1 }
+      /apt-get install -y nginx/ { saw_nginx_guidance=1 }
+      END {
+        if (!(saw_update_key && saw_update_guidance && saw_install_key && saw_install_guidance && saw_nginx_key && saw_nginx_guidance)) {
+          print "CyberStrikeAI dependency failures must tell users how to inspect apt logs and retry package installation." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /step "\$\(t app\.cyberstrikeai\.step\.install_deps\)"/ { in_block=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; saw_nginx_if=0; saw_nginx_error=0; next }
+      in_block && /if ! apt-get update -qq; then/ { saw_update_if=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.apt_update\)"/ { saw_update_error=1 }
+      in_block && /if ! apt-get install -y -qq \\/ { saw_install_if=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.deps_install\)"/ { saw_install_error=1 }
+      in_block && /if ! apt-get install -y -qq nginx; then/ { saw_nginx_if=1 }
+      in_block && /error "\$\(t app\.cyberstrikeai\.error\.nginx_deps_install\)"/ { saw_nginx_error=1 }
+      in_block && /success "\$\(t app\.cyberstrikeai\.success\.deps\)"/ {
+        if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error && saw_nginx_if && saw_nginx_error)) {
+          printf "%s CyberStrikeAI dependency installation must fail through explicit conditionals with actionable errors\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_vaultwarden_backup_failures_include_followup_guidance() {
   awk '
       /app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn_key=1 }
@@ -2419,6 +2496,8 @@ main() {
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
   check_blog_dependency_failures_are_reported
+  check_newapi_dependency_failures_are_reported
+  check_cyberstrikeai_dependency_failures_are_reported
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance
