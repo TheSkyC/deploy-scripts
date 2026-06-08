@@ -2474,7 +2474,7 @@ _backup_silent() {
   [[ -f "$VW_ENV_FILE" ]] && tar_extra=(-C / "${VW_ENV_FILE#/}")
   if tar -czf "$archive_tmp" --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
-    "${tar_extra[@]+"${tar_extra[@]}"}" 2>&1 >&2; then
+    "${tar_extra[@]+"${tar_extra[@]}"}" >&2; then
     if mv "$archive_tmp" "$archive"; then
       success "$(t app.vaultwarden.success.backup_created "$archive")"
     else

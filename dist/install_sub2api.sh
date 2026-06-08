@@ -2205,7 +2205,7 @@ _backup_silent() {
     local conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
     local conf_tmp="${conf_archive}.tmp"
     if tar -czf "$conf_tmp" \
-        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" 2>&1 >&2; then
+        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
       if mv "$conf_tmp" "$conf_archive"; then
         local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"

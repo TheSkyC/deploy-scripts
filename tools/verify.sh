@@ -950,6 +950,28 @@ check_backup_scripts_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
 }
 
+check_silent_backup_tar_diagnostics_use_stderr() {
+  if grep -R -n '2>&1 >&2; then' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Silent backup tar diagnostics must be written directly to stderr." >&2
+    return 1
+  fi
+  awk '
+      /_backup_silent\(\)/ { in_func=1; saw_tar=0; saw_stderr=0; next }
+      in_func && /if tar -czf/ { saw_tar=1 }
+      in_func && / >&2; then/ { saw_stderr=1 }
+      in_func && /^}/ {
+        if (!(saw_tar && saw_stderr)) {
+          printf "%s silent backup helper must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+}
+
 check_cron_logrotate_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
     echo "cron and logrotate configs must be written through temporary files before replacement." >&2
@@ -1209,6 +1231,7 @@ main() {
   check_vaultwarden_admin_token_file_is_private
   check_systemd_units_are_atomic
   check_backup_scripts_are_atomic
+  check_silent_backup_tar_diagnostics_use_stderr
   check_cron_logrotate_are_atomic
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic

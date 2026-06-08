@@ -428,7 +428,7 @@ _backup_silent() {
   fi
   if tar -czf "$archive_tmp" \
       --exclude="*.log" --exclude="*.log.*" \
-      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" 2>&1 >&2; then
+      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
     if mv "$archive_tmp" "$archive"; then
       local sz; sz=$(du -sh "$archive" 2>/dev/null | awk '{print $1}')
       success "$(t app.newapi.success.silent_backup "$archive" "$sz")"
