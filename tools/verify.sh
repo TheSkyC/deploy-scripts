@@ -1293,6 +1293,35 @@ check_sub2api_nginx_install_starts_service_explicitly() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
 }
 
+check_newapi_service_start_paths_are_explicit() {
+  if grep -R -nE '^[[:space:]]*systemctl (start|restart) "\$SERVICE_NAME"$' \
+      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+    echo "NewAPI service start/restart paths must branch explicitly on command failure." >&2
+    return 1
+  fi
+  awk '
+      /if ! systemctl enable "\$SERVICE_NAME" --quiet; then/ { in_install=1; saw_restart_wait=0; next }
+      in_install && /if systemctl restart "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 20; then/ { saw_restart_wait=1 }
+      in_install && /warn "\$\(t app\.newapi\.warn\.start_rollback\)"/ {
+        if (!saw_restart_wait) {
+          printf "%s NewAPI install must gate service success on an explicit restart-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      /systemctl daemon-reload/ && !seen_reload++ { next }
+      /if ! _install_binary_candidate "\$TMP_BIN"; then/ { in_update=1; saw_start_wait=0; next }
+      in_update && /if systemctl start "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 20; then/ { saw_start_wait=1 }
+      in_update && /warn "\$\(t app\.newapi\.warn\.update_start_failed "\$LATEST" "\$CURRENT"\)"/ {
+        if (!saw_start_wait) {
+          printf "%s NewAPI update must gate service success on an explicit start-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_sub2api_enable_failures_are_reported() {
   if grep -R -nE 'systemctl enable postgresql 2>/dev/null \|\| true|systemctl enable postgresql-15 2>/dev/null \|\| true|systemctl enable "postgresql-\$\{pg_ver\}" 2>/dev/null \|\| true' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
@@ -1318,6 +1347,34 @@ check_sub2api_enable_failures_are_reported() {
         }
       }
     ' apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
+check_sub2api_service_start_paths_are_explicit() {
+  if grep -R -nE '^[[:space:]]*systemctl (start|restart) "\$SERVICE_NAME"$' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API service start/restart paths must branch explicitly on command failure." >&2
+    return 1
+  fi
+  awk '
+      /if ! systemctl enable "\$SERVICE_NAME" --quiet; then/ { in_install=1; saw_restart_wait=0; next }
+      in_install && /if systemctl restart "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 25; then/ { saw_restart_wait=1 }
+      in_install && /if systemctl is-failed --quiet "\$SERVICE_NAME" 2>\/dev\/null; then/ {
+        if (!saw_restart_wait) {
+          printf "%s Sub2API install must gate service success on an explicit restart-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      /if ! _install_binary_candidate "\$TMP_BIN"; then/ { in_update=1; saw_start_wait=0; next }
+      in_update && /if systemctl start "\$SERVICE_NAME" && wait_for_service "\$SERVICE_NAME" 25; then/ { saw_start_wait=1 }
+      in_update && /warn "\$\(t app\.sub2api\.warn\.new_version_failed "\$LATEST" "\$CURRENT"\)"/ {
+        if (!saw_start_wait) {
+          printf "%s Sub2API update must gate service success on an explicit start-and-wait branch\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
 check_sub2api_redis_service_handling_is_explicit() {
@@ -1988,7 +2045,9 @@ main() {
   check_sub2api_nginx_reload_results_are_checked
   check_sub2api_postgres_rpm_setup_failures_are_explicit
   check_sub2api_dependency_services_start_before_success
+  check_newapi_service_start_paths_are_explicit
   check_sub2api_nginx_install_starts_service_explicitly
+  check_sub2api_service_start_paths_are_explicit
   check_sub2api_enable_failures_are_reported
   check_sub2api_redis_service_handling_is_explicit
   check_blog_enable_failures_are_reported

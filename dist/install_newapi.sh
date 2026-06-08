@@ -1724,8 +1724,7 @@ do_install() {
   if ! systemctl enable "$SERVICE_NAME" --quiet; then
     warn "$(t app.newapi.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
-  systemctl restart "$SERVICE_NAME"
-  if wait_for_service "$SERVICE_NAME" 20; then
+  if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.service_started)"
     systemctl status "$SERVICE_NAME" --no-pager -l | head -12 | sed 's/^/  /' >&2
   else
@@ -1804,8 +1803,7 @@ do_update() {
     error "$(t app.newapi.error.binary_install "$BIN_PATH")"
   fi
   systemctl daemon-reload
-  systemctl start "$SERVICE_NAME"
-  if wait_for_service "$SERVICE_NAME" 20; then
+  if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.updated_started)"
     INSTALLED_VERSION="$LATEST"
     save_config

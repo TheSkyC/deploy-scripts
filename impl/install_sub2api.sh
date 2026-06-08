@@ -1076,8 +1076,7 @@ do_install() {
   if ! systemctl enable "$SERVICE_NAME" --quiet; then
     warn "$(t app.sub2api.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
-  systemctl restart "$SERVICE_NAME"
-  if wait_for_service "$SERVICE_NAME" 25; then
+  if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.service_started)"
     systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' >&2
   else
@@ -1160,8 +1159,7 @@ do_update() {
     error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
   fi
   systemctl daemon-reload
-  systemctl start "$SERVICE_NAME"
-  if wait_for_service "$SERVICE_NAME" 25; then
+  if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.new_version_started)"
     INSTALLED_VERSION="$LATEST"
     save_config
