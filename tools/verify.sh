@@ -2258,6 +2258,51 @@ check_sub2api_update_rollbacks_report_restart_failures() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_install_summary_matches_runtime_state() {
+  awk '
+      /app\.sub2api\.summary\.title_ready/ { saw_title_ready=1 }
+      /app\.sub2api\.summary\.title_pending/ { saw_title_pending=1 }
+      /app\.sub2api\.summary\.next2_ready/ { saw_next_ready=1 }
+      /app\.sub2api\.summary\.next2_pending/ { saw_next_pending=1 }
+      END {
+        if (!(saw_title_ready && saw_title_pending && saw_next_ready && saw_next_pending)) {
+          print "Sub2API install summary strings must distinguish ready and pending service states." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /_print_install_summary\(\)/ { in_summary=1; saw_state=0; saw_pending=0; saw_ready=0; next }
+      in_summary && /local summary_state="\$\{2:-ready\}"/ { saw_state=1 }
+      in_summary && /summary_title="\$\(t app\.sub2api\.summary\.title_pending\)"/ { saw_pending=1 }
+      in_summary && /summary_title="\$\(t app\.sub2api\.summary\.title_ready\)"/ { saw_ready=1 }
+      in_summary && /^}/ {
+        if (!(saw_state && saw_pending && saw_ready)) {
+          printf "%s Sub2API install summary helper must branch on ready vs pending runtime state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_summary=0
+      }
+      /step "\$\(t app\.sub2api\.step\.start_service\)"/ { in_install=1; saw_init=0; saw_pending_state=0; saw_summary_call=0; next }
+      in_install && /local _install_summary_state="ready"/ { saw_init=1 }
+      in_install && /_install_summary_state="pending"/ { saw_pending_state=1 }
+      in_install && /_print_install_summary "\$LATEST" "\$_install_summary_state"/ {
+        saw_summary_call=1
+        if (!(saw_init && saw_pending_state)) {
+          printf "%s Sub2API install path must downgrade the summary when the service did not become ready\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      END {
+        if (!saw_summary_call) {
+          print "Sub2API install path must pass runtime state into the install summary." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_cyberstrikeai_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -2842,6 +2887,7 @@ main() {
   check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
   check_sub2api_update_rollbacks_report_restart_failures
+  check_sub2api_install_summary_matches_runtime_state
   check_cyberstrikeai_update_rollbacks_report_restart_failures
   check_newapi_update_rollbacks_report_restart_failures
   check_firewall_success_paths_validate_command_results

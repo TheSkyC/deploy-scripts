@@ -970,18 +970,27 @@ _backup_silent() {
 }
 _print_install_summary() {
   local version="$1"
+  local summary_state="${2:-ready}"
   local INTERNAL_IP
   INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP")
   local access_url
+  local summary_title next_step_two
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
     access_url="http://${SUB2API_DOMAIN}/"
   else
     access_url="http://${INTERNAL_IP}:${PORT}/"
   fi
+  if [[ "$summary_state" == "pending" ]]; then
+    summary_title="$(t app.sub2api.summary.title_pending)"
+    next_step_two="$(t app.sub2api.summary.next2_pending)"
+  else
+    summary_title="$(t app.sub2api.summary.title_ready)"
+    next_step_two="$(t app.sub2api.summary.next2_ready)"
+  fi
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  ╔════════════════════════════════════════════════════════════════╗"
-  echo "  ║              $(t app.sub2api.summary.title)                            ║"
+  echo "  ║              ${summary_title}                            ║"
   echo "  ╠════════════════════════════════════════════════════════════════╣"
   echo -e "  ║  Setup Wizard   ${CYAN}${access_url}${GREEN}"
   echo -e "  ║  $(t app.sub2api.summary.version)           ${YELLOW}${version}${GREEN}"
@@ -1007,7 +1016,7 @@ _print_install_summary() {
   echo "  ╠════════════════════════════════════════════════════════════════╣"
   echo "  ║  $(t app.sub2api.summary.next_steps)"
   echo -e "  ║    1) $(t app.sub2api.summary.next1)"
-  echo -e "  ║    2) $(t app.sub2api.summary.next2)"
+  echo -e "  ║    2) ${next_step_two}"
   echo -e "  ║    3) $(t app.sub2api.summary.next3 "$CONF_FILE")"
   echo "  ╚════════════════════════════════════════════════════════════════╝"
   echo -e "${NC}"
@@ -1102,6 +1111,7 @@ do_install() {
   fi
   success "$(t app.sub2api.success.cron_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.sub2api.step.start_service)"
+  local _install_summary_state="ready"
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
     local _port_owner
     _port_owner=$(ss -ltnp 2>/dev/null | grep ":${PORT}" | awk '{print $NF}' | head -1 || t app.sub2api.status.unknown_process)
@@ -1132,13 +1142,14 @@ do_install() {
     else
       warn "$(t app.sub2api.warn.waiting_deps)"
       warn "$(t app.sub2api.warn.setup_status_later)"
+      _install_summary_state="pending"
     fi
   fi
   step "$(t app.sub2api.step.health_save)"
   INSTALLED_VERSION="$LATEST"
   save_config
   _health_check
-  _print_install_summary "$LATEST"
+  _print_install_summary "$LATEST" "$_install_summary_state"
 }
 do_update() {
   show_banner

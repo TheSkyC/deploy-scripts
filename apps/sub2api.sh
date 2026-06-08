@@ -306,9 +306,12 @@ i18n_register_many \
   app.sub2api.warn.config_backup_failed \
   "Config directory backup failed. Inspect the tar output above; partial archives may still exist in the backup directory." \
   "配置目录备份失败。请检查上方 tar 输出；备份目录中可能仍保留了部分归档。" \
-  app.sub2api.summary.title \
+  app.sub2api.summary.title_ready \
   "Sub2API deployment complete!" \
   "Sub2API 部署完成！" \
+  app.sub2api.summary.title_pending \
+  "Sub2API files installed; complete the Setup Wizard" \
+  "Sub2API 文件已安装；请继续完成 Setup Wizard" \
   app.sub2api.summary.version \
   "Version" \
   "版本" \
@@ -366,9 +369,12 @@ i18n_register_many \
   app.sub2api.summary.next1 \
   "Open the Setup Wizard and fill database / Redis settings from the table above." \
   "打开 Setup Wizard，按上表填写数据库 / Redis 配置。" \
-  app.sub2api.summary.next2 \
+  app.sub2api.summary.next2_ready \
   "After the wizard is complete, the service will be ready and can be reached through Nginx." \
   "完成向导后服务自动就绪，可通过 Nginx 域名访问。" \
+  app.sub2api.summary.next2_pending \
+  "After the wizard is complete, run the status command again to confirm the service and Nginx are healthy." \
+  "完成向导后，请再次运行 status 命令，确认服务和 Nginx 都已恢复健康。" \
   app.sub2api.summary.next3 \
   "The PostgreSQL password is saved to %s (chmod 600)." \
   "PostgreSQL 密码已保存至 %s（chmod 600）。" \
