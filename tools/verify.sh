@@ -640,15 +640,19 @@ check_cyberstrikeai_rollback_restore_is_validated() {
     return 1
   fi
   awk '
-      /restore_update_backup\(\)/ { in_func=1; saw_bin_cp=0; saw_chmod=0; saw_bin_chown=0; saw_config_cp=0; saw_config_chown=0; next }
-      in_func && /cp "\$bin_backup" "\$BIN_PATH"/ { saw_bin_cp=1 }
-      in_func && /chmod 0755 "\$BIN_PATH"/ { saw_chmod=1 }
-      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_bin_chown=1 }
-      in_func && /cp "\$config_backup" "\$CONFIG_FILE"/ { saw_config_cp=1 }
-      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$CONFIG_FILE"/ { saw_config_chown=1 }
+      /restore_update_backup\(\)/ { in_func=1; saw_bin_tmp=0; saw_bin_cp=0; saw_chmod=0; saw_bin_chown=0; saw_bin_mv=0; saw_config_tmp=0; saw_config_cp=0; saw_config_chown=0; saw_config_mv=0; next }
+      in_func && /bin_restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\)/ { saw_bin_tmp=1 }
+      in_func && /cp "\$bin_backup" "\$bin_restore_tmp"/ { saw_bin_cp=1 }
+      in_func && /chmod 0755 "\$bin_restore_tmp"/ { saw_chmod=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$bin_restore_tmp"/ { saw_bin_chown=1 }
+      in_func && /mv "\$bin_restore_tmp" "\$BIN_PATH"/ { saw_bin_mv=1 }
+      in_func && /config_restore_tmp=\$\(mktemp "\$\{CONFIG_FILE\}\.restore\.XXXXXX"\)/ { saw_config_tmp=1 }
+      in_func && /cp "\$config_backup" "\$config_restore_tmp"/ { saw_config_cp=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$config_restore_tmp"/ { saw_config_chown=1 }
+      in_func && /mv "\$config_restore_tmp" "\$CONFIG_FILE"/ { saw_config_mv=1 }
       in_func && /^}/ {
-        if (!(saw_bin_cp && saw_chmod && saw_bin_chown && saw_config_cp && saw_config_chown)) {
-          printf "%s CyberStrikeAI rollback helper must validate restored binary and config state\n", FILENAME > "/dev/stderr"
+        if (!(saw_bin_tmp && saw_bin_cp && saw_chmod && saw_bin_chown && saw_bin_mv && saw_config_tmp && saw_config_cp && saw_config_chown && saw_config_mv)) {
+          printf "%s CyberStrikeAI rollback helper must stage and atomically restore binary and config state\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
@@ -723,12 +727,15 @@ check_binary_restores_validate_permissions() {
     return 1
   fi
   awk '
-      /_restore_binary_backup\(\)/ { in_func=1; saw_chmod=0; saw_chown=0; next }
-      in_func && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
-      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_chown=1 }
+      /_restore_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; next }
+      in_func && /restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\)/ { saw_tmp=1 }
+      in_func && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
+      in_func && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
+      in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
+      in_func && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
       in_func && /^}/ {
-        if (!(saw_chmod && saw_chown)) {
-          printf "%s restore helper must validate restored binary mode and ownership\n", FILENAME > "/dev/stderr"
+        if (!(saw_tmp && saw_cp && saw_chmod && saw_chown && saw_mv)) {
+          printf "%s restore helper must stage and atomically restore binary mode and ownership\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0

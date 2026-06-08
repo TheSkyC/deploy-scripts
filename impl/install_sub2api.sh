@@ -205,12 +205,19 @@ _install_binary_candidate() {
 }
 _restore_binary_backup() {
   local backup_path="$1"
+  local restore_tmp
   [[ -f "$backup_path" ]] || return 1
-  if ! cp "$backup_path" "$BIN_PATH"; then
+  restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX") || return 1
+  if ! cp "$backup_path" "$restore_tmp"; then
+    rm -f "$restore_tmp"
     return 1
   fi
-  chmod +x "$BIN_PATH" \
-    && chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"
+  if ! chmod +x "$restore_tmp" \
+      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$restore_tmp" \
+      || ! mv "$restore_tmp" "$BIN_PATH"; then
+    rm -f "$restore_tmp"
+    return 1
+  fi
 }
 _backup_current_binary() {
   local backup_path="$1"

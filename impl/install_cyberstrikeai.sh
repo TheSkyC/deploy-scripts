@@ -295,13 +295,24 @@ build_binary() {
 }
 restore_update_backup() {
   local bin_backup="$1" config_backup="$2"
+  local bin_restore_tmp config_restore_tmp
   [[ -f "$bin_backup" ]] || return 1
-  cp "$bin_backup" "$BIN_PATH" || return 1
-  chmod 0755 "$BIN_PATH" || return 1
-  chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH" || return 1
+  bin_restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX") || return 1
+  if ! cp "$bin_backup" "$bin_restore_tmp" \
+      || ! chmod 0755 "$bin_restore_tmp" \
+      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$bin_restore_tmp" \
+      || ! mv "$bin_restore_tmp" "$BIN_PATH"; then
+    rm -f "$bin_restore_tmp"
+    return 1
+  fi
   if [[ -f "$config_backup" ]]; then
-    cp "$config_backup" "$CONFIG_FILE" || return 1
-    chown "${SERVICE_USER}:${SERVICE_USER}" "$CONFIG_FILE" || return 1
+    config_restore_tmp=$(mktemp "${CONFIG_FILE}.restore.XXXXXX") || return 1
+    if ! cp "$config_backup" "$config_restore_tmp" \
+        || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$config_restore_tmp" \
+        || ! mv "$config_restore_tmp" "$CONFIG_FILE"; then
+      rm -f "$config_restore_tmp"
+      return 1
+    fi
   fi
 }
 install_runtime_dirs() {
