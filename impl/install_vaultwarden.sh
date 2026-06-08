@@ -985,7 +985,9 @@ do_update() {
   OLD_VER=$(get_installed_version)
   info "$(t app.vaultwarden.info.current_version "$OLD_VER")"
   info "$(t app.vaultwarden.info.pre_update_backup)"
-  _backup_silent "pre-update"
+  if ! _backup_silent "pre-update"; then
+    :
+  fi
   local _pre_update_svc_state
   _pre_update_svc_state=$(systemctl is-active vaultwarden 2>/dev/null || echo "inactive")
   if [[ "$_pre_update_svc_state" == "failed" ]]; then

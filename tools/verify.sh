@@ -707,6 +707,17 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
         in_block=0
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+  awk '
+      /info "\$\(t app\.vaultwarden\.info\.pre_update_backup\)"/ { in_update=1; saw_if=0; next }
+      in_update && /if ! _backup_silent "pre-update"; then/ { saw_if=1 }
+      in_update && /local _pre_update_svc_state/ {
+        if (!saw_if) {
+          printf "%s Vaultwarden pre-update backup must use an explicit conditional so backup failures do not abort the update under set -e\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
 check_preupdate_backup_warnings_include_followup_guidance() {
