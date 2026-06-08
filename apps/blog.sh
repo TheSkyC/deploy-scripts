@@ -293,6 +293,12 @@ i18n_register app.blog.step_nginx \
 i18n_register app.blog.static_deployed \
   "Static files deployed to: %s" \
   "静态文件已部署到：%s"
+i18n_register app.blog.success.publish_script \
+  "Publish helper written: /usr/local/bin/blog-publish" \
+  "发布辅助脚本已写入：/usr/local/bin/blog-publish"
+i18n_register app.blog.error.publish_script \
+  "Publish helper write failed: /usr/local/bin/blog-publish" \
+  "发布辅助脚本写入失败：/usr/local/bin/blog-publish"
 i18n_register app.blog.error.static_deploy \
   "Static file deployment failed. The previous site was kept or a restore was attempted. Inspect %s and retry after fixing filesystem or copy errors." \
   "静态文件部署失败。旧站点已保留或已尝试恢复。请检查 %s，并在修复文件系统或复制错误后重试。"
@@ -381,8 +387,8 @@ i18n_register app.blog.workflow_visit \
   "Visit: http://%s:1313" \
   "访问：http://%s:1313"
 i18n_register app.blog.workflow_publish \
-  "3. Build to the staging directory, then sync to Nginx" \
-  "3. 先构建到暂存目录，再同步到 Nginx"
+  "3. Build to the staging directory, then run blog-publish" \
+  "3. 先构建到暂存目录，再运行 blog-publish"
 i18n_register app.blog.cms_usage \
   "Decap CMS usage:" \
   "Decap CMS 使用："
@@ -423,8 +429,8 @@ i18n_register app.blog.theme_docs \
   "Theme docs:" \
   "主题文档："
 i18n_register app.blog.rebuild_hint \
-  "Rebuild after changing config: hugo --destination %s --gc --minify, then sync the output to Nginx." \
-  "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再将输出同步到 Nginx。"
+  "Rebuild after changing config: hugo --destination %s --gc --minify, then run /usr/local/bin/blog-publish." \
+  "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再运行 /usr/local/bin/blog-publish。"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"

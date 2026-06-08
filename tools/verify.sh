@@ -2718,7 +2718,10 @@ check_blog_static_deploy_swaps_tree() {
     return 1
   fi
   awk '
-      /restore_nginx_root_backup\(\)/ { in_helper=1; saw_rm=0; saw_restore=0; next }
+      /<< BKSH$/ { in_heredoc=1 }
+      in_heredoc && /^BKSH$/ { in_heredoc=0; next }
+      in_heredoc { next }
+      /^[[:space:]]*restore_nginx_root_backup\(\)/ { in_helper=1; saw_rm=0; saw_restore=0; next }
       in_helper && /rm -rf "\$NGINX_ROOT"/ { saw_rm=1 }
       in_helper && /mv "\$DEPLOY_BAK" "\$NGINX_ROOT"/ { saw_restore=1 }
       in_helper && /^}/ {
@@ -2728,13 +2731,21 @@ check_blog_static_deploy_swaps_tree() {
         }
         in_helper=0
       }
-      /DEPLOY_TMP="\$\(mktemp -d/ { saw_tmp=1 }
-      /mv "\$NGINX_ROOT" "\$DEPLOY_BAK"/ { saw_backup=1 }
-      /mv "\$DEPLOY_TMP" "\$NGINX_ROOT"/ { saw_swap=1 }
-      /restore_nginx_root_backup/ { saw_restore=1 }
-      END {
-        if (!(saw_tmp && saw_backup && saw_swap && saw_restore)) {
+      /step "\$\(t app\.blog\.step_nginx\)"/ { in_deploy=1; saw_tmp=0; saw_backup=0; saw_swap=0; saw_restore_call=0; next }
+      in_deploy && /DEPLOY_TMP="\$\(mktemp -d/ { saw_tmp=1 }
+      in_deploy && /mv "\$NGINX_ROOT" "\$DEPLOY_BAK"/ { saw_backup=1 }
+      in_deploy && /mv "\$DEPLOY_TMP" "\$NGINX_ROOT"/ { saw_swap=1 }
+      in_deploy && /restore_nginx_root_backup/ { saw_restore_call=1 }
+      in_deploy && /success "\$\(t app\.blog\.static_deployed "\$NGINX_ROOT"\)"/ {
+        if (!(saw_tmp && saw_backup && saw_swap && saw_restore_call)) {
           print "Blog static deployment must stage, swap, and restore the Nginx root." > "/dev/stderr"
+          exit 1
+        }
+        in_deploy=0
+      }
+      END {
+        if (in_deploy) {
+          print "Blog static deployment verifier did not observe the full deploy block." > "/dev/stderr"
           exit 1
         }
       }
@@ -2805,12 +2816,14 @@ check_blog_site_files_are_atomic() {
 check_blog_publish_guidance_uses_staging_output() {
   awk '
       /app\.blog\.workflow_publish/ { saw_publish=1 }
-      /staging directory, then sync to Nginx/ { saw_publish_guidance=1 }
+      /staging directory, then run blog-publish/ { saw_publish_guidance=1 }
+      /app\.blog\.success\.publish_script/ { saw_publish_script=1 }
+      /app\.blog\.error\.publish_script/ { saw_publish_script_error=1 }
       /app\.blog\.rebuild_hint/ { saw_rebuild=1 }
-      /then sync the output to Nginx/ { saw_rebuild_guidance=1 }
+      /then run \/usr\/local\/bin\/blog-publish/ { saw_rebuild_guidance=1 }
       END {
-        if (!(saw_publish && saw_publish_guidance && saw_rebuild && saw_rebuild_guidance)) {
-          print "Blog publish guidance must direct users through staged output before Nginx sync." > "/dev/stderr"
+        if (!(saw_publish && saw_publish_guidance && saw_publish_script && saw_publish_script_error && saw_rebuild && saw_rebuild_guidance)) {
+          print "Blog publish guidance must direct users through the generated blog-publish helper." > "/dev/stderr"
           exit 1
         }
       }
@@ -2818,10 +2831,10 @@ check_blog_publish_guidance_uses_staging_output() {
   awk '
       /# \$\(t app\.blog\.workflow_publish\)/ { in_publish=1; saw_build=0; saw_sync=0; next }
       in_publish && /hugo --destination \$\{PUBLIC_DIR\} --gc --minify/ { saw_build=1 }
-      in_publish && /rsync -a --delete \$\{PUBLIC_DIR\}\/ \$\{NGINX_ROOT\}\// { saw_sync=1 }
+      in_publish && /\/usr\/local\/bin\/blog-publish/ { saw_sync=1 }
       in_publish && /^echo ""$/ {
         if (!(saw_build && saw_sync)) {
-          printf "%s Blog publish guidance must build into PUBLIC_DIR and sync that output into NGINX_ROOT\n", FILENAME > "/dev/stderr"
+          printf "%s Blog publish guidance must build into PUBLIC_DIR and then invoke blog-publish\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_publish=0
@@ -2830,6 +2843,32 @@ check_blog_publish_guidance_uses_staging_output() {
       END {
         if (!saw_hint_target) {
           print "Blog rebuild hint must point to the staging PUBLIC_DIR, not the live Nginx root." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
+check_blog_publish_helper_is_atomic() {
+  awk '
+      /_write_publish_script\(\)/ { saw_helper=1; next }
+      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_restore=0; next }
+      in_heredoc && /DEPLOY_TMP="\\\$\(mktemp -d/ { saw_tmp=1 }
+      in_heredoc && /cp -a "\\\$\{PUBLIC_DIR\}\/\." "\\\$DEPLOY_TMP\/"/ { saw_copy=1 }
+      in_heredoc && /mv "\\\$NGINX_ROOT" "\\\$DEPLOY_BAK"/ { saw_backup=1 }
+      in_heredoc && /mv "\\\$DEPLOY_TMP" "\\\$NGINX_ROOT"/ { saw_swap=1 }
+      in_heredoc && /restore_nginx_root_backup\(\)/ { saw_restore=1 }
+      in_heredoc && /^BKSH$/ {
+        if (!(saw_tmp && saw_copy && saw_backup && saw_swap && saw_restore)) {
+          printf "%s Blog publish helper must stage output, back up the live root, and restore on failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_heredoc=0
+        saw_heredoc=1
+      }
+      END {
+        if (!(saw_helper && saw_heredoc)) {
+          print "Blog publish helper verifier did not observe the generated helper script body." > "/dev/stderr"
           exit 1
         }
       }
@@ -2940,6 +2979,7 @@ main() {
   check_blog_static_deploy_failures_are_actionable
   check_blog_site_files_are_atomic
   check_blog_publish_guidance_uses_staging_output
+  check_blog_publish_helper_is_atomic
   echo "Verification passed"
 }
 

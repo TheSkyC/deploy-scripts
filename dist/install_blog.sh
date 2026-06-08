@@ -808,6 +808,12 @@ i18n_register app.blog.step_nginx \
 i18n_register app.blog.static_deployed \
   "Static files deployed to: %s" \
   "静态文件已部署到：%s"
+i18n_register app.blog.success.publish_script \
+  "Publish helper written: /usr/local/bin/blog-publish" \
+  "发布辅助脚本已写入：/usr/local/bin/blog-publish"
+i18n_register app.blog.error.publish_script \
+  "Publish helper write failed: /usr/local/bin/blog-publish" \
+  "发布辅助脚本写入失败：/usr/local/bin/blog-publish"
 i18n_register app.blog.error.static_deploy \
   "Static file deployment failed. The previous site was kept or a restore was attempted. Inspect %s and retry after fixing filesystem or copy errors." \
   "静态文件部署失败。旧站点已保留或已尝试恢复。请检查 %s，并在修复文件系统或复制错误后重试。"
@@ -896,8 +902,8 @@ i18n_register app.blog.workflow_visit \
   "Visit: http://%s:1313" \
   "访问：http://%s:1313"
 i18n_register app.blog.workflow_publish \
-  "3. Build to the staging directory, then sync to Nginx" \
-  "3. 先构建到暂存目录，再同步到 Nginx"
+  "3. Build to the staging directory, then run blog-publish" \
+  "3. 先构建到暂存目录，再运行 blog-publish"
 i18n_register app.blog.cms_usage \
   "Decap CMS usage:" \
   "Decap CMS 使用："
@@ -938,8 +944,8 @@ i18n_register app.blog.theme_docs \
   "Theme docs:" \
   "主题文档："
 i18n_register app.blog.rebuild_hint \
-  "Rebuild after changing config: hugo --destination %s --gc --minify, then sync the output to Nginx." \
-  "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再将输出同步到 Nginx。"
+  "Rebuild after changing config: hugo --destination %s --gc --minify, then run /usr/local/bin/blog-publish." \
+  "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再运行 /usr/local/bin/blog-publish。"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
@@ -977,6 +983,63 @@ restore_nginx_root_backup() {
   [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] || return 0
   rm -rf "$NGINX_ROOT" || return 1
   mv "$DEPLOY_BAK" "$NGINX_ROOT" || return 1
+}
+
+_write_publish_script() {
+  local publish_script="/usr/local/bin/blog-publish"
+  local publish_tmp
+  publish_tmp=$(mktemp "${publish_script}.XXXXXX") || error "$(t app.blog.error.publish_script)"
+  if ! cat > "$publish_tmp" << BKSH
+#!/bin/bash
+set -euo pipefail
+PUBLIC_DIR="${PUBLIC_DIR}"
+NGINX_ROOT="${NGINX_ROOT}"
+NGINX_ROOT_PARENT="\$(dirname "\$NGINX_ROOT")"
+NGINX_ROOT_NAME="\$(basename "\$NGINX_ROOT")"
+DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX")"
+DEPLOY_BAK="\${NGINX_ROOT}.bak.\$(date +%Y%m%d%H%M%S)"
+restore_nginx_root_backup() {
+  [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] || return 0
+  rm -rf "\$NGINX_ROOT" || return 1
+  mv "\$DEPLOY_BAK" "\$NGINX_ROOT" || return 1
+}
+[[ -d "\$PUBLIC_DIR" ]] || { echo "PUBLIC_DIR is missing: \$PUBLIC_DIR" >&2; exit 1; }
+mkdir -p "\$NGINX_ROOT_PARENT"
+if cp -a "\${PUBLIC_DIR}/." "\$DEPLOY_TMP/"; then
+  if [[ -e "\$NGINX_ROOT" || -L "\$NGINX_ROOT" ]]; then
+    if ! mv "\$NGINX_ROOT" "\$DEPLOY_BAK"; then
+      rm -rf "\$DEPLOY_TMP"
+      echo "Failed to back up the live Nginx root: \$NGINX_ROOT" >&2
+      exit 1
+    fi
+  fi
+  if mv "\$DEPLOY_TMP" "\$NGINX_ROOT"; then
+    [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] && rm -rf "\$DEPLOY_BAK"
+  else
+    restore_nginx_root_backup || {
+      echo "Failed to restore the previous Nginx root: \$NGINX_ROOT" >&2
+      exit 1
+    }
+    echo "Failed to replace the live Nginx root: \$NGINX_ROOT" >&2
+    exit 1
+  fi
+else
+  rm -rf "\$DEPLOY_TMP"
+  echo "Failed to stage static output from \$PUBLIC_DIR" >&2
+  exit 1
+fi
+BKSH
+  then
+    rm -f "$publish_tmp"
+    error "$(t app.blog.error.publish_script)"
+  fi
+  if ! chmod 750 "$publish_tmp" \
+      || ! chown root:root "$publish_tmp" \
+      || ! mv "$publish_tmp" "$publish_script"; then
+    rm -f "$publish_tmp"
+    error "$(t app.blog.error.publish_script)"
+  fi
+  success "$(t app.blog.success.publish_script)"
 }
 
 backup_blog_file() {
@@ -1406,6 +1469,7 @@ else
   error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
 fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
+_write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
 NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX")
 if ! cat > "$NGINX_TMP" << NGINX
@@ -1567,7 +1631,7 @@ echo -e "  # $(t app.blog.workflow_visit "$INTERNAL_IP")"
 echo ""
 echo -e "  ${CYAN}# $(t app.blog.workflow_publish)${NC}"
 echo -e "  hugo --destination ${PUBLIC_DIR} --gc --minify"
-echo -e "  rsync -a --delete ${PUBLIC_DIR}/ ${NGINX_ROOT}/"
+echo -e "  /usr/local/bin/blog-publish"
 echo ""
 if [[ "$ENABLE_CMS" == "true" ]]; then
 echo -e "  ${BOLD}$(t app.blog.cms_usage)${NC}"

@@ -23,6 +23,63 @@ restore_nginx_root_backup() {
   mv "$DEPLOY_BAK" "$NGINX_ROOT" || return 1
 }
 
+_write_publish_script() {
+  local publish_script="/usr/local/bin/blog-publish"
+  local publish_tmp
+  publish_tmp=$(mktemp "${publish_script}.XXXXXX") || error "$(t app.blog.error.publish_script)"
+  if ! cat > "$publish_tmp" << BKSH
+#!/bin/bash
+set -euo pipefail
+PUBLIC_DIR="${PUBLIC_DIR}"
+NGINX_ROOT="${NGINX_ROOT}"
+NGINX_ROOT_PARENT="\$(dirname "\$NGINX_ROOT")"
+NGINX_ROOT_NAME="\$(basename "\$NGINX_ROOT")"
+DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX")"
+DEPLOY_BAK="\${NGINX_ROOT}.bak.\$(date +%Y%m%d%H%M%S)"
+restore_nginx_root_backup() {
+  [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] || return 0
+  rm -rf "\$NGINX_ROOT" || return 1
+  mv "\$DEPLOY_BAK" "\$NGINX_ROOT" || return 1
+}
+[[ -d "\$PUBLIC_DIR" ]] || { echo "PUBLIC_DIR is missing: \$PUBLIC_DIR" >&2; exit 1; }
+mkdir -p "\$NGINX_ROOT_PARENT"
+if cp -a "\${PUBLIC_DIR}/." "\$DEPLOY_TMP/"; then
+  if [[ -e "\$NGINX_ROOT" || -L "\$NGINX_ROOT" ]]; then
+    if ! mv "\$NGINX_ROOT" "\$DEPLOY_BAK"; then
+      rm -rf "\$DEPLOY_TMP"
+      echo "Failed to back up the live Nginx root: \$NGINX_ROOT" >&2
+      exit 1
+    fi
+  fi
+  if mv "\$DEPLOY_TMP" "\$NGINX_ROOT"; then
+    [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] && rm -rf "\$DEPLOY_BAK"
+  else
+    restore_nginx_root_backup || {
+      echo "Failed to restore the previous Nginx root: \$NGINX_ROOT" >&2
+      exit 1
+    }
+    echo "Failed to replace the live Nginx root: \$NGINX_ROOT" >&2
+    exit 1
+  fi
+else
+  rm -rf "\$DEPLOY_TMP"
+  echo "Failed to stage static output from \$PUBLIC_DIR" >&2
+  exit 1
+fi
+BKSH
+  then
+    rm -f "$publish_tmp"
+    error "$(t app.blog.error.publish_script)"
+  fi
+  if ! chmod 750 "$publish_tmp" \
+      || ! chown root:root "$publish_tmp" \
+      || ! mv "$publish_tmp" "$publish_script"; then
+    rm -f "$publish_tmp"
+    error "$(t app.blog.error.publish_script)"
+  fi
+  success "$(t app.blog.success.publish_script)"
+}
+
 backup_blog_file() {
   local source_path="$1" backup_path="$2"
   local backup_tmp
@@ -450,6 +507,7 @@ else
   error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
 fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
+_write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
 NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX")
 if ! cat > "$NGINX_TMP" << NGINX
@@ -611,7 +669,7 @@ echo -e "  # $(t app.blog.workflow_visit "$INTERNAL_IP")"
 echo ""
 echo -e "  ${CYAN}# $(t app.blog.workflow_publish)${NC}"
 echo -e "  hugo --destination ${PUBLIC_DIR} --gc --minify"
-echo -e "  rsync -a --delete ${PUBLIC_DIR}/ ${NGINX_ROOT}/"
+echo -e "  /usr/local/bin/blog-publish"
 echo ""
 if [[ "$ENABLE_CMS" == "true" ]]; then
 echo -e "  ${BOLD}$(t app.blog.cms_usage)${NC}"
