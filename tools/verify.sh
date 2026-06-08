@@ -2403,6 +2403,61 @@ check_cyberstrikeai_update_rollbacks_report_restart_failures() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_install_summary_matches_health_state() {
+  awk '
+      /app\.cyberstrikeai\.summary\.title_ready/ { saw_title_ready=1 }
+      /app\.cyberstrikeai\.summary\.title_pending/ { saw_title_pending=1 }
+      END {
+        if (!(saw_title_ready && saw_title_pending)) {
+          print "CyberStrikeAI install summary strings must distinguish ready and pending health states." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /health_check\(\)/ { in_health=1; saw_pending_flag=0; saw_backend_warn=0; saw_nginx_warn=0; saw_return=0; next }
+      in_health && /local health_pending=0/ { saw_pending_flag=1 }
+      in_health && /warn "\$\(t app\.cyberstrikeai\.warn\.backend_health "\$code"\)"/ { saw_backend_warn=1 }
+      in_health && /warn "\$\(t app\.cyberstrikeai\.warn\.nginx_health "\$code"\)"/ { saw_nginx_warn=1 }
+      in_health && /\[\[ "\$health_pending" -eq 0 \]\]/ { saw_return=1 }
+      in_health && /^}/ {
+        if (!(saw_pending_flag && saw_backend_warn && saw_nginx_warn && saw_return)) {
+          printf "%s CyberStrikeAI health check must return explicit ready/pending status\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_health=0
+      }
+      /print_summary\(\)/ { in_summary=1; saw_state=0; saw_pending=0; saw_ready=0; next }
+      in_summary && /local summary_state="\$\{1:-ready\}"/ { saw_state=1 }
+      in_summary && /app\.cyberstrikeai\.summary\.title_pending/ { saw_pending=1 }
+      in_summary && /app\.cyberstrikeai\.summary\.title_ready/ { saw_ready=1 }
+      in_summary && /^}/ {
+        if (!(saw_state && saw_pending && saw_ready)) {
+          printf "%s CyberStrikeAI summary printer must branch on health state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_summary=0
+      }
+      /start_service/ { saw_start=1 }
+      /local _install_summary_state="ready"/ { saw_init=1 }
+      /if ! health_check; then/ { saw_health_if=1 }
+      /_install_summary_state="pending"/ { saw_pending_state=1 }
+      /print_summary "\$_install_summary_state"/ {
+        if (!(saw_start && saw_init && saw_health_if && saw_pending_state)) {
+          printf "%s CyberStrikeAI install flow must downgrade the summary when health checks stay pending\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_summary_call=1
+      }
+      END {
+        if (!saw_summary_call) {
+          print "CyberStrikeAI install flow must pass health state into the install summary." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
@@ -3039,6 +3094,7 @@ main() {
   check_sub2api_update_rollbacks_report_restart_failures
   check_sub2api_install_summary_matches_runtime_state
   check_cyberstrikeai_update_rollbacks_report_restart_failures
+  check_cyberstrikeai_install_summary_matches_health_state
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_summary_matches_health_state
   check_vaultwarden_install_summary_matches_health_state

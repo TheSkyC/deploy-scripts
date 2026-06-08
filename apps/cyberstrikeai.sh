@@ -216,9 +216,12 @@ i18n_register_many \
   app.cyberstrikeai.warn.nginx_health \
   "Nginx health returned HTTP %s" \
   "Nginx 健康检查返回 HTTP %s" \
-  app.cyberstrikeai.summary.title \
+  app.cyberstrikeai.summary.title_ready \
   "CyberStrikeAI deployment complete" \
   "CyberStrikeAI 部署完成" \
+  app.cyberstrikeai.summary.title_pending \
+  "CyberStrikeAI files installed; verify backend and Nginx health before use" \
+  "CyberStrikeAI 文件已安装；请先确认后端和 Nginx 健康后再使用" \
   app.cyberstrikeai.summary.service \
   "service" \
   "服务" \

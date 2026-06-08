@@ -701,12 +701,14 @@ health_check() {
   local scheme="http"
   _bool_true "$CSAI_HTTPS" && scheme="https"
   local code backend_url public_url
+  local health_pending=0
   backend_url="${scheme}://127.0.0.1:${PORT}/"
   code=$(curl -k -o /dev/null -s -w "%{http_code}" --max-time 8 "$backend_url" || echo "000")
   if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
     success "$(t app.cyberstrikeai.success.backend_health "$backend_url" "$code")"
   else
     warn "$(t app.cyberstrikeai.warn.backend_health "$code")"
+    health_pending=1
   fi
   if _bool_true "$ENABLE_NGINX"; then
     public_url="http://127.0.0.1:${PUBLIC_PORT}/"
@@ -715,16 +717,23 @@ health_check() {
       success "$(t app.cyberstrikeai.success.nginx_health "$public_url" "$code")"
     else
       warn "$(t app.cyberstrikeai.warn.nginx_health "$code")"
+      health_pending=1
     fi
   fi
+  [[ "$health_pending" -eq 0 ]]
 }
 print_summary() {
+  local summary_state="${1:-ready}"
   local ip
   ip=$(hostname -I 2>/dev/null | awk '{print $1}')
   local backend_scheme="http"
   _bool_true "$CSAI_HTTPS" && backend_scheme="https"
   echo ""
-  echo -e "${BOLD}${GREEN}$(t app.cyberstrikeai.summary.title)${NC}"
+  if [[ "$summary_state" == "pending" ]]; then
+    echo -e "${BOLD}${GREEN}$(t app.cyberstrikeai.summary.title_pending)${NC}"
+  else
+    echo -e "${BOLD}${GREEN}$(t app.cyberstrikeai.summary.title_ready)${NC}"
+  fi
   printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.service):" "$SERVICE_NAME"
   printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.install_dir):" "$INSTALL_DIR"
   printf '  %-12s %s\n' "$(t app.cyberstrikeai.summary.config):" "$CONFIG_FILE"
@@ -770,8 +779,11 @@ do_install() {
   open_firewall_ports
   save_config
   start_service
-  health_check
-  print_summary
+  local _install_summary_state="ready"
+  if ! health_check; then
+    _install_summary_state="pending"
+  fi
+  print_summary "$_install_summary_state"
   release_lock
 }
 do_backup() {
