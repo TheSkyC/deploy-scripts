@@ -749,6 +749,9 @@ i18n_register app.blog.config_backed_up \
 i18n_register app.blog.config_written \
   "Config file written: %s" \
   "配置文件已写入：%s"
+i18n_register app.blog.error.file_write \
+  "Blog file write failed: %s" \
+  "博客文件写入失败：%s"
 i18n_register app.blog.step_content \
   "Step 6  Create sample post and pages" \
   "Step 6  创建示例文章与页面"
@@ -950,6 +953,23 @@ CMS_BRANCH="main"
 CMS_SITE_URL="https://${BLOG_DOMAIN}"
 LOCK_FILE="/var/lock/blog-deploy.lock"
 
+_write_blog_file() {
+  local target_path="$1"
+  local target_dir target_tmp
+  target_dir="$(dirname "$target_path")"
+  mkdir -p "$target_dir"
+  target_tmp=$(mktemp "${target_dir}/.$(basename "$target_path").XXXXXX")
+  if ! cat > "$target_tmp"; then
+    rm -f "$target_tmp"
+    error "$(t app.blog.error.file_write "$target_path")"
+  fi
+  if ! chmod 644 "$target_tmp" \
+      || ! mv "$target_tmp" "$target_path"; then
+    rm -f "$target_tmp"
+    error "$(t app.blog.error.file_write "$target_path")"
+  fi
+}
+
 do_install() {
 echo -e "\n${BOLD}${CYAN}"
 cat << 'EOF'
@@ -1035,7 +1055,7 @@ if [[ -n "$BLOG_DOMAIN" ]]; then
 else
   BASE_URL="http://localhost"
 fi
-cat > "$CONFIG_FILE" << TOML
+_write_blog_file "$CONFIG_FILE" << TOML
 baseURL = "${BASE_URL}"
 locale = "${BLOG_LANG}"
 defaultContentLanguage = "${BLOG_LANG}"
@@ -1112,7 +1132,7 @@ mkdir -p "${SITE_DIR}/content/page/about"
 mkdir -p "${SITE_DIR}/content/page/archives"
 mkdir -p "${SITE_DIR}/static/img"
 if [[ ! -f "${SITE_DIR}/content/post/hello-world/index.md" ]]; then
-cat > "${SITE_DIR}/content/post/hello-world/index.md" << MD
+_write_blog_file "${SITE_DIR}/content/post/hello-world/index.md" << MD
 +++
 title = "$(t app.blog.post_title)"
 date = "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1147,7 +1167,7 @@ MD
 success "$(t app.blog.sample_post_created)"
 fi
 if [[ ! -f "${SITE_DIR}/content/page/about/index.md" ]]; then
-cat > "${SITE_DIR}/content/page/about/index.md" << MD
+_write_blog_file "${SITE_DIR}/content/page/about/index.md" << MD
 +++
 title = "$(t app.blog.about_title)"
 date = "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1167,7 +1187,7 @@ MD
 success "$(t app.blog.about_created)"
 fi
 if [[ ! -f "${SITE_DIR}/content/page/archives/index.md" ]]; then
-cat > "${SITE_DIR}/content/page/archives/index.md" << MD
+_write_blog_file "${SITE_DIR}/content/page/archives/index.md" << MD
 +++
 title = "$(t app.blog.archives_title)"
 date = "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1182,7 +1202,7 @@ if [[ "$ENABLE_CMS" != "true" ]]; then
 else
   CMS_ADMIN_DIR="${SITE_DIR}/static/admin"
   mkdir -p "$CMS_ADMIN_DIR"
-  cat > "${CMS_ADMIN_DIR}/index.html" << HTML
+  _write_blog_file "${CMS_ADMIN_DIR}/index.html" << HTML
 <!doctype html>
 <html>
   <head>
@@ -1196,7 +1216,7 @@ else
   </body>
 </html>
 HTML
-  cat > "${CMS_ADMIN_DIR}/config.yml" << YAML
+  _write_blog_file "${CMS_ADMIN_DIR}/config.yml" << YAML
 # ─────────────────────────────────────────────
 #  Decap CMS configuration for hugo-theme-stack.
 #  Docs: https://decapcms.org/docs/configuration-options/

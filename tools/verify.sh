@@ -682,6 +682,26 @@ check_blog_static_deploy_swaps_tree() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_blog_site_files_are_atomic() {
+  if grep -R -nE '^[[:space:]]*cat > "\$CONFIG_FILE"|^[[:space:]]*cat > "\$\{SITE_DIR\}/|^[[:space:]]*cat > "\$\{CMS_ADMIN_DIR\}/' \
+      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog site files must be written through temporary files before replacement." >&2
+    return 1
+  fi
+  awk '
+      /target_tmp=\$\(mktemp "\$\{target_dir\}\/\.\$\(basename "\$target_path"\)\.XXXXXX"\)/ { saw_tmp=1 }
+      /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
+      /rm -f "\$target_tmp"/ { saw_cleanup=1 }
+      /_write_blog_file "?\$\{?(SITE_DIR|CMS_ADMIN_DIR)\}?/ || /_write_blog_file "\$CONFIG_FILE"/ { saw_helper=1 }
+      END {
+        if (!(saw_tmp && saw_mv && saw_cleanup && saw_helper)) {
+          print "Blog site file writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -723,6 +743,7 @@ main() {
   check_vaultwarden_webvault_restore_cleans_partial
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_blog_static_deploy_swaps_tree
+  check_blog_site_files_are_atomic
   echo "Verification passed"
 }
 

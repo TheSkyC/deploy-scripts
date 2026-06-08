@@ -242,6 +242,9 @@ i18n_register app.blog.config_backed_up \
 i18n_register app.blog.config_written \
   "Config file written: %s" \
   "配置文件已写入：%s"
+i18n_register app.blog.error.file_write \
+  "Blog file write failed: %s" \
+  "博客文件写入失败：%s"
 i18n_register app.blog.step_content \
   "Step 6  Create sample post and pages" \
   "Step 6  创建示例文章与页面"
