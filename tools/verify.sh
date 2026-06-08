@@ -1320,6 +1320,28 @@ check_sub2api_enable_failures_are_reported() {
     ' apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_redis_service_handling_is_explicit() {
+  if grep -R -n 'systemctl enable --now redis-server 2>/dev/null' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API Redis helper must not conflate service startup with enablement." >&2
+    return 1
+  fi
+  awk '
+      /_ensure_redis_running\(\)/ { in_helper=1; saw_probe_loop=0; saw_start_loop=0; saw_enable_warn=0; next }
+      in_helper && /for redis_unit in redis-server redis; do/ { saw_loop_count++; next }
+      in_helper && /if systemctl is-active --quiet "\$redis_unit" 2>\/dev\/null; then/ { saw_probe_loop=1 }
+      in_helper && /if systemctl start "\$redis_unit" 2>\/dev\/null; then/ { saw_start_loop=1 }
+      in_helper && /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "\$redis_unit" "\$redis_unit"\)"/ { saw_enable_warn=1 }
+      in_helper && /^}/ {
+        if (!(saw_loop_count >= 2 && saw_probe_loop && saw_start_loop && saw_enable_warn)) {
+          printf "%s Sub2API Redis helper must probe units, start them explicitly, and warn on enable failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_helper=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_blog_enable_failures_are_reported() {
   awk '
       /app\.blog\.warn\.service_enable_failed/ { saw_warn_key=1 }
@@ -1947,6 +1969,7 @@ main() {
   check_sub2api_dependency_services_start_before_success
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_enable_failures_are_reported
+  check_sub2api_redis_service_handling_is_explicit
   check_blog_enable_failures_are_reported
   check_newapi_enable_failures_are_reported
   check_newapi_manual_backup_wal_result_is_explicit

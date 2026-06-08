@@ -1720,12 +1720,21 @@ _install_postgres() {
   fi
 }
 _ensure_redis_running() {
-  if systemctl is-active --quiet redis-server 2>/dev/null || \
-      systemctl is-active --quiet redis 2>/dev/null; then
-    return 0
-  fi
-  systemctl enable --now redis-server 2>/dev/null || \
-    systemctl enable --now redis 2>/dev/null
+  local redis_unit
+  for redis_unit in redis-server redis; do
+    if systemctl is-active --quiet "$redis_unit" 2>/dev/null; then
+      return 0
+    fi
+  done
+  for redis_unit in redis-server redis; do
+    if systemctl start "$redis_unit" 2>/dev/null; then
+      if ! systemctl enable "$redis_unit" 2>/dev/null; then
+        warn "$(t app.sub2api.warn.service_enable_failed "$redis_unit" "$redis_unit")"
+      fi
+      return 0
+    fi
+  done
+  return 1
 }
 _install_redis() {
   if command -v redis-server &>/dev/null; then
