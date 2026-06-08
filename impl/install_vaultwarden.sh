@@ -1387,7 +1387,9 @@ do_uninstall() {
   rm -f /etc/fail2ban/filter.d/vaultwarden.conf \
         /etc/fail2ban/filter.d/vaultwarden-admin.conf \
         /etc/fail2ban/jail.d/vaultwarden.conf
-  systemctl restart fail2ban 2>/dev/null || true
+  if ! systemctl restart fail2ban 2>/dev/null; then
+    warn "$(t app.vaultwarden.warn.fail2ban_restart)"
+  fi
   success "$(t app.vaultwarden.success.removed_fail2ban)"
   rm -f /etc/cron.d/vaultwarden-backup \
         /usr/local/bin/vaultwarden-backup \

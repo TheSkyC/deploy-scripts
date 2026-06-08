@@ -1689,6 +1689,27 @@ check_fail2ban_configs_are_atomic() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_fail2ban_restart_failures_are_reported() {
+  if grep -R -n 'systemctl restart fail2ban 2>/dev/null || true' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden uninstall must not silently ignore fail2ban restart failures." >&2
+    return 1
+  fi
+  awk '
+      /app\.vaultwarden\.warn\.fail2ban_restart/ { saw_warn_key=1 }
+      /rm -f \/etc\/fail2ban\/filter\.d\/vaultwarden\.conf/ { in_block=1; saw_restart_if=0; saw_warn=0; next }
+      in_block && /if ! systemctl restart fail2ban 2>\/dev\/null; then/ { saw_restart_if=1 }
+      in_block && /warn "\$\(t app\.vaultwarden\.warn\.fail2ban_restart\)"/ { saw_warn=1 }
+      in_block && /success "\$\(t app\.vaultwarden\.success\.removed_fail2ban\)"/ {
+        if (!(saw_warn_key && saw_restart_if && saw_warn)) {
+          printf "%s Vaultwarden uninstall must warn when fail2ban restart fails after removing its rules\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_result_chains_are_explicit() {
   if grep -R -nE 'nginx -t && systemctl reload nginx[[:space:]\\]*$' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
@@ -1982,6 +2003,7 @@ main() {
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
+  check_vaultwarden_fail2ban_restart_failures_are_reported
   check_vaultwarden_result_chains_are_explicit
   check_user_deletion_paths_are_explicit
   check_vaultwarden_webvault_restore_cleans_partial

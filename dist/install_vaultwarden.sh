@@ -833,6 +833,9 @@ i18n_register_many \
   app.vaultwarden.success.fail2ban \
   "Fail2Ban configured (login: 5 failures/hour -> 1h ban, admin: 3 failures/day -> 24h ban)." \
   "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）。" \
+  app.vaultwarden.warn.fail2ban_restart \
+  "Fail2Ban rules were removed, but the service could not be restarted. Inspect: journalctl -u fail2ban -n 30" \
+  "Fail2Ban 规则已移除，但服务重启失败。请检查：journalctl -u fail2ban -n 30" \
   app.vaultwarden.step.logrotate \
   "Step 12  Configure log rotation" \
   "Step 12  配置日志轮转" \
@@ -2690,7 +2693,9 @@ do_uninstall() {
   rm -f /etc/fail2ban/filter.d/vaultwarden.conf \
         /etc/fail2ban/filter.d/vaultwarden-admin.conf \
         /etc/fail2ban/jail.d/vaultwarden.conf
-  systemctl restart fail2ban 2>/dev/null || true
+  if ! systemctl restart fail2ban 2>/dev/null; then
+    warn "$(t app.vaultwarden.warn.fail2ban_restart)"
+  fi
   success "$(t app.vaultwarden.success.removed_fail2ban)"
   rm -f /etc/cron.d/vaultwarden-backup \
         /usr/local/bin/vaultwarden-backup \
