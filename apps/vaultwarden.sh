@@ -315,6 +315,9 @@ i18n_register_many \
   app.vaultwarden.error.fail2ban_write \
   "Fail2Ban config write failed: %s" \
   "Fail2Ban 配置写入失败：%s" \
+  app.vaultwarden.error.fail2ban_start \
+  "Cannot start Fail2Ban service. Inspect: journalctl -u fail2ban -n 30" \
+  "无法启动 Fail2Ban 服务，请检查：journalctl -u fail2ban -n 30" \
   app.vaultwarden.success.fail2ban \
   "Fail2Ban configured (login: 5 failures/hour -> 1h ban, admin: 3 failures/day -> 24h ban)." \
   "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）。" \

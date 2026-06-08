@@ -1530,6 +1530,35 @@ check_vaultwarden_enable_failures_are_reported() {
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_runtime_service_starts_are_explicit() {
+  if grep -R -nE '^[[:space:]]*systemctl restart (nginx|fail2ban)$' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden nginx/fail2ban restart paths must branch explicitly on command failure." >&2
+    return 1
+  fi
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.certbot\)"/ { in_nginx=1; saw_restart_wait=0; next }
+      in_nginx && /if ! systemctl restart nginx \|\| ! wait_for_service nginx 10; then/ { saw_restart_wait=1 }
+      in_nginx && /success "\$\(t app\.vaultwarden\.success\.nginx_ready\)"/ {
+        if (!saw_restart_wait) {
+          printf "%s Vaultwarden nginx startup must keep restart failure handling explicit\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_nginx=0
+      }
+      /JAIL/ { in_fail2ban=1; saw_fail2ban_if=0; next }
+      in_fail2ban && /if ! systemctl restart fail2ban; then/ { saw_fail2ban_if=1 }
+      in_fail2ban && /error "\$\(t app\.vaultwarden\.error\.fail2ban_start\)"/ { saw_fail2ban_error=1 }
+      in_fail2ban && /success "\$\(t app\.vaultwarden\.success\.fail2ban\)"/ {
+        if (!(saw_fail2ban_if && saw_fail2ban_error)) {
+          printf "%s Vaultwarden fail2ban startup must branch explicitly on restart failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_fail2ban=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_service_start_paths_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl start vaultwarden$' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
@@ -2139,6 +2168,7 @@ main() {
   check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
   check_vaultwarden_enable_failures_are_reported
+  check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
   check_sub2api_update_rollbacks_report_restart_failures
   check_cyberstrikeai_update_rollbacks_report_restart_failures

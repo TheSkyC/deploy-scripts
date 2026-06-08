@@ -603,8 +603,7 @@ NGINX
   if ! systemctl enable nginx --quiet; then
     warn "$(t app.vaultwarden.warn.service_enable_failed "nginx" "nginx")"
   fi
-  systemctl restart nginx
-  if ! wait_for_service nginx 10; then
+  if ! systemctl restart nginx || ! wait_for_service nginx 10; then
     error "$(t app.vaultwarden.error.nginx_start)"
   fi
   success "$(t app.vaultwarden.success.nginx_ready)"
@@ -812,7 +811,9 @@ JAIL
   if ! systemctl enable fail2ban --quiet; then
     warn "$(t app.vaultwarden.warn.service_enable_failed "fail2ban" "fail2ban")"
   fi
-  systemctl restart fail2ban
+  if ! systemctl restart fail2ban; then
+    error "$(t app.vaultwarden.error.fail2ban_start)"
+  fi
   success "$(t app.vaultwarden.success.fail2ban)"
   step "$(t app.vaultwarden.step.logrotate)"
   local _vw_logrotate_file="/etc/logrotate.d/vaultwarden"

@@ -830,6 +830,9 @@ i18n_register_many \
   app.vaultwarden.error.fail2ban_write \
   "Fail2Ban config write failed: %s" \
   "Fail2Ban 配置写入失败：%s" \
+  app.vaultwarden.error.fail2ban_start \
+  "Cannot start Fail2Ban service. Inspect: journalctl -u fail2ban -n 30" \
+  "无法启动 Fail2Ban 服务，请检查：journalctl -u fail2ban -n 30" \
   app.vaultwarden.success.fail2ban \
   "Fail2Ban configured (login: 5 failures/hour -> 1h ban, admin: 3 failures/day -> 24h ban)." \
   "Fail2Ban 已配置（登录失败 5 次/小时封禁 1h，Admin 3 次/天封禁 24h）。" \
@@ -1909,8 +1912,7 @@ NGINX
   if ! systemctl enable nginx --quiet; then
     warn "$(t app.vaultwarden.warn.service_enable_failed "nginx" "nginx")"
   fi
-  systemctl restart nginx
-  if ! wait_for_service nginx 10; then
+  if ! systemctl restart nginx || ! wait_for_service nginx 10; then
     error "$(t app.vaultwarden.error.nginx_start)"
   fi
   success "$(t app.vaultwarden.success.nginx_ready)"
@@ -2118,7 +2120,9 @@ JAIL
   if ! systemctl enable fail2ban --quiet; then
     warn "$(t app.vaultwarden.warn.service_enable_failed "fail2ban" "fail2ban")"
   fi
-  systemctl restart fail2ban
+  if ! systemctl restart fail2ban; then
+    error "$(t app.vaultwarden.error.fail2ban_start)"
+  fi
   success "$(t app.vaultwarden.success.fail2ban)"
   step "$(t app.vaultwarden.step.logrotate)"
   local _vw_logrotate_file="/etc/logrotate.d/vaultwarden"
