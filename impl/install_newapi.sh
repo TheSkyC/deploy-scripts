@@ -493,10 +493,10 @@ do_update() {
   step "$(t app.newapi.step.replace_restart)"
   local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
   local BAK_PATH="${INSTALL_DIR}/new-api.bak.${BAK_TS}"
-  info "$(t app.newapi.info.stop_service)"
-  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   cp "$BIN_PATH" "$BAK_PATH"
   info "$(t app.newapi.info.old_binary "$BAK_PATH")"
+  info "$(t app.newapi.info.stop_service)"
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   mv "$TMP_BIN" "$BIN_PATH"
   chmod +x "$BIN_PATH"
   chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"

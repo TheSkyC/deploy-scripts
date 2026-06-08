@@ -2181,10 +2181,10 @@ do_update() {
   step "$(t app.sub2api.step.replace_restart)"
   local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
   local BAK_PATH="${INSTALL_DIR}/sub2api.bak.${BAK_TS}"
-  info "$(t app.sub2api.info.stopping_service)"
-  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   cp "$BIN_PATH" "$BAK_PATH"
   info "$(t app.sub2api.info.old_binary_backup "$BAK_PATH")"
+  info "$(t app.sub2api.info.stopping_service)"
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   mv "$TMP_BIN" "$BIN_PATH"
   chmod +x "$BIN_PATH"
   chown "${SERVICE_USER}:${SERVICE_USER}" "$BIN_PATH"

@@ -396,6 +396,22 @@ check_mutating_installs_acquire_locks() {
   '
 }
 
+check_update_backs_up_before_stop() {
+  local file
+  for file in impl/install_newapi.sh impl/install_sub2api.sh; do
+    awk '
+      /local BAK_PATH=/ { seen_bak=1; seen_cp=0 }
+      seen_bak && index($0, "cp \"$BIN_PATH\" \"$BAK_PATH\"") { seen_cp=1 }
+      seen_bak && index($0, "systemctl stop \"$SERVICE_NAME\"") {
+        if (!seen_cp) {
+          printf "%s stops the service before backing up the current binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' "$file"
+  done
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -420,6 +436,7 @@ main() {
   check_random_head_pipelines_handle_sigpipe
   check_go_tarball_failures_cleanup
   check_mutating_installs_acquire_locks
+  check_update_backs_up_before_stop
   echo "Verification passed"
 }
 
