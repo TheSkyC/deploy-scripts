@@ -364,6 +364,13 @@ check_keyring_writes_are_atomic() {
   fi
 }
 
+check_random_head_pipelines_handle_sigpipe() {
+  if grep -R -nE 'rand .*\\|.*head -c [0-9]+\\)$|tr -dc .*\\| head -c [0-9]+\\)$' impl dist 2>/dev/null; then
+    echo "Random byte pipelines ending in head -c need an explicit successful terminator under pipefail." >&2
+    return 1
+  fi
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -385,6 +392,7 @@ main() {
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads
   check_keyring_writes_are_atomic
+  check_random_head_pipelines_handle_sigpipe
   echo "Verification passed"
 }
 

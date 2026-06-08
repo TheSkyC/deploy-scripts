@@ -298,7 +298,7 @@ _setup_postgres() {
       error "$(t app.sub2api.error.postgres_start)"
   fi
   if [[ -z "${PG_PASS:-}" ]]; then
-    PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24; true)
     info "$(t app.sub2api.info.pg_password_generated)"
   else
     info "$(t app.sub2api.info.pg_password_reused)"
