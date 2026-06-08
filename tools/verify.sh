@@ -263,7 +263,7 @@ check_config_crlf_handling() {
   local tmp_dir conf
   tmp_dir="$(mktemp -d)"
   conf="${tmp_dir}/deploy.conf"
-  printf 'FOO="bar"\r\nBAZ=qux\r\n' > "$conf"
+  printf ' FOO = "bar"\r\n\tBAZ\t= qux \r\nQUOTED = " spaced value "\r\n' > "$conf"
 
   cat > "${tmp_dir}/stat" <<'STUB'
 #!/usr/bin/env bash
@@ -280,9 +280,11 @@ STUB
     source lib/core.sh
     FOO=""
     BAZ=""
-    load_config_file "$1" FOO BAZ
+    QUOTED=""
+    load_config_file "$1" FOO BAZ QUOTED
     [[ "$FOO" == "bar" ]] || { printf "FOO contained unexpected bytes: " >&2; printf "%s" "$FOO" | od -An -tx1 >&2; exit 1; }
     [[ "$BAZ" == "qux" ]] || { printf "BAZ contained unexpected bytes: " >&2; printf "%s" "$BAZ" | od -An -tx1 >&2; exit 1; }
+    [[ "$QUOTED" == " spaced value " ]] || { printf "QUOTED contained unexpected bytes: " >&2; printf "%s" "$QUOTED" | od -An -tx1 >&2; exit 1; }
     sanitized="$(sanitize_conf_val $'"'"'one\ntwo'"'"')"
     [[ "$sanitized" == "one" ]] || { printf "sanitize_conf_val returned unexpected bytes: " >&2; printf "%s" "$sanitized" | od -An -tx1 >&2; exit 1; }
   ' _ "$conf"

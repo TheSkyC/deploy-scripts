@@ -202,6 +202,13 @@ sanitize_conf_val() {
   echo "$value"
 }
 
+trim_conf_token() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
 config_file_is_safe() {
   local conf_file="$1"
   [[ -f "$conf_file" ]] || return 0
@@ -227,13 +234,12 @@ load_config_file() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     [[ "$line" =~ ^[[:space:]]*(#|$) || "$line" != *=* ]] && continue
-    key="${line%%=*}"
-    key="${key// /}"
+    key="$(trim_conf_token "${line%%=*}")"
     if [[ ! "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
       warn "$(t warn.config_invalid_key "$key")"
       continue
     fi
-    value="${line#*=}"
+    value="$(trim_conf_token "${line#*=}")"
     if [[ "$value" =~ ^\"(.*)\"$ ]]; then
       value="${BASH_REMATCH[1]}"
     fi
