@@ -345,11 +345,14 @@ i18n_register app.blog.http_ok \
   "HTTP response is healthy: 200 OK" \
   "HTTP 响应正常（200 OK）"
 i18n_register app.blog.http_warn \
-  "HTTP returned %s. If the domain is not pointed here yet, use the internal IP." \
-  "HTTP 返回 %s，如无域名指向请用内网 IP 访问"
-i18n_register app.blog.summary_title \
+  "HTTP returned %s from the local Nginx probe. Check the Nginx root, local listener, and error log before relying on the site." \
+  "本地 Nginx 探测返回 HTTP %s。请先检查 Nginx 站点目录、本地监听状态和错误日志，再继续使用站点。"
+i18n_register app.blog.summary_title_ready \
   "Blog deployment complete!" \
   "博客部署完成！"
+i18n_register app.blog.summary_title_pending \
+  "Blog files deployed; verify local Nginx health before relying on the site" \
+  "博客文件已部署；请先确认本地 Nginx 健康后再继续使用站点"
 i18n_register app.blog.public_url \
   "Public URL" \
   "公网访问"

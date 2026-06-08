@@ -629,17 +629,23 @@ else
   error "$(t app.blog.error.nginx_start)"
 fi
 step "$(t app.blog.step_health)"
-HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
+local _blog_summary_state="ready"
+HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
 if [[ "$HTTP_CODE" == "200" ]]; then
   success "$(t app.blog.http_ok)"
 else
   warn "$(t app.blog.http_warn "$HTTP_CODE")"
+  _blog_summary_state="pending"
 fi
 INTERNAL_IP=$(hostname -I | awk '{print $1}')
 echo ""
 echo -e "${BOLD}${GREEN}"
 echo "  ╔══════════════════════════════════════════════════════╗"
-printf "  ║               %s                     ║\n" "$(t app.blog.summary_title)"
+if [[ "$_blog_summary_state" == "pending" ]]; then
+  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_pending)"
+else
+  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_ready)"
+fi
 echo "  ╠══════════════════════════════════════════════════════╣"
 if [[ -n "$BLOG_DOMAIN" ]]; then
 echo -e "  ║  $(t app.blog.public_url)  ${CYAN}http://${BLOG_DOMAIN}${GREEN}"

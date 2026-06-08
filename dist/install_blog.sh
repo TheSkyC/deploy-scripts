@@ -860,11 +860,14 @@ i18n_register app.blog.http_ok \
   "HTTP response is healthy: 200 OK" \
   "HTTP 响应正常（200 OK）"
 i18n_register app.blog.http_warn \
-  "HTTP returned %s. If the domain is not pointed here yet, use the internal IP." \
-  "HTTP 返回 %s，如无域名指向请用内网 IP 访问"
-i18n_register app.blog.summary_title \
+  "HTTP returned %s from the local Nginx probe. Check the Nginx root, local listener, and error log before relying on the site." \
+  "本地 Nginx 探测返回 HTTP %s。请先检查 Nginx 站点目录、本地监听状态和错误日志，再继续使用站点。"
+i18n_register app.blog.summary_title_ready \
   "Blog deployment complete!" \
   "博客部署完成！"
+i18n_register app.blog.summary_title_pending \
+  "Blog files deployed; verify local Nginx health before relying on the site" \
+  "博客文件已部署；请先确认本地 Nginx 健康后再继续使用站点"
 i18n_register app.blog.public_url \
   "Public URL" \
   "公网访问"
@@ -1591,17 +1594,23 @@ else
   error "$(t app.blog.error.nginx_start)"
 fi
 step "$(t app.blog.step_health)"
-HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
+local _blog_summary_state="ready"
+HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
 if [[ "$HTTP_CODE" == "200" ]]; then
   success "$(t app.blog.http_ok)"
 else
   warn "$(t app.blog.http_warn "$HTTP_CODE")"
+  _blog_summary_state="pending"
 fi
 INTERNAL_IP=$(hostname -I | awk '{print $1}')
 echo ""
 echo -e "${BOLD}${GREEN}"
 echo "  ╔══════════════════════════════════════════════════════╗"
-printf "  ║               %s                     ║\n" "$(t app.blog.summary_title)"
+if [[ "$_blog_summary_state" == "pending" ]]; then
+  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_pending)"
+else
+  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_ready)"
+fi
 echo "  ╠══════════════════════════════════════════════════════╣"
 if [[ -n "$BLOG_DOMAIN" ]]; then
 echo -e "  ║  $(t app.blog.public_url)  ${CYAN}http://${BLOG_DOMAIN}${GREEN}"
