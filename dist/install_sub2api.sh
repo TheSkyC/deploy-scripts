@@ -1642,9 +1642,13 @@ _ensure_postgres_running() {
     return 0
   fi
   warn "$(t app.sub2api.warn.postgres_not_running)"
-  systemctl start postgresql 2>/dev/null || \
-    systemctl start "postgresql-${pg_ver}" 2>/dev/null || \
-    error "$(t app.sub2api.error.postgres_start)"
+  if systemctl start postgresql 2>/dev/null; then
+    return 0
+  fi
+  if systemctl start "postgresql-${pg_ver}" 2>/dev/null; then
+    return 0
+  fi
+  error "$(t app.sub2api.error.postgres_start)"
 }
 _install_postgres() {
   if command -v psql &>/dev/null; then
@@ -1803,9 +1807,10 @@ _setup_postgres() {
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
     warn "$(t app.sub2api.warn.postgres_not_running)"
-    systemctl start postgresql 2>/dev/null || \
-      systemctl start postgresql-15 2>/dev/null || \
+    if ! systemctl start postgresql 2>/dev/null \
+        && ! systemctl start postgresql-15 2>/dev/null; then
       error "$(t app.sub2api.error.postgres_start)"
+    fi
   fi
   if [[ -z "${PG_PASS:-}" ]]; then
     PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24; true)

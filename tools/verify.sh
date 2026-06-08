@@ -1235,6 +1235,11 @@ check_sub2api_postgres_rpm_setup_failures_are_explicit() {
 }
 
 check_sub2api_dependency_services_start_before_success() {
+  if grep -R -nE 'systemctl start postgresql 2>/dev/null \|\|[[:space:]\\]*systemctl start "postgresql-\$\{pg_ver\}" 2>/dev/null \|\||systemctl start postgresql 2>/dev/null \|\|[[:space:]\\]*systemctl start postgresql-15 2>/dev/null \|\|' \
+      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API PostgreSQL startup fallbacks must use explicit conditionals." >&2
+    return 1
+  fi
   if grep -R -nE 'success "\$\(t app\.sub2api\.success\.(postgres_exists|redis_exists)[^"]*"\)[[:space:]]*$' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
     awk '
@@ -1248,9 +1253,9 @@ check_sub2api_dependency_services_start_before_success() {
           in_pg=0
         }
         /if \[\[ "\$redis_ver" -ge 7 \]\]; then/ { in_redis=1; saw_redis_ensure=0; next }
-        in_redis && /_ensure_redis_running \|\| error "\$\(t app\.sub2api\.error\.redis_start\)"/ { saw_redis_ensure=1 }
-        in_redis && /success "\$\(t app\.sub2api\.success\.redis_exists "\$redis_ver"\)"/ {
-          if (!saw_redis_ensure) {
+      in_redis && /_ensure_redis_running \|\| error "\$\(t app\.sub2api\.error\.redis_start\)"/ { saw_redis_ensure=1 }
+      in_redis && /success "\$\(t app\.sub2api\.success\.redis_exists "\$redis_ver"\)"/ {
+        if (!saw_redis_ensure) {
             printf "%s Sub2API must ensure Redis is running before reporting an existing installation as ready\n", FILENAME > "/dev/stderr"
             exit 1
           }
@@ -1260,10 +1265,14 @@ check_sub2api_dependency_services_start_before_success() {
   fi
   awk '
       /_ensure_postgres_running\(\)/ { saw_pg_helper=1 }
+      /if systemctl start postgresql 2>\/dev\/null; then/ { saw_pg_start_if=1 }
+      /if systemctl start "postgresql-\$\{pg_ver\}" 2>\/dev\/null; then/ { saw_pg_version_start_if=1 }
       /_ensure_redis_running\(\)/ { saw_redis_helper=1 }
       /app\.sub2api\.error\.redis_start/ { saw_redis_error=1 }
+      /if ! systemctl start postgresql 2>\/dev\/null/ { saw_pg_setup_if=1 }
+      /! systemctl start postgresql-15 2>\/dev\/null; then/ { saw_pg_setup_fallback=1 }
       END {
-        if (!(saw_pg_helper && saw_redis_helper && saw_redis_error)) {
+        if (!(saw_pg_helper && saw_pg_start_if && saw_pg_version_start_if && saw_pg_setup_if && saw_pg_setup_fallback && saw_redis_helper && saw_redis_error)) {
           print "Sub2API must keep explicit helpers and error reporting for PostgreSQL and Redis service startup." > "/dev/stderr"
           exit 1
         }
