@@ -1497,8 +1497,9 @@ step "$(t app.blog.step_start_nginx)"
 if ! systemctl enable nginx --quiet; then
   warn "$(t app.blog.warn.service_enable_failed "nginx" "nginx")"
 fi
-systemctl restart nginx
-sleep 1
+if systemctl restart nginx; then
+  sleep 1
+fi
 if systemctl is-active --quiet nginx; then
   success "$(t app.blog.nginx_started)"
 else

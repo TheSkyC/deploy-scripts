@@ -1441,6 +1441,26 @@ check_blog_enable_failures_are_reported() {
     ' apps/blog.sh impl/install_blog.sh dist/install_blog.sh
 }
 
+check_blog_nginx_start_path_is_explicit() {
+  if grep -R -n '^systemctl restart nginx$' \
+      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+    echo "Blog nginx startup must branch explicitly on restart failure." >&2
+    return 1
+  fi
+  awk '
+      /step "\$\(t app\.blog\.step_start_nginx\)"/ { in_block=1; saw_restart_if=0; saw_active_check=0; next }
+      in_block && /if systemctl restart nginx; then/ { saw_restart_if=1 }
+      in_block && /if systemctl is-active --quiet nginx; then/ { saw_active_check=1 }
+      in_block && /step "\$\(t app\.blog\.step_health\)"/ {
+        if (!(saw_restart_if && saw_active_check)) {
+          printf "%s Blog nginx startup must keep restart failure handling explicit before the health check\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_newapi_enable_failures_are_reported() {
   awk '
       /app\.newapi\.warn\.service_enable_failed/ { saw_warn_key=1 }
@@ -2114,6 +2134,7 @@ main() {
   check_sub2api_enable_failures_are_reported
   check_sub2api_redis_service_handling_is_explicit
   check_blog_enable_failures_are_reported
+  check_blog_nginx_start_path_is_explicit
   check_newapi_enable_failures_are_reported
   check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
