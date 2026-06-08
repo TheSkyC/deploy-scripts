@@ -51,6 +51,9 @@ i18n_register_many \
   app.cyberstrikeai.error.go_empty \
   "Downloaded Go archive is empty" \
   "下载的 Go 压缩包为空" \
+  app.cyberstrikeai.error.go_extract \
+  "Failed to extract the official Go archive." \
+  "解压官方 Go 压缩包失败。" \
   app.cyberstrikeai.error.go_failed \
   "Go installation failed. Please install Go 1.21+ manually." \
   "Go 安装失败，请手动安装 Go 1.21 或更高版本。" \

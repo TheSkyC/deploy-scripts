@@ -373,6 +373,13 @@ check_random_head_pipelines_handle_sigpipe() {
   fi
 }
 
+check_go_tarball_failures_cleanup() {
+  if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
+    echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
+    return 1
+  fi
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -395,6 +402,7 @@ main() {
   check_no_fixed_tmp_downloads
   check_keyring_writes_are_atomic
   check_random_head_pipelines_handle_sigpipe
+  check_go_tarball_failures_cleanup
   echo "Verification passed"
 }
 

@@ -558,6 +558,9 @@ i18n_register_many \
   app.cyberstrikeai.error.go_empty \
   "Downloaded Go archive is empty" \
   "下载的 Go 压缩包为空" \
+  app.cyberstrikeai.error.go_extract \
+  "Failed to extract the official Go archive." \
+  "解压官方 Go 压缩包失败。" \
   app.cyberstrikeai.error.go_failed \
   "Go installation failed. Please install Go 1.21+ manually." \
   "Go 安装失败，请手动安装 Go 1.21 或更高版本。" \
@@ -1014,10 +1017,19 @@ install_go_if_needed() {
   url="https://go.dev/dl/${tarball}"
   tmp=$(mktemp)
   info "$(t app.cyberstrikeai.info.download "$url")"
-  curl -fL --retry 3 --connect-timeout 15 -o "$tmp" "$url"
-  [[ -s "$tmp" ]] || error "$(t app.cyberstrikeai.error.go_empty)"
+  if ! curl -fL --retry 3 --connect-timeout 15 -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    error "$(t app.cyberstrikeai.error.go_query)"
+  fi
+  if [[ ! -s "$tmp" ]]; then
+    rm -f "$tmp"
+    error "$(t app.cyberstrikeai.error.go_empty)"
+  fi
   rm -rf /usr/local/go
-  tar -C /usr/local -xzf "$tmp"
+  if ! tar -C /usr/local -xzf "$tmp"; then
+    rm -f "$tmp"
+    error "$(t app.cyberstrikeai.error.go_extract)"
+  fi
   rm -f "$tmp"
   ln -sf /usr/local/go/bin/go /usr/local/bin/go
   ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
