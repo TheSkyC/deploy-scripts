@@ -832,6 +832,9 @@ i18n_register app.blog.firewall_missing \
 i18n_register app.blog.step_start_nginx \
   "Step 11  Start Nginx" \
   "Step 11  启动 Nginx"
+i18n_register app.blog.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。"
 i18n_register app.blog.nginx_started \
   "Nginx started." \
   "Nginx 已启动"
@@ -1491,7 +1494,9 @@ if ! $FW_DONE; then
   fi
 fi
 step "$(t app.blog.step_start_nginx)"
-systemctl enable nginx --quiet
+if ! systemctl enable nginx --quiet; then
+  warn "$(t app.blog.warn.service_enable_failed "nginx" "nginx")"
+fi
 systemctl restart nginx
 sleep 1
 if systemctl is-active --quiet nginx; then

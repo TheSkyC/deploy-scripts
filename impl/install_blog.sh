@@ -544,7 +544,9 @@ if ! $FW_DONE; then
   fi
 fi
 step "$(t app.blog.step_start_nginx)"
-systemctl enable nginx --quiet
+if ! systemctl enable nginx --quiet; then
+  warn "$(t app.blog.warn.service_enable_failed "nginx" "nginx")"
+fi
 systemctl restart nginx
 sleep 1
 if systemctl is-active --quiet nginx; then

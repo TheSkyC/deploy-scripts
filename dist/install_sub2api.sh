@@ -2442,7 +2442,9 @@ do_install() {
     warn "$(t app.sub2api.warn.port_hint)"
   fi
   systemctl daemon-reload
-  systemctl enable "$SERVICE_NAME" --quiet
+  if ! systemctl enable "$SERVICE_NAME" --quiet; then
+    warn "$(t app.sub2api.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   systemctl restart "$SERVICE_NAME"
   if wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.service_started)"

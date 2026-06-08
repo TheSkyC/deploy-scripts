@@ -1309,13 +1309,29 @@ check_sub2api_enable_failures_are_reported() {
       /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "postgresql-15" "postgresql-15"\)"/ { saw_rpm_pg_warn=1 }
       /if ! systemctl enable nginx; then/ { saw_nginx=1 }
       /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "nginx" "nginx"\)"/ { saw_nginx_warn=1 }
+      /if ! systemctl enable "\$SERVICE_NAME" --quiet; then/ { saw_service=1 }
+      /warn "\$\(t app\.sub2api\.warn\.service_enable_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_service_warn=1 }
       END {
-        if (!(saw_warn_key && saw_existing_pg && saw_existing_pg_warn && saw_apt_pg && saw_apt_pg_warn && saw_rpm_pg && saw_rpm_pg_warn && saw_nginx && saw_nginx_warn)) {
-          print "Sub2API must warn when service enablement fails for PostgreSQL or Nginx." > "/dev/stderr"
+        if (!(saw_warn_key && saw_existing_pg && saw_existing_pg_warn && saw_apt_pg && saw_apt_pg_warn && saw_rpm_pg && saw_rpm_pg_warn && saw_nginx && saw_nginx_warn && saw_service && saw_service_warn)) {
+          print "Sub2API must warn when service enablement fails for PostgreSQL, Nginx, or the app service." > "/dev/stderr"
           exit 1
         }
       }
     ' apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
+check_blog_enable_failures_are_reported() {
+  awk '
+      /app\.blog\.warn\.service_enable_failed/ { saw_warn_key=1 }
+      /if ! systemctl enable nginx --quiet; then/ { saw_enable_if=1 }
+      /warn "\$\(t app\.blog\.warn\.service_enable_failed "nginx" "nginx"\)"/ { saw_warn=1 }
+      END {
+        if (!(saw_warn_key && saw_enable_if && saw_warn)) {
+          print "Blog must warn when Nginx service enablement fails." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/blog.sh impl/install_blog.sh dist/install_blog.sh
 }
 
 check_newapi_enable_failures_are_reported() {
@@ -1931,6 +1947,7 @@ main() {
   check_sub2api_dependency_services_start_before_success
   check_sub2api_nginx_install_starts_service_explicitly
   check_sub2api_enable_failures_are_reported
+  check_blog_enable_failures_are_reported
   check_newapi_enable_failures_are_reported
   check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
