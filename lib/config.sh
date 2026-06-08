@@ -80,7 +80,10 @@ write_config_file() {
       return 1
     fi
   done
-  chown root:root "$tmp_file" 2>/dev/null || true
+  if ! chown root:root "$tmp_file" 2>/dev/null; then
+    rm -f "$tmp_file"
+    return 1
+  fi
   if ! mv "$tmp_file" "$conf_file"; then
     rm -f "$tmp_file"
     return 1

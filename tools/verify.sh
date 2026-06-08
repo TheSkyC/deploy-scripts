@@ -320,6 +320,30 @@ STUB
     fi
   ' _ "$tmp_dir" "$conf"
 
+  rm -f "${tmp_dir}/chmod"
+  cat > "${tmp_dir}/chown" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+  chmod +x "${tmp_dir}/chown"
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    FOO="bar"
+    PATH="$1:$PATH"
+    set +e
+    write_config_file "$2" FOO
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || { echo "write_config_file unexpectedly ignored chown failure" >&2; exit 1; }
+    if find "$(dirname "$2")" -maxdepth 1 -name "$(basename "$2").tmp.*" -type f | grep -q .; then
+      echo "write_config_file left a temporary config file behind after chown failure" >&2
+      find "$(dirname "$2")" -maxdepth 1 -name "$(basename "$2").tmp.*" -type f >&2
+      exit 1
+    fi
+  ' _ "$tmp_dir" "$conf"
+
   rm -rf "$tmp_dir"
 }
 
