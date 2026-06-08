@@ -160,6 +160,17 @@ restore_web_vault_backup() {
   chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" || return 1
   chmod -R 750 "$VW_WEB_DIR" || return 1
 }
+install_vaultwarden_binary() {
+  local source_bin="$1"
+  local bin_tmp
+  mkdir -p "$VW_BIN_DIR" || return 1
+  bin_tmp=$(mktemp "${VW_BIN}.XXXXXX") || return 1
+  if ! install -m 755 -o root -g root "$source_bin" "$bin_tmp" \
+      || ! mv "$bin_tmp" "$VW_BIN"; then
+    rm -f "$bin_tmp"
+    return 1
+  fi
+}
 _write_nginx_config_file() {
   local nginx_conf="$1"
   local nginx_tmp
@@ -285,8 +296,8 @@ do_install() {
   BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
   success "$(t app.vaultwarden.success.binary_extracted "$BIN_PATH")"
-  mkdir -p "$VW_BIN_DIR"
-  install -m 755 -o root -g root "$BIN_PATH" "$VW_BIN"
+  install_vaultwarden_binary "$BIN_PATH" \
+    || error "$(t app.vaultwarden.error.binary_install "$VW_BIN")"
   success "$(t app.vaultwarden.success.binary_installed "$VW_BIN")"
   VW_VER=$("$VW_BIN" --version 2>/dev/null || echo "unknown")
   info "$(t app.vaultwarden.info.version "$VW_VER")"
@@ -923,8 +934,8 @@ do_update() {
   NEW_BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
   cp "$VW_BIN" "${VW_BIN}.bak.$(date +%Y%m%d%H%M%S)"
-  mkdir -p "$VW_BIN_DIR"
-  install -m 755 -o root -g root "$NEW_BIN_PATH" "$VW_BIN"
+  install_vaultwarden_binary "$NEW_BIN_PATH" \
+    || error "$(t app.vaultwarden.error.binary_install "$VW_BIN")"
   success "$(t app.vaultwarden.success.binary_updated)"
   NEW_VER=$(get_installed_version)
   step "$(t app.vaultwarden.step.update_web_vault)"
@@ -990,7 +1001,8 @@ do_update() {
       -name "vaultwarden.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
       | sort -rn | awk 'NR==1{print $2}' || true)
     if [[ -n "$NEWEST_BAK" ]]; then
-      install -m 755 -o root -g root "$NEWEST_BAK" "$VW_BIN"
+      install_vaultwarden_binary "$NEWEST_BAK" \
+        || error "$(t app.vaultwarden.error.rollback_start_failed)"
       if [[ -d "$_wv_bak_ts" ]]; then
         restore_web_vault_backup "$_wv_bak_ts" \
           || error "$(t app.vaultwarden.error.rollback_start_failed)"

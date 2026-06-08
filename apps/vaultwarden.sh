@@ -63,6 +63,9 @@ i18n_register_many \
   app.vaultwarden.error.binary_not_elf \
   "Extracted file is not a valid ELF binary (magic bytes mismatch); the download may be corrupted." \
   "提取的文件不是合法的 ELF 二进制（magic bytes 不匹配），疑似下载损坏。" \
+  app.vaultwarden.error.binary_install \
+  "Failed to install Vaultwarden binary: %s" \
+  "安装 Vaultwarden 二进制失败：%s。" \
   app.vaultwarden.error.elf_machine \
   "ELF e_machine mismatch. Expected %s (%s), actual %s.\n  The image platform argument may be wrong, or the image manifest parsing failed. Retry." \
   "ELF e_machine 不匹配！期望 %s（%s），实际 %s。\n  镜像平台参数可能有误，或镜像 manifest 解析异常，请重试。" \

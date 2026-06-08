@@ -741,6 +741,27 @@ check_vaultwarden_env_file_is_atomic() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_binary_installs_are_atomic() {
+  if grep -R -n 'install -m 755 -o root -g root .* "$VW_BIN"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden binary installs must stage to a temporary file before replacing VW_BIN." >&2
+    return 1
+  fi
+  awk '
+      /install_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_install=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /bin_tmp=\$\(mktemp "\$\{VW_BIN\}\.XXXXXX"\)/ { saw_tmp=1 }
+      in_func && /install -m 755 -o root -g root "\$source_bin" "\$bin_tmp"/ { saw_install=1 }
+      in_func && /mv "\$bin_tmp" "\$VW_BIN"/ { saw_mv=1 }
+      in_func && /rm -f "\$bin_tmp"/ { saw_cleanup=1 }
+      in_func && /^}/ {
+        if (!(saw_tmp && saw_install && saw_mv && saw_cleanup)) {
+          print "Vaultwarden binary install helper must stage, replace, and clean up temporary files." > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_admin_token_file_is_private() {
   if grep -R -n 'mktemp /tmp/vw_token_' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden admin token display files must not be created in world-writable /tmp." >&2
@@ -1014,6 +1035,7 @@ main() {
   check_binary_restores_validate_permissions
   check_download_validation_failures_cleanup
   check_vaultwarden_env_file_is_atomic
+  check_vaultwarden_binary_installs_are_atomic
   check_vaultwarden_admin_token_file_is_private
   check_systemd_units_are_atomic
   check_backup_scripts_are_atomic
