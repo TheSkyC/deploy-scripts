@@ -822,9 +822,14 @@ do_update() {
   local _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_bak_ts"
-    cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR"
-    chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"
-    success "$(t app.vaultwarden.success.web_vault_updated_image)"
+    if cp -a "$EXTRACTED_WEBVAULT_PATH" "$VW_WEB_DIR" \
+        && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"; then
+      success "$(t app.vaultwarden.success.web_vault_updated_image)"
+    else
+      warn "$(t app.vaultwarden.warn.web_vault_extract)"
+      rm -rf "$VW_WEB_DIR"
+      [[ -d "$_wv_bak_ts" ]] && mv "$_wv_bak_ts" "$VW_WEB_DIR" || true
+    fi
   else
     local _fetched_wv_ver
     _fetched_wv_ver=$(get_latest_webvault_ver)
@@ -832,11 +837,12 @@ do_update() {
       local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_fetched_wv_ver}/bw_web_v${_fetched_wv_ver}.tar.gz"
       if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
         [[ -d "$VW_WEB_DIR" ]] && mv "$VW_WEB_DIR" "$_wv_bak_ts"
-        if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")"; then
-          chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"
+        if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$(dirname "$VW_WEB_DIR")" \
+            && chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"; then
           success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
         else
           warn "$(t app.vaultwarden.warn.web_vault_extract)"
+          rm -rf "$VW_WEB_DIR"
           [[ -d "$_wv_bak_ts" ]] && mv "$_wv_bak_ts" "$VW_WEB_DIR" || true
         fi
       else

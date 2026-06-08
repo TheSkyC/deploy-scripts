@@ -419,6 +419,20 @@ check_sub2api_extract_move_failure_cleanup() {
   fi
 }
 
+check_vaultwarden_webvault_restore_cleans_partial() {
+  awk '
+      /warn "\$\(t app\.vaultwarden\.warn\.web_vault_extract\)"/ { in_restore=1; saw_rm=0; next }
+      in_restore && /rm -rf "\$VW_WEB_DIR"/ { saw_rm=1 }
+      in_restore && /mv "\$_wv_bak_ts" "\$VW_WEB_DIR"/ {
+        if (!saw_rm) {
+          printf "%s restores Web Vault backup without removing the partial directory first\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_restore=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 main() {
   check_shell_syntax
   DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
@@ -445,6 +459,7 @@ main() {
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
   check_sub2api_extract_move_failure_cleanup
+  check_vaultwarden_webvault_restore_cleans_partial
   echo "Verification passed"
 }
 
