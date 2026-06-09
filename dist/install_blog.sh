@@ -1101,7 +1101,9 @@ if cp -a "\${PUBLIC_DIR}/." "\$DEPLOY_TMP/"; then
     fi
   fi
   if mv "\$DEPLOY_TMP" "\$NGINX_ROOT"; then
-    [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] && rm -rf "\$DEPLOY_BAK"
+    if [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]]; then
+      rm -rf "\$DEPLOY_BAK"
+    fi
   else
     rm -rf "\$DEPLOY_TMP"
     restore_nginx_root_backup || {
@@ -1601,7 +1603,9 @@ if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
     fi
   fi
   if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
-    [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] && rm -rf "$DEPLOY_BAK"
+    if [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]]; then
+      rm -rf "$DEPLOY_BAK"
+    fi
   else
     rm -rf "$DEPLOY_TMP"
     restore_nginx_root_backup || error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
