@@ -351,7 +351,7 @@ _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
   fi
-  local msg_start msg_backup_dir_failed msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_done
+  local msg_start msg_backup_dir_failed msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_remove_failed msg_done
   msg_start="$(t app.newapi.backup.log.start)"
   msg_backup_dir_failed="$(t app.newapi.backup.log.dir_failed '%s')"
   msg_data_missing="$(t app.newapi.backup.log.data_missing '%s')"
@@ -361,6 +361,7 @@ _write_backup_script() {
   msg_backup_ok="$(t app.newapi.backup.log.ok '%s' '%s')"
   msg_tar_failed="$(t app.newapi.backup.log.tar_failed)"
   msg_removed_old="$(t app.newapi.backup.log.removed_old '%s' '%s')"
+  msg_remove_failed="$(t app.newapi.backup.log.remove_failed '%s')"
   msg_done="$(t app.newapi.backup.log.done)"
   local backup_script="/usr/local/bin/new-api-backup"
   local backup_tmp
@@ -388,6 +389,7 @@ MSG_INTEGRITY_WARN="${msg_integrity_warn}"
 MSG_BACKUP_OK="${msg_backup_ok}"
 MSG_TAR_FAILED="${msg_tar_failed}"
 MSG_REMOVED_OLD="${msg_removed_old}"
+MSG_REMOVE_FAILED="${msg_remove_failed}"
 MSG_DONE="${msg_done}"
 BKSH_HEADER
   then
@@ -451,7 +453,11 @@ fi
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   REMOVED=0
   while IFS= read -r f; do
-    rm -f "$f" && REMOVED=$(( REMOVED + 1 )) || true
+    if rm -f "$f"; then
+      REMOVED=$(( REMOVED + 1 ))
+    else
+      _log "$(printf "$MSG_REMOVE_FAILED" "$f")"
+    fi
   done < <(find "${BACKUP_DIR}" -maxdepth 1 -name "new-api_*.tar.gz" -mtime "+${KEEP_DAYS}" 2>/dev/null)
   [[ $REMOVED -gt 0 ]] && _log "$(printf "$MSG_REMOVED_OLD" "$REMOVED" "$KEEP_DAYS")"
 fi
@@ -851,7 +857,11 @@ do_backup() {
   if [[ "$_keep_days" -gt 0 ]]; then
     local _cleaned=0
     while IFS= read -r f; do
-      rm -f "$f" && _cleaned=$(( _cleaned + 1 )) || true
+      if rm -f "$f"; then
+        _cleaned=$(( _cleaned + 1 ))
+      else
+        warn "$(t app.newapi.warn.backup_cleanup_failed "$f")"
+      fi
     done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
              -mtime "+${_keep_days}" 2>/dev/null)
     [[ $_cleaned -gt 0 ]] && info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$_keep_days")"

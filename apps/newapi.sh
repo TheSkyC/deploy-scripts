@@ -99,6 +99,9 @@ i18n_register_many \
   app.newapi.backup.log.removed_old \
   "[OK] Removed %s old backups older than %s days." \
   "[OK] 已清理 %s 个超过 %s 天的旧备份。" \
+  app.newapi.backup.log.remove_failed \
+  "[WARN] Could not remove old backup: %s" \
+  "[WARN] 旧备份删除失败：%s" \
   app.newapi.backup.log.done \
   "Backup finished" \
   "备份完成" \
@@ -417,6 +420,9 @@ i18n_register_many \
   app.newapi.info.cleaned_backups \
   "Removed %s old backups older than %s days." \
   "已清理 %s 个超过 %s 天的旧备份。" \
+  app.newapi.warn.backup_cleanup_failed \
+  "Could not remove old backup: %s" \
+  "旧备份删除失败：%s" \
   app.newapi.info.backup_list \
   "Backup list (%s, latest 10):" \
   "备份列表（%s，最近 10 个）：" \

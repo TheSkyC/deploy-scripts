@@ -822,6 +822,9 @@ i18n_register_many \
   app.sub2api.backup.log.removed_old \
   "[OK] Removed %s old backups older than %s days." \
   "[OK] 已清理 %s 个超过 %s 天的旧备份。" \
+  app.sub2api.backup.log.remove_failed \
+  "[WARN] Could not remove old backup: %s" \
+  "[WARN] 旧备份删除失败：%s" \
   app.sub2api.backup.log.done \
   "Backup finished" \
   "备份完成" \
@@ -2309,7 +2312,7 @@ _write_backup_script() {
     error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
   fi
   local msg_start msg_backup_dir_failed msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
-  local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_done
+  local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_remove_failed msg_done
   msg_start="$(t app.sub2api.backup.log.start)"
   msg_backup_dir_failed="$(t app.sub2api.backup.log.dir_failed '%s')"
   msg_pg_dump_start="$(t app.sub2api.backup.log.pg_dump_start)"
@@ -2322,6 +2325,7 @@ _write_backup_script() {
   msg_data_ok="$(t app.sub2api.backup.log.data_ok '%s' '%s')"
   msg_data_failed="$(t app.sub2api.backup.log.data_failed)"
   msg_removed_old="$(t app.sub2api.backup.log.removed_old '%s' '%s')"
+  msg_remove_failed="$(t app.sub2api.backup.log.remove_failed '%s')"
   msg_done="$(t app.sub2api.backup.log.done)"
   local backup_script="/usr/local/bin/sub2api-backup"
   local backup_tmp
@@ -2354,6 +2358,7 @@ MSG_CONFIG_FAILED="${msg_config_failed}"
 MSG_DATA_OK="${msg_data_ok}"
 MSG_DATA_FAILED="${msg_data_failed}"
 MSG_REMOVED_OLD="${msg_removed_old}"
+MSG_REMOVE_FAILED="${msg_remove_failed}"
 MSG_DONE="${msg_done}"
 BKSH_HEADER
   then
@@ -2449,7 +2454,11 @@ fi
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   REMOVED=0
   while IFS= read -r f; do
-    rm -f "$f" && REMOVED=$(( REMOVED + 1 )) || true
+    if rm -f "$f"; then
+      REMOVED=$(( REMOVED + 1 ))
+    else
+      _log "$(printf "$MSG_REMOVE_FAILED" "$f")"
+    fi
   done < <(find "${BACKUP_DIR}" -maxdepth 1 \
     \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
     -o -name "sub2api_conf_*.tar.gz" \) \

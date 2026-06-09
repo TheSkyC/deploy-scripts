@@ -300,6 +300,9 @@ i18n_register_many \
   app.sub2api.backup.log.removed_old \
   "[OK] Removed %s old backups older than %s days." \
   "[OK] 已清理 %s 个超过 %s 天的旧备份。" \
+  app.sub2api.backup.log.remove_failed \
+  "[WARN] Could not remove old backup: %s" \
+  "[WARN] 旧备份删除失败：%s" \
   app.sub2api.backup.log.done \
   "Backup finished" \
   "备份完成" \

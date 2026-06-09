@@ -2951,6 +2951,46 @@ check_manual_backup_retention_is_normalized() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_backup_retention_cleanup_reports_failures() {
+  if grep -R -nE 'rm -f "\$f" && [^|]+ \|\| true' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Backup retention cleanup must report per-file removal failures instead of ignoring them." >&2
+    return 1
+  fi
+  awk '
+      /app\.newapi\.backup\.log\.remove_failed/ { saw_newapi_log_key=1 }
+      /app\.newapi\.warn\.backup_cleanup_failed/ { saw_newapi_warn_key=1 }
+      /app\.sub2api\.backup\.log\.remove_failed/ { saw_sub2api_log_key=1 }
+      END {
+        if (!(saw_newapi_log_key && saw_newapi_warn_key && saw_sub2api_log_key)) {
+          print "Backup cleanup failure messages must be localized." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh apps/sub2api.sh
+  awk '
+      /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
+      /_log "\$\(printf "\$MSG_REMOVE_FAILED" "\$f"\)"/ { saw_log=1 }
+      /warn "\$\(t app\.newapi\.warn\.backup_cleanup_failed "\$f"\)"/ { saw_warn=1 }
+      END {
+        if (!(saw_msg && saw_log && saw_warn)) {
+          printf "%s NewAPI backup retention cleanup must log generated-script failures and warn for manual backup cleanup failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
+      /_log "\$\(printf "\$MSG_REMOVE_FAILED" "\$f"\)"/ { saw_log=1 }
+      END {
+        if (!(saw_msg && saw_log)) {
+          printf "%s Sub2API generated backup retention cleanup must log per-file removal failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_silent_backup_tar_diagnostics_use_stderr() {
   if grep -R -n '2>&1 >&2; then' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
@@ -4720,6 +4760,7 @@ main() {
   check_backup_scripts_are_atomic
   check_generated_backup_scripts_handle_missing_dirs
   check_manual_backup_retention_is_normalized
+  check_backup_retention_cleanup_reports_failures
   check_silent_backup_tar_diagnostics_use_stderr
   check_tar_diagnostics_use_stderr
   check_cron_logrotate_are_atomic
