@@ -87,9 +87,15 @@ i18n_register_many \
   app.sub2api.info.postgres_apt_source \
   "Adding the official PostgreSQL PGDG apt repository..." \
   "添加 PostgreSQL PGDG 官方 apt 源..." \
+  app.sub2api.error.postgres_keyring_dir \
+  "Cannot prepare the PostgreSQL keyring directory: %s. Check filesystem permissions and retry." \
+  "无法准备 PostgreSQL keyring 目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.postgres_key \
   "Cannot download the PostgreSQL signing key. Check the network and retry." \
   "无法下载 PostgreSQL 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.postgres_source_dir \
+  "Cannot prepare the PostgreSQL apt source directory: %s. Check filesystem permissions and retry." \
+  "无法准备 PostgreSQL apt 源目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.postgres_source \
   "PostgreSQL apt source write failed: /etc/apt/sources.list.d/pgdg.list" \
   "PostgreSQL apt 源写入失败：/etc/apt/sources.list.d/pgdg.list。" \
@@ -126,9 +132,15 @@ i18n_register_many \
   app.sub2api.info.redis_apt_source \
   "Adding the official Redis apt repository..." \
   "添加 Redis 官方 apt 源..." \
+  app.sub2api.error.redis_keyring_dir \
+  "Cannot prepare the Redis keyring directory: %s. Check filesystem permissions and retry." \
+  "无法准备 Redis keyring 目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.redis_key \
   "Cannot download or convert the Redis signing key. Check the network and retry." \
   "无法下载或转换 Redis 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.redis_source_dir \
+  "Cannot prepare the Redis apt source directory: %s. Check filesystem permissions and retry." \
+  "无法准备 Redis apt 源目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.redis_source \
   "Redis apt source write failed: /etc/apt/sources.list.d/redis.list" \
   "Redis apt 源写入失败：/etc/apt/sources.list.d/redis.list。" \

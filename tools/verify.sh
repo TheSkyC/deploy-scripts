@@ -471,13 +471,17 @@ check_keyring_writes_are_atomic() {
     return 1
   fi
   awk '
-      /(pg_key_tmp|redis_key_tmp)="?\$\(mktemp/ { saw_tmp=1 }
+      /(postgres_keyring_dir|redis_keyring_dir)=/ { saw_dir_var=1 }
+      /if ! install -d "\$(pg_keyring_dir|redis_keyring_dir)"; then/ { saw_dir_if=1 }
+      /error "\$\(t app\.sub2api\.error\.(postgres|redis)_keyring_dir "\$(pg_keyring_dir|redis_keyring_dir)"\)"/ { saw_dir_error=1 }
+      /if ! (pg_key_tmp|redis_key_tmp)="?\$\(mktemp/ { saw_tmp=1 }
+      /error "\$\(t app\.sub2api\.error\.(postgres|redis)_key\)"/ { saw_tmp_error=1 }
       /(curl .* -o "\$pg_key_tmp"|gpg .* --dearmor -o "\$redis_key_tmp")/ { saw_write=1 }
       /mv "\$(pg_key_tmp|redis_key_tmp)" "\$(pg_keyring|redis_keyring)"/ { saw_mv=1 }
       /rm -f "\$(pg_key_tmp|redis_key_tmp)"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_write && saw_mv && saw_cleanup)) {
-          print "Apt keyring writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_dir_var && saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_write && saw_mv && saw_cleanup)) {
+          print "Apt keyring writes must prepare directories, stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }
@@ -490,12 +494,16 @@ check_apt_sources_are_atomic() {
     return 1
   fi
   awk '
-      /(pg_source_tmp|redis_source_tmp)=\$\(mktemp/ { saw_tmp=1 }
+      /apt_source_dir="\/etc\/apt\/sources\.list\.d"/ { saw_dir_var=1 }
+      /if ! mkdir -p "\$apt_source_dir"; then/ { saw_dir_if=1 }
+      /error "\$\(t app\.sub2api\.error\.(postgres|redis)_source_dir "\$apt_source_dir"\)"/ { saw_dir_error=1 }
+      /if ! (pg_source_tmp|redis_source_tmp)=\$\(mktemp/ { saw_tmp=1 }
+      /error "\$\(t app\.sub2api\.error\.(postgres|redis)_source\)"/ { saw_tmp_error=1 }
       /mv "\$(pg_source_tmp|redis_source_tmp)" "\$(pg_source_list|redis_source_list)"/ { saw_mv=1 }
       /rm -f "\$(pg_source_tmp|redis_source_tmp)"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_mv && saw_cleanup)) {
-          print "Apt source list writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_dir_var && saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
+          print "Apt source list writes must prepare directories, stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }
@@ -508,13 +516,16 @@ check_iptables_rules_are_atomic() {
     return 1
   fi
   awk '
-      /iptables_tmp=\$\(mktemp "\$\{iptables_rules\}\.XXXXXX"\)/ { saw_tmp=1 }
+      /iptables_dir="\/etc\/iptables"/ { saw_dir=1 }
+      /if mkdir -p "\$iptables_dir"; then/ { saw_dir_if=1 }
+      /warn "\$\(t app\.(newapi|sub2api)\.warn\.iptables_write_failed\)"/ { saw_warn=1 }
+      /if ! iptables_tmp=\$\(mktemp "\$\{iptables_rules\}\.XXXXXX"\); then/ { saw_tmp=1 }
       /iptables-save > "\$iptables_tmp"/ { saw_save=1 }
       /mv "\$iptables_tmp" "\$iptables_rules"/ { saw_mv=1 }
       /rm -f "\$iptables_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_save && saw_mv && saw_cleanup)) {
-          print "iptables rules writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_dir && saw_dir_if && saw_warn && saw_tmp && saw_save && saw_mv && saw_cleanup)) {
+          print "iptables rules writes must prepare directories, stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }

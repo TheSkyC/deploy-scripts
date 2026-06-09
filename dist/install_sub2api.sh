@@ -602,9 +602,15 @@ i18n_register_many \
   app.sub2api.info.postgres_apt_source \
   "Adding the official PostgreSQL PGDG apt repository..." \
   "添加 PostgreSQL PGDG 官方 apt 源..." \
+  app.sub2api.error.postgres_keyring_dir \
+  "Cannot prepare the PostgreSQL keyring directory: %s. Check filesystem permissions and retry." \
+  "无法准备 PostgreSQL keyring 目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.postgres_key \
   "Cannot download the PostgreSQL signing key. Check the network and retry." \
   "无法下载 PostgreSQL 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.postgres_source_dir \
+  "Cannot prepare the PostgreSQL apt source directory: %s. Check filesystem permissions and retry." \
+  "无法准备 PostgreSQL apt 源目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.postgres_source \
   "PostgreSQL apt source write failed: /etc/apt/sources.list.d/pgdg.list" \
   "PostgreSQL apt 源写入失败：/etc/apt/sources.list.d/pgdg.list。" \
@@ -641,9 +647,15 @@ i18n_register_many \
   app.sub2api.info.redis_apt_source \
   "Adding the official Redis apt repository..." \
   "添加 Redis 官方 apt 源..." \
+  app.sub2api.error.redis_keyring_dir \
+  "Cannot prepare the Redis keyring directory: %s. Check filesystem permissions and retry." \
+  "无法准备 Redis keyring 目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.redis_key \
   "Cannot download or convert the Redis signing key. Check the network and retry." \
   "无法下载或转换 Redis 签名密钥，请检查网络后重试。" \
+  app.sub2api.error.redis_source_dir \
+  "Cannot prepare the Redis apt source directory: %s. Check filesystem permissions and retry." \
+  "无法准备 Redis apt 源目录：%s。请检查文件系统权限后重试。" \
   app.sub2api.error.redis_source \
   "Redis apt source write failed: /etc/apt/sources.list.d/redis.list" \
   "Redis apt 源写入失败：/etc/apt/sources.list.d/redis.list。" \
@@ -1746,10 +1758,15 @@ _install_postgres() {
   fi
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "$(t app.sub2api.info.postgres_apt_source)"
-    install -d /usr/share/postgresql-common/pgdg
+    local pg_keyring_dir="/usr/share/postgresql-common/pgdg"
+    if ! install -d "$pg_keyring_dir"; then
+      error "$(t app.sub2api.error.postgres_keyring_dir "$pg_keyring_dir")"
+    fi
     local pg_keyring pg_key_tmp
-    pg_keyring="/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc"
-    pg_key_tmp="$(mktemp "${pg_keyring}.XXXXXX")"
+    pg_keyring="${pg_keyring_dir}/apt.postgresql.org.asc"
+    if ! pg_key_tmp="$(mktemp "${pg_keyring}.XXXXXX")"; then
+      error "$(t app.sub2api.error.postgres_key)"
+    fi
     if ! curl -fsSL --max-time 30 -o "$pg_key_tmp" \
         "https://www.postgresql.org/media/keys/ACCC4CF8.asc" \
         || ! chmod 644 "$pg_key_tmp" \
@@ -1760,10 +1777,15 @@ _install_postgres() {
     fi
     local codename
     codename="$(_apt_codename)"
-    mkdir -p /etc/apt/sources.list.d
+    local apt_source_dir="/etc/apt/sources.list.d"
+    if ! mkdir -p "$apt_source_dir"; then
+      error "$(t app.sub2api.error.postgres_source_dir "$apt_source_dir")"
+    fi
     local pg_source_list="/etc/apt/sources.list.d/pgdg.list"
     local pg_source_tmp
-    pg_source_tmp=$(mktemp "${pg_source_list}.XXXXXX")
+    if ! pg_source_tmp=$(mktemp "${pg_source_list}.XXXXXX"); then
+      error "$(t app.sub2api.error.postgres_source)"
+    fi
     if ! printf '%s\n' "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" > "$pg_source_tmp" \
         || ! chmod 644 "$pg_source_tmp" \
         || ! chown root:root "$pg_source_tmp" \
@@ -1837,10 +1859,15 @@ _install_redis() {
   fi
   if [[ "$PKG_MANAGER" == "apt" ]]; then
     info "$(t app.sub2api.info.redis_apt_source)"
-    install -d /usr/share/keyrings
+    local redis_keyring_dir="/usr/share/keyrings"
+    if ! install -d "$redis_keyring_dir"; then
+      error "$(t app.sub2api.error.redis_keyring_dir "$redis_keyring_dir")"
+    fi
     local redis_keyring redis_key_tmp
-    redis_keyring="/usr/share/keyrings/redis-archive-keyring.gpg"
-    redis_key_tmp="$(mktemp "${redis_keyring}.tmp.XXXXXX")"
+    redis_keyring="${redis_keyring_dir}/redis-archive-keyring.gpg"
+    if ! redis_key_tmp="$(mktemp "${redis_keyring}.tmp.XXXXXX")"; then
+      error "$(t app.sub2api.error.redis_key)"
+    fi
     if ! curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
         | gpg --batch --yes --dearmor -o "$redis_key_tmp"; then
       rm -f "$redis_key_tmp"
@@ -1854,10 +1881,15 @@ _install_redis() {
     fi
     local codename
     codename="$(_apt_codename)"
-    mkdir -p /etc/apt/sources.list.d
+    local apt_source_dir="/etc/apt/sources.list.d"
+    if ! mkdir -p "$apt_source_dir"; then
+      error "$(t app.sub2api.error.redis_source_dir "$apt_source_dir")"
+    fi
     local redis_source_list="/etc/apt/sources.list.d/redis.list"
     local redis_source_tmp
-    redis_source_tmp=$(mktemp "${redis_source_list}.XXXXXX")
+    if ! redis_source_tmp=$(mktemp "${redis_source_list}.XXXXXX"); then
+      error "$(t app.sub2api.error.redis_source)"
+    fi
     if ! printf '%s\n' "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb ${codename} main" > "$redis_source_tmp" \
         || ! chmod 644 "$redis_source_tmp" \
         || ! chown root:root "$redis_source_tmp" \
@@ -2154,17 +2186,22 @@ _configure_firewall() {
           warn "$(t app.sub2api.warn.iptables_not_persisted)"
         fi
       elif command -v iptables-save &>/dev/null; then
-        mkdir -p /etc/iptables
-        local iptables_rules="/etc/iptables/rules.v4"
-        local iptables_tmp
-        iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX")
-        if iptables-save > "$iptables_tmp" 2>/dev/null \
-            && chmod 644 "$iptables_tmp" \
-            && chown root:root "$iptables_tmp" \
-            && mv "$iptables_tmp" "$iptables_rules"; then
-          info "$(t app.sub2api.info.iptables_written)"
+        local iptables_dir="/etc/iptables"
+        if mkdir -p "$iptables_dir"; then
+          local iptables_rules="${iptables_dir}/rules.v4"
+          local iptables_tmp
+          if ! iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX"); then
+            warn "$(t app.sub2api.warn.iptables_write_failed)"
+          elif iptables-save > "$iptables_tmp" 2>/dev/null \
+              && chmod 644 "$iptables_tmp" \
+              && chown root:root "$iptables_tmp" \
+              && mv "$iptables_tmp" "$iptables_rules"; then
+            info "$(t app.sub2api.info.iptables_written)"
+          else
+            rm -f "$iptables_tmp"
+            warn "$(t app.sub2api.warn.iptables_write_failed)"
+          fi
         else
-          rm -f "$iptables_tmp"
           warn "$(t app.sub2api.warn.iptables_write_failed)"
         fi
       else
