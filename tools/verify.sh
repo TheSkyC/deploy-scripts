@@ -1851,6 +1851,64 @@ check_update_binary_backups_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
 }
 
+check_old_backup_cleanup_reports_failures() {
+  local file
+  for file in impl/install_newapi.sh dist/install_newapi.sh; do
+    awk '
+        /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
+        /warn "\$\(t app\.newapi\.warn\.cleanup_old_failed "\$_old_bak"\)"/ { saw_warn=1 }
+        /info "\$\(t app\.newapi\.info\.cleaned_old "\$_cleaned_old"\)"/ { saw_count=1 }
+        /rm -f "\$\{_old_baks\[@\]\}"/ {
+          printf "%s NewAPI must not silently batch-remove old binary backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        END {
+          if (!(saw_loop && saw_warn && saw_count)) {
+            printf "%s NewAPI old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
+  for file in impl/install_sub2api.sh dist/install_sub2api.sh; do
+    awk '
+        /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
+        /warn "\$\(t app\.sub2api\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_warn=1 }
+        /info "\$\(t app\.sub2api\.info\.cleaned_old_binaries "\$_cleaned_old"\)"/ { saw_count=1 }
+        /rm -f "\$\{_old_baks\[@\]\}"/ {
+          printf "%s Sub2API must not silently batch-remove old binary backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        END {
+          if (!(saw_loop && saw_warn && saw_count)) {
+            printf "%s Sub2API old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
+  for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+    awk '
+        /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_binary_loop=1 }
+        /warn "\$\(t app\.vaultwarden\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_binary_warn=1 }
+        /info "\$\(t app\.vaultwarden\.info\.cleaned_old_binaries "\$_cleaned_old"\)"/ { saw_binary_count=1 }
+        /for _old_wv_bak in "\$\{_old_wv_baks\[@\]\}"/ { saw_web_loop=1 }
+        /warn "\$\(t app\.vaultwarden\.warn\.cleanup_old_webvault_failed "\$_old_wv_bak"\)"/ { saw_web_warn=1 }
+        /info "\$\(t app\.vaultwarden\.info\.cleaned_webvault_backups "\$_cleaned_wv"\)"/ { saw_web_count=1 }
+        /rm -f "\$\{_old_baks\[@\]\}"/ || /rm -rf "\$\{_old_wv_baks\[@\]\}"/ {
+          printf "%s Vaultwarden must not silently batch-remove old backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        END {
+          if (!(saw_binary_loop && saw_binary_warn && saw_binary_count && saw_web_loop && saw_web_warn && saw_web_count)) {
+            printf "%s Vaultwarden old backup cleanup must report per-path failures and count successful removals\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
+}
+
 check_sub2api_extract_move_failure_cleanup() {
   if grep -R -n '^[[:space:]]*mv "$bin_path" "$tmp_bin"$' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
     echo "sub2api extraction must clean up temporary files if moving the binary fails." >&2
@@ -4178,6 +4236,7 @@ main() {
   check_mutating_installs_acquire_locks
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic
+  check_old_backup_cleanup_reports_failures
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_runtime_dir_failures_are_explicit
   check_cyberstrikeai_source_and_build_prep_failures_are_explicit

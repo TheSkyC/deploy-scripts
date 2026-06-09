@@ -1104,6 +1104,15 @@ i18n_register_many \
   app.vaultwarden.info.cleaned_webvault_backups \
   "Removed %s old web-vault backup directories (keeping the latest 3)." \
   "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。" \
+  app.vaultwarden.info.cleaned_old_binaries \
+  "Removed %s old binary backups (keeping the latest 3)." \
+  "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
+  app.vaultwarden.warn.cleanup_old_binary_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
+  app.vaultwarden.warn.cleanup_old_webvault_failed \
+  "Could not remove old web-vault backup directory: %s" \
+  "旧 web-vault 备份目录删除失败：%s" \
   app.vaultwarden.backup.script.data_missing \
   "[ERROR] Data directory does not exist (%s); backup aborted." \
   "[ERROR] 数据目录不存在（%s），备份已中止。" \
@@ -2527,7 +2536,18 @@ do_update() {
   mapfile -t _old_baks < <(find "$(dirname "$VW_BIN")" -maxdepth 1 \
     -name "vaultwarden.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | awk 'NR>3{print $2}')
-  [[ ${#_old_baks[@]} -gt 0 ]] && rm -f "${_old_baks[@]}"
+  if [[ ${#_old_baks[@]} -gt 0 ]]; then
+    local _cleaned_old=0
+    local _old_bak
+    for _old_bak in "${_old_baks[@]}"; do
+      if rm -f "$_old_bak"; then
+        _cleaned_old=$(( _cleaned_old + 1 ))
+      else
+        warn "$(t app.vaultwarden.warn.cleanup_old_binary_failed "$_old_bak")"
+      fi
+    done
+    [[ $_cleaned_old -gt 0 ]] && info "$(t app.vaultwarden.info.cleaned_old_binaries "$_cleaned_old")"
+  fi
   local _wv_parent
   _wv_parent=$(dirname "$VW_WEB_DIR")
   local _wv_basename
@@ -2537,8 +2557,16 @@ do_update() {
     -name "${_wv_basename}.bak.*" -type d -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | awk 'NR>3{print $2}')
   if [[ ${#_old_wv_baks[@]} -gt 0 ]]; then
-    rm -rf "${_old_wv_baks[@]}"
-    info "$(t app.vaultwarden.info.cleaned_webvault_backups "${#_old_wv_baks[@]}")"
+    local _cleaned_wv=0
+    local _old_wv_bak
+    for _old_wv_bak in "${_old_wv_baks[@]}"; do
+      if rm -rf "$_old_wv_bak"; then
+        _cleaned_wv=$(( _cleaned_wv + 1 ))
+      else
+        warn "$(t app.vaultwarden.warn.cleanup_old_webvault_failed "$_old_wv_bak")"
+      fi
+    done
+    [[ $_cleaned_wv -gt 0 ]] && info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
   fi
   save_config
 }

@@ -755,8 +755,16 @@ do_update() {
         -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk 'NR>3{print $2}'
     )
     if [[ ${#_old_baks[@]} -gt 0 ]]; then
-      rm -f "${_old_baks[@]}"
-      info "$(t app.newapi.info.cleaned_old "${#_old_baks[@]}")"
+      local _cleaned_old=0
+      local _old_bak
+      for _old_bak in "${_old_baks[@]}"; do
+        if rm -f "$_old_bak"; then
+          _cleaned_old=$(( _cleaned_old + 1 ))
+        else
+          warn "$(t app.newapi.warn.cleanup_old_failed "$_old_bak")"
+        fi
+      done
+      [[ $_cleaned_old -gt 0 ]] && info "$(t app.newapi.info.cleaned_old "$_cleaned_old")"
     fi
     if ! _health_check; then
       :

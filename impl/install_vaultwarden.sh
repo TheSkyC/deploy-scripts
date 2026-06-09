@@ -1166,7 +1166,18 @@ do_update() {
   mapfile -t _old_baks < <(find "$(dirname "$VW_BIN")" -maxdepth 1 \
     -name "vaultwarden.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | awk 'NR>3{print $2}')
-  [[ ${#_old_baks[@]} -gt 0 ]] && rm -f "${_old_baks[@]}"
+  if [[ ${#_old_baks[@]} -gt 0 ]]; then
+    local _cleaned_old=0
+    local _old_bak
+    for _old_bak in "${_old_baks[@]}"; do
+      if rm -f "$_old_bak"; then
+        _cleaned_old=$(( _cleaned_old + 1 ))
+      else
+        warn "$(t app.vaultwarden.warn.cleanup_old_binary_failed "$_old_bak")"
+      fi
+    done
+    [[ $_cleaned_old -gt 0 ]] && info "$(t app.vaultwarden.info.cleaned_old_binaries "$_cleaned_old")"
+  fi
   local _wv_parent
   _wv_parent=$(dirname "$VW_WEB_DIR")
   local _wv_basename
@@ -1176,8 +1187,16 @@ do_update() {
     -name "${_wv_basename}.bak.*" -type d -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | awk 'NR>3{print $2}')
   if [[ ${#_old_wv_baks[@]} -gt 0 ]]; then
-    rm -rf "${_old_wv_baks[@]}"
-    info "$(t app.vaultwarden.info.cleaned_webvault_backups "${#_old_wv_baks[@]}")"
+    local _cleaned_wv=0
+    local _old_wv_bak
+    for _old_wv_bak in "${_old_wv_baks[@]}"; do
+      if rm -rf "$_old_wv_bak"; then
+        _cleaned_wv=$(( _cleaned_wv + 1 ))
+      else
+        warn "$(t app.vaultwarden.warn.cleanup_old_webvault_failed "$_old_wv_bak")"
+      fi
+    done
+    [[ $_cleaned_wv -gt 0 ]] && info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
   fi
   save_config
 }

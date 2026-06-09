@@ -597,6 +597,9 @@ i18n_register_many \
   app.sub2api.info.cleaned_old_binaries \
   "Removed %s old binary backups (keeping the latest 3)." \
   "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
+  app.sub2api.warn.cleanup_old_binary_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
   app.sub2api.success.update_done \
   "Update complete: %s -> %s" \
   "更新完成：%s → %s" \

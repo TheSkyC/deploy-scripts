@@ -363,6 +363,9 @@ i18n_register_many \
   app.newapi.info.cleaned_old \
   "Removed %s expired old binary backups (keeping latest 3)." \
   "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
+  app.newapi.warn.cleanup_old_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
   app.newapi.success.update_done \
   "Update complete: %s -> %s" \
   "更新完成：%s → %s" \

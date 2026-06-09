@@ -1119,6 +1119,9 @@ i18n_register_many \
   app.sub2api.info.cleaned_old_binaries \
   "Removed %s old binary backups (keeping the latest 3)." \
   "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
+  app.sub2api.warn.cleanup_old_binary_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
   app.sub2api.success.update_done \
   "Update complete: %s -> %s" \
   "更新完成：%s → %s" \
@@ -2788,8 +2791,16 @@ do_update() {
         -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk 'NR>3{print $2}'
     )
     if [[ ${#_old_baks[@]} -gt 0 ]]; then
-      rm -f "${_old_baks[@]}"
-      info "$(t app.sub2api.info.cleaned_old_binaries "${#_old_baks[@]}")"
+      local _cleaned_old=0
+      local _old_bak
+      for _old_bak in "${_old_baks[@]}"; do
+        if rm -f "$_old_bak"; then
+          _cleaned_old=$(( _cleaned_old + 1 ))
+        else
+          warn "$(t app.sub2api.warn.cleanup_old_binary_failed "$_old_bak")"
+        fi
+      done
+      [[ $_cleaned_old -gt 0 ]] && info "$(t app.sub2api.info.cleaned_old_binaries "$_cleaned_old")"
     fi
     if ! _health_check; then
       :

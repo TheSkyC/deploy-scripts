@@ -582,6 +582,15 @@ i18n_register_many \
   app.vaultwarden.info.cleaned_webvault_backups \
   "Removed %s old web-vault backup directories (keeping the latest 3)." \
   "已清理 %s 个过期 web-vault 备份目录（保留最近 3 个）。" \
+  app.vaultwarden.info.cleaned_old_binaries \
+  "Removed %s old binary backups (keeping the latest 3)." \
+  "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
+  app.vaultwarden.warn.cleanup_old_binary_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
+  app.vaultwarden.warn.cleanup_old_webvault_failed \
+  "Could not remove old web-vault backup directory: %s" \
+  "旧 web-vault 备份目录删除失败：%s" \
   app.vaultwarden.backup.script.data_missing \
   "[ERROR] Data directory does not exist (%s); backup aborted." \
   "[ERROR] 数据目录不存在（%s），备份已中止。" \
