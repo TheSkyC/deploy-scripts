@@ -1649,7 +1649,9 @@ _restore_moved_binary_backup() {
   local restore_tmp
   [[ -n "$backup_path" && -f "$backup_path" ]] || return 0
   [[ ! -e "$BIN_PATH" ]] || return 1
-  restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX") || return 1
+  if ! restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX"); then
+    return 1
+  fi
   if ! cp "$backup_path" "$restore_tmp"; then
     rm -f "$restore_tmp"
     return 1
@@ -1686,7 +1688,9 @@ _restore_binary_backup() {
   local backup_path="$1"
   local restore_tmp
   [[ -f "$backup_path" ]] || return 1
-  restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX") || return 1
+  if ! restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX"); then
+    return 1
+  fi
   if ! cp "$backup_path" "$restore_tmp"; then
     rm -f "$restore_tmp"
     return 1

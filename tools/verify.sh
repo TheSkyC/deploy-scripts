@@ -1971,15 +1971,16 @@ check_binary_replacements_handle_failure() {
     return 1
   fi
   awk '
-      /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
-      in_func && /restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\)/ { saw_tmp=1 }
+      /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /if ! restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\); then/ { saw_tmp=1 }
+      in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_func && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
       in_func && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
       in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
       in_func && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_path"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
           printf "%s moved binary backup restores must stage, restore atomically, and clean up the moved backup\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -2000,14 +2001,15 @@ check_binary_restores_validate_permissions() {
     return 1
   fi
   awk '
-      /_restore_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; next }
-      in_func && /restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\)/ { saw_tmp=1 }
+      /_restore_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; next }
+      in_func && /if ! restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\); then/ { saw_tmp=1 }
+      in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_func && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
       in_func && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
       in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
       in_func && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_cp && saw_chmod && saw_chown && saw_mv)) {
+        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv)) {
           printf "%s restore helper must stage and atomically restore binary mode and ownership\n", FILENAME > "/dev/stderr"
           exit 1
         }
