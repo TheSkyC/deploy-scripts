@@ -1405,15 +1405,18 @@ check_newapi_runtime_dir_failures_are_explicit() {
       }
     ' apps/newapi.sh
   awk '
-      /step "\$\(t app\.newapi\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_chown_if=0; saw_chown_error=0; next }
+      /step "\$\(t app\.newapi\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_install_guard=0; saw_log_guard=0; saw_backup_guard=0; saw_chown_if=0; saw_chown_error=0; next }
       in_dirs && /if ! useradd -r -s \/usr\/sbin\/nologin -d "\$INSTALL_DIR" "\$SERVICE_USER"; then/ { saw_user_if=1 }
       in_dirs && /error "\$\(t app\.newapi\.error\.user_create "\$SERVICE_USER"\)"/ { saw_user_error=1 }
       in_dirs && /if ! mkdir -p "\$INSTALL_DIR" "\$DATA_DIR" "\$LOG_DIR" "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
       in_dirs && /error "\$\(t app\.newapi\.error\.dir_create "\$INSTALL_DIR" "\$BACKUP_DIR"\)"/ { saw_mkdir_error=1 }
+      in_dirs && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_guard=1 }
+      in_dirs && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log_guard=1 }
+      in_dirs && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup_guard=1 }
       in_dirs && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR" "\$LOG_DIR" "\$BACKUP_DIR"; then/ { saw_chown_if=1 }
       in_dirs && /error "\$\(t app\.newapi\.error\.dir_owner "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"\)"/ { saw_chown_error=1 }
       in_dirs && /success "\$\(t app\.newapi\.success\.dirs "\$INSTALL_DIR" "\$DATA_DIR" "\$LOG_DIR"\)"/ {
-        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_chown_if && saw_chown_error)) {
+        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_install_guard && saw_log_guard && saw_backup_guard && saw_chown_if && saw_chown_error)) {
           printf "%s NewAPI install must fail explicitly when user creation, directory creation, or directory ownership setup fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -1612,17 +1615,20 @@ check_sub2api_runtime_dir_failures_are_explicit() {
       }
     ' apps/sub2api.sh
   awk '
-      /step "\$\(t app\.sub2api\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_chown_if=0; saw_chown_error=0; saw_chmod_if=0; saw_chmod_error=0; next }
+      /step "\$\(t app\.sub2api\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_install_guard=0; saw_log_guard=0; saw_config_guard=0; saw_chown_if=0; saw_chown_error=0; saw_chmod_if=0; saw_chmod_error=0; next }
       in_dirs && /if ! useradd -r -s \/usr\/sbin\/nologin -d "\$INSTALL_DIR" "\$SERVICE_USER"; then/ { saw_user_if=1 }
       in_dirs && /error "\$\(t app\.sub2api\.error\.user_create "\$SERVICE_USER"\)"/ { saw_user_error=1 }
       in_dirs && /if ! mkdir -p "\$INSTALL_DIR" "\$DATA_DIR" "\$LOG_DIR" "\$CONFIG_DIR" "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
       in_dirs && /error "\$\(t app\.sub2api\.error\.dir_create "\$INSTALL_DIR" "\$BACKUP_DIR"\)"/ { saw_mkdir_error=1 }
+      in_dirs && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_guard=1 }
+      in_dirs && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log_guard=1 }
+      in_dirs && /require_safe_path "CONFIG_DIR" "\$CONFIG_DIR"/ { saw_config_guard=1 }
       in_dirs && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR" "\$LOG_DIR" "\$CONFIG_DIR"; then/ { saw_chown_if=1 }
       in_dirs && /error "\$\(t app\.sub2api\.error\.dir_owner "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR"\)"/ { saw_chown_error=1 }
       in_dirs && /if ! chmod 750 "\$CONFIG_DIR"; then/ { saw_chmod_if=1 }
       in_dirs && /error "\$\(t app\.sub2api\.error\.config_dir_mode "\$CONFIG_DIR"\)"/ { saw_chmod_error=1 }
       in_dirs && /success "\$\(t app\.sub2api\.success\.dirs_created\)"/ {
-        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_chown_if && saw_chown_error && saw_chmod_if && saw_chmod_error)) {
+        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_install_guard && saw_log_guard && saw_config_guard && saw_chown_if && saw_chown_error && saw_chmod_if && saw_chmod_error)) {
           printf "%s Sub2API install must fail explicitly when user creation, directory creation, ownership setup, or config-dir chmod fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -1992,14 +1998,16 @@ check_cyberstrikeai_runtime_dir_failures_are_explicit() {
       }
     ' apps/cyberstrikeai.sh
   awk '
-      /install_runtime_dirs\(\)/ { in_func=1; saw_mkdir_if=0; saw_chown_if=0; saw_mode_if=0; saw_child_mode_if=0; saw_error=0; next }
+      /install_runtime_dirs\(\)/ { in_func=1; saw_mkdir_if=0; saw_install_guard=0; saw_backup_guard=0; saw_chown_if=0; saw_mode_if=0; saw_child_mode_if=0; saw_error=0; next }
       in_func && /if ! mkdir -p "\$LOG_DIR" "\$INSTALL_DIR\/data" "\$INSTALL_DIR\/tmp" "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
+      in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_guard=1 }
+      in_func && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup_guard=1 }
       in_func && /if ! chown -R "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$INSTALL_DIR" "\$BACKUP_DIR"; then/ { saw_chown_if=1 }
       in_func && /if ! chmod 750 "\$INSTALL_DIR" "\$BACKUP_DIR"; then/ { saw_mode_if=1 }
       in_func && /if ! chmod 750 "\$LOG_DIR" "\$INSTALL_DIR\/data" "\$INSTALL_DIR\/tmp"; then/ { saw_child_mode_if=1 }
       in_func && /error "\$\(t app\.cyberstrikeai\.error\.runtime_dirs "\$INSTALL_DIR" "\$BACKUP_DIR"\)"/ { saw_error=1 }
       in_func && /success "\$\(t app\.cyberstrikeai\.success\.runtime_dirs\)"/ {
-        if (!(saw_mkdir_if && saw_chown_if && saw_mode_if && saw_child_mode_if && saw_error)) {
+        if (!(saw_mkdir_if && saw_install_guard && saw_backup_guard && saw_chown_if && saw_mode_if && saw_child_mode_if && saw_error)) {
           printf "%s CyberStrikeAI runtime directory setup must fail explicitly on mkdir, chown, and chmod errors\n", FILENAME > "/dev/stderr"
           exit 1
         }

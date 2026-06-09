@@ -2628,6 +2628,9 @@ do_install() {
   if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"; then
     error "$(t app.sub2api.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
   fi

@@ -1457,6 +1457,8 @@ install_runtime_dirs() {
   if ! mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"; then
     error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$BACKUP_DIR"; then
     error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
