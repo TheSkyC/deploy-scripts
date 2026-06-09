@@ -162,7 +162,9 @@ install_go_if_needed() {
   [[ -n "$version" ]] || error "$(t app.cyberstrikeai.error.go_parse)"
   tarball="${version}.linux-${go_arch}.tar.gz"
   url="https://go.dev/dl/${tarball}"
-  tmp=$(mktemp)
+  if ! tmp=$(mktemp); then
+    error "$(t app.cyberstrikeai.error.go_query)"
+  fi
   info "$(t app.cyberstrikeai.info.download "$url")"
   if ! curl -fL --retry 3 --connect-timeout 15 -o "$tmp" "$url"; then
     rm -f "$tmp"
@@ -172,7 +174,10 @@ install_go_if_needed() {
     rm -f "$tmp"
     error "$(t app.cyberstrikeai.error.go_empty)"
   fi
-  extract_dir=$(mktemp -d /usr/local/go.extract.XXXXXX)
+  if ! extract_dir=$(mktemp -d /usr/local/go.extract.XXXXXX); then
+    rm -f "$tmp"
+    error "$(t app.cyberstrikeai.error.go_extract)"
+  fi
   if ! tar -C "$extract_dir" -xzf "$tmp" || [[ ! -d "$extract_dir/go" ]]; then
     rm -f "$tmp"
     rm -rf "$extract_dir"
@@ -181,8 +186,14 @@ install_go_if_needed() {
   rm -f "$tmp"
   old_go_backup=""
   if [[ -e /usr/local/go ]]; then
-    old_go_backup=$(mktemp -d /usr/local/go.previous.XXXXXX)
-    rmdir "$old_go_backup"
+    if ! old_go_backup=$(mktemp -d /usr/local/go.previous.XXXXXX); then
+      rm -rf "$extract_dir"
+      error "$(t app.cyberstrikeai.error.go_failed)"
+    fi
+    if ! rmdir "$old_go_backup"; then
+      rm -rf "$extract_dir" "$old_go_backup"
+      error "$(t app.cyberstrikeai.error.go_failed)"
+    fi
     if ! mv /usr/local/go "$old_go_backup"; then
       rm -rf "$extract_dir"
       error "$(t app.cyberstrikeai.error.go_failed)"
@@ -328,7 +339,10 @@ setup_python_env() {
   fi
   if [[ -f requirements.txt ]]; then
     local pip_log
-    pip_log=$(mktemp)
+    if ! pip_log=$(mktemp); then
+      warn "$(t app.cyberstrikeai.warn.python_requirements)"
+      return 0
+    fi
     if python -m pip install --index-url "$PIP_INDEX_URL" -r requirements.txt >"$pip_log" 2>&1; then
       success "$(t app.cyberstrikeai.success.python_requirements)"
     else

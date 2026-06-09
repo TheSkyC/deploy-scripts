@@ -631,6 +631,11 @@ check_go_tarball_failures_cleanup() {
     return 1
   fi
   awk '
+      /if ! tmp=\$\(mktemp\); then/ { saw_download_tmp=1 }
+      /if ! extract_dir=\$\(mktemp -d \/usr\/local\/go\.extract\.XXXXXX\); then/ { saw_extract_tmp=1 }
+      /if ! old_go_backup=\$\(mktemp -d \/usr\/local\/go\.previous\.XXXXXX\); then/ { saw_backup_tmp=1 }
+      /if ! rmdir "\$old_go_backup"; then/ { saw_backup_rmdir=1 }
+      /error "\$\(t app\.cyberstrikeai\.error\.(go_query|go_extract|go_failed)\)"/ { saw_tmp_error=1 }
       /restore_old_go_toolchain\(\)/ { in_func=1; saw_exists=0; saw_absent=0; saw_mv=0; next }
       in_func && /\[\[ -n "\$old_go_backup" && -e "\$old_go_backup" \]\]/ { saw_exists=1 }
       in_func && /\[\[ ! -e \/usr\/local\/go \]\]/ { saw_absent=1 }
@@ -641,6 +646,12 @@ check_go_tarball_failures_cleanup() {
           exit 1
         }
         in_func=0
+      }
+      END {
+        if (!(saw_download_tmp && saw_extract_tmp && saw_backup_tmp && saw_backup_rmdir && saw_tmp_error)) {
+          print "CyberStrikeAI Go installation must report download, extract, and backup temp path preparation failures." > "/dev/stderr"
+          exit 1
+        }
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
   awk '
@@ -1671,9 +1682,11 @@ check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
       /setup_python_env\(\)/ { in_python=1; saw_python_cd_if=0; saw_python_cd_error=0; next }
       in_python && /if ! cd "\$INSTALL_DIR"; then/ { saw_python_cd_if=1 }
       in_python && /error "\$\(t app\.cyberstrikeai\.error\.install_dir_missing "\$INSTALL_DIR"\)"/ { saw_python_cd_error=1 }
-      in_python && /if \[\[ ! -d "\$VENV_DIR" \]\]; then/ {
-        if (!(saw_python_cd_if && saw_python_cd_error)) {
-          printf "%s CyberStrikeAI Python setup must guard install-directory access explicitly\n", FILENAME > "/dev/stderr"
+      in_python && /if ! pip_log=\$\(mktemp\); then/ { saw_pip_tmp_if=1 }
+      in_python && /warn "\$\(t app\.cyberstrikeai\.warn\.python_requirements\)"/ { saw_pip_tmp_warn=1 }
+      in_python && /warn "\$\(t app\.cyberstrikeai\.warn\.requirements_missing\)"/ {
+        if (!(saw_python_cd_if && saw_python_cd_error && saw_pip_tmp_if && saw_pip_tmp_warn)) {
+          printf "%s CyberStrikeAI Python setup must guard install-directory access and pip log creation explicitly\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_python=0
