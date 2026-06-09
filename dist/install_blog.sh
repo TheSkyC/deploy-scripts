@@ -181,7 +181,9 @@ safe_rm_dir() {
 acquire_lock() {
   local lock_file="${1:-${LOCK_FILE:-}}"
   [[ -n "$lock_file" ]] || return 0
-  mkdir -p "$(dirname "$lock_file")"
+  if ! mkdir -p "$(dirname "$lock_file")"; then
+    error "$(t error.lock_failed "$lock_file")"
+  fi
   exec 9>"$lock_file"
   flock -n 9 || error "$(t error.lock_failed "$lock_file")"
   trap 'release_lock' EXIT
@@ -1060,7 +1062,10 @@ restore_nginx_root_backup() {
   fi
 }
 [[ -d "\$PUBLIC_DIR" ]] || { echo "PUBLIC_DIR is missing: \$PUBLIC_DIR" >&2; exit 1; }
-mkdir -p "\$NGINX_ROOT_PARENT"
+if ! mkdir -p "\$NGINX_ROOT_PARENT"; then
+  echo "Failed to create the Nginx root parent: \$NGINX_ROOT_PARENT" >&2
+  exit 1
+fi
 if cp -a "\${PUBLIC_DIR}/." "\$DEPLOY_TMP/"; then
   if [[ -e "\$NGINX_ROOT" || -L "\$NGINX_ROOT" ]]; then
     if ! mv "\$NGINX_ROOT" "\$DEPLOY_BAK"; then

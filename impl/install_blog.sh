@@ -53,7 +53,10 @@ restore_nginx_root_backup() {
   fi
 }
 [[ -d "\$PUBLIC_DIR" ]] || { echo "PUBLIC_DIR is missing: \$PUBLIC_DIR" >&2; exit 1; }
-mkdir -p "\$NGINX_ROOT_PARENT"
+if ! mkdir -p "\$NGINX_ROOT_PARENT"; then
+  echo "Failed to create the Nginx root parent: \$NGINX_ROOT_PARENT" >&2
+  exit 1
+fi
 if cp -a "\${PUBLIC_DIR}/." "\$DEPLOY_TMP/"; then
   if [[ -e "\$NGINX_ROOT" || -L "\$NGINX_ROOT" ]]; then
     if ! mv "\$NGINX_ROOT" "\$DEPLOY_BAK"; then

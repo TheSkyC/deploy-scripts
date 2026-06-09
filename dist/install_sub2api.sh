@@ -181,7 +181,9 @@ safe_rm_dir() {
 acquire_lock() {
   local lock_file="${1:-${LOCK_FILE:-}}"
   [[ -n "$lock_file" ]] || return 0
-  mkdir -p "$(dirname "$lock_file")"
+  if ! mkdir -p "$(dirname "$lock_file")"; then
+    error "$(t error.lock_failed "$lock_file")"
+  fi
   exec 9>"$lock_file"
   flock -n 9 || error "$(t error.lock_failed "$lock_file")"
   trap 'release_lock' EXIT
@@ -2034,7 +2036,9 @@ _write_nginx_config() {
   else
     server_name_line="    server_name _;"
   fi
-  mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+  if ! mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled; then
+    error "$(t app.sub2api.error.nginx_config_write)"
+  fi
   local nginx_conf="/etc/nginx/sites-available/sub2api"
   local nginx_tmp
   if ! nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX"); then

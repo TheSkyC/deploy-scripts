@@ -578,7 +578,9 @@ _write_nginx_config() {
   else
     server_name_line="    server_name _;"
   fi
-  mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+  if ! mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled; then
+    error "$(t app.sub2api.error.nginx_config_write)"
+  fi
   local nginx_conf="/etc/nginx/sites-available/sub2api"
   local nginx_tmp
   if ! nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX"); then

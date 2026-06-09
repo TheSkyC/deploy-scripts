@@ -181,7 +181,9 @@ safe_rm_dir() {
 acquire_lock() {
   local lock_file="${1:-${LOCK_FILE:-}}"
   [[ -n "$lock_file" ]] || return 0
-  mkdir -p "$(dirname "$lock_file")"
+  if ! mkdir -p "$(dirname "$lock_file")"; then
+    error "$(t error.lock_failed "$lock_file")"
+  fi
   exec 9>"$lock_file"
   flock -n 9 || error "$(t error.lock_failed "$lock_file")"
   trap 'release_lock' EXIT

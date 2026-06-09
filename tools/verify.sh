@@ -1755,6 +1755,18 @@ check_mutating_installs_acquire_locks() {
       fi
     done
   '
+  awk '
+      /acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; next }
+      in_func && /if ! mkdir -p "\$\(dirname "\$lock_file"\)"; then/ { saw_mkdir=1 }
+      in_func && /error "\$\(t error\.lock_failed "\$lock_file"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_mkdir && saw_error)) {
+          print "Lock acquisition must report lock directory creation failures." > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' lib/lock.sh dist/install_newapi.sh
 }
 
 check_update_backs_up_before_stop() {
@@ -2532,14 +2544,15 @@ check_nginx_configs_are_atomic() {
     return 1
   fi
   awk '
+      /if ! mkdir -p \/etc\/nginx\/sites-available \/etc\/nginx\/sites-enabled; then/ { saw_nginx_dirs=1 }
       /if ! (nginx_tmp|NGINX_TMP)=\$\(mktemp/ { saw_tmp=1 }
       /error "\$\(t app\.(sub2api|cyberstrikeai|vaultwarden|blog)\.error\.(nginx_config_write|nginx|nginx_write|nginx_conf)/ { saw_tmp_error=1 }
       /mv "\$(nginx_tmp|NGINX_TMP)" "\$(nginx_conf|NGINX_CONF)"/ { saw_mv=1 }
       /rm -f "\$(nginx_tmp|NGINX_TMP)"/ { saw_cleanup=1 }
       /_write_nginx_config_file "\$NGINX_CONF"/ { saw_helper=1 }
       END {
-        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup && saw_helper)) {
-          print "Nginx site config writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
+        if (!(saw_nginx_dirs && saw_tmp && saw_tmp_error && saw_mv && saw_cleanup && saw_helper)) {
+          print "Nginx site config writes must prepare directories, stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
           exit 1
         }
       }
@@ -4009,17 +4022,19 @@ check_blog_publish_guidance_uses_staging_output() {
 check_blog_publish_helper_is_atomic() {
   awk '
       /_write_publish_script\(\)/ { saw_helper=1; next }
-      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_tmp_cleanup=0; saw_restore=0; next }
+      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_parent_dir=0; saw_parent_dir_error=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_tmp_cleanup=0; saw_restore=0; next }
       in_heredoc && /DEPLOY_TMP="\\\$\(mktemp -d/ { saw_tmp=1 }
       in_heredoc && /Failed to create a staging directory under \\\$NGINX_ROOT_PARENT/ { saw_tmp_error=1 }
+      in_heredoc && /if ! mkdir -p "\\\$NGINX_ROOT_PARENT"; then/ { saw_parent_dir=1 }
+      in_heredoc && /Failed to create the Nginx root parent: \\\$NGINX_ROOT_PARENT/ { saw_parent_dir_error=1 }
       in_heredoc && /cp -a "\\\$\{PUBLIC_DIR\}\/\." "\\\$DEPLOY_TMP\/"/ { saw_copy=1 }
       in_heredoc && /mv "\\\$NGINX_ROOT" "\\\$DEPLOY_BAK"/ { saw_backup=1 }
       in_heredoc && /mv "\\\$DEPLOY_TMP" "\\\$NGINX_ROOT"/ { saw_swap=1 }
       in_heredoc && /rm -rf "\\\$DEPLOY_TMP"/ { saw_tmp_cleanup=1 }
       in_heredoc && /restore_nginx_root_backup\(\)/ { saw_restore=1 }
       in_heredoc && /^BKSH$/ {
-        if (!(saw_tmp && saw_tmp_error && saw_copy && saw_backup && saw_swap && saw_tmp_cleanup && saw_restore)) {
-          printf "%s Blog publish helper must report temp creation failures, stage output, clean up failed staging directories, back up the live root, and restore on failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_parent_dir && saw_parent_dir_error && saw_copy && saw_backup && saw_swap && saw_tmp_cleanup && saw_restore)) {
+          printf "%s Blog publish helper must report directory/temp creation failures, stage output, clean up failed staging directories, back up the live root, and restore on failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_heredoc=0
