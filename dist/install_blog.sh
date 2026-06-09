@@ -1039,7 +1039,10 @@ PUBLIC_DIR="${PUBLIC_DIR}"
 NGINX_ROOT="${NGINX_ROOT}"
 NGINX_ROOT_PARENT="\$(dirname "\$NGINX_ROOT")"
 NGINX_ROOT_NAME="\$(basename "\$NGINX_ROOT")"
-DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX")"
+DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX")" || {
+  echo "Failed to create a staging directory under \$NGINX_ROOT_PARENT" >&2
+  exit 1
+}
 DEPLOY_BAK="\${NGINX_ROOT}.bak.\$(date +%Y%m%d%H%M%S)"
 restore_nginx_root_backup() {
   [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] || return 0
@@ -1112,8 +1115,12 @@ _write_blog_file() {
   local target_path="$1"
   local target_dir target_tmp
   target_dir="$(dirname "$target_path")"
-  mkdir -p "$target_dir"
-  target_tmp=$(mktemp "${target_dir}/.$(basename "$target_path").XXXXXX")
+  if ! mkdir -p "$target_dir"; then
+    error "$(t app.blog.error.file_write "$target_path")"
+  fi
+  if ! target_tmp=$(mktemp "${target_dir}/.$(basename "$target_path").XXXXXX"); then
+    error "$(t app.blog.error.file_write "$target_path")"
+  fi
   if ! cat > "$target_tmp"; then
     rm -f "$target_tmp"
     error "$(t app.blog.error.file_write "$target_path")"
@@ -1181,7 +1188,9 @@ HUGO_VER=$(curl -fsSL --max-time 15 \
 success "$(t app.blog.latest_version "$HUGO_VER")"
 DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"
 info "$(t app.blog.download_url "$DEB_URL")"
-HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"
+if ! HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
+  error "$(t app.blog.error.hugo_download)"
+fi
 if ! wget -q --show-progress -O "$HUGO_DEB" "$DEB_URL"; then
   rm -f "$HUGO_DEB"
   error "$(t app.blog.error.hugo_download)"
@@ -1529,7 +1538,9 @@ NGINX_ROOT_NAME="$(basename "$NGINX_ROOT")"
 if ! mkdir -p "$NGINX_ROOT_PARENT"; then
   error "$(t app.blog.error.nginx_root_parent "$NGINX_ROOT_PARENT")"
 fi
-DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"
+if ! DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"; then
+  error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+fi
 DEPLOY_BAK="${NGINX_ROOT}.bak.$(date +%Y%m%d%H%M%S)"
 if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
   if [[ -e "$NGINX_ROOT" || -L "$NGINX_ROOT" ]]; then
@@ -1552,7 +1563,9 @@ fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 _write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
-NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX")
+if ! NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX"); then
+  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+fi
 if ! cat > "$NGINX_TMP" << NGINX
 server {
     listen 80;
