@@ -2008,6 +2008,105 @@ check_systemd_units_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
 }
 
+check_systemd_daemon_reloads_are_explicit() {
+  if grep -R -nE '^[[:space:]]*systemctl daemon-reload$' impl dist 2>/dev/null; then
+    echo "systemd daemon reload failures must be handled explicitly or intentionally ignored in cleanup paths." >&2
+    return 1
+  fi
+  awk '
+      /app\.newapi\.error\.systemd_reload/ { saw_newapi_key=1 }
+      /app\.sub2api\.error\.systemd_reload/ { saw_sub2api_key=1 }
+      /app\.cyberstrikeai\.error\.systemd_reload/ { saw_cyberstrikeai_key=1 }
+      /app\.vaultwarden\.error\.systemd_reload/ { saw_vaultwarden_key=1 }
+      END {
+        if (!(saw_newapi_key && saw_sub2api_key && saw_cyberstrikeai_key && saw_vaultwarden_key)) {
+          print "All systemd apps must define actionable daemon reload failure messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh apps/vaultwarden.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.newapi\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      END {
+        if (!(reloads == 3 && errors == 3)) {
+          printf "%s NewAPI must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.newapi\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      END {
+        if (!(reloads == 3 && errors == 3)) {
+          printf "%s NewAPI must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' dist/install_newapi.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.sub2api\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      END {
+        if (!(reloads == 3 && errors == 3)) {
+          printf "%s Sub2API must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.sub2api\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      END {
+        if (!(reloads == 3 && errors == 3)) {
+          printf "%s Sub2API must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' dist/install_sub2api.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.cyberstrikeai\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      END {
+        if (!(reloads == 2 && errors == 2)) {
+          printf "%s CyberStrikeAI must handle install and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.cyberstrikeai\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      END {
+        if (!(reloads == 2 && errors == 2)) {
+          printf "%s CyberStrikeAI must handle install and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' dist/install_cyberstrikeai.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.vaultwarden\.error\.systemd_reload\)"/ { errors++ }
+      END {
+        if (!(reloads == 2 && errors == 2)) {
+          printf "%s Vaultwarden must handle install and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh
+  awk '
+      /if ! systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t app\.vaultwarden\.error\.systemd_reload\)"/ { errors++ }
+      END {
+        if (!(reloads == 2 && errors == 2)) {
+          printf "%s Vaultwarden must handle install and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' dist/install_vaultwarden.sh
+}
+
 check_backup_scripts_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat (>|>>) /usr/local/bin/.*-backup|^[[:space:]]*cat > "\$BACKUP_SCRIPT"' impl dist 2>/dev/null; then
     echo "Backup scripts must be written through temporary files before replacement." >&2
@@ -3769,6 +3868,7 @@ main() {
   check_vaultwarden_binary_installs_are_atomic
   check_vaultwarden_admin_token_file_is_private
   check_systemd_units_are_atomic
+  check_systemd_daemon_reloads_are_explicit
   check_backup_scripts_are_atomic
   check_generated_backup_scripts_handle_missing_dirs
   check_silent_backup_tar_diagnostics_use_stderr

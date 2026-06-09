@@ -628,7 +628,9 @@ do_install() {
     warn "$(t app.newapi.warn.port_used "$PORT" "$_port_owner")"
     warn "$(t app.newapi.warn.port_release)"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if ! systemctl enable "$SERVICE_NAME" --quiet; then
     warn "$(t app.newapi.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
@@ -714,7 +716,9 @@ do_update() {
     fi
     error "$(t app.newapi.error.binary_install "$BIN_PATH")"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.updated_started)"
     INSTALLED_VERSION="$LATEST"
@@ -963,7 +967,9 @@ do_uninstall() {
   systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
+  fi
   success "$(t app.newapi.success.removed_systemd)"
   rm -f "$BIN_PATH"
   find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f -delete 2>/dev/null || true

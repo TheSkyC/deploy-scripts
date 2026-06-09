@@ -998,6 +998,9 @@ i18n_register_many \
   app.sub2api.success.systemd_unit \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service" \
+  app.sub2api.error.systemd_reload \
+  "systemd daemon reload failed for %s. Run manually after fixing systemd: systemctl daemon-reload" \
+  "无法为 %s 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
   app.sub2api.step.nginx \
   "Step 10  Install and configure Nginx reverse proxy" \
   "Step 10  安装并配置 Nginx 反向代理" \
@@ -2588,7 +2591,9 @@ do_install() {
     warn "$(t app.sub2api.warn.port_used "$PORT" "$_port_owner")"
     warn "$(t app.sub2api.warn.port_hint)"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.sub2api.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if ! systemctl enable "$SERVICE_NAME" --quiet; then
     warn "$(t app.sub2api.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
@@ -2679,7 +2684,9 @@ do_update() {
     fi
     error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.sub2api.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.new_version_started)"
     INSTALLED_VERSION="$LATEST"
@@ -2983,7 +2990,9 @@ do_uninstall() {
   systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.sub2api.error.systemd_reload "$SERVICE_NAME")"
+  fi
   success "$(t app.sub2api.success.removed_systemd)"
   rm -f "$BIN_PATH"
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*"       -type f -delete 2>/dev/null || true

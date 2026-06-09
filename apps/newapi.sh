@@ -267,6 +267,9 @@ i18n_register_many \
   app.newapi.success.systemd \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service。" \
+  app.newapi.error.systemd_reload \
+  "systemd daemon reload failed for %s. Run manually after fixing systemd: systemctl daemon-reload" \
+  "无法为 %s 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
   app.newapi.warn.service_enable_failed \
   "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
   "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \

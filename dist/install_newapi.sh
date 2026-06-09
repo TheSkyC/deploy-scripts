@@ -782,6 +782,9 @@ i18n_register_many \
   app.newapi.success.systemd \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service。" \
+  app.newapi.error.systemd_reload \
+  "systemd daemon reload failed for %s. Run manually after fixing systemd: systemctl daemon-reload" \
+  "无法为 %s 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
   app.newapi.warn.service_enable_failed \
   "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
   "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
@@ -1799,7 +1802,9 @@ do_install() {
     warn "$(t app.newapi.warn.port_used "$PORT" "$_port_owner")"
     warn "$(t app.newapi.warn.port_release)"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if ! systemctl enable "$SERVICE_NAME" --quiet; then
     warn "$(t app.newapi.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
@@ -1885,7 +1890,9 @@ do_update() {
     fi
     error "$(t app.newapi.error.binary_install "$BIN_PATH")"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.updated_started)"
     INSTALLED_VERSION="$LATEST"
@@ -2134,7 +2141,9 @@ do_uninstall() {
   systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
+  fi
   success "$(t app.newapi.success.removed_systemd)"
   rm -f "$BIN_PATH"
   find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f -delete 2>/dev/null || true

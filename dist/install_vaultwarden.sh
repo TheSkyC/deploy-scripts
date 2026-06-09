@@ -758,6 +758,9 @@ i18n_register_many \
   app.vaultwarden.success.systemd \
   "systemd service created." \
   "systemd 服务已创建。" \
+  app.vaultwarden.error.systemd_reload \
+  "systemd daemon reload failed for vaultwarden. Run manually after fixing systemd: systemctl daemon-reload" \
+  "无法为 vaultwarden 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
   app.vaultwarden.warn.service_enable_failed \
   "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
   "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
@@ -1902,7 +1905,9 @@ UNIT
     rm -f "$unit_tmp"
     error "$(t app.vaultwarden.error.systemd)"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.vaultwarden.error.systemd_reload)"
+  fi
   if ! systemctl enable vaultwarden --quiet; then
     warn "$(t app.vaultwarden.warn.service_enable_failed "vaultwarden" "vaultwarden")"
   fi
@@ -2774,7 +2779,9 @@ do_uninstall() {
   systemctl stop    vaultwarden 2>/dev/null || true
   systemctl disable vaultwarden 2>/dev/null || true
   rm -f /etc/systemd/system/vaultwarden.service
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.vaultwarden.error.systemd_reload)"
+  fi
   success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
   find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -delete 2>/dev/null || true

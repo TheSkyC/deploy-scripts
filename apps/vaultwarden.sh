@@ -243,6 +243,9 @@ i18n_register_many \
   app.vaultwarden.success.systemd \
   "systemd service created." \
   "systemd 服务已创建。" \
+  app.vaultwarden.error.systemd_reload \
+  "systemd daemon reload failed for vaultwarden. Run manually after fixing systemd: systemctl daemon-reload" \
+  "无法为 vaultwarden 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
   app.vaultwarden.warn.service_enable_failed \
   "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
   "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \

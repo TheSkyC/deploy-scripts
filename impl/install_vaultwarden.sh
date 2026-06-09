@@ -551,7 +551,9 @@ UNIT
     rm -f "$unit_tmp"
     error "$(t app.vaultwarden.error.systemd)"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.vaultwarden.error.systemd_reload)"
+  fi
   if ! systemctl enable vaultwarden --quiet; then
     warn "$(t app.vaultwarden.warn.service_enable_failed "vaultwarden" "vaultwarden")"
   fi
@@ -1423,7 +1425,9 @@ do_uninstall() {
   systemctl stop    vaultwarden 2>/dev/null || true
   systemctl disable vaultwarden 2>/dev/null || true
   rm -f /etc/systemd/system/vaultwarden.service
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.vaultwarden.error.systemd_reload)"
+  fi
   success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
   find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -delete 2>/dev/null || true

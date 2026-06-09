@@ -450,7 +450,9 @@ SERVICE
     rm -f "$unit_tmp"
     error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
   fi
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.cyberstrikeai.error.systemd_reload "$SERVICE_NAME")"
+  fi
   if ! systemctl enable "$SERVICE_NAME" --quiet; then
     warn "$(t app.cyberstrikeai.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
@@ -1004,7 +1006,9 @@ do_uninstall() {
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-  systemctl daemon-reload
+  if ! systemctl daemon-reload; then
+    error "$(t app.cyberstrikeai.error.systemd_reload "$SERVICE_NAME")"
+  fi
   success "$(t app.cyberstrikeai.success.removed_systemd)"
   rm -f "$NGINX_LINK" "$NGINX_CONF"
   if command -v nginx >/dev/null 2>&1; then

@@ -483,6 +483,9 @@ i18n_register_many \
   app.sub2api.success.systemd_unit \
   "systemd service file written: /etc/systemd/system/%s.service" \
   "systemd 服务文件已写入：/etc/systemd/system/%s.service" \
+  app.sub2api.error.systemd_reload \
+  "systemd daemon reload failed for %s. Run manually after fixing systemd: systemctl daemon-reload" \
+  "无法为 %s 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
   app.sub2api.step.nginx \
   "Step 10  Install and configure Nginx reverse proxy" \
   "Step 10  安装并配置 Nginx 反向代理" \
