@@ -1492,7 +1492,9 @@ LOGR
   success "$(t app.newapi.success.logrotate)"
 }
 _write_backup_script() {
-  mkdir -p "$BACKUP_DIR"
+  if ! mkdir -p "$BACKUP_DIR"; then
+    error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
+  fi
   local msg_start msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_done
   msg_start="$(t app.newapi.backup.log.start)"
   msg_data_missing="$(t app.newapi.backup.log.data_missing '%s')"

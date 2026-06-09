@@ -207,7 +207,9 @@ install_go_if_needed() {
 }
 ensure_service_user() {
   if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-    useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
+    if ! useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"; then
+      error "$(t app.cyberstrikeai.error.user_create "$SERVICE_USER")"
+    fi
     success "$(t app.cyberstrikeai.success.user_created "$SERVICE_USER")"
   fi
 }

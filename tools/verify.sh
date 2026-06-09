@@ -1151,6 +1151,33 @@ check_sub2api_runtime_dir_failures_are_explicit() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_backup_script_dir_failures_are_explicit() {
+  awk '
+      /_write_backup_script\(\)/ { in_newapi=1; saw_newapi_if=0; saw_newapi_error=0; next }
+      in_newapi && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_newapi_if=1 }
+      in_newapi && /error "\$\(t app\.newapi\.error\.backup_dir_create "\$BACKUP_DIR"\)"/ { saw_newapi_error=1 }
+      in_newapi && /local msg_start/ {
+        if (!(saw_newapi_if && saw_newapi_error)) {
+          printf "%s NewAPI backup-script generator must fail explicitly when the backup directory cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_newapi=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /_write_backup_script\(\)/ { in_sub2api=1; saw_sub2api_if=0; saw_sub2api_error=0; next }
+      in_sub2api && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_sub2api_if=1 }
+      in_sub2api && /error "\$\(t app\.sub2api\.error\.backup_dir_create "\$BACKUP_DIR"\)"/ { saw_sub2api_error=1 }
+      in_sub2api && /local msg_start/ {
+        if (!(saw_sub2api_if && saw_sub2api_error)) {
+          printf "%s Sub2API backup-script generator must fail explicitly when the backup directory cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_sub2api=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_vaultwarden_runtime_dir_failures_are_explicit() {
   awk '
       /app\.vaultwarden\.error\.user_create/ { saw_user_key=1 }
@@ -1160,9 +1187,13 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
       /app\.vaultwarden\.error\.data_dir_mode/ { saw_mode_key=1 }
       /app\.vaultwarden\.error\.web_vault_extract_dir/ { saw_extract_key=1 }
       /Web Vault extraction directory/ { saw_extract_guidance=1 }
+      /app\.vaultwarden\.error\.nginx_dirs/ { saw_nginx_dir_key=1 }
+      /Nginx support directories/ { saw_nginx_dir_guidance=1 }
+      /app\.vaultwarden\.error\.fail2ban_dirs/ { saw_fail2ban_dir_key=1 }
+      /Fail2Ban configuration directories/ { saw_fail2ban_dir_guidance=1 }
       END {
-        if (!(saw_user_key && saw_dir_key && saw_dir_guidance && saw_owner_key && saw_mode_key && saw_extract_key && saw_extract_guidance)) {
-          print "Vaultwarden runtime directory failures must provide actionable user, mkdir, chown, chmod, and Web Vault extract-dir guidance." > "/dev/stderr"
+        if (!(saw_user_key && saw_dir_key && saw_dir_guidance && saw_owner_key && saw_mode_key && saw_extract_key && saw_extract_guidance && saw_nginx_dir_key && saw_nginx_dir_guidance && saw_fail2ban_dir_key && saw_fail2ban_dir_guidance)) {
+          print "Vaultwarden runtime directory failures must provide actionable user, mkdir, chown, chmod, Web Vault extract-dir, Nginx-dir, and Fail2Ban-dir guidance." > "/dev/stderr"
           exit 1
         }
       }
@@ -1193,6 +1224,26 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
           exit 1
         }
         in_extract=0
+      }
+      /step "\$\(t app\.vaultwarden\.step\.nginx_http\)"/ { in_nginx=1; saw_nginx_dirs_if=0; saw_nginx_dirs_error=0; next }
+      in_nginx && /if ! mkdir -p \/var\/www\/certbot \/etc\/nginx\/sites-available \/etc\/nginx\/sites-enabled; then/ { saw_nginx_dirs_if=1 }
+      in_nginx && /error "\$\(t app\.vaultwarden\.error\.nginx_dirs "\$NGINX_CONF"\)"/ { saw_nginx_dirs_error=1 }
+      in_nginx && /_write_nginx_config_file "\$NGINX_CONF"/ {
+        if (!(saw_nginx_dirs_if && saw_nginx_dirs_error)) {
+          printf "%s Vaultwarden Nginx bootstrap must fail explicitly when support directories cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_nginx=0
+      }
+      /step "\$\(t app\.vaultwarden\.step\.fail2ban\)"/ { in_fail2ban=1; saw_fail2ban_dirs_if=0; saw_fail2ban_dirs_error=0; next }
+      in_fail2ban && /if ! mkdir -p \/etc\/fail2ban\/filter\.d \/etc\/fail2ban\/jail\.d; then/ { saw_fail2ban_dirs_if=1 }
+      in_fail2ban && /error "\$\(t app\.vaultwarden\.error\.fail2ban_dirs\)"/ { saw_fail2ban_dirs_error=1 }
+      in_fail2ban && /_write_fail2ban_config_file \/etc\/fail2ban\/filter\.d\/vaultwarden\.conf/ {
+        if (!(saw_fail2ban_dirs_if && saw_fail2ban_dirs_error)) {
+          printf "%s Vaultwarden Fail2Ban setup must fail explicitly when configuration directories cannot be created\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_fail2ban=0
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
@@ -1469,6 +1520,7 @@ check_cyberstrikeai_runtime_dir_failures_are_explicit() {
 
 check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
   awk '
+      /app\.cyberstrikeai\.error\.user_create/ { saw_user_key=1 }
       /app\.cyberstrikeai\.error\.source_parent_dir/ { saw_parent_key=1 }
       /app\.cyberstrikeai\.error\.repo_fetch/ { saw_fetch_key=1 }
       /git -C %s fetch --prune origin %s/ { saw_fetch_guidance=1 }
@@ -1484,13 +1536,23 @@ check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
       /app\.cyberstrikeai\.error\.nginx_dirs/ { saw_nginx_key=1 }
       /app\.cyberstrikeai\.error\.install_dir_owner/ { saw_owner_key=1 }
       END {
-        if (!(saw_parent_key && saw_fetch_key && saw_fetch_guidance && saw_checkout_key && saw_checkout_guidance && saw_pull_key && saw_pull_guidance && saw_clone_key && saw_clone_guidance && saw_dir_key && saw_mod_key && saw_mod_guidance && saw_nginx_key && saw_owner_key)) {
+        if (!(saw_user_key && saw_parent_key && saw_fetch_key && saw_fetch_guidance && saw_checkout_key && saw_checkout_guidance && saw_pull_key && saw_pull_guidance && saw_clone_key && saw_clone_guidance && saw_dir_key && saw_mod_key && saw_mod_guidance && saw_nginx_key && saw_owner_key)) {
           print "CyberStrikeAI source and build-prep failures must provide actionable recovery guidance." > "/dev/stderr"
           exit 1
         }
       }
     ' apps/cyberstrikeai.sh
   awk '
+      /ensure_service_user\(\)/ { in_user=1; saw_user_if=0; saw_user_error=0; next }
+      in_user && /if ! useradd --system --home "\$INSTALL_DIR" --shell \/usr\/sbin\/nologin "\$SERVICE_USER"; then/ { saw_user_if=1 }
+      in_user && /error "\$\(t app\.cyberstrikeai\.error\.user_create "\$SERVICE_USER"\)"/ { saw_user_error=1 }
+      in_user && /success "\$\(t app\.cyberstrikeai\.success\.user_created "\$SERVICE_USER"\)"/ {
+        if (!(saw_user_if && saw_user_error)) {
+          printf "%s CyberStrikeAI service-user setup must fail explicitly when useradd fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_user=0
+      }
       /sync_repo_branch\(\)/ { in_sync=1; saw_fetch_if=0; saw_fetch_error=0; saw_checkout_if=0; saw_checkout_error=0; saw_pull_if=0; saw_pull_error=0; next }
       in_sync && /if ! git -C "\$INSTALL_DIR" fetch --prune origin "\$GITHUB_BRANCH"; then/ { saw_fetch_if=1 }
       in_sync && /error "\$\(t app\.cyberstrikeai\.error\.repo_fetch "\$GITHUB_BRANCH" "\$INSTALL_DIR" "\$INSTALL_DIR" "\$GITHUB_BRANCH"\)"/ { saw_fetch_error=1 }
@@ -3607,6 +3669,7 @@ main() {
   check_sub2api_apt_failures_are_reported
   check_sub2api_rpm_dependency_failures_are_reported
   check_sub2api_runtime_dir_failures_are_explicit
+  check_backup_script_dir_failures_are_explicit
   check_vaultwarden_runtime_dir_failures_are_explicit
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance

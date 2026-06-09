@@ -276,6 +276,9 @@ i18n_register_many \
   app.vaultwarden.error.nginx_write \
   "Nginx config write failed: %s" \
   "Nginx 配置写入失败：%s" \
+  app.vaultwarden.error.nginx_dirs \
+  "Failed to prepare Nginx support directories for %s. Check filesystem permissions and retry." \
+  "无法为 %s 准备 Nginx 支撑目录。请检查文件系统权限后重试。" \
   app.vaultwarden.error.nginx_http_test \
   "Nginx config validation failed (HTTP phase)." \
   "Nginx 配置验证失败（HTTP 阶段）。" \
@@ -333,6 +336,9 @@ i18n_register_many \
   app.vaultwarden.step.fail2ban \
   "Step 11  Configure Fail2Ban brute-force protection" \
   "Step 11  配置 Fail2Ban 防暴力破解" \
+  app.vaultwarden.error.fail2ban_dirs \
+  "Failed to prepare Fail2Ban configuration directories. Check filesystem permissions for /etc/fail2ban and retry." \
+  "无法准备 Fail2Ban 配置目录。请检查 /etc/fail2ban 的文件系统权限后重试。" \
   app.vaultwarden.error.fail2ban_write \
   "Fail2Ban config write failed: %s" \
   "Fail2Ban 配置写入失败：%s" \

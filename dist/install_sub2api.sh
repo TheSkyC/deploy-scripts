@@ -2206,7 +2206,9 @@ LOGR
   success "$(t app.sub2api.success.logrotate)"
 }
 _write_backup_script() {
-  mkdir -p "$BACKUP_DIR"
+  if ! mkdir -p "$BACKUP_DIR"; then
+    error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
+  fi
   local msg_start msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
   local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_done
   msg_start="$(t app.sub2api.backup.log.start)"

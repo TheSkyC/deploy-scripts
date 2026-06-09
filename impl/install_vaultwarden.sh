@@ -577,7 +577,9 @@ UNIT
   fi
   step "$(t app.vaultwarden.step.nginx_http)"
   local NGINX_CONF="/etc/nginx/sites-available/vaultwarden"
-  mkdir -p /var/www/certbot /etc/nginx/sites-available /etc/nginx/sites-enabled
+  if ! mkdir -p /var/www/certbot /etc/nginx/sites-available /etc/nginx/sites-enabled; then
+    error "$(t app.vaultwarden.error.nginx_dirs "$NGINX_CONF")"
+  fi
   _write_nginx_config_file "$NGINX_CONF" << NGINX
 # Vaultwarden reverse proxy configuration for the HTTP bootstrap phase.
 server {
@@ -786,7 +788,9 @@ NGINX2BODY
     warn "$(t app.vaultwarden.warn.https_skipped)"
   fi
   step "$(t app.vaultwarden.step.fail2ban)"
-  mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
+  if ! mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d; then
+    error "$(t app.vaultwarden.error.fail2ban_dirs)"
+  fi
   _write_fail2ban_config_file /etc/fail2ban/filter.d/vaultwarden.conf << F2B
 [INCLUDES]
 before = common.conf

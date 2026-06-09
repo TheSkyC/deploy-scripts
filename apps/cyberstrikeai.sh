@@ -75,6 +75,9 @@ i18n_register_many \
   app.cyberstrikeai.success.go_installed \
   "Go installed: %s" \
   "Go 已安装：%s" \
+  app.cyberstrikeai.error.user_create \
+  "Failed to create service user %s. Check useradd output and retry." \
+  "创建服务用户 %s 失败。请检查 useradd 输出后重试。" \
   app.cyberstrikeai.success.user_created \
   "Created service user: %s" \
   "服务用户已创建：%s" \
