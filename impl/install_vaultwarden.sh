@@ -638,7 +638,7 @@ UNIT
   fi
   if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
     success "$(t app.vaultwarden.success.service_started)"
-    systemctl status vaultwarden --no-pager -l | head -12 | sed 's/^/  /'
+    systemctl status vaultwarden --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' || true
   else
     warn "$(t app.vaultwarden.warn.service_cleanup)"
     systemctl stop    vaultwarden 2>/dev/null || true

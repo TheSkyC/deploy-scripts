@@ -661,7 +661,7 @@ do_install() {
   fi
   if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.service_started)"
-    systemctl status "$SERVICE_NAME" --no-pager -l | head -12 | sed 's/^/  /' >&2
+    systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' >&2 || true
   else
     warn "$(t app.newapi.warn.start_rollback)"
     systemctl stop    "$SERVICE_NAME" 2>/dev/null || true

@@ -1228,7 +1228,7 @@ do_install() {
   fi
   if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.service_started)"
-    systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' >&2
+    systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' >&2 || true
   else
     if systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
       warn "$(t app.sub2api.warn.service_failed_rollback)"

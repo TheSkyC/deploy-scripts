@@ -689,6 +689,28 @@ check_summary_ip_detection_has_fallback() {
   done
 }
 
+check_systemctl_status_diagnostics_are_nonfatal() {
+  awk '
+      /systemctl status .*\| head .*\| sed/ {
+        pending=1
+        pending_line=FNR
+        if (/&&|\|\| true/) {
+          pending=0
+        }
+        next
+      }
+      pending {
+        if (/\|\| (true|echo|warn|error)/) {
+          pending=0
+          next
+        }
+        printf "%s:%d systemctl status diagnostic pipelines must be non-fatal under pipefail.\n", FILENAME, pending_line > "/dev/stderr"
+        exit 1
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4285,6 +4307,7 @@ main() {
   check_iptables_rules_are_atomic
   check_random_head_pipelines_handle_sigpipe
   check_summary_ip_detection_has_fallback
+  check_systemctl_status_diagnostics_are_nonfatal
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
