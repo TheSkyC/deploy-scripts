@@ -809,6 +809,9 @@ i18n_register_many \
   app.cyberstrikeai.backup.error.install_missing \
   "install dir missing: %s" \
   "安装目录不存在：%s" \
+  app.cyberstrikeai.backup.error.backup_dir_create \
+  "cannot create backup directory: %s" \
+  "无法创建备份目录：%s" \
   app.cyberstrikeai.backup.warn.sqlite_integrity \
   "SQLite integrity warning for %s: %s" \
   "SQLite 完整性警告：%s：%s" \
@@ -1603,8 +1606,9 @@ ROTATE
   fi
 }
 write_backup_script() {
-  local msg_install_missing msg_sqlite_integrity msg_backup_created
+  local msg_install_missing msg_backup_dir_failed msg_sqlite_integrity msg_backup_created
   msg_install_missing="$(t app.cyberstrikeai.backup.error.install_missing '%s')"
+  msg_backup_dir_failed="$(t app.cyberstrikeai.backup.error.backup_dir_create '%s')"
   msg_sqlite_integrity="$(t app.cyberstrikeai.backup.warn.sqlite_integrity '%s' '%s')"
   msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
   local backup_tmp
@@ -1621,12 +1625,16 @@ KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 SERVICE_NAME="${SERVICE_NAME}"
 LOG_FILE="${LOG_DIR}/backup.log"
 MSG_INSTALL_MISSING="${msg_install_missing}"
+MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_SQLITE_INTEGRITY="${msg_sqlite_integrity}"
 MSG_BACKUP_CREATED="${msg_backup_created}"
 
 _log() { echo "\$(date '+%F %T') \$*" >> "\$LOG_FILE"; }
 
-mkdir -p "\$BACKUP_DIR"
+if ! mkdir -p "\$BACKUP_DIR"; then
+  printf "\$(date '+%F %T') [ERROR] %s\n" "\$(printf "\$MSG_BACKUP_DIR_FAILED" "\$BACKUP_DIR")" >&2
+  exit 1
+fi
 if [[ ! -d "\$INSTALL_DIR" ]]; then
   _log "[ERROR] \$(printf "\$MSG_INSTALL_MISSING" "\$INSTALL_DIR")"
   printf "\$(date '+%F %T') [ERROR] %s\n" "\$(printf "\$MSG_INSTALL_MISSING" "\$INSTALL_DIR")" >&2

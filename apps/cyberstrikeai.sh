@@ -294,6 +294,9 @@ i18n_register_many \
   app.cyberstrikeai.backup.error.install_missing \
   "install dir missing: %s" \
   "安装目录不存在：%s" \
+  app.cyberstrikeai.backup.error.backup_dir_create \
+  "cannot create backup directory: %s" \
+  "无法创建备份目录：%s" \
   app.cyberstrikeai.backup.warn.sqlite_integrity \
   "SQLite integrity warning for %s: %s" \
   "SQLite 完整性警告：%s：%s" \

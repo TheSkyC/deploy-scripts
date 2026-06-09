@@ -582,6 +582,9 @@ i18n_register_many \
   app.vaultwarden.backup.script.data_missing \
   "[ERROR] Data directory does not exist (%s); backup aborted." \
   "[ERROR] 数据目录不存在（%s），备份已中止。" \
+  app.vaultwarden.backup.script.dir_failed \
+  "[ERROR] Cannot create backup directory: %s" \
+  "[ERROR] 无法创建备份目录：%s" \
   app.vaultwarden.backup.script.sqlite_warning \
   "[WARN] SQLite integrity check failed (%s). Backup will continue, but the database may be corrupted." \
   "[WARN] SQLite 完整性校验失败（%s），备份仍将继续但数据库可能已损坏。" \

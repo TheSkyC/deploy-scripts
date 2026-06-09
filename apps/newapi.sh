@@ -72,6 +72,9 @@ i18n_register_many \
   app.newapi.backup.log.start \
   "Backup started" \
   "开始备份" \
+  app.newapi.backup.log.dir_failed \
+  "[ERROR] Cannot create backup directory: %s" \
+  "[ERROR] 无法创建备份目录：%s" \
   app.newapi.backup.log.data_missing \
   "[ERROR] Data directory does not exist (%s); backup aborted." \
   "[ERROR] 数据目录不存在（%s），备份中止。" \

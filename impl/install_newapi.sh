@@ -327,8 +327,9 @@ _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
   fi
-  local msg_start msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_done
+  local msg_start msg_backup_dir_failed msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_done
   msg_start="$(t app.newapi.backup.log.start)"
+  msg_backup_dir_failed="$(t app.newapi.backup.log.dir_failed '%s')"
   msg_data_missing="$(t app.newapi.backup.log.data_missing '%s')"
   msg_wal_ok="$(t app.newapi.backup.log.wal_ok)"
   msg_wal_warn="$(t app.newapi.backup.log.wal_warn)"
@@ -352,6 +353,7 @@ DATA_DIR="${DATA_DIR}"
 SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 MSG_START="${msg_start}"
+MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_DATA_MISSING="${msg_data_missing}"
 MSG_WAL_OK="${msg_wal_ok}"
 MSG_WAL_WARN="${msg_wal_warn}"
@@ -373,6 +375,10 @@ ARCHIVE="${BACKUP_DIR}/new-api_${TS}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"
 
 _log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
+if ! mkdir -p "${BACKUP_DIR}"; then
+  printf '%s  %s\n' "$(date '+%F %T')" "$(printf "$MSG_BACKUP_DIR_FAILED" "$BACKUP_DIR")" >&2
+  exit 1
+fi
 _log "── ${MSG_START} ────────────────────────────────────"
 
 # Refuse to create an empty backup when the data directory is missing.
@@ -380,8 +386,6 @@ if [[ ! -d "${DATA_DIR}" ]]; then
   _log "$(printf "$MSG_DATA_MISSING" "$DATA_DIR")"
   exit 1
 fi
-
-mkdir -p "${BACKUP_DIR}"
 
 # Flush SQLite WAL data and run an integrity check before archiving.
 DB_FILE="${DATA_DIR}/one-api.db"

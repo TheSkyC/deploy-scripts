@@ -774,9 +774,10 @@ _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
   fi
-  local msg_start msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
+  local msg_start msg_backup_dir_failed msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
   local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_done
   msg_start="$(t app.sub2api.backup.log.start)"
+  msg_backup_dir_failed="$(t app.sub2api.backup.log.dir_failed '%s')"
   msg_pg_dump_start="$(t app.sub2api.backup.log.pg_dump_start)"
   msg_pg_dump_ok="$(t app.sub2api.backup.log.pg_dump_ok '%s' '%s')"
   msg_pg_dump_failed="$(t app.sub2api.backup.log.pg_dump_failed)"
@@ -805,6 +806,7 @@ SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 PG_DSN="${PG_DSN}"
 MSG_START="${msg_start}"
+MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_PG_DUMP_START="${msg_pg_dump_start}"
 MSG_PG_DUMP_OK="${msg_pg_dump_ok}"
 MSG_PG_DUMP_FAILED="${msg_pg_dump_failed}"
@@ -831,9 +833,11 @@ PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
 PG_DUMP_TMP="${PG_DUMP_FILE}.tmp"
 
 _log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
+if ! mkdir -p "${BACKUP_DIR}"; then
+  printf '%s  %s\n' "$(date '+%F %T')" "$(printf "$MSG_BACKUP_DIR_FAILED" "$BACKUP_DIR")" >&2
+  exit 1
+fi
 _log "── ${MSG_START} ────────────────────────────────────"
-
-mkdir -p "${BACKUP_DIR}"
 
 # ── 1. PostgreSQL database backup ─────────────────────────────
 if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then

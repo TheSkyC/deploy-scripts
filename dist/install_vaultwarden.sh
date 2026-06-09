@@ -1097,6 +1097,9 @@ i18n_register_many \
   app.vaultwarden.backup.script.data_missing \
   "[ERROR] Data directory does not exist (%s); backup aborted." \
   "[ERROR] 数据目录不存在（%s），备份已中止。" \
+  app.vaultwarden.backup.script.dir_failed \
+  "[ERROR] Cannot create backup directory: %s" \
+  "[ERROR] 无法创建备份目录：%s" \
   app.vaultwarden.backup.script.sqlite_warning \
   "[WARN] SQLite integrity check failed (%s). Backup will continue, but the database may be corrupted." \
   "[WARN] SQLite 完整性校验失败（%s），备份仍将继续但数据库可能已损坏。" \
@@ -2501,6 +2504,7 @@ DATA_DIR="${VW_DATA_DIR}"
 ENV_FILE="${VW_ENV_FILE}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
 MSG_DATA_MISSING="$(t app.vaultwarden.backup.script.data_missing)"
+MSG_BACKUP_DIR_FAILED="$(t app.vaultwarden.backup.script.dir_failed)"
 MSG_SQLITE_WARNING="$(t app.vaultwarden.backup.script.sqlite_warning)"
 MSG_SUCCESS="$(t app.vaultwarden.backup.script.success)"
 MSG_FAILED="$(t app.vaultwarden.backup.script.failed)"
@@ -2514,7 +2518,10 @@ BKSH_VARS
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
-mkdir -p "${BACKUP_DIR}"
+if ! mkdir -p "${BACKUP_DIR}"; then
+  printf '%s  '"${MSG_BACKUP_DIR_FAILED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${BACKUP_DIR}" >&2
+  exit 1
+fi
 
 # Refuse to create an empty archive when the data directory is missing.
 if [[ ! -d "${DATA_DIR}" ]]; then

@@ -252,6 +252,9 @@ i18n_register_many \
   app.sub2api.backup.log.start \
   "Backup started" \
   "开始备份" \
+  app.sub2api.backup.log.dir_failed \
+  "[ERROR] Cannot create backup directory: %s" \
+  "[ERROR] 无法创建备份目录：%s" \
   app.sub2api.backup.log.pg_dump_start \
   "[DB] Starting pg_dump..." \
   "[DB] 开始 pg_dump..." \
