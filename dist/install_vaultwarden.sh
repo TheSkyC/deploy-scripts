@@ -1527,7 +1527,9 @@ deploy_web_vault_from_dir() {
   local source_dir="$1" backup_dir="$2"
   local staged_dir
   [[ -d "$source_dir" ]] || return 1
-  mkdir -p "$(dirname "$VW_WEB_DIR")" || return 1
+  if ! mkdir -p "$(dirname "$VW_WEB_DIR")"; then
+    return 1
+  fi
   if ! staged_dir=$(mktemp -d "${VW_WEB_DIR}.new.XXXXXX"); then
     return 1
   fi
@@ -1555,7 +1557,9 @@ deploy_web_vault_from_dir() {
 install_vaultwarden_binary() {
   local source_bin="$1"
   local bin_tmp
-  mkdir -p "$VW_BIN_DIR" || return 1
+  if ! mkdir -p "$VW_BIN_DIR"; then
+    return 1
+  fi
   if ! bin_tmp=$(mktemp "${VW_BIN}.XXXXXX"); then
     return 1
   fi
@@ -1596,7 +1600,9 @@ _write_nginx_config_file() {
 _write_nginx_site_link() {
   local target="$1" link_path="$2"
   local link_tmp
-  mkdir -p "$(dirname "$link_path")" || return 1
+  if ! mkdir -p "$(dirname "$link_path")"; then
+    error "$(t app.vaultwarden.error.nginx_write "$target")"
+  fi
   if ! link_tmp=$(mktemp "${link_path}.XXXXXX"); then
     error "$(t app.vaultwarden.error.nginx_write "$target")"
   fi
