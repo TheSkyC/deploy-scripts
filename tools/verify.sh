@@ -160,13 +160,20 @@ check_release_build_outputs_are_atomic() {
     return 1
   fi
   awk '
-      /output_tmp="\$\(mktemp "\$\{output\}\.XXXXXX"\)"/ { saw_tmp=1 }
+      /fail\(\)/ { saw_fail=1 }
+      /output_tmp=""/ { saw_tmp_init=1 }
+      /if ! mkdir -p "\$DIST_DIR"; then/ { saw_dir_if=1 }
+      /fail "cannot create output directory: \$\{DIST_DIR\}"/ { saw_dir_error=1 }
+      /if ! output_tmp="\$\(mktemp "\$\{output\}\.XXXXXX"\)"; then/ { saw_tmp=1 }
+      /fail "cannot create temporary output for \$\{output\}"/ { saw_tmp_error=1 }
       /} > "\$output_tmp"/ { saw_write=1 }
+      /fail "failed to compose release script for \$\{app\}: \$\{output\}"/ { saw_write_error=1 }
       /mv "\$output_tmp" "\$output"/ { saw_mv=1 }
       /rm -f "\$output_tmp"/ { saw_cleanup=1 }
+      /fail "failed to install release script: \$\{output\}"/ { saw_install_error=1 }
       END {
-        if (!(saw_tmp && saw_write && saw_mv && saw_cleanup)) {
-          print "Release script generation must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_fail && saw_tmp_init && saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_write && saw_write_error && saw_mv && saw_cleanup && saw_install_error)) {
+          print "Release script generation must prepare output directories, stage, replace, clean up temporary files, and report failures." > "/dev/stderr"
           exit 1
         }
       }

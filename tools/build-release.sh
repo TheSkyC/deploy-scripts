@@ -8,6 +8,11 @@ usage() {
   echo "Usage: bash tools/build-release.sh [all|newapi|sub2api|vaultwarden|cyberstrikeai|blog]" >&2
 }
 
+fail() {
+  echo "build-release: $*" >&2
+  exit 1
+}
+
 app_file_for() {
   case "$1" in
     newapi) echo "apps/newapi.sh" ;;
@@ -38,6 +43,7 @@ emit_without_shebang() {
 build_one() {
   local app="$1"
   local app_file impl_file output output_tmp commit built_at
+  output_tmp=""
   app_file="$(app_file_for "$app")" || {
     usage
     exit 1
@@ -55,8 +61,12 @@ build_one() {
     built_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   fi
 
-  mkdir -p "$DIST_DIR"
-  output_tmp="$(mktemp "${output}.XXXXXX")"
+  if ! mkdir -p "$DIST_DIR"; then
+    fail "cannot create output directory: ${DIST_DIR}"
+  fi
+  if ! output_tmp="$(mktemp "${output}.XXXXXX")"; then
+    fail "cannot create temporary output for ${output}"
+  fi
   if ! {
     echo '#!/usr/bin/env bash'
     echo 'set -euo pipefail'
@@ -108,12 +118,12 @@ build_one() {
     cat "${ROOT_DIR}/${impl_file}"
   } > "$output_tmp"; then
     rm -f "$output_tmp"
-    return 1
+    fail "failed to compose release script for ${app}: ${output}"
   fi
 
   if ! chmod 755 "$output_tmp" || ! mv "$output_tmp" "$output"; then
     rm -f "$output_tmp"
-    return 1
+    fail "failed to install release script: ${output}"
   fi
   echo "Built ${output}"
 }
