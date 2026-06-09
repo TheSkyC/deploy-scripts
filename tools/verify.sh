@@ -3063,8 +3063,9 @@ check_manual_backup_retention_is_normalized() {
 }
 
 check_backup_retention_cleanup_reports_failures() {
-  if grep -R -nE 'rm -f "\$f" && [^|]+ \|\| true' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+  if grep -R -nE 'rm -f "\$f" && [^|]+ \|\| true|find "\\?\$BACKUP_DIR" -maxdepth 1 .* -delete 2>/dev/null \|\| true' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "Backup retention cleanup must report per-file removal failures instead of ignoring them." >&2
     return 1
   fi
@@ -3072,13 +3073,14 @@ check_backup_retention_cleanup_reports_failures() {
       /app\.newapi\.backup\.log\.remove_failed/ { saw_newapi_log_key=1 }
       /app\.newapi\.warn\.backup_cleanup_failed/ { saw_newapi_warn_key=1 }
       /app\.sub2api\.backup\.log\.remove_failed/ { saw_sub2api_log_key=1 }
+      /app\.cyberstrikeai\.backup\.warn\.remove_failed/ { saw_csai_log_key=1 }
       END {
-        if (!(saw_newapi_log_key && saw_newapi_warn_key && saw_sub2api_log_key)) {
+        if (!(saw_newapi_log_key && saw_newapi_warn_key && saw_sub2api_log_key && saw_csai_log_key)) {
           print "Backup cleanup failure messages must be localized." > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/newapi.sh apps/sub2api.sh
+    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh
   awk '
       /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
       /_log "\$\(printf "\$MSG_REMOVE_FAILED" "\$f"\)"/ { saw_log=1 }
@@ -3100,6 +3102,16 @@ check_backup_retention_cleanup_reports_failures() {
         }
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
+      index($0, "_log \"[WARN] \\$(printf \"\\$MSG_REMOVE_FAILED\" \"\\$old_backup\")\"") { saw_log=1 }
+      END {
+        if (!(saw_msg && saw_log)) {
+          printf "%s CyberStrikeAI generated backup retention cleanup must log per-file removal failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
 check_optional_count_messages_are_nonfatal() {

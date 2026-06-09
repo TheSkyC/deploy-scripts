@@ -682,11 +682,12 @@ ROTATE
   fi
 }
 write_backup_script() {
-  local msg_install_missing msg_backup_dir_failed msg_sqlite_integrity msg_backup_created
+  local msg_install_missing msg_backup_dir_failed msg_sqlite_integrity msg_backup_created msg_remove_failed
   msg_install_missing="$(t app.cyberstrikeai.backup.error.install_missing '%s')"
   msg_backup_dir_failed="$(t app.cyberstrikeai.backup.error.backup_dir_create '%s')"
   msg_sqlite_integrity="$(t app.cyberstrikeai.backup.warn.sqlite_integrity '%s' '%s')"
   msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
+  msg_remove_failed="$(t app.cyberstrikeai.backup.warn.remove_failed '%s')"
   local backup_tmp
   if ! backup_tmp=$(mktemp "${BACKUP_SCRIPT}.XXXXXX"); then
     error "$(t app.cyberstrikeai.error.backup_script)"
@@ -707,6 +708,7 @@ MSG_INSTALL_MISSING="${msg_install_missing}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_SQLITE_INTEGRITY="${msg_sqlite_integrity}"
 MSG_BACKUP_CREATED="${msg_backup_created}"
+MSG_REMOVE_FAILED="${msg_remove_failed}"
 
 _log() { echo "\$(date '+%F %T') \$*" >> "\$LOG_FILE"; }
 
@@ -752,7 +754,11 @@ else
 fi
 
 if [[ "\$KEEP_DAYS" -gt 0 ]]; then
-  find "\$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -mtime "+\$KEEP_DAYS" -delete 2>/dev/null || true
+  while IFS= read -r -d '' old_backup; do
+    if ! rm -f "\$old_backup"; then
+      _log "[WARN] \$(printf "\$MSG_REMOVE_FAILED" "\$old_backup")"
+    fi
+  done < <(find "\$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -mtime "+\$KEEP_DAYS" -type f -print0 2>/dev/null)
 fi
 
 _log "[OK] \$(printf "\$MSG_BACKUP_CREATED" "\$archive")"

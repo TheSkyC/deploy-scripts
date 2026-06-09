@@ -312,6 +312,9 @@ i18n_register_many \
   app.cyberstrikeai.backup.ok.created \
   "backup created: %s" \
   "备份已创建：%s" \
+  app.cyberstrikeai.backup.warn.remove_failed \
+  "could not remove old backup: %s" \
+  "旧备份删除失败：%s" \
   app.cyberstrikeai.error.backup_script \
   "Backup script write failed: %s" \
   "备份脚本写入失败：%s" \
