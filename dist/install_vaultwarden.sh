@@ -1597,6 +1597,7 @@ restore_web_vault_backup() {
   if ! mv "$backup_dir" "$VW_WEB_DIR"; then
     return 1
   fi
+  require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
   if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"; then
     return 1
   fi
@@ -1788,6 +1789,8 @@ do_install() {
   if ! mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"; then
     error "$(t app.vaultwarden.error.dir_create "$VW_DATA_DIR" "$VW_BACKUP_DIR")"
   fi
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"; then
     error "$(t app.vaultwarden.error.dir_owner "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR")"
   fi

@@ -1685,17 +1685,19 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
       }
     ' apps/vaultwarden.sh
   awk '
-      /step "\$\(t app\.vaultwarden\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_chown_if=0; saw_chown_error=0; saw_chmod_if=0; saw_chmod_error=0; next }
+      /step "\$\(t app\.vaultwarden\.step\.user_dirs\)"/ { in_dirs=1; saw_user_if=0; saw_user_error=0; saw_mkdir_if=0; saw_mkdir_error=0; saw_data_guard=0; saw_log_guard=0; saw_chown_if=0; saw_chown_error=0; saw_chmod_if=0; saw_chmod_error=0; next }
       in_dirs && /if ! useradd --system --no-create-home \\/ { saw_user_if=1 }
       in_dirs && /error "\$\(t app\.vaultwarden\.error\.user_create "\$VW_USER"\)"/ { saw_user_error=1 }
       in_dirs && /if ! mkdir -p "\$VW_DATA_DIR" "\$\(dirname "\$VW_LOG_FILE"\)" "\$VW_BACKUP_DIR"; then/ { saw_mkdir_if=1 }
       in_dirs && /error "\$\(t app\.vaultwarden\.error\.dir_create "\$VW_DATA_DIR" "\$VW_BACKUP_DIR"\)"/ { saw_mkdir_error=1 }
+      in_dirs && /require_safe_path "VW_DATA_DIR" "\$VW_DATA_DIR"/ { saw_data_guard=1 }
+      in_dirs && /require_safe_path "LOG_DIR" "\$\(dirname "\$VW_LOG_FILE"\)"/ { saw_log_guard=1 }
       in_dirs && /if ! chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_DATA_DIR" "\$\(dirname "\$VW_LOG_FILE"\)"; then/ { saw_chown_if=1 }
       in_dirs && /error "\$\(t app\.vaultwarden\.error\.dir_owner "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_DATA_DIR"\)"/ { saw_chown_error=1 }
       in_dirs && /if ! chmod 750 "\$VW_DATA_DIR"; then/ { saw_chmod_if=1 }
       in_dirs && /error "\$\(t app\.vaultwarden\.error\.data_dir_mode "\$VW_DATA_DIR"\)"/ { saw_chmod_error=1 }
       in_dirs && /success "\$\(t app\.vaultwarden\.success\.dirs\)"/ {
-        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_chown_if && saw_chown_error && saw_chmod_if && saw_chmod_error)) {
+        if (!(saw_user_if && saw_user_error && saw_mkdir_if && saw_mkdir_error && saw_data_guard && saw_log_guard && saw_chown_if && saw_chown_error && saw_chmod_if && saw_chmod_error)) {
           printf "%s Vaultwarden install must fail explicitly when user creation, directory creation, ownership setup, or data-dir chmod fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -4242,17 +4244,18 @@ check_vaultwarden_webvault_restore_cleans_partial() {
     return 1
   fi
   awk '
-      /restore_web_vault_backup\(\)/ { in_helper=1; saw_rm=0; saw_rm_return=0; saw_mv=0; saw_mv_return=0; saw_chown=0; saw_chown_return=0; saw_chmod=0; saw_chmod_return=0; next }
+      /restore_web_vault_backup\(\)/ { in_helper=1; saw_rm=0; saw_rm_return=0; saw_mv=0; saw_mv_return=0; saw_guard=0; saw_chown=0; saw_chown_return=0; saw_chmod=0; saw_chmod_return=0; next }
       in_helper && /if ! safe_rm_dir "\$VW_WEB_DIR" "VW_WEB_DIR"; then/ { saw_rm=1 }
       in_helper && saw_rm && /return 1/ { saw_rm_return=1 }
       in_helper && /if ! mv "\$backup_dir" "\$VW_WEB_DIR"; then/ { saw_mv=1 }
       in_helper && saw_mv && /return 1/ { saw_mv_return=1 }
+      in_helper && /require_safe_path "VW_WEB_DIR" "\$VW_WEB_DIR"/ { saw_guard=1 }
       in_helper && /if ! chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_WEB_DIR"; then/ { saw_chown=1 }
       in_helper && saw_chown && /return 1/ { saw_chown_return=1 }
       in_helper && /if ! chmod -R 750 "\$VW_WEB_DIR"; then/ { saw_chmod=1 }
       in_helper && saw_chmod && /return 1/ { saw_chmod_return=1 }
       in_helper && /^}/ {
-        if (!(saw_rm && saw_rm_return && saw_mv && saw_mv_return && saw_chown && saw_chown_return && saw_chmod && saw_chmod_return)) {
+        if (!(saw_rm && saw_rm_return && saw_mv && saw_mv_return && saw_guard && saw_chown && saw_chown_return && saw_chmod && saw_chmod_return)) {
           printf "%s restore helper must validate Web Vault replacement, ownership, and mode\n", FILENAME > "/dev/stderr"
           exit 1
         }
