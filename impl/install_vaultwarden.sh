@@ -161,7 +161,7 @@ extract_binary() {
 restore_web_vault_backup() {
   local backup_dir="$1"
   [[ -d "$backup_dir" ]] || return 1
-  if ! rm -rf "$VW_WEB_DIR"; then
+  if ! safe_rm_dir "$VW_WEB_DIR" "VW_WEB_DIR"; then
     return 1
   fi
   if ! mv "$backup_dir" "$VW_WEB_DIR"; then

@@ -309,6 +309,26 @@ check_safe_path_guard() {
       fi
     done
   '
+  awk '
+      /restore_web_vault_backup\(\)/ { in_vw=1; saw_safe=0; next }
+      in_vw && /safe_rm_dir "\$VW_WEB_DIR" "VW_WEB_DIR"/ { saw_safe=1 }
+      in_vw && /mv "\$backup_dir" "\$VW_WEB_DIR"/ {
+        if (!saw_safe) {
+          print "Vaultwarden Web Vault restore must use safe_rm_dir before replacing the live directory." > "/dev/stderr"
+          exit 1
+        }
+        in_vw=0
+      }
+      /^restore_nginx_root_backup\(\)/ { in_blog=1; saw_blog_safe=0; next }
+      in_blog && /safe_rm_dir "\$NGINX_ROOT" "NGINX_ROOT"/ { saw_blog_safe=1 }
+      in_blog && /mv "\$DEPLOY_BAK" "\$NGINX_ROOT"/ {
+        if (!saw_blog_safe) {
+          print "Blog Nginx root restore must use safe_rm_dir before replacing the live directory." > "/dev/stderr"
+          exit 1
+        }
+        in_blog=0
+      }
+    ' impl/install_blog.sh impl/install_vaultwarden.sh
 }
 
 check_service_status_label() {
@@ -3771,7 +3791,7 @@ check_vaultwarden_webvault_restore_cleans_partial() {
   fi
   awk '
       /restore_web_vault_backup\(\)/ { in_helper=1; saw_rm=0; saw_rm_return=0; saw_mv=0; saw_mv_return=0; saw_chown=0; saw_chown_return=0; saw_chmod=0; saw_chmod_return=0; next }
-      in_helper && /if ! rm -rf "\$VW_WEB_DIR"; then/ { saw_rm=1 }
+      in_helper && /if ! safe_rm_dir "\$VW_WEB_DIR" "VW_WEB_DIR"; then/ { saw_rm=1 }
       in_helper && saw_rm && /return 1/ { saw_rm_return=1 }
       in_helper && /if ! mv "\$backup_dir" "\$VW_WEB_DIR"; then/ { saw_mv=1 }
       in_helper && saw_mv && /return 1/ { saw_mv_return=1 }
@@ -3888,7 +3908,7 @@ check_blog_static_deploy_swaps_tree() {
       in_heredoc && /^BKSH$/ { in_heredoc=0; next }
       in_heredoc { next }
       /^[[:space:]]*restore_nginx_root_backup\(\)/ { in_helper=1; saw_rm=0; saw_rm_return=0; saw_restore=0; saw_restore_return=0; next }
-      in_helper && /if ! rm -rf "\$NGINX_ROOT"; then/ { saw_rm=1 }
+      in_helper && /if ! safe_rm_dir "\$NGINX_ROOT" "NGINX_ROOT"; then/ { saw_rm=1 }
       in_helper && saw_rm && /return 1/ { saw_rm_return=1 }
       in_helper && /if ! mv "\$DEPLOY_BAK" "\$NGINX_ROOT"; then/ { saw_restore=1 }
       in_helper && saw_restore && /return 1/ { saw_restore_return=1 }
@@ -4025,19 +4045,20 @@ check_blog_publish_guidance_uses_staging_output() {
 check_blog_publish_helper_is_atomic() {
   awk '
       /_write_publish_script\(\)/ { saw_helper=1; next }
-      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_parent_dir=0; saw_parent_dir_error=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_tmp_cleanup=0; saw_restore=0; next }
+      saw_helper && /<< BKSH$/ { in_heredoc=1; saw_tmp=0; saw_parent_dir=0; saw_parent_dir_error=0; saw_safe_rm=0; saw_copy=0; saw_backup=0; saw_swap=0; saw_tmp_cleanup=0; saw_restore=0; next }
       in_heredoc && /DEPLOY_TMP="\\\$\(mktemp -d/ { saw_tmp=1 }
       in_heredoc && /Failed to create a staging directory under \\\$NGINX_ROOT_PARENT/ { saw_tmp_error=1 }
       in_heredoc && /if ! mkdir -p "\\\$NGINX_ROOT_PARENT"; then/ { saw_parent_dir=1 }
       in_heredoc && /Failed to create the Nginx root parent: \\\$NGINX_ROOT_PARENT/ { saw_parent_dir_error=1 }
+      in_heredoc && /safe_rm_dir\(\)/ { saw_safe_rm=1 }
       in_heredoc && /cp -a "\\\$\{PUBLIC_DIR\}\/\." "\\\$DEPLOY_TMP\/"/ { saw_copy=1 }
       in_heredoc && /mv "\\\$NGINX_ROOT" "\\\$DEPLOY_BAK"/ { saw_backup=1 }
       in_heredoc && /mv "\\\$DEPLOY_TMP" "\\\$NGINX_ROOT"/ { saw_swap=1 }
       in_heredoc && /rm -rf "\\\$DEPLOY_TMP"/ { saw_tmp_cleanup=1 }
       in_heredoc && /restore_nginx_root_backup\(\)/ { saw_restore=1 }
       in_heredoc && /^BKSH$/ {
-        if (!(saw_tmp && saw_tmp_error && saw_parent_dir && saw_parent_dir_error && saw_copy && saw_backup && saw_swap && saw_tmp_cleanup && saw_restore)) {
-          printf "%s Blog publish helper must report directory/temp creation failures, stage output, clean up failed staging directories, back up the live root, and restore on failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_parent_dir && saw_parent_dir_error && saw_safe_rm && saw_copy && saw_backup && saw_swap && saw_tmp_cleanup && saw_restore)) {
+          printf "%s Blog publish helper must report directory/temp creation failures, stage output, clean up failed staging directories, back up the live root, and restore safely on failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_heredoc=0

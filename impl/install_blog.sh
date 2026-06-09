@@ -19,7 +19,7 @@ LOCK_FILE="/var/lock/blog-deploy.lock"
 
 restore_nginx_root_backup() {
   [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] || return 0
-  if ! rm -rf "$NGINX_ROOT"; then
+  if ! safe_rm_dir "$NGINX_ROOT" "NGINX_ROOT"; then
     return 1
   fi
   if ! mv "$DEPLOY_BAK" "$NGINX_ROOT"; then
@@ -43,9 +43,29 @@ DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX"
   exit 1
 }
 DEPLOY_BAK="\${NGINX_ROOT}.bak.\$(date +%Y%m%d%H%M%S)"
+is_safe_path() {
+  local path="\${1:-}"
+  [[ -n "\$path" && "\$path" = /* ]] || return 1
+  while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
+  case "\$path" in
+    /|.|..|*'/../'*|*'/..'|*'/./'*|*'/.')
+      return 1
+      ;;
+    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var|/var/lib|/var/log|/usr/local|/usr/local/bin)
+      return 1
+      ;;
+  esac
+  return 0
+}
+safe_rm_dir() {
+  local path="\$1"
+  while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
+  is_safe_path "\$path" || return 1
+  [[ -d "\$path" ]] && rm -rf -- "\$path"
+}
 restore_nginx_root_backup() {
   [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] || return 0
-  if ! rm -rf "\$NGINX_ROOT"; then
+  if ! safe_rm_dir "\$NGINX_ROOT" "NGINX_ROOT"; then
     return 1
   fi
   if ! mv "\$DEPLOY_BAK" "\$NGINX_ROOT"; then
