@@ -2619,7 +2619,9 @@ do_update() {
         warn "$(t app.vaultwarden.warn.cleanup_old_binary_failed "$_old_bak")"
       fi
     done
-    [[ $_cleaned_old -gt 0 ]] && info "$(t app.vaultwarden.info.cleaned_old_binaries "$_cleaned_old")"
+    if [[ $_cleaned_old -gt 0 ]]; then
+      info "$(t app.vaultwarden.info.cleaned_old_binaries "$_cleaned_old")"
+    fi
   fi
   local _wv_parent
   _wv_parent=$(dirname "$VW_WEB_DIR")
@@ -2639,7 +2641,9 @@ do_update() {
         warn "$(t app.vaultwarden.warn.cleanup_old_webvault_failed "$_old_wv_bak")"
       fi
     done
-    [[ $_cleaned_wv -gt 0 ]] && info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
+    if [[ $_cleaned_wv -gt 0 ]]; then
+      info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
+    fi
   fi
   save_config
 }
@@ -2732,7 +2736,9 @@ fi
 # Remove expired backups.
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   REMOVED=$(find "${BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
-  [[ "${REMOVED}" -gt 0 ]] && printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
+  if [[ "${REMOVED}" -gt 0 ]]; then
+    printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
+  fi
 fi
 BKSH
   then

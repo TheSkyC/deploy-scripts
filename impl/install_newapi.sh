@@ -459,7 +459,9 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
       _log "$(printf "$MSG_REMOVE_FAILED" "$f")"
     fi
   done < <(find "${BACKUP_DIR}" -maxdepth 1 -name "new-api_*.tar.gz" -mtime "+${KEEP_DAYS}" 2>/dev/null)
-  [[ $REMOVED -gt 0 ]] && _log "$(printf "$MSG_REMOVED_OLD" "$REMOVED" "$KEEP_DAYS")"
+  if [[ $REMOVED -gt 0 ]]; then
+    _log "$(printf "$MSG_REMOVED_OLD" "$REMOVED" "$KEEP_DAYS")"
+  fi
 fi
 
 _log "── ${MSG_DONE} ────────────────────────────────────"
@@ -781,7 +783,9 @@ do_update() {
           warn "$(t app.newapi.warn.cleanup_old_failed "$_old_bak")"
         fi
       done
-      [[ $_cleaned_old -gt 0 ]] && info "$(t app.newapi.info.cleaned_old "$_cleaned_old")"
+      if [[ $_cleaned_old -gt 0 ]]; then
+        info "$(t app.newapi.info.cleaned_old "$_cleaned_old")"
+      fi
     fi
     if ! _health_check; then
       :
@@ -864,7 +868,9 @@ do_backup() {
       fi
     done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
              -mtime "+${_keep_days}" 2>/dev/null)
-    [[ $_cleaned -gt 0 ]] && info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$_keep_days")"
+    if [[ $_cleaned -gt 0 ]]; then
+      info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$_keep_days")"
+    fi
   fi
   echo ""
   info "$(t app.newapi.info.backup_list "$BACKUP_DIR")"
@@ -948,7 +954,9 @@ do_status() {
       _cnt=$(( _cnt + 1 ))
     done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
              -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -3 | awk '{print $2}')
-    [[ $_cnt -eq 0 ]] && echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.warn.no_backups)"
+    if [[ $_cnt -eq 0 ]]; then
+      echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.warn.no_backups)"
+    fi
   else
     echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.backup_missing "$BACKUP_DIR")"
   fi

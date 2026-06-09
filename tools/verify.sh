@@ -3047,6 +3047,15 @@ check_backup_retention_cleanup_reports_failures() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_optional_count_messages_are_nonfatal() {
+  if grep -R -nE '\[\[ (\$\{?REMOVED\}?|\$_cleaned|\$_cleaned_old|\$_cleaned_wv|\$_cnt) -(gt|eq) 0 \]\] &&' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Optional count-based status messages must use explicit if branches so zero counts do not trip set -e." >&2
+    return 1
+  fi
+}
+
 check_silent_backup_tar_diagnostics_use_stderr() {
   if grep -R -n '2>&1 >&2; then' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
@@ -4826,6 +4835,7 @@ main() {
   check_generated_backup_scripts_handle_missing_dirs
   check_manual_backup_retention_is_normalized
   check_backup_retention_cleanup_reports_failures
+  check_optional_count_messages_are_nonfatal
   check_silent_backup_tar_diagnostics_use_stderr
   check_tar_diagnostics_use_stderr
   check_cron_logrotate_are_atomic
