@@ -534,6 +534,9 @@ i18n_register_many \
   app.newapi.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
+  app.newapi.error.port_invalid \
+  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
+  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
   app.newapi.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
@@ -1212,6 +1215,7 @@ preflight_check() {
     aarch64) BIN_ARCH="arm64" ;;
     *) error "$(t app.newapi.error.arch "$ARCH")" ;;
   esac
+  _validate_port
 }
 LOCK_FILE="/var/lock/new-api-deploy.lock"
 check_connectivity() {
@@ -1227,11 +1231,17 @@ save_config() {
   fi
   success "$(t config.saved "$CONF_FILE")"
 }
+_validate_port() {
+  if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
+    error "$(t app.newapi.error.port_invalid "$PORT")"
+  fi
+}
 load_config() {
   [[ -f "$CONF_FILE" ]] || return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   BIN_PATH="${INSTALL_DIR}/new-api"
   LOG_FILE="${LOG_DIR}/new-api.log"
+  _validate_port
   success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {

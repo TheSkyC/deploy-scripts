@@ -40,6 +40,7 @@ preflight_check() {
     aarch64) BIN_ARCH="arm64" ; ELF_MACHINE="b7" ;;
     *) error "$(t app.sub2api.error.arch "$ARCH")" ;;
   esac
+  _validate_port
 }
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
 check_connectivity() {
@@ -68,10 +69,16 @@ save_config() {
   fi
   success "$(t config.saved "$CONF_FILE")"
 }
+_validate_port() {
+  if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
+    error "$(t app.sub2api.error.port_invalid "$PORT")"
+  fi
+}
 load_config() {
   [[ -f "$CONF_FILE" ]] || return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   BIN_PATH="${INSTALL_DIR}/sub2api"
+  _validate_port
   success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {

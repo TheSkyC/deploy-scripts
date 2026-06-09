@@ -784,6 +784,85 @@ check_api_status_directory_sizes_are_nonfatal() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_api_ports_are_validated() {
+  awk '
+      /app\.newapi\.error\.port_invalid/ { saw_key=1 }
+      /Set a port between 1 and 65535/ { saw_guidance=1 }
+      END {
+        if (!(saw_key && saw_guidance)) {
+          print "NewAPI must provide an actionable invalid port error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /app\.sub2api\.error\.port_invalid/ { saw_key=1 }
+      /Set a port between 1 and 65535/ { saw_guidance=1 }
+      END {
+        if (!(saw_key && saw_guidance)) {
+          print "Sub2API must provide an actionable invalid port error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /preflight_check\(\)/ { in_preflight=1; next }
+      in_preflight && /^}/ {
+        if (!saw_preflight) {
+          printf "%s NewAPI preflight must validate PORT defaults\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_preflight=0
+      }
+      /_validate_port\(\)/ { saw_helper=1 }
+      /error "\$\(t app\.newapi\.error\.port_invalid "\$PORT"\)"/ { saw_error=1 }
+      in_preflight && /_validate_port/ { saw_preflight=1 }
+      /load_config\(\)/ { in_load=1; next }
+      in_load && /^}/ {
+        if (!saw_load) {
+          printf "%s NewAPI load_config must validate configured PORT\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_load=0
+      }
+      in_load && /_validate_port/ { saw_load=1 }
+      END {
+        if (!(saw_helper && saw_error && saw_preflight && saw_load)) {
+          printf "%s NewAPI must validate PORT range before using it\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /preflight_check\(\)/ { in_preflight=1; next }
+      in_preflight && /^}/ {
+        if (!saw_preflight) {
+          printf "%s Sub2API preflight must validate PORT defaults\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_preflight=0
+      }
+      /_validate_port\(\)/ { saw_helper=1 }
+      /error "\$\(t app\.sub2api\.error\.port_invalid "\$PORT"\)"/ { saw_error=1 }
+      in_preflight && /_validate_port/ { saw_preflight=1 }
+      /load_config\(\)/ { in_load=1; next }
+      in_load && /^}/ {
+        if (!saw_load) {
+          printf "%s Sub2API load_config must validate configured PORT\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_load=0
+      }
+      in_load && /_validate_port/ { saw_load=1 }
+      END {
+        if (!(saw_helper && saw_error && saw_preflight && saw_load)) {
+          printf "%s Sub2API must validate PORT range before using it\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4384,6 +4463,7 @@ main() {
   check_vaultwarden_status_display_commands_are_nonfatal
   check_cyberstrikeai_display_sizes_are_nonfatal
   check_api_status_directory_sizes_are_nonfatal
+  check_api_ports_are_validated
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported

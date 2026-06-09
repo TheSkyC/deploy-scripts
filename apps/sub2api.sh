@@ -15,6 +15,9 @@ i18n_register_many \
   app.sub2api.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
+  app.sub2api.error.port_invalid \
+  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
+  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
   app.sub2api.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
