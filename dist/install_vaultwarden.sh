@@ -69,6 +69,7 @@ __deploy_i18n_message() {
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
     error.config_permission) echo "Refusing to load unsafe config permissions: %s|拒绝加载权限不安全的配置文件：%s" ;;
     error.config_owner) echo "Refusing to load config not owned by root: %s|拒绝加载非 root 拥有的配置文件：%s" ;;
+    error.config_write) echo "Failed to save deployment config: %s|部署配置保存失败：%s" ;;
     error.lock_failed) echo "Another deployment process is running: %s|已有部署进程正在运行：%s" ;;
     error.root_required) echo "Please run as root: sudo bash %s %s|请使用 root 权限运行：sudo bash %s %s" ;;
     error.unsupported_action) echo "%s does not support %s yet.|%s 暂不支持 %s。" ;;
@@ -1416,7 +1417,9 @@ load_config() {
   fi
 }
 save_config() {
-  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
+  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
+    error "$(t error.config_write "$CONF_FILE")"
+  fi
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed

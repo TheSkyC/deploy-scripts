@@ -62,7 +62,9 @@ load_config() {
   fi
 }
 save_config() {
-  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
+  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
+    error "$(t error.config_write "$CONF_FILE")"
+  fi
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed

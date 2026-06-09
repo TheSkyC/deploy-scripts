@@ -454,6 +454,31 @@ check_unsafe_config_loads_fail_closed() {
     ' lib/config.sh
 }
 
+check_config_save_failures_are_explicit() {
+  awk '
+      /error\.config_write/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "Config save failures must have a shared error message." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/i18n.sh dist/install_newapi.sh
+  awk '
+      /save_config\(\)/ { in_func=1; saw_if=0; saw_error=0; next }
+      in_func && /if ! write_config_file "\$CONF_FILE" "\$\{CONFIG_KEYS\[@\]\}"; then/ { saw_if=1 }
+      in_func && /error "\$\(t error\.config_write "\$CONF_FILE"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_if && saw_error)) {
+          printf "%s save_config must report config write failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
+}
+
 check_sub2api_codename_resolution() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -3859,6 +3884,7 @@ main() {
   check_config_crlf_handling
   check_config_write_failure_cleanup
   check_unsafe_config_loads_fail_closed
+  check_config_save_failures_are_explicit
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads

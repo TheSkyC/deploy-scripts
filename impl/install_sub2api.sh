@@ -63,7 +63,9 @@ _apt_codename() {
   printf '%s\n' "$codename"
 }
 save_config() {
-  write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
+  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
+    error "$(t error.config_write "$CONF_FILE")"
+  fi
   success "$(t config.saved "$CONF_FILE")"
 }
 load_config() {
