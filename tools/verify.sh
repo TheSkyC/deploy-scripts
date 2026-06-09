@@ -711,6 +711,24 @@ check_systemctl_status_diagnostics_are_nonfatal() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh
 }
 
+check_vaultwarden_status_display_commands_are_nonfatal() {
+  awk '
+      /do_status\(\)/ { in_status=1; next }
+      in_status && /^}/ {
+        if (!(saw_bin_size && saw_bin_time && saw_ls && saw_data_size && saw_db_size)) {
+          printf "%s Vaultwarden status display commands must fall back instead of failing under pipefail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+      in_status && /_bin_size=\$\(du -sh "\$VW_BIN" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_bin_size=1 }
+      in_status && /_bin_time=\$\(stat -c '\''%y'\'' "\$VW_BIN" 2>\/dev\/null \| cut -d'\''\.'\'' -f1 \|\| t status\.unknown\)/ { saw_bin_time=1 }
+      in_status && /ls -lh "\$\{VW_DATA_DIR\}" 2>\/dev\/null \| tail -n \+2 \| awk .* \|\| true/ { saw_ls=1 }
+      in_status && /_data_size=\$\(du -sh "\$VW_DATA_DIR" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_data_size=1 }
+      in_status && /DB_SIZE=\$\(du -sh "\$\{VW_DATA_DIR\}\/db\.sqlite3" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_db_size=1 }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4308,6 +4326,7 @@ main() {
   check_random_head_pipelines_handle_sigpipe
   check_summary_ip_detection_has_fallback
   check_systemctl_status_diagnostics_are_nonfatal
+  check_vaultwarden_status_display_commands_are_nonfatal
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported

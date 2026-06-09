@@ -2817,19 +2817,24 @@ do_status() {
     || echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.service_missing)"
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.version_info)]${NC}"
   if [[ -x "$VW_BIN" ]]; then
+    local _bin_size _bin_time
+    _bin_size=$(du -sh "$VW_BIN" 2>/dev/null | cut -f1 || t status.unknown)
+    _bin_time=$(stat -c '%y' "$VW_BIN" 2>/dev/null | cut -d'.' -f1 || t status.unknown)
     echo -e "  $(t app.vaultwarden.status.binary_version "$(get_installed_version)")"
-    echo -e "  $(t app.vaultwarden.status.binary_path "$VW_BIN" "$(du -sh "$VW_BIN" | cut -f1)")"
-    echo -e "  $(t app.vaultwarden.status.binary_time "$(stat -c '%y' "$VW_BIN" | cut -d'.' -f1)")"
+    echo -e "  $(t app.vaultwarden.status.binary_path "$VW_BIN" "$_bin_size")"
+    echo -e "  $(t app.vaultwarden.status.binary_time "$_bin_time")"
   else
     echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.binary_missing "$VW_BIN")"
   fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.data_dir "$VW_DATA_DIR")]${NC}"
   if [[ -d "$VW_DATA_DIR" ]]; then
-    ls -lh "${VW_DATA_DIR}" 2>/dev/null | tail -n +2 | awk '{printf "  %-12s  %s\n", $5, $NF}'
+    ls -lh "${VW_DATA_DIR}" 2>/dev/null | tail -n +2 | awk '{printf "  %-12s  %s\n", $5, $NF}' || true
     echo "  ──────────────────────────"
-    echo "  $(t app.vaultwarden.status.total "$(du -sh "$VW_DATA_DIR" | cut -f1)")"
+    local _data_size
+    _data_size=$(du -sh "$VW_DATA_DIR" 2>/dev/null | cut -f1 || t status.unknown)
+    echo "  $(t app.vaultwarden.status.total "$_data_size")"
     if [[ -f "${VW_DATA_DIR}/db.sqlite3" ]]; then
-      DB_SIZE=$(du -sh "${VW_DATA_DIR}/db.sqlite3" | cut -f1)
+      DB_SIZE=$(du -sh "${VW_DATA_DIR}/db.sqlite3" 2>/dev/null | cut -f1 || t status.unknown)
       echo -e "  $(t app.vaultwarden.status.database "$DB_SIZE")"
     fi
   else
