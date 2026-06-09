@@ -756,6 +756,34 @@ check_cyberstrikeai_display_sizes_are_nonfatal() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_api_status_directory_sizes_are_nonfatal() {
+  awk '
+      /do_status\(\)/ { in_status=1; next }
+      in_status && /^}/ {
+        if (!(saw_data && saw_db && saw_backup)) {
+          printf "%s NewAPI status directory sizes must fall back instead of failing under pipefail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+      in_status && /data_size=\$\(du -sh "\$DATA_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_data=1 }
+      in_status && /db_size=\$\(du -sh "\$\{DATA_DIR\}\/one-api\.db" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_db=1 }
+      in_status && /bak_total_size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_backup=1 }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /do_status\(\)/ { in_status=1; next }
+      in_status && /^}/ {
+        if (!(saw_dir && saw_backup)) {
+          printf "%s Sub2API status directory sizes must fall back instead of failing under pipefail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+      in_status && /_sz=\$\(du -sh "\$_d" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.sub2api\.status\.unknown\)/ { saw_dir=1 }
+      in_status && /bak_total_size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.sub2api\.status\.unknown\)/ { saw_backup=1 }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4355,6 +4383,7 @@ main() {
   check_systemctl_status_diagnostics_are_nonfatal
   check_vaultwarden_status_display_commands_are_nonfatal
   check_cyberstrikeai_display_sizes_are_nonfatal
+  check_api_status_directory_sizes_are_nonfatal
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported

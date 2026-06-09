@@ -1524,7 +1524,7 @@ do_status() {
   echo -e "\n${BOLD}[$(t app.sub2api.status.directories)]${NC}"
   for _d in "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR"; do
     if [[ -d "$_d" ]]; then
-      local _sz; _sz=$(du -sh "$_d" 2>/dev/null | awk '{print $1}' || echo "?")
+      local _sz; _sz=$(du -sh "$_d" 2>/dev/null | awk '{print $1}' || t app.sub2api.status.unknown)
       echo -e "  ${GREEN}[✓]${NC} ${_d} (${_sz})"
     else
       echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.dir_missing "$_d")"
@@ -1537,7 +1537,7 @@ do_status() {
       \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
          -o -name "sub2api_conf_*.tar.gz" \) \
       2>/dev/null | wc -l)
-    bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}')
+    bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t app.sub2api.status.unknown)
     echo -e "  $(t app.sub2api.status.backup_dir "$BACKUP_DIR" "$bak_total_size" "$bak_count")"
     local _cnt=0
     while IFS= read -r f; do

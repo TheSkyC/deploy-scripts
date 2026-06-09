@@ -2089,10 +2089,10 @@ do_status() {
   fi
   echo -e "\n${BOLD}[$(t app.newapi.status.directories)]${NC}"
   if [[ -d "$DATA_DIR" ]]; then
-    local data_size; data_size=$(du -sh "$DATA_DIR" 2>/dev/null | awk '{print $1}')
+    local data_size; data_size=$(du -sh "$DATA_DIR" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
     echo -e "  $(t app.newapi.status.data_dir):  ${DATA_DIR} (${data_size})"
     if [[ -f "${DATA_DIR}/one-api.db" ]]; then
-      local db_size; db_size=$(du -sh "${DATA_DIR}/one-api.db" 2>/dev/null | awk '{print $1}')
+      local db_size; db_size=$(du -sh "${DATA_DIR}/one-api.db" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
       echo -e "  $(t app.newapi.status.database):    one-api.db (${db_size})"
     fi
   else
@@ -2103,7 +2103,7 @@ do_status() {
   if [[ -d "$BACKUP_DIR" ]]; then
     local bak_count bak_total_size
     bak_count=$(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" 2>/dev/null | wc -l)
-    bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}')
+    bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
     echo -e "  $(t app.newapi.status.backup_dir):  ${BACKUP_DIR} (${bak_total_size}, $(t app.newapi.status.backup_count "$bak_count"))"
     local _cnt=0
     while IFS= read -r f; do
