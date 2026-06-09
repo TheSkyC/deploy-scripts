@@ -1567,7 +1567,9 @@ backup_vaultwarden_binary() {
 _write_nginx_config_file() {
   local nginx_conf="$1"
   local nginx_tmp
-  nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX")
+  if ! nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX"); then
+    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
+  fi
   if ! cat > "$nginx_tmp"; then
     rm -f "$nginx_tmp"
     error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
@@ -1593,7 +1595,9 @@ _write_nginx_site_link() {
 _write_fail2ban_config_file() {
   local fail2ban_conf="$1"
   local fail2ban_tmp
-  fail2ban_tmp=$(mktemp "${fail2ban_conf}.XXXXXX")
+  if ! fail2ban_tmp=$(mktemp "${fail2ban_conf}.XXXXXX"); then
+    error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
+  fi
   if ! cat > "$fail2ban_tmp"; then
     rm -f "$fail2ban_tmp"
     error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
@@ -1850,7 +1854,9 @@ ENV
   step "$(t app.vaultwarden.step.systemd)"
   local unit_path="/etc/systemd/system/vaultwarden.service"
   local unit_tmp
-  unit_tmp=$(mktemp "${unit_path}.XXXXXX")
+  if ! unit_tmp=$(mktemp "${unit_path}.XXXXXX"); then
+    error "$(t app.vaultwarden.error.systemd)"
+  fi
   if ! cat > "$unit_tmp" << UNIT
 [Unit]
 Description=Vaultwarden Password Manager (Bitwarden-compatible)
@@ -2196,7 +2202,9 @@ JAIL
   step "$(t app.vaultwarden.step.logrotate)"
   local _vw_logrotate_file="/etc/logrotate.d/vaultwarden"
   local _vw_logrotate_tmp
-  _vw_logrotate_tmp=$(mktemp "${_vw_logrotate_file}.XXXXXX")
+  if ! _vw_logrotate_tmp=$(mktemp "${_vw_logrotate_file}.XXXXXX"); then
+    error "$(t app.vaultwarden.error.logrotate)"
+  fi
   if ! cat > "$_vw_logrotate_tmp" << LOGR
 ${VW_LOG_FILE} {
     daily
@@ -2268,7 +2276,9 @@ LOGR
   _write_backup_script
   local _vw_cron_file="/etc/cron.d/vaultwarden-backup"
   local _vw_cron_tmp
-  _vw_cron_tmp=$(mktemp "${_vw_cron_file}.XXXXXX")
+  if ! _vw_cron_tmp=$(mktemp "${_vw_cron_file}.XXXXXX"); then
+    error "$(t app.vaultwarden.error.auto_backup)"
+  fi
   if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" > "$_vw_cron_tmp" \
       || ! chmod 644 "$_vw_cron_tmp" \
       || ! chown root:root "$_vw_cron_tmp" \
