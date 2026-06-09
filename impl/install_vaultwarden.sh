@@ -449,7 +449,9 @@ do_install() {
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     info "$(t app.vaultwarden.info.web_vault_image)"
     if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_install_bak"; then
-      [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
+      if [[ -d "$_wv_install_bak" ]]; then
+        rm -rf "$_wv_install_bak"
+      fi
       success "$(t app.vaultwarden.success.web_vault_image)"
     else
       warn "$(t app.vaultwarden.warn.web_vault_extract)"
@@ -476,7 +478,9 @@ do_install() {
       local _wv_source_dir
       _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1 || true)
       if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_install_bak"; then
-        [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
+        if [[ -d "$_wv_install_bak" ]]; then
+          rm -rf "$_wv_install_bak"
+        fi
         success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
       else
         warn "$(t app.vaultwarden.warn.web_vault_extract)"

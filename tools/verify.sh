@@ -1291,6 +1291,15 @@ check_vaultwarden_workdir_cleanup_traps_are_nonfatal() {
   done
 }
 
+check_optional_directory_cleanup_is_nonfatal() {
+  if grep -R -nE '\[\[ (-n "\$old_go_backup"|-d "\$_wv_install_bak") \]\] && rm -rf' \
+      impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
+      dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Optional directory cleanup must use explicit if branches so absent paths do not trip set -e." >&2
+    return 1
+  fi
+}
+
 check_blog_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl wget git nginx ca-certificates$' \
       impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
@@ -4795,6 +4804,7 @@ main() {
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
   check_vaultwarden_workdir_cleanup_traps_are_nonfatal
+  check_optional_directory_cleanup_is_nonfatal
   check_blog_dependency_failures_are_reported
   check_blog_hugo_install_failures_are_actionable
   check_blog_site_setup_failures_are_explicit

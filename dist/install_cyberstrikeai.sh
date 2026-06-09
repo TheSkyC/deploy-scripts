@@ -1252,7 +1252,9 @@ install_go_if_needed() {
     error "$(t app.cyberstrikeai.error.go_failed)"
   fi
   rm -rf "$extract_dir"
-  [[ -n "$old_go_backup" ]] && rm -rf "$old_go_backup"
+  if [[ -n "$old_go_backup" ]]; then
+    rm -rf "$old_go_backup"
+  fi
   write_tool_symlink /usr/local/go/bin/go /usr/local/bin/go \
     || error "$(t app.cyberstrikeai.error.go_failed)"
   write_tool_symlink /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
