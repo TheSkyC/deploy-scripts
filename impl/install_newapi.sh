@@ -351,6 +351,11 @@ _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
   fi
+  local backup_dir_literal data_dir_literal service_name_literal keep_days_literal
+  printf -v backup_dir_literal '%q' "$BACKUP_DIR"
+  printf -v data_dir_literal '%q' "$DATA_DIR"
+  printf -v service_name_literal '%q' "$SERVICE_NAME"
+  printf -v keep_days_literal '%q' "$BACKUP_KEEP_DAYS"
   local msg_start msg_backup_dir_failed msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_remove_failed msg_done
   msg_start="$(t app.newapi.backup.log.start)"
   msg_backup_dir_failed="$(t app.newapi.backup.log.dir_failed '%s')"
@@ -375,10 +380,10 @@ _write_backup_script() {
 set -euo pipefail
 umask 077
 
-BACKUP_DIR="${BACKUP_DIR}"
-DATA_DIR="${DATA_DIR}"
-SERVICE_NAME="${SERVICE_NAME}"
-KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+BACKUP_DIR=${backup_dir_literal}
+DATA_DIR=${data_dir_literal}
+SERVICE_NAME=${service_name_literal}
+KEEP_DAYS=${keep_days_literal}
 [[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
 MSG_START="${msg_start}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"

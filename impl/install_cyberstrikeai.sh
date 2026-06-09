@@ -682,6 +682,13 @@ ROTATE
   fi
 }
 write_backup_script() {
+  local install_dir_literal config_file_literal backup_dir_literal keep_days_literal service_name_literal log_file_literal
+  printf -v install_dir_literal '%q' "$INSTALL_DIR"
+  printf -v config_file_literal '%q' "$CONFIG_FILE"
+  printf -v backup_dir_literal '%q' "$BACKUP_DIR"
+  printf -v keep_days_literal '%q' "$BACKUP_KEEP_DAYS"
+  printf -v service_name_literal '%q' "$SERVICE_NAME"
+  printf -v log_file_literal '%q' "${LOG_DIR}/backup.log"
   local msg_install_missing msg_backup_dir_failed msg_sqlite_integrity msg_backup_created msg_remove_failed
   msg_install_missing="$(t app.cyberstrikeai.backup.error.install_missing '%s')"
   msg_backup_dir_failed="$(t app.cyberstrikeai.backup.error.backup_dir_create '%s')"
@@ -697,13 +704,13 @@ write_backup_script() {
 set -euo pipefail
 umask 077
 
-INSTALL_DIR="${INSTALL_DIR}"
-CONFIG_FILE="${CONFIG_FILE}"
-BACKUP_DIR="${BACKUP_DIR}"
-KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+INSTALL_DIR=${install_dir_literal}
+CONFIG_FILE=${config_file_literal}
+BACKUP_DIR=${backup_dir_literal}
+KEEP_DAYS=${keep_days_literal}
 [[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
-SERVICE_NAME="${SERVICE_NAME}"
-LOG_FILE="${LOG_DIR}/backup.log"
+SERVICE_NAME=${service_name_literal}
+LOG_FILE=${log_file_literal}
 MSG_INSTALL_MISSING="${msg_install_missing}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_SQLITE_INTEGRITY="${msg_sqlite_integrity}"

@@ -2960,6 +2960,54 @@ check_backup_scripts_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
 }
 
+check_generated_backup_headers_are_shell_quoted() {
+  if grep -R -nE '^(BACKUP_DIR|DATA_DIR|CONFIG_DIR|INSTALL_DIR|PG_DSN|SERVICE_NAME)="\$\{(BACKUP_DIR|DATA_DIR|CONFIG_DIR|INSTALL_DIR|PG_DSN|SERVICE_NAME)\}"$|^KEEP_DAYS="\$\{BACKUP_KEEP_DAYS\}"$|^LOG_FILE="\$\{LOG_DIR\}/backup\.log"$' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "Generated backup script headers must use shell-quoted literals instead of interpolating raw values." >&2
+    return 1
+  fi
+  awk '
+      /_write_backup_script\(\)/ { in_func=1; saw_backup=0; saw_data=0; next }
+      in_func && /printf -v backup_dir_literal '\''%q'\'' "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /printf -v data_dir_literal '\''%q'\'' "\$DATA_DIR"/ { saw_data=1 }
+      in_func && /^BKSH_HEADER$/ {
+        if (!(saw_backup && saw_data)) {
+          printf "%s generated NewAPI backup header must shell-quote configured paths\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /_write_backup_script\(\)/ { in_func=1; saw_backup=0; saw_data=0; saw_config=0; saw_dsn=0; next }
+      in_func && /printf -v backup_dir_literal '\''%q'\'' "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /printf -v data_dir_literal '\''%q'\'' "\$DATA_DIR"/ { saw_data=1 }
+      in_func && /printf -v config_dir_literal '\''%q'\'' "\$CONFIG_DIR"/ { saw_config=1 }
+      in_func && /printf -v pg_dsn_literal '\''%q'\'' "\$PG_DSN"/ { saw_dsn=1 }
+      in_func && /^BKSH_HEADER$/ {
+        if (!(saw_backup && saw_data && saw_config && saw_dsn)) {
+          printf "%s generated Sub2API backup header must shell-quote configured paths and DSN\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /write_backup_script\(\)/ { in_func=1; saw_install=0; saw_backup=0; saw_log=0; next }
+      in_func && /printf -v install_dir_literal '\''%q'\'' "\$INSTALL_DIR"/ { saw_install=1 }
+      in_func && /printf -v backup_dir_literal '\''%q'\'' "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /printf -v log_file_literal '\''%q'\'' "\$\{LOG_DIR\}\/backup\.log"/ { saw_log=1 }
+      in_func && /^BACKUP$/ {
+        if (!(saw_install && saw_backup && saw_log)) {
+          printf "%s generated CyberStrikeAI backup header must shell-quote configured paths\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_generated_backup_scripts_handle_missing_dirs() {
   awk '
       /KEEP_DAYS="\$\{BACKUP_KEEP_DAYS\}"/ { saw_assignment=1; next }
@@ -4901,6 +4949,7 @@ main() {
   check_systemd_units_are_atomic
   check_systemd_daemon_reloads_are_explicit
   check_backup_scripts_are_atomic
+  check_generated_backup_headers_are_shell_quoted
   check_generated_backup_scripts_handle_missing_dirs
   check_manual_backup_retention_is_normalized
   check_backup_retention_cleanup_reports_failures

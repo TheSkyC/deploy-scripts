@@ -842,6 +842,13 @@ _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
   fi
+  local backup_dir_literal data_dir_literal config_dir_literal service_name_literal keep_days_literal pg_dsn_literal
+  printf -v backup_dir_literal '%q' "$BACKUP_DIR"
+  printf -v data_dir_literal '%q' "$DATA_DIR"
+  printf -v config_dir_literal '%q' "$CONFIG_DIR"
+  printf -v service_name_literal '%q' "$SERVICE_NAME"
+  printf -v keep_days_literal '%q' "$BACKUP_KEEP_DAYS"
+  printf -v pg_dsn_literal '%q' "$PG_DSN"
   local msg_start msg_backup_dir_failed msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
   local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_remove_failed msg_done
   msg_start="$(t app.sub2api.backup.log.start)"
@@ -870,13 +877,13 @@ _write_backup_script() {
 set -euo pipefail
 umask 077
 
-BACKUP_DIR="${BACKUP_DIR}"
-DATA_DIR="${DATA_DIR}"
-CONFIG_DIR="${CONFIG_DIR}"
-SERVICE_NAME="${SERVICE_NAME}"
-KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+BACKUP_DIR=${backup_dir_literal}
+DATA_DIR=${data_dir_literal}
+CONFIG_DIR=${config_dir_literal}
+SERVICE_NAME=${service_name_literal}
+KEEP_DAYS=${keep_days_literal}
 [[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
-PG_DSN="${PG_DSN}"
+PG_DSN=${pg_dsn_literal}
 MSG_START="${msg_start}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_PG_DUMP_START="${msg_pg_dump_start}"
