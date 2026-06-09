@@ -2392,6 +2392,16 @@ check_backup_scripts_are_atomic() {
 
 check_generated_backup_scripts_handle_missing_dirs() {
   awk '
+      /KEEP_DAYS="\$\{BACKUP_KEEP_DAYS\}"/ { saw_assignment=1; next }
+      saw_assignment && index($0, "KEEP_DAYS=0") && index($0, "^[0-9]+$") { saw_guard=1; saw_assignment=0 }
+      END {
+        if (!saw_guard) {
+          printf "%s generated backup script must normalize non-numeric BACKUP_KEEP_DAYS before numeric comparisons\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh
+  awk '
       /app\.newapi\.backup\.log\.dir_failed/ { saw_newapi=1 }
       /app\.sub2api\.backup\.log\.dir_failed/ { saw_sub2api=1 }
       /app\.cyberstrikeai\.backup\.error\.backup_dir_create/ { saw_csai=1 }

@@ -1552,6 +1552,7 @@ BACKUP_DIR="${BACKUP_DIR}"
 DATA_DIR="${DATA_DIR}"
 SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+[[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
 MSG_START="${msg_start}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_DATA_MISSING="${msg_data_missing}"

@@ -867,6 +867,7 @@ DATA_DIR="${DATA_DIR}"
 CONFIG_DIR="${CONFIG_DIR}"
 SERVICE_NAME="${SERVICE_NAME}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+[[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
 PG_DSN="${PG_DSN}"
 MSG_START="${msg_start}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"

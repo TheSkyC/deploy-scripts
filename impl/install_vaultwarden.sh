@@ -1202,6 +1202,7 @@ BACKUP_DIR="${VW_BACKUP_DIR}"
 DATA_DIR="${VW_DATA_DIR}"
 ENV_FILE="${VW_ENV_FILE}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS}"
+[[ "\${KEEP_DAYS}" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
 MSG_DATA_MISSING="$(t app.vaultwarden.backup.script.data_missing)"
 MSG_BACKUP_DIR_FAILED="$(t app.vaultwarden.backup.script.dir_failed)"
 MSG_SQLITE_WARNING="$(t app.vaultwarden.backup.script.sqlite_warning)"
