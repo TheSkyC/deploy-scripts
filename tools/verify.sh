@@ -2468,6 +2468,30 @@ check_generated_backup_scripts_handle_missing_dirs() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_manual_backup_retention_is_normalized() {
+  awk '
+      /^do_backup\(\) \{/ {
+        in_func=1
+        saw_assignment=0
+        saw_guard=0
+        saw_positive_guard=0
+        saw_find=0
+        next
+      }
+      in_func && /^}/ {
+        if (!(saw_assignment && saw_guard && saw_positive_guard && saw_find)) {
+          printf "%s NewAPI manual backup retention cleanup must normalize BACKUP_KEEP_DAYS and skip cleanup when it is zero\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      in_func && /local _keep_days="\$\{BACKUP_KEEP_DAYS\}"/ { saw_assignment=1 }
+      in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
+      in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
+      in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_silent_backup_tar_diagnostics_use_stderr() {
   if grep -R -n '2>&1 >&2; then' \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
@@ -4174,6 +4198,7 @@ main() {
   check_systemd_daemon_reloads_are_explicit
   check_backup_scripts_are_atomic
   check_generated_backup_scripts_handle_missing_dirs
+  check_manual_backup_retention_is_normalized
   check_silent_backup_tar_diagnostics_use_stderr
   check_tar_diagnostics_use_stderr
   check_cron_logrotate_are_atomic

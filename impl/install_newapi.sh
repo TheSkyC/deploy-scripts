@@ -827,12 +827,16 @@ do_backup() {
     rm -f "$ARCHIVE_TMP"
     error "$(t app.newapi.error.backup_failed "$BACKUP_DIR")"
   fi
-  local _cleaned=0
-  while IFS= read -r f; do
-    rm -f "$f" && _cleaned=$(( _cleaned + 1 )) || true
-  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-           -mtime "+${BACKUP_KEEP_DAYS}" 2>/dev/null)
-  [[ $_cleaned -gt 0 ]] && info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$BACKUP_KEEP_DAYS")"
+  local _keep_days="${BACKUP_KEEP_DAYS}"
+  [[ "$_keep_days" =~ ^[0-9]+$ ]] || _keep_days=0
+  if [[ "$_keep_days" -gt 0 ]]; then
+    local _cleaned=0
+    while IFS= read -r f; do
+      rm -f "$f" && _cleaned=$(( _cleaned + 1 )) || true
+    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
+             -mtime "+${_keep_days}" 2>/dev/null)
+    [[ $_cleaned -gt 0 ]] && info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$_keep_days")"
+  fi
   echo ""
   info "$(t app.newapi.info.backup_list "$BACKUP_DIR")"
   local -a _bak_list
