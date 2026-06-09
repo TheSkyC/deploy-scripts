@@ -1814,7 +1814,9 @@ do_install() {
   fi
   _cleanup_install() {
     flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
-    [[ -d "${WORK_DIR:-}" ]] && rm -rf "$WORK_DIR"
+    if [[ -d "${WORK_DIR:-}" ]]; then
+      rm -rf "$WORK_DIR"
+    fi
   }
   trap '_cleanup_install' EXIT
   local BIN_PATH EXTRACTED_WEBVAULT_PATH VW_VER
@@ -2512,7 +2514,9 @@ do_update() {
   fi
   _cleanup_update() {
     flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
-    [[ -d "${WORK_DIR:-}" ]] && rm -rf "$WORK_DIR"
+    if [[ -d "${WORK_DIR:-}" ]]; then
+      rm -rf "$WORK_DIR"
+    fi
   }
   trap '_cleanup_update' EXIT
   step "$(t app.vaultwarden.step.extract_update_binary)"

@@ -1261,6 +1261,36 @@ check_vaultwarden_apt_update_failures_are_reported() {
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_workdir_cleanup_traps_are_nonfatal() {
+  if grep -R -nE '\[\[ -d "\$\{WORK_DIR:-\}" \]\] && rm -rf "\$WORK_DIR"' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden WORK_DIR cleanup traps must not return failure when the directory is already gone." >&2
+    return 1
+  fi
+  local file
+  for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+    awk '
+        /_cleanup_(install|update)\(\)/ { in_func=1; saw_if=0; saw_rm=0; next }
+        in_func && /if \[\[ -d "\$\{WORK_DIR:-\}" \]\]; then/ { saw_if=1 }
+        in_func && /rm -rf "\$WORK_DIR"/ { saw_rm=1 }
+        in_func && /^}/ {
+          if (!(saw_if && saw_rm)) {
+            printf "%s Vaultwarden WORK_DIR cleanup trap must use an explicit optional-directory branch\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+          count++
+          in_func=0
+        }
+        END {
+          if (count != 2) {
+            printf "%s verifier expected install and update WORK_DIR cleanup traps\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
+}
+
 check_blog_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl wget git nginx ca-certificates$' \
       impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
@@ -4755,6 +4785,7 @@ main() {
   check_cyberstrikeai_python_env_failures_are_reported
   check_cyberstrikeai_repo_go_install_failures_are_reported
   check_vaultwarden_apt_update_failures_are_reported
+  check_vaultwarden_workdir_cleanup_traps_are_nonfatal
   check_blog_dependency_failures_are_reported
   check_blog_hugo_install_failures_are_actionable
   check_blog_site_setup_failures_are_explicit
