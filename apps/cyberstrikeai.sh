@@ -15,6 +15,9 @@ i18n_register_many \
   app.cyberstrikeai.error.arch \
   "Unsupported architecture: %s." \
   "不支持的架构：%s。" \
+  app.cyberstrikeai.error.port_invalid \
+  "%s is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
+  "%s 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \

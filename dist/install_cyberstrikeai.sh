@@ -537,6 +537,9 @@ i18n_register_many \
   app.cyberstrikeai.error.arch \
   "Unsupported architecture: %s." \
   "不支持的架构：%s。" \
+  app.cyberstrikeai.error.port_invalid \
+  "%s is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
+  "%s 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
@@ -1049,6 +1052,16 @@ save_config() {
   fi
   success "$(t config.saved "$CONF_FILE")"
 }
+_validate_port_value() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 || "$value" -gt 65535 ]]; then
+    error "$(t app.cyberstrikeai.error.port_invalid "$name" "$value")"
+  fi
+}
+_validate_ports() {
+  _validate_port_value "PORT" "$PORT"
+  _validate_port_value "PUBLIC_PORT" "$PUBLIC_PORT"
+}
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
@@ -1056,6 +1069,7 @@ load_config() {
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
+  _validate_ports
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -1067,6 +1081,7 @@ preflight_check() {
     x86_64|aarch64|arm64) ;;
     *) error "$(t app.cyberstrikeai.error.arch "$arch")" ;;
   esac
+  _validate_ports
 }
 check_connectivity() {
   check_connectivity_urls \

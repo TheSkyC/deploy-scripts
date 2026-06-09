@@ -863,6 +863,50 @@ check_api_ports_are_validated() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_cyberstrikeai_ports_are_validated() {
+  awk '
+      /app\.cyberstrikeai\.error\.port_invalid/ { saw_key=1 }
+      /Set a port between 1 and 65535/ { saw_guidance=1 }
+      END {
+        if (!(saw_key && saw_guidance)) {
+          print "CyberStrikeAI must provide an actionable invalid port error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /_validate_port_value\(\)/ { saw_value_helper=1 }
+      /error "\$\(t app\.cyberstrikeai\.error\.port_invalid "\$name" "\$value"\)"/ { saw_error=1 }
+      /_validate_ports\(\)/ { saw_ports_helper=1 }
+      /_validate_port_value "PORT" "\$PORT"/ { saw_port=1 }
+      /_validate_port_value "PUBLIC_PORT" "\$PUBLIC_PORT"/ { saw_public_port=1 }
+      /preflight_check\(\)/ { in_preflight=1; next }
+      in_preflight && /^}/ {
+        if (!saw_preflight) {
+          printf "%s CyberStrikeAI preflight must validate PORT and PUBLIC_PORT defaults\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_preflight=0
+      }
+      in_preflight && /_validate_ports/ { saw_preflight=1 }
+      /load_config\(\)/ { in_load=1; next }
+      in_load && /^}/ {
+        if (!saw_load) {
+          printf "%s CyberStrikeAI load_config must validate configured PORT and PUBLIC_PORT\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_load=0
+      }
+      in_load && /_validate_ports/ { saw_load=1 }
+      END {
+        if (!(saw_value_helper && saw_error && saw_ports_helper && saw_port && saw_public_port && saw_preflight && saw_load)) {
+          printf "%s CyberStrikeAI must validate PORT and PUBLIC_PORT before using them\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4464,6 +4508,7 @@ main() {
   check_cyberstrikeai_display_sizes_are_nonfatal
   check_api_status_directory_sizes_are_nonfatal
   check_api_ports_are_validated
+  check_cyberstrikeai_ports_are_validated
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported

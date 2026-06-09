@@ -45,6 +45,16 @@ save_config() {
   fi
   success "$(t config.saved "$CONF_FILE")"
 }
+_validate_port_value() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 || "$value" -gt 65535 ]]; then
+    error "$(t app.cyberstrikeai.error.port_invalid "$name" "$value")"
+  fi
+}
+_validate_ports() {
+  _validate_port_value "PORT" "$PORT"
+  _validate_port_value "PUBLIC_PORT" "$PUBLIC_PORT"
+}
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
@@ -52,6 +62,7 @@ load_config() {
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
+  _validate_ports
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -63,6 +74,7 @@ preflight_check() {
     x86_64|aarch64|arm64) ;;
     *) error "$(t app.cyberstrikeai.error.arch "$arch")" ;;
   esac
+  _validate_ports
 }
 check_connectivity() {
   check_connectivity_urls \
