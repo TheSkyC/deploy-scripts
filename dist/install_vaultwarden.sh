@@ -2629,7 +2629,7 @@ fi
 
 # Remove expired backups.
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
-  REMOVED=$(find "${BACKUP_DIR}" -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
+  REMOVED=$(find "${BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
   [[ "${REMOVED}" -gt 0 ]] && printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
 fi
 BKSH

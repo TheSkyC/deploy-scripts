@@ -2443,13 +2443,14 @@ check_generated_backup_scripts_handle_missing_dirs() {
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
   awk '
-      /_write_backup_script\(\)/ { in_func=1; saw_msg=0; saw_mkdir=0; saw_stderr=0; next }
+      /_write_backup_script\(\)/ { in_func=1; saw_msg=0; saw_mkdir=0; saw_stderr=0; saw_maxdepth=0; next }
       in_func && /MSG_BACKUP_DIR_FAILED=/ { saw_msg=1 }
-      in_func && /if ! mkdir -p "\$\{BACKUP_DIR\}"; then/ { saw_mkdir=1 }
-      in_func && /MSG_BACKUP_DIR_FAILED.*>&2/ { saw_stderr=1 }
-      in_func && /if \[\[ ! -d "\$\{DATA_DIR\}" \]\]; then/ {
-        if (!(saw_msg && saw_mkdir && saw_stderr)) {
-          printf "%s generated Vaultwarden backup script must create the backup directory explicitly before archiving\n", FILENAME > "/dev/stderr"
+      in_func && index($0, "if ! mkdir -p \"${BACKUP_DIR}\"; then") { saw_mkdir=1 }
+      in_func && index($0, "${MSG_BACKUP_DIR_FAILED}") && index($0, ">&2") { saw_stderr=1 }
+      in_func && index($0, "find \"${BACKUP_DIR}\" -maxdepth 1 -name \"vaultwarden_*.tar.gz\"") { saw_maxdepth=1 }
+      in_func && /mv "\$backup_tmp" "\$backup_script"/ {
+        if (!(saw_msg && saw_mkdir && saw_stderr && saw_maxdepth)) {
+          printf "%s generated Vaultwarden backup script must create the backup directory explicitly and limit retention cleanup before archiving\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
