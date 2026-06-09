@@ -880,8 +880,8 @@ do_backup() {
   find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | head -10 | awk '{print $2}' | while read -r file; do
         [[ -n "$file" ]] || continue
-        printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}')" >&2
-      done
+        printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
+      done || true
   release_lock
 }
 do_update() {
@@ -965,7 +965,7 @@ do_status() {
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_branch):" "$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || t status.unknown)"
   fi
   if [[ -x "$BIN_PATH" ]]; then
-    printf '  %-12s %s (%s)\n' "$(t app.cyberstrikeai.status.binary):" "$BIN_PATH" "$(du -sh "$BIN_PATH" | awk '{print $1}')"
+    printf '  %-12s %s (%s)\n' "$(t app.cyberstrikeai.status.binary):" "$BIN_PATH" "$(du -sh "$BIN_PATH" 2>/dev/null | awk '{print $1}' || t status.unknown)"
   else
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.binary):" "$(t app.cyberstrikeai.status.missing)"
   fi
@@ -1009,13 +1009,13 @@ do_status() {
   if [[ -d "$BACKUP_DIR" ]]; then
     local count size
     count=$(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" 2>/dev/null | wc -l)
-    size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}')
+    size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t status.unknown)
     printf '  %-12s %s (%s, %s)\n' "$(t app.cyberstrikeai.status.backup_dir):" "$BACKUP_DIR" "$size" "$(t app.cyberstrikeai.status.files "$count")"
     find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null \
       | sort -rn | head -5 | awk '{print $2}' | while read -r file; do
           [[ -n "$file" ]] || continue
-          printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}')" >&2
-        done
+          printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
+        done || true
   else
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.backup_dir):" "$(t app.cyberstrikeai.status.missing)"
   fi

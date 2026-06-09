@@ -729,6 +729,33 @@ check_vaultwarden_status_display_commands_are_nonfatal() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_cyberstrikeai_display_sizes_are_nonfatal() {
+  awk '
+      /do_backup\(\)/ { in_backup=1; next }
+      in_backup && /^}/ {
+        if (!(saw_backup_file_size && saw_backup_loop)) {
+          printf "%s CyberStrikeAI backup listing must tolerate disappearing backup files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+      in_backup && /du -sh "\$file" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_backup_file_size=1 }
+      in_backup && /done \|\| true/ { saw_backup_loop=1 }
+      /do_status\(\)/ { in_status=1; next }
+      in_status && /^}/ {
+        if (!(saw_binary_size && saw_backup_dir_size && saw_status_file_size && saw_status_loop)) {
+          printf "%s CyberStrikeAI status display sizes must fall back instead of failing under pipefail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+      in_status && /du -sh "\$BIN_PATH" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_binary_size=1 }
+      in_status && /size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown\)/ { saw_backup_dir_size=1 }
+      in_status && /du -sh "\$file" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_status_file_size=1 }
+      in_status && /done \|\| true/ { saw_status_loop=1 }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4327,6 +4354,7 @@ main() {
   check_summary_ip_detection_has_fallback
   check_systemctl_status_diagnostics_are_nonfatal
   check_vaultwarden_status_display_commands_are_nonfatal
+  check_cyberstrikeai_display_sizes_are_nonfatal
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
