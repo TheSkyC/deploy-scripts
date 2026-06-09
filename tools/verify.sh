@@ -2375,6 +2375,52 @@ check_old_backup_cleanup_reports_failures() {
   done
 }
 
+check_uninstall_binary_cleanup_reports_failures() {
+  if grep -R -nE 'find "\$INSTALL_DIR" -maxdepth 1 .* -delete 2>/dev/null \|\| true|find "\$\(dirname "\$VW_BIN"\)" -maxdepth 1 .* -delete 2>/dev/null \|\| true' \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Uninstall binary cleanup must report per-path removal failures instead of ignoring find -delete errors." >&2
+    return 1
+  fi
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_loop=0; saw_warn=0; next }
+      in_uninstall && /while IFS= read -r -d '\'''\'' _cleanup_path; do/ { saw_loop=1 }
+      in_uninstall && /warn "\$\(t app\.newapi\.warn\.cleanup_old_failed "\$_cleanup_path"\)"/ { saw_warn=1 }
+      in_uninstall && /success "\$\(t app\.newapi\.success\.removed_binary\)"/ {
+        if (!(saw_loop && saw_warn)) {
+          printf "%s NewAPI uninstall binary cleanup must warn on per-path removal failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_file_loop=0; saw_dir_loop=0; saw_warn=0; next }
+      in_uninstall && /-type f -print0/ { saw_file_loop=1 }
+      in_uninstall && /-type d -print0/ { saw_dir_loop=1 }
+      in_uninstall && /warn "\$\(t app\.sub2api\.warn\.cleanup_old_binary_failed "\$_cleanup_path"\)"/ { saw_warn=1 }
+      in_uninstall && /success "\$\(t app\.sub2api\.success\.removed_binary\)"/ {
+        if (!(saw_file_loop && saw_dir_loop && saw_warn)) {
+          printf "%s Sub2API uninstall binary cleanup must warn on file and directory removal failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_loop=0; saw_warn=0; next }
+      in_uninstall && /while IFS= read -r -d '\'''\'' _cleanup_path; do/ { saw_loop=1 }
+      in_uninstall && /warn "\$\(t app\.vaultwarden\.warn\.cleanup_old_binary_failed "\$_cleanup_path"\)"/ { saw_warn=1 }
+      in_uninstall && /success "\$\(t app\.vaultwarden\.success\.removed_binary\)"/ {
+        if (!(saw_loop && saw_warn)) {
+          printf "%s Vaultwarden uninstall binary cleanup must warn on per-path removal failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_sub2api_extract_move_failure_cleanup() {
   if grep -R -n '^[[:space:]]*mv "$bin_path" "$tmp_bin"$' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
     echo "sub2api extraction must clean up temporary files if moving the binary fails." >&2
@@ -4823,6 +4869,7 @@ main() {
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic
   check_old_backup_cleanup_reports_failures
+  check_uninstall_binary_cleanup_reports_failures
   check_sub2api_extract_move_failure_cleanup
   check_cyberstrikeai_runtime_dir_failures_are_explicit
   check_cyberstrikeai_source_and_build_prep_failures_are_explicit

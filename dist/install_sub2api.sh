@@ -3129,10 +3129,17 @@ do_uninstall() {
   success "$(t app.sub2api.success.removed_systemd)"
   rm -f "$BIN_PATH"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*"       -type f -delete 2>/dev/null || true
-  find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.tmp.*"       -type f -delete 2>/dev/null || true
-  find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-release.*.tar.gz" -type f -delete 2>/dev/null || true
-  find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-extract.*"   -type d -exec rm -rf {} + 2>/dev/null || true
+  local _cleanup_path
+  while IFS= read -r -d '' _cleanup_path; do
+    if ! rm -f "$_cleanup_path"; then
+      warn "$(t app.sub2api.warn.cleanup_old_binary_failed "$_cleanup_path")"
+    fi
+  done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "sub2api.bak.*" -o -name "sub2api.tmp.*" -o -name "sub2api-release.*.tar.gz" \) -type f -print0 2>/dev/null)
+  while IFS= read -r -d '' _cleanup_path; do
+    if ! rm -rf "$_cleanup_path"; then
+      warn "$(t app.sub2api.warn.cleanup_old_binary_failed "$_cleanup_path")"
+    fi
+  done < <(find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-extract.*" -type d -print0 2>/dev/null)
   success "$(t app.sub2api.success.removed_binary)"
   rm -f /etc/nginx/sites-enabled/sub2api
   rm -f /etc/nginx/sites-available/sub2api

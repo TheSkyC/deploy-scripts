@@ -2957,7 +2957,12 @@ do_uninstall() {
   success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
   require_safe_path "VW_BIN_DIR" "$(dirname "$VW_BIN")"
-  find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -delete 2>/dev/null || true
+  local _cleanup_path
+  while IFS= read -r -d '' _cleanup_path; do
+    if ! rm -f "$_cleanup_path"; then
+      warn "$(t app.vaultwarden.warn.cleanup_old_binary_failed "$_cleanup_path")"
+    fi
+  done < <(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -print0 2>/dev/null)
   success "$(t app.vaultwarden.success.removed_binary)"
   rm -f /etc/nginx/sites-enabled/vaultwarden /etc/nginx/sites-available/vaultwarden
   if command -v nginx >/dev/null 2>&1; then

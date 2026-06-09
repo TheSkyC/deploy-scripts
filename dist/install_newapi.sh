@@ -2235,8 +2235,12 @@ do_uninstall() {
   success "$(t app.newapi.success.removed_systemd)"
   rm -f "$BIN_PATH"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f -delete 2>/dev/null || true
-  find "$INSTALL_DIR" -maxdepth 1 -name "new-api.tmp.*" -type f -delete 2>/dev/null || true
+  local _cleanup_path
+  while IFS= read -r -d '' _cleanup_path; do
+    if ! rm -f "$_cleanup_path"; then
+      warn "$(t app.newapi.warn.cleanup_old_failed "$_cleanup_path")"
+    fi
+  done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "new-api.bak.*" -o -name "new-api.tmp.*" \) -type f -print0 2>/dev/null)
   success "$(t app.newapi.success.removed_binary)"
   rm -f /etc/cron.d/new-api-backup \
         /usr/local/bin/new-api-backup \
