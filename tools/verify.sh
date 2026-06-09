@@ -2103,14 +2103,13 @@ check_systemd_units_are_atomic() {
     return 1
   fi
   awk '
-      /unit_tmp=\$\(mktemp "\$\{?unit_path\}?\.XXXXXX"\)/ { saw_tmp=1 }
-      /if ! unit_tmp=\$\(mktemp "\$\{unit_path\}\.XXXXXX"\); then/ { saw_vaultwarden_tmp_if=1 }
-      /error "\$\(t app\.vaultwarden\.error\.systemd\)"/ { saw_vaultwarden_tmp_error=1 }
+      /if ! unit_tmp=\$\(mktemp "\$\{?unit_path\}?\.XXXXXX"\); then/ { saw_tmp=1 }
+      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(systemd_unit|systemd)/ { saw_tmp_error=1 }
       /mv "\$unit_tmp" "\$unit_path"/ { saw_mv=1 }
       /rm -f "\$unit_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_vaultwarden_tmp_if && saw_vaultwarden_tmp_error && saw_mv && saw_cleanup)) {
-          print "systemd unit writes must stage, replace, clean up temporary files, and report Vaultwarden temp creation failures." > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
+          print "systemd unit writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
           exit 1
         }
       }
@@ -2406,14 +2405,13 @@ check_cron_logrotate_are_atomic() {
     return 1
   fi
   awk '
-      /(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)=\$\(mktemp/ { saw_tmp=1 }
-      /if ! (_vw_cron_tmp|_vw_logrotate_tmp)=\$\(mktemp/ { saw_vaultwarden_tmp_if=1 }
-      /error "\$\(t app\.vaultwarden\.error\.(auto_backup|logrotate)\)"/ { saw_vaultwarden_tmp_error=1 }
+      /if ! (cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)=\$\(mktemp/ { saw_tmp=1 }
+      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(cron|cron_backup|auto_backup|logrotate)\)"/ { saw_tmp_error=1 }
       /mv "\$(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)" "\$(cron_file|_vw_cron_file|logrotate_file|_vw_logrotate_file|CRON_FILE|LOGROTATE_FILE)"/ { saw_mv=1 }
       /rm -f "\$(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_vaultwarden_tmp_if && saw_vaultwarden_tmp_error && saw_mv && saw_cleanup)) {
-          print "cron and logrotate config writes must stage, replace, clean up temporary files, and report Vaultwarden temp creation failures." > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
+          print "cron and logrotate config writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
           exit 1
         }
       }
@@ -2432,15 +2430,14 @@ check_nginx_configs_are_atomic() {
     return 1
   fi
   awk '
-      /(nginx_tmp|NGINX_TMP)=\$\(mktemp/ { saw_tmp=1 }
-      /if ! nginx_tmp=\$\(mktemp "\$\{nginx_conf\}\.XXXXXX"\); then/ { saw_vaultwarden_tmp_if=1 }
-      /error "\$\(t app\.vaultwarden\.error\.nginx_write "\$nginx_conf"\)"/ { saw_vaultwarden_tmp_error=1 }
+      /if ! (nginx_tmp|NGINX_TMP)=\$\(mktemp/ { saw_tmp=1 }
+      /error "\$\(t app\.(sub2api|cyberstrikeai|vaultwarden|blog)\.error\.(nginx_config_write|nginx|nginx_write|nginx_conf)/ { saw_tmp_error=1 }
       /mv "\$(nginx_tmp|NGINX_TMP)" "\$(nginx_conf|NGINX_CONF)"/ { saw_mv=1 }
       /rm -f "\$(nginx_tmp|NGINX_TMP)"/ { saw_cleanup=1 }
       /_write_nginx_config_file "\$NGINX_CONF"/ { saw_helper=1 }
       END {
-        if (!(saw_tmp && saw_vaultwarden_tmp_if && saw_vaultwarden_tmp_error && saw_mv && saw_cleanup && saw_helper)) {
-          print "Nginx site config writes must stage, replace, clean up temporary files, and report Vaultwarden temp creation failures." > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup && saw_helper)) {
+          print "Nginx site config writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
           exit 1
         }
       }

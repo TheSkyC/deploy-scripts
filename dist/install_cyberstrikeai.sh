@@ -1410,7 +1410,9 @@ write_systemd_unit() {
   _bool_true "$CSAI_HTTPS" && https_env="true"
   local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
   local unit_tmp
-  unit_tmp=$(mktemp "${unit_path}.XXXXXX")
+  if ! unit_tmp=$(mktemp "${unit_path}.XXXXXX"); then
+    error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
+  fi
   if ! cat > "$unit_tmp" <<SERVICE
 [Unit]
 Description=CyberStrikeAI
@@ -1480,7 +1482,9 @@ write_nginx_config() {
     error "$(t app.cyberstrikeai.error.nginx_dirs "$NGINX_CONF")"
   fi
   local nginx_tmp
-  nginx_tmp=$(mktemp "${NGINX_CONF}.XXXXXX")
+  if ! nginx_tmp=$(mktemp "${NGINX_CONF}.XXXXXX"); then
+    error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
+  fi
   if ! cat > "$nginx_tmp" <<NGINX
 server {
     listen ${PUBLIC_PORT};
@@ -1591,7 +1595,9 @@ open_firewall_ports() {
 }
 write_logrotate() {
   local logrotate_tmp
-  logrotate_tmp=$(mktemp "${LOGROTATE_FILE}.XXXXXX")
+  if ! logrotate_tmp=$(mktemp "${LOGROTATE_FILE}.XXXXXX"); then
+    error "$(t app.cyberstrikeai.error.logrotate)"
+  fi
   if ! cat > "$logrotate_tmp" <<ROTATE
 ${LOG_DIR}/*.log {
     daily
@@ -1620,7 +1626,9 @@ write_backup_script() {
   msg_sqlite_integrity="$(t app.cyberstrikeai.backup.warn.sqlite_integrity '%s' '%s')"
   msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
   local backup_tmp
-  backup_tmp=$(mktemp "${BACKUP_SCRIPT}.XXXXXX")
+  if ! backup_tmp=$(mktemp "${BACKUP_SCRIPT}.XXXXXX"); then
+    error "$(t app.cyberstrikeai.error.backup_script)"
+  fi
   if ! cat > "$backup_tmp" <<BACKUP
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1698,7 +1706,9 @@ BACKUP
     error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
   fi
   local cron_tmp
-  cron_tmp=$(mktemp "${CRON_FILE}.XXXXXX")
+  if ! cron_tmp=$(mktemp "${CRON_FILE}.XXXXXX"); then
+    error "$(t app.cyberstrikeai.error.cron)"
+  fi
   if ! cat > "$cron_tmp" <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
