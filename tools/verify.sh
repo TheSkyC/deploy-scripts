@@ -1764,14 +1764,15 @@ check_update_binary_backups_are_atomic() {
     return 1
   fi
   awk '
-      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
-      in_func && /backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\)/ { saw_tmp=1 }
+      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_error=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /if ! backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
+      in_func && /error "\$\(t app\.(newapi|sub2api|vaultwarden)\.error\.binary_install/ { saw_tmp_error=1 }
       in_func && /cp "\$(BIN_PATH|VW_BIN)" "\$backup_tmp"/ { saw_cp=1 }
       in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_cp && saw_mv && saw_cleanup)) {
-          printf "%s binary backup helper must stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup)) {
+          printf "%s binary backup helper must report temp creation failures, stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0

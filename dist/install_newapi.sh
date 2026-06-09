@@ -1329,7 +1329,9 @@ _restore_binary_backup() {
 _backup_current_binary() {
   local backup_path="$1"
   local backup_tmp
-  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! backup_tmp=$(mktemp "${backup_path}.XXXXXX"); then
+    error "$(t app.newapi.error.binary_install "$BIN_PATH")"
+  fi
   if ! cp "$BIN_PATH" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
     rm -f "$backup_tmp"
     return 1
