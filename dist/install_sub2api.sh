@@ -2008,7 +2008,9 @@ _write_nginx_site_link() {
   local target="$1" link_path="$2"
   local link_tmp
   mkdir -p "$(dirname "$link_path")" || return 1
-  link_tmp=$(mktemp "${link_path}.XXXXXX") || return 1
+  if ! link_tmp=$(mktemp "${link_path}.XXXXXX"); then
+    error "$(t app.sub2api.error.nginx_config_write)"
+  fi
   rm -f "$link_tmp"
   if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
     rm -f "$link_tmp"
