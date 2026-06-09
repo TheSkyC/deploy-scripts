@@ -161,10 +161,18 @@ extract_binary() {
 restore_web_vault_backup() {
   local backup_dir="$1"
   [[ -d "$backup_dir" ]] || return 1
-  rm -rf "$VW_WEB_DIR" || return 1
-  mv "$backup_dir" "$VW_WEB_DIR" || return 1
-  chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR" || return 1
-  chmod -R 750 "$VW_WEB_DIR" || return 1
+  if ! rm -rf "$VW_WEB_DIR"; then
+    return 1
+  fi
+  if ! mv "$backup_dir" "$VW_WEB_DIR"; then
+    return 1
+  fi
+  if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_WEB_DIR"; then
+    return 1
+  fi
+  if ! chmod -R 750 "$VW_WEB_DIR"; then
+    return 1
+  fi
 }
 deploy_web_vault_from_dir() {
   local source_dir="$1" backup_dir="$2"

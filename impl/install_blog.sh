@@ -19,8 +19,12 @@ LOCK_FILE="/var/lock/blog-deploy.lock"
 
 restore_nginx_root_backup() {
   [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] || return 0
-  rm -rf "$NGINX_ROOT" || return 1
-  mv "$DEPLOY_BAK" "$NGINX_ROOT" || return 1
+  if ! rm -rf "$NGINX_ROOT"; then
+    return 1
+  fi
+  if ! mv "$DEPLOY_BAK" "$NGINX_ROOT"; then
+    return 1
+  fi
 }
 
 _write_publish_script() {
@@ -41,8 +45,12 @@ DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX"
 DEPLOY_BAK="\${NGINX_ROOT}.bak.\$(date +%Y%m%d%H%M%S)"
 restore_nginx_root_backup() {
   [[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" ]] || return 0
-  rm -rf "\$NGINX_ROOT" || return 1
-  mv "\$DEPLOY_BAK" "\$NGINX_ROOT" || return 1
+  if ! rm -rf "\$NGINX_ROOT"; then
+    return 1
+  fi
+  if ! mv "\$DEPLOY_BAK" "\$NGINX_ROOT"; then
+    return 1
+  fi
 }
 [[ -d "\$PUBLIC_DIR" ]] || { echo "PUBLIC_DIR is missing: \$PUBLIC_DIR" >&2; exit 1; }
 mkdir -p "\$NGINX_ROOT_PARENT"

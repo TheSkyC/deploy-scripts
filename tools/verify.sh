@@ -3754,13 +3754,17 @@ check_vaultwarden_webvault_restore_cleans_partial() {
     return 1
   fi
   awk '
-      /restore_web_vault_backup\(\)/ { in_helper=1; saw_rm=0; saw_mv=0; saw_chown=0; saw_chmod=0; next }
-      in_helper && /rm -rf "\$VW_WEB_DIR"/ { saw_rm=1 }
-      in_helper && /mv "\$backup_dir" "\$VW_WEB_DIR"/ { saw_mv=1 }
-      in_helper && /chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_WEB_DIR"/ { saw_chown=1 }
-      in_helper && /chmod -R 750 "\$VW_WEB_DIR"/ { saw_chmod=1 }
+      /restore_web_vault_backup\(\)/ { in_helper=1; saw_rm=0; saw_rm_return=0; saw_mv=0; saw_mv_return=0; saw_chown=0; saw_chown_return=0; saw_chmod=0; saw_chmod_return=0; next }
+      in_helper && /if ! rm -rf "\$VW_WEB_DIR"; then/ { saw_rm=1 }
+      in_helper && saw_rm && /return 1/ { saw_rm_return=1 }
+      in_helper && /if ! mv "\$backup_dir" "\$VW_WEB_DIR"; then/ { saw_mv=1 }
+      in_helper && saw_mv && /return 1/ { saw_mv_return=1 }
+      in_helper && /if ! chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$VW_WEB_DIR"; then/ { saw_chown=1 }
+      in_helper && saw_chown && /return 1/ { saw_chown_return=1 }
+      in_helper && /if ! chmod -R 750 "\$VW_WEB_DIR"; then/ { saw_chmod=1 }
+      in_helper && saw_chmod && /return 1/ { saw_chmod_return=1 }
       in_helper && /^}/ {
-        if (!(saw_rm && saw_mv && saw_chown && saw_chmod)) {
+        if (!(saw_rm && saw_rm_return && saw_mv && saw_mv_return && saw_chown && saw_chown_return && saw_chmod && saw_chmod_return)) {
           printf "%s restore helper must validate Web Vault replacement, ownership, and mode\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -3867,11 +3871,13 @@ check_blog_static_deploy_swaps_tree() {
       /<< BKSH$/ { in_heredoc=1 }
       in_heredoc && /^BKSH$/ { in_heredoc=0; next }
       in_heredoc { next }
-      /^[[:space:]]*restore_nginx_root_backup\(\)/ { in_helper=1; saw_rm=0; saw_restore=0; next }
-      in_helper && /rm -rf "\$NGINX_ROOT"/ { saw_rm=1 }
-      in_helper && /mv "\$DEPLOY_BAK" "\$NGINX_ROOT"/ { saw_restore=1 }
+      /^[[:space:]]*restore_nginx_root_backup\(\)/ { in_helper=1; saw_rm=0; saw_rm_return=0; saw_restore=0; saw_restore_return=0; next }
+      in_helper && /if ! rm -rf "\$NGINX_ROOT"; then/ { saw_rm=1 }
+      in_helper && saw_rm && /return 1/ { saw_rm_return=1 }
+      in_helper && /if ! mv "\$DEPLOY_BAK" "\$NGINX_ROOT"; then/ { saw_restore=1 }
+      in_helper && saw_restore && /return 1/ { saw_restore_return=1 }
       in_helper && /^}/ {
-        if (!(saw_rm && saw_restore)) {
+        if (!(saw_rm && saw_rm_return && saw_restore && saw_restore_return)) {
           print "Blog static deployment restore helper must remove partial output and restore the previous root." > "/dev/stderr"
           exit 1
         }
