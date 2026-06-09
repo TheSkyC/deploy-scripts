@@ -729,6 +729,14 @@ check_vaultwarden_status_display_commands_are_nonfatal() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_find_head_pipelines_are_nonfatal() {
+  if grep -R -nE '\$\(find [^)]*\| head -1\)' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden find/head lookups must fall back so empty results reach explicit handling under pipefail." >&2
+    return 1
+  fi
+}
+
 check_cyberstrikeai_display_sizes_are_nonfatal() {
   awk '
       /do_backup\(\)/ { in_backup=1; next }
@@ -4658,6 +4666,7 @@ main() {
   check_summary_ip_detection_has_fallback
   check_systemctl_status_diagnostics_are_nonfatal
   check_vaultwarden_status_display_commands_are_nonfatal
+  check_vaultwarden_find_head_pipelines_are_nonfatal
   check_cyberstrikeai_display_sizes_are_nonfatal
   check_api_status_directory_sizes_are_nonfatal
   check_api_ports_are_validated

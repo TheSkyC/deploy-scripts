@@ -1557,7 +1557,7 @@ extract_binary() {
     "${VW_IMAGE_REPO}:${VW_IMAGE_TAG}" >&2 \
     || error "$(t app.vaultwarden.error.image_extract)"
   local bin_path
-  bin_path=$(find "$out_dir" -type f -name "vaultwarden" | head -1)
+  bin_path=$(find "$out_dir" -type f -name "vaultwarden" | head -1 || true)
   [[ -z "$bin_path" ]] && error "$(t app.vaultwarden.error.binary_missing_image)"
   local _bin_size
   _bin_size=$(wc -c < "$bin_path")
@@ -1584,7 +1584,7 @@ extract_binary() {
   fi
   chmod +x "$bin_path"
   local webvault_path
-  webvault_path=$(find "$out_dir" -type d -name "web-vault" | head -1)
+  webvault_path=$(find "$out_dir" -type d -name "web-vault" | head -1 || true)
   echo "$webvault_path" > "${workdir}/.webvault_path"
   echo "$bin_path"
 }
@@ -1854,7 +1854,7 @@ do_install() {
     fi
     if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
       local _wv_source_dir
-      _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
+      _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1 || true)
       if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_install_bak"; then
         [[ -d "$_wv_install_bak" ]] && rm -rf "$_wv_install_bak"
         success "$(t app.vaultwarden.success.web_vault_version "$_wv_ver")"
@@ -2543,7 +2543,7 @@ do_update() {
           fi
           if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
             local _wv_source_dir
-            _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
+            _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1 || true)
             if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_bak_ts"; then
               success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
             else
