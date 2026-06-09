@@ -1784,6 +1784,23 @@ check_sub2api_extract_move_failure_cleanup() {
     echo "sub2api extraction must clean up temporary files if moving the binary fails." >&2
     return 1
   fi
+  awk '
+      /extract_and_verify\(\)/ { in_func=1; saw_extract_tmp=0; saw_extract_archive_rm=0; saw_extract_error=0; saw_bin_tmp=0; saw_bin_archive_rm=0; saw_bin_extract_rm=0; saw_bin_error=0; next }
+      in_func && index($0, "if ! tmp_extract=$(mktemp -d \"${dest_dir}/sub2api-extract.XXXXXX\"); then") { saw_extract_tmp=1; next }
+      in_func && saw_bin_tmp && index($0, "rm -f \"$archive\"") { saw_bin_archive_rm=1; next }
+      in_func && saw_bin_tmp && index($0, "rm -rf \"$tmp_extract\"") { saw_bin_extract_rm=1; next }
+      in_func && saw_bin_tmp && index($0, "error \"$(t app.sub2api.error.archive_missing_binary)\"") { saw_bin_error=1; next }
+      in_func && saw_extract_tmp && index($0, "rm -f \"$archive\"") { saw_extract_archive_rm=1; next }
+      in_func && saw_extract_tmp && index($0, "error \"$(t app.sub2api.error.tar_extract)\"") { saw_extract_error=1; next }
+      in_func && index($0, "if ! tmp_bin=$(mktemp \"${dest_dir}/sub2api.tmp.XXXXXX\"); then") { saw_bin_tmp=1; next }
+      in_func && index($0, "echo \"$tmp_bin\"") {
+        if (!(saw_extract_tmp && saw_extract_archive_rm && saw_extract_error && saw_bin_tmp && saw_bin_archive_rm && saw_bin_extract_rm && saw_bin_error)) {
+          printf "%s sub2api extraction must report and clean up temporary file creation failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
 check_sub2api_pg_dump_errors_stay_out_of_backups() {
@@ -2036,6 +2053,18 @@ check_download_validation_failures_cleanup() {
 }
 
 check_download_temp_creation_failures_are_explicit() {
+  awk '
+      /verify_checksum\(\)/ { in_func=1; saw_tmp=0; saw_warn=0; next }
+      in_func && index($0, "if ! tmp_sum=$(mktemp); then") { saw_tmp=1; next }
+      in_func && saw_tmp && index($0, "warn \"$(t app.sub2api.warn.checksum_download)\"") { saw_warn=1; next }
+      in_func && index($0, "success \"$(t app.sub2api.success.sha_ok \"${actual_hash:0:16}\")\"") {
+        if (!(saw_tmp && saw_warn)) {
+          printf "%s Sub2API checksum temporary file creation failures must be explicit\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
   awk '
       /step "\$\(t app\.newapi\.step\.download "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
       in_install && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_install_tmp=1 }

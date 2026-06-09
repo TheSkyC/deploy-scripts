@@ -107,7 +107,11 @@ verify_checksum() {
   local ver; ver=$(_tag_to_ver "$tag")
   local expected_name="sub2api_${ver}_linux_${BIN_ARCH}.tar.gz"
   local checksum_url; checksum_url=$(get_checksum_url "$tag")
-  local tmp_sum; tmp_sum=$(mktemp)
+  local tmp_sum
+  if ! tmp_sum=$(mktemp); then
+    warn "$(t app.sub2api.warn.checksum_download)"
+    return 0
+  fi
   if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
     warn "$(t app.sub2api.warn.checksum_download)"
     rm -f "$tmp_sum"
@@ -137,7 +141,11 @@ verify_checksum() {
 }
 extract_and_verify() {
   local archive="$1" dest_dir="$2"
-  local tmp_extract; tmp_extract=$(mktemp -d "${dest_dir}/sub2api-extract.XXXXXX")
+  local tmp_extract
+  if ! tmp_extract=$(mktemp -d "${dest_dir}/sub2api-extract.XXXXXX"); then
+    rm -f "$archive"
+    error "$(t app.sub2api.error.tar_extract)"
+  fi
   if ! tar -xzf "$archive" -C "$tmp_extract" >&2; then
     rm -f "$archive"
     rm -rf "$tmp_extract"
@@ -167,7 +175,12 @@ extract_and_verify() {
   local size; size=$(wc -c < "$bin_path")
   local size_mb=$(( size / 1024 / 1024 ))
   success "$(t app.sub2api.success.elf_ok "$BIN_ARCH" "$size_mb")"
-  local tmp_bin; tmp_bin=$(mktemp "${dest_dir}/sub2api.tmp.XXXXXX")
+  local tmp_bin
+  if ! tmp_bin=$(mktemp "${dest_dir}/sub2api.tmp.XXXXXX"); then
+    rm -f "$archive"
+    rm -rf "$tmp_extract"
+    error "$(t app.sub2api.error.archive_missing_binary)"
+  fi
   if ! mv "$bin_path" "$tmp_bin"; then
     rm -f "$archive"
     rm -f "$tmp_bin"
