@@ -173,7 +173,9 @@ safe_rm_dir() {
     path="${path%/}"
   done
   require_safe_path "$name" "$path"
-  [[ -d "$path" ]] && rm -rf -- "$path"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  [[ -d "$path" || -L "$path" ]] || return 1
+  rm -rf -- "$path"
 }
 
 # ----- lib/lock.sh -----

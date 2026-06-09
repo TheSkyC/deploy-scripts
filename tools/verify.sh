@@ -349,6 +349,32 @@ check_safe_path_guard() {
     ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
+check_safe_rm_dir_is_idempotent() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/fs.sh
+    tmp=$(mktemp -d)
+    child="${tmp}/missing-dir"
+    rmdir "$tmp"
+    safe_rm_dir "$child" "TEST_PATH"
+  '
+  awk '
+      /_write_publish_script\(\)/ { saw_helper=1; next }
+      saw_helper && /<< BKSH$/ { in_heredoc=1; next }
+      in_heredoc && /safe_rm_dir\(\)/ { in_func=1; saw_missing=0; saw_type_guard=0; next }
+      in_func && /\[\[ -e "\\\$path" \|\| -L "\\\$path" \]\] \|\| return 0/ { saw_missing=1 }
+      in_func && /\[\[ -d "\\\$path" \|\| -L "\\\$path" \]\] \|\| return 1/ { saw_type_guard=1 }
+      in_func && /^}/ {
+        if (!(saw_missing && saw_type_guard)) {
+          printf "%s Blog publish helper safe_rm_dir must treat missing safe paths as already removed and reject non-directory paths\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+        in_heredoc=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_service_status_label() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -4691,6 +4717,7 @@ main() {
   check_bundled_impl_cleanup
   check_bundled_impl_failure_cleanup
   check_safe_path_guard
+  check_safe_rm_dir_is_idempotent
   check_service_status_label
   check_config_crlf_handling
   check_config_write_failure_cleanup
