@@ -1467,11 +1467,15 @@ extract_binary() {
   else
     warn "$(t app.vaultwarden.warn.extract_tool_sha_missing)"
   fi
-  chmod +x "${workdir}/docker-image-extract"
+  if ! chmod +x "${workdir}/docker-image-extract"; then
+    error "$(t app.vaultwarden.error.extract_tool_download)"
+  fi
   info "$(t app.vaultwarden.info.extract_image "$VW_IMAGE_REPO" "$VW_IMAGE_TAG" "$platform")"
   info "$(t app.vaultwarden.info.first_download_wait)"
   local out_dir="${workdir}/image_output"
-  mkdir -p "$out_dir"
+  if ! mkdir -p "$out_dir"; then
+    error "$(t app.vaultwarden.error.image_extract)"
+  fi
   bash "${workdir}/docker-image-extract" \
     -p "$platform" \
     -o "$out_dir" \
@@ -1705,7 +1709,9 @@ do_install() {
     armv7l)  PLATFORM="linux/arm/v7" ;;
   esac
   local WORK_DIR
-  WORK_DIR=$(mktemp -d /tmp/vaultwarden_install_XXXXXX)
+  if ! WORK_DIR=$(mktemp -d /tmp/vaultwarden_install_XXXXXX); then
+    error "$(t app.vaultwarden.error.image_extract)"
+  fi
   _cleanup_install() {
     flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
     [[ -d "${WORK_DIR:-}" ]] && rm -rf "$WORK_DIR"
@@ -2395,7 +2401,9 @@ do_update() {
     armv7l)  PLATFORM="linux/arm/v7" ;;
     *)       error "$(t app.vaultwarden.error.arch "$ARCH")" ;;
   esac
-  WORK_DIR=$(mktemp -d /tmp/vaultwarden_update_XXXXXX)
+  if ! WORK_DIR=$(mktemp -d /tmp/vaultwarden_update_XXXXXX); then
+    error "$(t app.vaultwarden.error.image_extract)"
+  fi
   _cleanup_update() {
     flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
     [[ -d "${WORK_DIR:-}" ]] && rm -rf "$WORK_DIR"

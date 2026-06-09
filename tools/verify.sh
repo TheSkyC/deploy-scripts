@@ -1293,6 +1293,10 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
         }
         in_dirs=0
       }
+      /if ! WORK_DIR=\$\(mktemp -d \/tmp\/vaultwarden_(install|update)_XXXXXX\); then/ { saw_workdir_if++ }
+      /error "\$\(t app\.vaultwarden\.error\.image_extract\)"/ { saw_image_extract_error=1 }
+      /if ! chmod \+x "\$\{workdir\}\/docker-image-extract"; then/ { saw_extract_chmod_if=1 }
+      /if ! mkdir -p "\$out_dir"; then/ { saw_image_out_if=1 }
       /web-vault-extract/ { in_extract=1; saw_extract_if=0; saw_extract_error=0; next }
       in_extract && /if ! mkdir -p "\$_wv_extract_root"; then/ { saw_extract_if=1 }
       in_extract && /error "\$\(t app\.vaultwarden\.error\.web_vault_extract_dir "\$_wv_extract_root"\)"/ { saw_extract_error=1 }
@@ -1322,6 +1326,12 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
           exit 1
         }
         in_fail2ban=0
+      }
+      END {
+        if (!(saw_workdir_if >= 2 && saw_image_extract_error && saw_extract_chmod_if && saw_image_out_if)) {
+          print "Vaultwarden image extraction must report workdir, helper chmod, and image output directory preparation failures." > "/dev/stderr"
+          exit 1
+        }
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
