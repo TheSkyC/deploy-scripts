@@ -1096,6 +1096,19 @@ check_go_tarball_failures_cleanup() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_go_version_parse_failures_are_explicit() {
+  awk '
+      /version=\$\(printf .*\| grep -oE .*go\[0-9\].*\| head -1 \| sed .* \|\| true\)/ { saw_safe_parse=1 }
+      /\[\[ -n "\$version" \]\] \|\| error "\$\(t app\.cyberstrikeai\.error\.go_parse\)"/ { saw_parse_error=1 }
+      END {
+        if (!(saw_safe_parse && saw_parse_error)) {
+          printf "%s CyberStrikeAI Go version parsing must allow empty parse results to reach the explicit go_parse error under pipefail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_cyberstrikeai_go_restore_failures_are_reported() {
   if grep -R -n 'warn "\$\(t app\.cyberstrikeai\.error\.go_failed\)"' \
       impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
@@ -4653,6 +4666,7 @@ main() {
   check_vaultwarden_config_values_are_validated
   check_status_port_matches_are_bounded
   check_go_tarball_failures_cleanup
+  check_cyberstrikeai_go_version_parse_failures_are_explicit
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
   check_cyberstrikeai_python_env_failures_are_reported

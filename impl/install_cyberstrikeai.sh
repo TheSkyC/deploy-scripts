@@ -189,7 +189,7 @@ install_go_if_needed() {
   esac
   latest_json=$(curl -fsSL --max-time 20 "https://go.dev/dl/?mode=json" 2>/dev/null) \
     || error "$(t app.cyberstrikeai.error.go_query)"
-  version=$(printf '%s\n' "$latest_json" | grep -oE '"version"[[:space:]]*:[[:space:]]*"go[0-9]+\.[0-9]+(\.[0-9]+)?"' | head -1 | sed 's/.*"\(go[^"]*\)".*/\1/')
+  version=$(printf '%s\n' "$latest_json" | grep -oE '"version"[[:space:]]*:[[:space:]]*"go[0-9]+\.[0-9]+(\.[0-9]+)?"' | head -1 | sed 's/.*"\(go[^"]*\)".*/\1/' || true)
   [[ -n "$version" ]] || error "$(t app.cyberstrikeai.error.go_parse)"
   tarball="${version}.linux-${go_arch}.tar.gz"
   url="https://go.dev/dl/${tarball}"
