@@ -114,6 +114,9 @@ i18n_register_many \
   app.vaultwarden.error.port_invalid \
   "VW_PORT is invalid: '%s'. Set a port between 1 and 65535 at the top of the script." \
   "VW_PORT 无效：'%s'，请在脚本顶部设置 1-65535 之间的端口号。" \
+  app.vaultwarden.error.bool_invalid \
+  "%s is invalid: '%s'. Set it to true or false in the script or config file." \
+  "%s 无效：'%s'，请在脚本或配置文件中设置为 true 或 false。" \
   app.vaultwarden.info.domain \
   "Domain     : %s" \
   "域名     : %s" \

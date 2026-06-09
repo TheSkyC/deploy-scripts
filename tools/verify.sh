@@ -907,6 +907,52 @@ check_cyberstrikeai_ports_are_validated() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_vaultwarden_config_values_are_validated() {
+  awk '
+      /app\.vaultwarden\.error\.port_invalid/ { saw_port=1 }
+      /app\.vaultwarden\.error\.bool_invalid/ { saw_bool=1 }
+      /true or false/ { saw_guidance=1 }
+      END {
+        if (!(saw_port && saw_bool && saw_guidance)) {
+          print "Vaultwarden must provide actionable invalid port and boolean config errors." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /preflight_check\(\)/ { in_preflight=1; next }
+      in_preflight && /^}/ {
+        if (!saw_preflight) {
+          printf "%s Vaultwarden preflight must validate config defaults\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_preflight=0
+      }
+      in_preflight && /_validate_config_values/ { saw_preflight=1 }
+      /load_config\(\)/ { in_load=1; next }
+      in_load && /^}/ {
+        if (!saw_load) {
+          printf "%s Vaultwarden load_config must validate configured values\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_load=0
+      }
+      in_load && /_validate_config_values/ { saw_load=1 }
+      /_validate_bool_value\(\)/ { saw_bool_helper=1 }
+      /error "\$\(t app\.vaultwarden\.error\.bool_invalid "\$name" "\$value"\)"/ { saw_bool_error=1 }
+      /_validate_config_values\(\)/ { saw_config_helper=1 }
+      /error "\$\(t app\.vaultwarden\.error\.port_invalid "\$VW_PORT"\)"/ { saw_port_error=1 }
+      /_validate_bool_value "ENABLE_HTTPS" "\$ENABLE_HTTPS"/ { saw_https=1 }
+      /_validate_bool_value "SIGNUPS_ALLOWED" "\$SIGNUPS_ALLOWED"/ { saw_signups=1 }
+      END {
+        if (!(saw_preflight && saw_load && saw_bool_helper && saw_bool_error && saw_config_helper && saw_port_error && saw_https && saw_signups)) {
+          printf "%s Vaultwarden must validate VW_PORT, ENABLE_HTTPS, and SIGNUPS_ALLOWED before using them\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4509,6 +4555,7 @@ main() {
   check_api_status_directory_sizes_are_nonfatal
   check_api_ports_are_validated
   check_cyberstrikeai_ports_are_validated
+  check_vaultwarden_config_values_are_validated
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported

@@ -41,6 +41,7 @@ preflight_check() {
     armv7l)  : ;;
     *) error "$(t app.vaultwarden.error.arch "$ARCH")" ;;
   esac
+  _validate_config_values
 }
 LOCK_FILE="/var/lock/vaultwarden-deploy.lock"
 check_connectivity() {
@@ -58,6 +59,7 @@ load_config() {
       VW_WEB_DIR="${VW_DATA_DIR}/web-vault"
     fi
     EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
+    _validate_config_values
     success "$(t config.loaded "$CONF_FILE")"
   fi
 }
@@ -65,6 +67,20 @@ save_config() {
   if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
     error "$(t error.config_write "$CONF_FILE")"
   fi
+}
+_validate_bool_value() {
+  local name="$1" value="$2"
+  case "${value,,}" in
+    true|false) ;;
+    *) error "$(t app.vaultwarden.error.bool_invalid "$name" "$value")" ;;
+  esac
+}
+_validate_config_values() {
+  if ! [[ "$VW_PORT" =~ ^[0-9]+$ ]] || [[ "$VW_PORT" -lt 1 || "$VW_PORT" -gt 65535 ]]; then
+    error "$(t app.vaultwarden.error.port_invalid "$VW_PORT")"
+  fi
+  _validate_bool_value "ENABLE_HTTPS" "$ENABLE_HTTPS"
+  _validate_bool_value "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed
@@ -352,9 +368,6 @@ do_install() {
     done
   fi
   echo ""
-  if ! [[ "$VW_PORT" =~ ^[0-9]+$ ]] || [[ "$VW_PORT" -lt 1 || "$VW_PORT" -gt 65535 ]]; then
-    error "$(t app.vaultwarden.error.port_invalid "$VW_PORT")"
-  fi
   info "$(t app.vaultwarden.info.domain "$VW_DOMAIN")"
   info "$(t app.vaultwarden.info.listen_port "$VW_PORT")"
   info "$(t app.vaultwarden.info.binary "$VW_BIN")"
