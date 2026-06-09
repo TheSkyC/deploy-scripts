@@ -649,7 +649,7 @@ UNIT
   step "$(t app.vaultwarden.step.start_service)"
   if ss -ltn 2>/dev/null | grep -qE ":${VW_PORT}[[:space:]]"; then
     local _port_owner
-    _port_owner=$(ss -ltnp 2>/dev/null | grep ":${VW_PORT}" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
+    _port_owner=$(ss -ltnp 2>/dev/null | grep -E ":${VW_PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
     warn "$(t app.vaultwarden.warn.port_used "$VW_PORT" "$_port_owner")"
     warn "$(t app.vaultwarden.warn.port_hint)"
   fi
@@ -1182,7 +1182,7 @@ do_update() {
   fi
   if ss -ltn 2>/dev/null | grep -qE ":${VW_PORT}[[:space:]]"; then
     local _port_owner_upd
-    _port_owner_upd=$(ss -ltnp 2>/dev/null | grep ":${VW_PORT}" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
+    _port_owner_upd=$(ss -ltnp 2>/dev/null | grep -E ":${VW_PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
     warn "$(t app.vaultwarden.warn.update_port_used "$VW_PORT" "$_port_owner_upd")"
   fi
   if systemctl start vaultwarden && wait_for_service vaultwarden 20; then

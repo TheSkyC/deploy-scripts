@@ -1846,7 +1846,7 @@ do_install() {
   local _install_summary_state="ready"
   if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
     local _port_owner
-    _port_owner=$(ss -ltnp 2>/dev/null | grep ":${PORT}" | awk '{print $NF}' | head -1 || t app.newapi.status.unknown_process)
+    _port_owner=$(ss -ltnp 2>/dev/null | grep -E ":${PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.newapi.status.unknown_process)
     warn "$(t app.newapi.warn.port_used "$PORT" "$_port_owner")"
     warn "$(t app.newapi.warn.port_release)"
   fi
@@ -2146,7 +2146,7 @@ do_status() {
   echo -e "\n${BOLD}[$(t app.newapi.status.firewall "$PORT")]${NC}"
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     local ufw_rule
-    ufw_rule=$(ufw status 2>/dev/null | grep "${PORT}" || true)
+    ufw_rule=$(ufw status 2>/dev/null | grep -E "(^|[[:space:]])${PORT}/tcp([[:space:]]|$)" || true)
     if [[ -n "$ufw_rule" ]]; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.newapi.status.ufw_allowed "$PORT")"
       echo "$ufw_rule" | sed 's/^/  /'

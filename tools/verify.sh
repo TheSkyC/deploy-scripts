@@ -998,6 +998,43 @@ check_vaultwarden_config_values_are_validated() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_status_port_matches_are_bounded() {
+  if grep -R -nF 'grep ":${PORT}"' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "API port owner detection must not use substring port matches." >&2
+    return 1
+  fi
+  if grep -R -nF 'grep "${PORT}"' \
+      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "API firewall status checks must not use substring port matches." >&2
+    return 1
+  fi
+  if grep -R -nF 'grep ":${VW_PORT}"' \
+      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden port owner detection must not use substring port matches." >&2
+    return 1
+  fi
+  awk '
+      /grep -E ":\$\{PORT\}\[\[:space:\]\]"/ { saw_owner++ }
+      /grep -E "\(\^\|\[\[:space:\]\]\)\$\{PORT\}\/tcp\(\[\[:space:\]\]\|\$\)"/ { saw_ufw++ }
+      END {
+        if (!(saw_owner >= 1 && saw_ufw >= 1)) {
+          printf "%s API status checks must use bounded PORT matches for owners and UFW rules\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+  awk '
+      /grep -E ":\$\{VW_PORT\}\[\[:space:\]\]"/ { saw_owner++ }
+      END {
+        if (saw_owner < 2) {
+          printf "%s Vaultwarden status checks must use bounded VW_PORT owner matches\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4614,6 +4651,7 @@ main() {
   check_cyberstrikeai_ports_are_validated
   check_cyberstrikeai_booleans_are_validated
   check_vaultwarden_config_values_are_validated
+  check_status_port_matches_are_bounded
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported
