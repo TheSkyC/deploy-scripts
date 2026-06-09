@@ -456,6 +456,21 @@ check_unsafe_config_loads_fail_closed() {
 
 check_config_save_failures_are_explicit() {
   awk '
+      /write_config_file\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_chmod=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /if ! tmp_file="\$\(mktemp "\$\{conf_file\}\.tmp\.XXXXXX"\)"; then/ { saw_tmp=1 }
+      in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
+      in_func && /chmod 600 "\$tmp_file"/ { saw_chmod=1 }
+      in_func && /mv "\$tmp_file" "\$conf_file"/ { saw_mv=1 }
+      in_func && /rm -f "\$tmp_file"/ { saw_cleanup=1 }
+      in_func && /^}/ {
+        if (!(saw_tmp && saw_tmp_return && saw_chmod && saw_mv && saw_cleanup)) {
+          printf "%s write_config_file must report temp creation failures, secure, replace, and clean up temporary config files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' lib/config.sh dist/install_newapi.sh
+  awk '
       /error\.config_write/ { saw_key=1 }
       END {
         if (!saw_key) {
@@ -2143,13 +2158,14 @@ check_vaultwarden_binary_installs_are_atomic() {
     return 1
   fi
   awk '
-      /install_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_install=0; saw_mv=0; saw_cleanup=0; next }
-      in_func && /bin_tmp=\$\(mktemp "\$\{VW_BIN\}\.XXXXXX"\)/ { saw_tmp=1 }
+      /install_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_install=0; saw_mv=0; saw_cleanup=0; next }
+      in_func && /if ! bin_tmp=\$\(mktemp "\$\{VW_BIN\}\.XXXXXX"\); then/ { saw_tmp=1 }
+      in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_func && /install -m 755 -o root -g root "\$source_bin" "\$bin_tmp"/ { saw_install=1 }
       in_func && /mv "\$bin_tmp" "\$VW_BIN"/ { saw_mv=1 }
       in_func && /rm -f "\$bin_tmp"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_install && saw_mv && saw_cleanup)) {
+        if (!(saw_tmp && saw_tmp_return && saw_install && saw_mv && saw_cleanup)) {
           print "Vaultwarden binary install helper must stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
@@ -3754,8 +3770,9 @@ check_vaultwarden_webvault_replacements_are_atomic() {
     return 1
   fi
   awk '
-      /deploy_web_vault_from_dir\(\)/ { in_helper=1; saw_tmp=0; saw_copy=0; saw_chown=0; saw_chmod=0; saw_backup=0; saw_swap=0; saw_cleanup=0; next }
-      in_helper && /staged_dir=\$\(mktemp -d "\$\{VW_WEB_DIR\}\.new\.XXXXXX"\)/ { saw_tmp=1 }
+      /deploy_web_vault_from_dir\(\)/ { in_helper=1; saw_tmp=0; saw_tmp_return=0; saw_copy=0; saw_chown=0; saw_chmod=0; saw_backup=0; saw_swap=0; saw_cleanup=0; next }
+      in_helper && /if ! staged_dir=\$\(mktemp -d "\$\{VW_WEB_DIR\}\.new\.XXXXXX"\); then/ { saw_tmp=1 }
+      in_helper && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_helper && /cp -a "\$\{source_dir\}\/\." "\$staged_dir\/"/ { saw_copy=1 }
       in_helper && /chown -R "\$\{VW_USER\}:\$\{VW_GROUP\}" "\$staged_dir"/ { saw_chown=1 }
       in_helper && /chmod -R 750 "\$staged_dir"/ { saw_chmod=1 }
@@ -3763,7 +3780,7 @@ check_vaultwarden_webvault_replacements_are_atomic() {
       in_helper && /mv "\$staged_dir" "\$VW_WEB_DIR"/ { saw_swap=1 }
       in_helper && /rm -rf "\$staged_dir"/ { saw_cleanup=1 }
       in_helper && /^}/ {
-        if (!(saw_tmp && saw_copy && saw_chown && saw_chmod && saw_backup && saw_swap && saw_cleanup)) {
+        if (!(saw_tmp && saw_tmp_return && saw_copy && saw_chown && saw_chmod && saw_backup && saw_swap && saw_cleanup)) {
           printf "%s Vaultwarden Web Vault replacement helper must stage, permission, back up, and atomically swap trees\n", FILENAME > "/dev/stderr"
           exit 1
         }

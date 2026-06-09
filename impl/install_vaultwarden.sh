@@ -171,7 +171,9 @@ deploy_web_vault_from_dir() {
   local staged_dir
   [[ -d "$source_dir" ]] || return 1
   mkdir -p "$(dirname "$VW_WEB_DIR")" || return 1
-  staged_dir=$(mktemp -d "${VW_WEB_DIR}.new.XXXXXX") || return 1
+  if ! staged_dir=$(mktemp -d "${VW_WEB_DIR}.new.XXXXXX"); then
+    return 1
+  fi
   if ! cp -a "${source_dir}/." "$staged_dir/" \
       || ! chown -R "${VW_USER}:${VW_GROUP}" "$staged_dir" \
       || ! chmod -R 750 "$staged_dir"; then
@@ -197,7 +199,9 @@ install_vaultwarden_binary() {
   local source_bin="$1"
   local bin_tmp
   mkdir -p "$VW_BIN_DIR" || return 1
-  bin_tmp=$(mktemp "${VW_BIN}.XXXXXX") || return 1
+  if ! bin_tmp=$(mktemp "${VW_BIN}.XXXXXX"); then
+    return 1
+  fi
   if ! install -m 755 -o root -g root "$source_bin" "$bin_tmp" \
       || ! mv "$bin_tmp" "$VW_BIN"; then
     rm -f "$bin_tmp"

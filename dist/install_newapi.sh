@@ -261,7 +261,9 @@ write_config_file() {
   local conf_file="$1"
   shift
   local tmp_file=""
-  tmp_file="$(mktemp "${conf_file}.tmp.XXXXXX")" || return 1
+  if ! tmp_file="$(mktemp "${conf_file}.tmp.XXXXXX")"; then
+    return 1
+  fi
   if ! chmod 600 "$tmp_file"; then
     rm -f "$tmp_file"
     return 1
