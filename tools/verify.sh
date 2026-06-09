@@ -665,6 +665,30 @@ check_random_head_pipelines_handle_sigpipe() {
   fi
 }
 
+check_summary_ip_detection_has_fallback() {
+  if grep -R -n 'hostname -I .*| awk '\''{print $1}'\''' \
+      impl/install_blog.sh impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
+      dist/install_blog.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh 2>/dev/null \
+      | grep -v '|| true'; then
+    echo "Summary IP detection must tolerate hostname -I failures and provide YOUR_SERVER_IP fallback." >&2
+    return 1
+  fi
+  local file
+  for file in impl/install_blog.sh impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
+      dist/install_blog.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh; do
+    awk '
+        /hostname -I 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| true/ { saw_safe=1 }
+        /YOUR_SERVER_IP/ { saw_fallback=1 }
+        END {
+          if (!(saw_safe && saw_fallback)) {
+            printf "%s summary IP detection must use a non-fatal hostname pipeline and fallback value\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
+}
+
 check_go_tarball_failures_cleanup() {
   if grep -R -n 'tar -C /usr/local -xzf "$tmp"$' impl dist 2>/dev/null; then
     echo "Go tarball extraction failures must remove the downloaded temporary archive." >&2
@@ -4260,6 +4284,7 @@ main() {
   check_apt_sources_are_atomic
   check_iptables_rules_are_atomic
   check_random_head_pipelines_handle_sigpipe
+  check_summary_ip_detection_has_fallback
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported
   check_cyberstrikeai_pip_upgrade_failures_are_reported

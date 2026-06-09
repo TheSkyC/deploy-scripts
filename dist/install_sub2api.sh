@@ -2523,7 +2523,8 @@ _print_install_summary() {
   local version="$1"
   local summary_state="${2:-ready}"
   local INTERNAL_IP
-  INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP")
+  INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+  INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   local access_url
   local summary_title next_step_two
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then

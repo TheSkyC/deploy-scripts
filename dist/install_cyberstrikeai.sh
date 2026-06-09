@@ -1812,7 +1812,8 @@ health_check() {
 print_summary() {
   local summary_state="${1:-ready}"
   local ip
-  ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+  ip="${ip:-YOUR_SERVER_IP}"
   local backend_scheme="http"
   _bool_true "$CSAI_HTTPS" && backend_scheme="https"
   echo ""

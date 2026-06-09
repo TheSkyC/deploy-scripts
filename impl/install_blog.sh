@@ -729,7 +729,8 @@ else
   warn "$(t app.blog.http_warn "$HTTP_CODE")"
   _blog_summary_state="pending"
 fi
-INTERNAL_IP=$(hostname -I | awk '{print $1}')
+INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
 echo ""
 echo -e "${BOLD}${GREEN}"
 echo "  ╔══════════════════════════════════════════════════════╗"

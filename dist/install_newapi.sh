@@ -1699,7 +1699,8 @@ _print_install_summary() {
   local summary_state="${2:-ready}"
   local INTERNAL_IP
   local summary_title
-  INTERNAL_IP=$(hostname -I | awk '{print $1}')
+  INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+  INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   if [[ "$summary_state" == "pending" ]]; then
     summary_title="$(t app.newapi.summary.title_pending)"
   else

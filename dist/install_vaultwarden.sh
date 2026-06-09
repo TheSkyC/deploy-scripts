@@ -2392,7 +2392,8 @@ LOGR
     local _health_state="pending"
   fi
   local INTERNAL_IP PROTO INSTALLED_VER
-  INTERNAL_IP=$(hostname -I | awk '{print $1}')
+  INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+  INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then PROTO="https"; else PROTO="http"; fi
   INSTALLED_VER=$(get_installed_version)
   local _token_tmp
