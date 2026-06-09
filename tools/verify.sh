@@ -2559,6 +2559,24 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_summary_does_not_print_pg_password() {
+  if grep -R -nE 'summary\.password.*\$\{?PG_PASS\}?' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API install summary must not print the generated PostgreSQL password." >&2
+    return 1
+  fi
+  awk '
+      /_print_install_summary\(\)/ { in_summary=1; saw_password_written=0; next }
+      in_summary && /summary\.password_written "\$CONF_FILE"/ { saw_password_written=1 }
+      in_summary && /^}/ {
+        if (!saw_password_written) {
+          printf "%s Sub2API install summary must tell users where the PostgreSQL password was written\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_summary=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_cyberstrikeai_build_temp_cleanup() {
   if grep -R -n '\${BIN_PATH}\.tmp\.\$\$' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI binary build must use mktemp instead of a pid-derived temporary binary path." >&2
@@ -5006,6 +5024,7 @@ main() {
   check_cyberstrikeai_runtime_dir_failures_are_explicit
   check_cyberstrikeai_source_and_build_prep_failures_are_explicit
   check_sub2api_pg_dump_errors_stay_out_of_backups
+  check_sub2api_summary_does_not_print_pg_password
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated
   check_cyberstrikeai_backups_are_atomic

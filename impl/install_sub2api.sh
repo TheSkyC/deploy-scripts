@@ -1116,7 +1116,7 @@ _print_install_summary() {
   echo -e "  ║    $(t app.sub2api.summary.host)         ${CYAN}localhost${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.port)         ${CYAN}5432${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.username)       ${CYAN}${PG_USER}${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.password)         ${YELLOW}${PG_PASS}${GREEN}   <- $(t app.sub2api.summary.password_written "$CONF_FILE")"
+  echo -e "  ║    $(t app.sub2api.summary.password)         ${YELLOW}$(t app.sub2api.summary.password_written "$CONF_FILE")${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.database)     ${CYAN}${PG_DB}${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.ssl_mode)     ${CYAN}$(t app.sub2api.summary.ssl_disable)${GREEN}"
   echo "  ╠════════════════════════════════════════════════════════════════╣"

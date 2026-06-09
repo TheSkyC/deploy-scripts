@@ -891,8 +891,8 @@ i18n_register_many \
   "Password" \
   "密码" \
   app.sub2api.summary.password_written \
-  "written to %s" \
-  "已写入 %s" \
+  "written to %s (not printed)" \
+  "已写入 %s（不在终端显示）" \
   app.sub2api.summary.database \
   "Database" \
   "数据库名" \
@@ -2599,7 +2599,7 @@ _print_install_summary() {
   echo -e "  ║    $(t app.sub2api.summary.host)         ${CYAN}localhost${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.port)         ${CYAN}5432${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.username)       ${CYAN}${PG_USER}${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.password)         ${YELLOW}${PG_PASS}${GREEN}   <- $(t app.sub2api.summary.password_written "$CONF_FILE")"
+  echo -e "  ║    $(t app.sub2api.summary.password)         ${YELLOW}$(t app.sub2api.summary.password_written "$CONF_FILE")${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.database)     ${CYAN}${PG_DB}${GREEN}"
   echo -e "  ║    $(t app.sub2api.summary.ssl_mode)     ${CYAN}$(t app.sub2api.summary.ssl_disable)${GREEN}"
   echo "  ╠════════════════════════════════════════════════════════════════╣"
