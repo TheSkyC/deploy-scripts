@@ -1125,7 +1125,10 @@ do_install() {
   fi
   success "$(t app.sub2api.success.dirs_created)"
   step "$(t app.sub2api.step.download_binary "$BIN_ARCH")"
-  local TMP_ARCHIVE; TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz")
+  local TMP_ARCHIVE
+  if ! TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz"); then
+    error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
+  fi
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
     rm -f "$TMP_ARCHIVE"
     error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
@@ -1245,7 +1248,10 @@ do_update() {
   step "$(t app.sub2api.step.download_update "$CURRENT" "$LATEST")"
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "$(t app.sub2api.info.download_url "$DOWNLOAD_URL")"
-  local TMP_ARCHIVE; TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz")
+  local TMP_ARCHIVE
+  if ! TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz"); then
+    error "$(t app.sub2api.error.update_download)"
+  fi
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
     rm -f "$TMP_ARCHIVE"
     error "$(t app.sub2api.error.update_download)"

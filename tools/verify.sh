@@ -1992,6 +1992,53 @@ check_download_validation_failures_cleanup() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_download_temp_creation_failures_are_explicit() {
+  awk '
+      /step "\$\(t app\.newapi\.step\.download "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
+      in_install && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_install_tmp=1 }
+      in_install && /error "\$\(t app\.newapi\.error\.download "\$GITHUB_REPO"\)"/ { saw_install_error=1 }
+      in_install && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ {
+        if (!(saw_install_tmp && saw_install_error)) {
+          printf "%s NewAPI install must report temporary download file creation failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      /step "\$\(t app\.newapi\.step\.download_update "\$CURRENT" "\$LATEST"\)"/ { in_update=1; saw_update_tmp=0; saw_update_error=0; next }
+      in_update && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_update_tmp=1 }
+      in_update && /error "\$\(t app\.newapi\.error\.update_download\)"/ { saw_update_error=1 }
+      in_update && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ {
+        if (!(saw_update_tmp && saw_update_error)) {
+          printf "%s NewAPI update must report temporary download file creation failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /step "\$\(t app\.sub2api\.step\.download_binary "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
+      in_install && /if ! TMP_ARCHIVE=\$\(mktemp "\$\{INSTALL_DIR\}\/sub2api-release\.XXXXXX\.tar\.gz"\); then/ { saw_install_tmp=1 }
+      in_install && /error "\$\(t app\.sub2api\.error\.download_failed "\$GITHUB_REPO"\)"/ { saw_install_error=1 }
+      in_install && /if ! curl -fL --progress-bar -o "\$TMP_ARCHIVE" "\$DOWNLOAD_URL"; then/ {
+        if (!(saw_install_tmp && saw_install_error)) {
+          printf "%s Sub2API install must report temporary download archive creation failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      /step "\$\(t app\.sub2api\.step\.download_update "\$CURRENT" "\$LATEST"\)"/ { in_update=1; saw_update_tmp=0; saw_update_error=0; next }
+      in_update && /if ! TMP_ARCHIVE=\$\(mktemp "\$\{INSTALL_DIR\}\/sub2api-release\.XXXXXX\.tar\.gz"\); then/ { saw_update_tmp=1 }
+      in_update && /error "\$\(t app\.sub2api\.error\.update_download\)"/ { saw_update_error=1 }
+      in_update && /if ! curl -fL --progress-bar -o "\$TMP_ARCHIVE" "\$DOWNLOAD_URL"; then/ {
+        if (!(saw_update_tmp && saw_update_error)) {
+          printf "%s Sub2API update must report temporary download archive creation failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_vaultwarden_env_file_is_atomic() {
   if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden env files contain secrets and must be written through a temporary file before replacement." >&2
@@ -3927,6 +3974,7 @@ main() {
   check_binary_replacements_handle_failure
   check_binary_restores_validate_permissions
   check_download_validation_failures_cleanup
+  check_download_temp_creation_failures_are_explicit
   check_vaultwarden_env_file_is_atomic
   check_vaultwarden_binary_installs_are_atomic
   check_vaultwarden_admin_token_file_is_private

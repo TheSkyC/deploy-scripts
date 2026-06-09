@@ -1757,7 +1757,9 @@ do_install() {
   step "$(t app.newapi.step.download "$BIN_ARCH")"
   info "$(t app.newapi.info.download_url "$DOWNLOAD_URL")"
   local TMP_BIN
-  TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX")
+  if ! TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX"); then
+    error "$(t app.newapi.error.download "$GITHUB_REPO")"
+  fi
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     rm -f "$TMP_BIN"
     error "$(t app.newapi.error.download "$GITHUB_REPO")"
@@ -1876,7 +1878,9 @@ do_update() {
   DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "$(t app.newapi.info.download_url "$DOWNLOAD_URL")"
   local TMP_BIN
-  TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX")
+  if ! TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX"); then
+    error "$(t app.newapi.error.update_download)"
+  fi
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     rm -f "$TMP_BIN"
     error "$(t app.newapi.error.update_download)"
