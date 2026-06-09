@@ -1092,7 +1092,9 @@ write_backup_file() {
   local source_path="$1" backup_path="$2"
   local backup_tmp
   [[ -f "$source_path" ]] || return 0
-  backup_tmp=$(mktemp "${backup_path}.XXXXXX") || return 1
+  if ! backup_tmp=$(mktemp "${backup_path}.XXXXXX"); then
+    return 1
+  fi
   if ! cp "$source_path" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
     rm -f "$backup_tmp"
     return 1
