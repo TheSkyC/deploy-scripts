@@ -52,7 +52,7 @@ check_connectivity() {
 }
 load_config() {
   if [[ -f "$CONF_FILE" ]]; then
-    load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
+    load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
     VW_BIN="${VW_BIN_DIR}/vaultwarden"
     if [[ "${VW_WEB_DIR}" == */web-vault ]]; then
       VW_WEB_DIR="${VW_DATA_DIR}/web-vault"

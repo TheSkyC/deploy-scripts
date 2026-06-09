@@ -436,6 +436,24 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_unsafe_config_loads_fail_closed() {
+  if grep -R -n 'load_config_file "\$CONF_FILE" "\${CONFIG_KEYS\[@\]}" || return 0' impl dist 2>/dev/null; then
+    echo "App config loaders must not ignore unsafe or unreadable config files." >&2
+    return 1
+  fi
+  awk '
+      /error "\$\(t error\.config_owner "\$conf_file"\)"/ { saw_owner=1 }
+      /error "\$\(t error\.config_permission "\$conf_file"\)"/ { saw_permission=1 }
+      /warn "\$\(t warn\.config_(owner|permission)/ { saw_warn=1 }
+      END {
+        if (!(saw_owner && saw_permission) || saw_warn) {
+          print "Unsafe config ownership or permissions must fail closed with config errors." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/config.sh
+}
+
 check_sub2api_codename_resolution() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -3840,6 +3858,7 @@ main() {
   check_service_status_label
   check_config_crlf_handling
   check_config_write_failure_cleanup
+  check_unsafe_config_loads_fail_closed
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads

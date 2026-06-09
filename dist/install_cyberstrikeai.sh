@@ -217,8 +217,8 @@ config_file_is_safe() {
     local owner mode
     owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
     mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo 777)"
-    [[ "$owner" == "root" ]] || { warn "$(t warn.config_owner "$conf_file" "$owner")"; return 1; }
-    [[ "$mode" == "600" || "$mode" == "400" ]] || { warn "$(t warn.config_permission "$conf_file" "$mode")"; return 1; }
+    [[ "$owner" == "root" ]] || error "$(t error.config_owner "$conf_file")"
+    [[ "$mode" == "600" || "$mode" == "400" ]] || error "$(t error.config_permission "$conf_file")"
   fi
   return 0
 }
@@ -1042,7 +1042,7 @@ save_config() {
 }
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
-  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
+  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"

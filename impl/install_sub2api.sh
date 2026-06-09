@@ -68,7 +68,7 @@ save_config() {
 }
 load_config() {
   [[ -f "$CONF_FILE" ]] || return 0
-  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}" || return 0
+  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   BIN_PATH="${INSTALL_DIR}/sub2api"
   success "$(t config.loaded "$CONF_FILE")"
 }
