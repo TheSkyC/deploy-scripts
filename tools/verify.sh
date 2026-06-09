@@ -888,7 +888,7 @@ check_cyberstrikeai_ports_are_validated() {
         }
         in_preflight=0
       }
-      in_preflight && /_validate_ports/ { saw_preflight=1 }
+      in_preflight && /_validate_(ports|config_values)/ { saw_preflight=1 }
       /load_config\(\)/ { in_load=1; next }
       in_load && /^}/ {
         if (!saw_load) {
@@ -897,10 +897,55 @@ check_cyberstrikeai_ports_are_validated() {
         }
         in_load=0
       }
-      in_load && /_validate_ports/ { saw_load=1 }
+      in_load && /_validate_(ports|config_values)/ { saw_load=1 }
       END {
         if (!(saw_value_helper && saw_error && saw_ports_helper && saw_port && saw_public_port && saw_preflight && saw_load)) {
           printf "%s CyberStrikeAI must validate PORT and PUBLIC_PORT before using them\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
+check_cyberstrikeai_booleans_are_validated() {
+  awk '
+      /app\.cyberstrikeai\.error\.bool_invalid/ { saw_key=1 }
+      /true\/false, yes\/no, on\/off, or 1\/0/ { saw_guidance=1 }
+      END {
+        if (!(saw_key && saw_guidance)) {
+          print "CyberStrikeAI must provide an actionable invalid boolean config error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /_validate_bool_value\(\)/ { saw_bool_helper=1 }
+      /error "\$\(t app\.cyberstrikeai\.error\.bool_invalid "\$name" "\$value"\)"/ { saw_bool_error=1 }
+      /_validate_config_values\(\)/ { saw_config_helper=1 }
+      /_validate_bool_value "ENABLE_NGINX" "\$ENABLE_NGINX"/ { saw_nginx=1 }
+      /_validate_bool_value "CSAI_HTTPS" "\$CSAI_HTTPS"/ { saw_https=1 }
+      /_validate_bool_value "OPEN_FIREWALL" "\$OPEN_FIREWALL"/ { saw_firewall=1 }
+      /preflight_check\(\)/ { in_preflight=1; next }
+      in_preflight && /^}/ {
+        if (!saw_preflight) {
+          printf "%s CyberStrikeAI preflight must validate boolean config defaults\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_preflight=0
+      }
+      in_preflight && /_validate_config_values/ { saw_preflight=1 }
+      /load_config\(\)/ { in_load=1; next }
+      in_load && /^}/ {
+        if (!saw_load) {
+          printf "%s CyberStrikeAI load_config must validate configured boolean values\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_load=0
+      }
+      in_load && /_validate_config_values/ { saw_load=1 }
+      END {
+        if (!(saw_bool_helper && saw_bool_error && saw_config_helper && saw_nginx && saw_https && saw_firewall && saw_preflight && saw_load)) {
+          printf "%s CyberStrikeAI must validate ENABLE_NGINX, CSAI_HTTPS, and OPEN_FIREWALL before using them\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -4555,6 +4600,7 @@ main() {
   check_api_status_directory_sizes_are_nonfatal
   check_api_ports_are_validated
   check_cyberstrikeai_ports_are_validated
+  check_cyberstrikeai_booleans_are_validated
   check_vaultwarden_config_values_are_validated
   check_go_tarball_failures_cleanup
   check_cyberstrikeai_go_restore_failures_are_reported

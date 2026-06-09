@@ -39,6 +39,13 @@ _bool_true() {
     *) return 1 ;;
   esac
 }
+_validate_bool_value() {
+  local name="$1" value="$2"
+  case "${value,,}" in
+    1|0|true|false|yes|no|y|n|on|off) ;;
+    *) error "$(t app.cyberstrikeai.error.bool_invalid "$name" "$value")" ;;
+  esac
+}
 save_config() {
   if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
     error "$(t error.config_write "$CONF_FILE")"
@@ -55,6 +62,12 @@ _validate_ports() {
   _validate_port_value "PORT" "$PORT"
   _validate_port_value "PUBLIC_PORT" "$PUBLIC_PORT"
 }
+_validate_config_values() {
+  _validate_ports
+  _validate_bool_value "ENABLE_NGINX" "$ENABLE_NGINX"
+  _validate_bool_value "CSAI_HTTPS" "$CSAI_HTTPS"
+  _validate_bool_value "OPEN_FIREWALL" "$OPEN_FIREWALL"
+}
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
@@ -62,7 +75,7 @@ load_config() {
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
-  _validate_ports
+  _validate_config_values
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -74,7 +87,7 @@ preflight_check() {
     x86_64|aarch64|arm64) ;;
     *) error "$(t app.cyberstrikeai.error.arch "$arch")" ;;
   esac
-  _validate_ports
+  _validate_config_values
 }
 check_connectivity() {
   check_connectivity_urls \

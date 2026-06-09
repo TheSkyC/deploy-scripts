@@ -540,6 +540,9 @@ i18n_register_many \
   app.cyberstrikeai.error.port_invalid \
   "%s is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
   "%s 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
+  app.cyberstrikeai.error.bool_invalid \
+  "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0 in the script or config file." \
+  "%s 无效：'%s'，请在脚本或配置文件中使用 true/false、yes/no、on/off 或 1/0。" \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
@@ -1046,6 +1049,13 @@ _bool_true() {
     *) return 1 ;;
   esac
 }
+_validate_bool_value() {
+  local name="$1" value="$2"
+  case "${value,,}" in
+    1|0|true|false|yes|no|y|n|on|off) ;;
+    *) error "$(t app.cyberstrikeai.error.bool_invalid "$name" "$value")" ;;
+  esac
+}
 save_config() {
   if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
     error "$(t error.config_write "$CONF_FILE")"
@@ -1062,6 +1072,12 @@ _validate_ports() {
   _validate_port_value "PORT" "$PORT"
   _validate_port_value "PUBLIC_PORT" "$PUBLIC_PORT"
 }
+_validate_config_values() {
+  _validate_ports
+  _validate_bool_value "ENABLE_NGINX" "$ENABLE_NGINX"
+  _validate_bool_value "CSAI_HTTPS" "$CSAI_HTTPS"
+  _validate_bool_value "OPEN_FIREWALL" "$OPEN_FIREWALL"
+}
 load_config() {
   [[ ! -f "$CONF_FILE" ]] && return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
@@ -1069,7 +1085,7 @@ load_config() {
   CONFIG_FILE="${INSTALL_DIR}/config.yaml"
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
-  _validate_ports
+  _validate_config_values
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -1081,7 +1097,7 @@ preflight_check() {
     x86_64|aarch64|arm64) ;;
     *) error "$(t app.cyberstrikeai.error.arch "$arch")" ;;
   esac
-  _validate_ports
+  _validate_config_values
 }
 check_connectivity() {
   check_connectivity_urls \
