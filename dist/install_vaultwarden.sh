@@ -1609,6 +1609,7 @@ deploy_web_vault_from_dir() {
   local source_dir="$1" backup_dir="$2"
   local staged_dir
   [[ -d "$source_dir" ]] || return 1
+  require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
   if ! mkdir -p "$(dirname "$VW_WEB_DIR")"; then
     return 1
   fi

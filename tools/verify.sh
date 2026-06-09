@@ -4271,7 +4271,8 @@ check_vaultwarden_webvault_replacements_are_atomic() {
     return 1
   fi
   awk '
-      /deploy_web_vault_from_dir\(\)/ { in_helper=1; saw_dir=0; saw_dir_return=0; saw_tmp=0; saw_tmp_return=0; saw_copy=0; saw_chown=0; saw_chmod=0; saw_backup=0; saw_swap=0; saw_cleanup=0; next }
+      /deploy_web_vault_from_dir\(\)/ { in_helper=1; saw_guard=0; saw_dir=0; saw_dir_return=0; saw_tmp=0; saw_tmp_return=0; saw_copy=0; saw_chown=0; saw_chmod=0; saw_backup=0; saw_swap=0; saw_cleanup=0; next }
+      in_helper && /require_safe_path "VW_WEB_DIR" "\$VW_WEB_DIR"/ { saw_guard=1 }
       in_helper && /if ! mkdir -p "\$\(dirname "\$VW_WEB_DIR"\)"; then/ { saw_dir=1 }
       in_helper && saw_dir && /return 1/ { saw_dir_return=1 }
       in_helper && /if ! staged_dir=\$\(mktemp -d "\$\{VW_WEB_DIR\}\.new\.XXXXXX"\); then/ { saw_tmp=1 }
@@ -4283,7 +4284,7 @@ check_vaultwarden_webvault_replacements_are_atomic() {
       in_helper && /mv "\$staged_dir" "\$VW_WEB_DIR"/ { saw_swap=1 }
       in_helper && /rm -rf "\$staged_dir"/ { saw_cleanup=1 }
       in_helper && /^}/ {
-        if (!(saw_dir && saw_dir_return && saw_tmp && saw_tmp_return && saw_copy && saw_chown && saw_chmod && saw_backup && saw_swap && saw_cleanup)) {
+        if (!(saw_guard && saw_dir && saw_dir_return && saw_tmp && saw_tmp_return && saw_copy && saw_chown && saw_chmod && saw_backup && saw_swap && saw_cleanup)) {
           printf "%s Vaultwarden Web Vault replacement helper must stage, permission, back up, and atomically swap trees\n", FILENAME > "/dev/stderr"
           exit 1
         }
