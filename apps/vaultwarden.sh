@@ -63,6 +63,15 @@ i18n_register_many \
   app.vaultwarden.error.binary_not_elf \
   "Extracted file is not a valid ELF binary (magic bytes mismatch); the download may be corrupted." \
   "提取的文件不是合法的 ELF 二进制（magic bytes 不匹配），疑似下载损坏。" \
+  app.vaultwarden.error.web_vault_archive_empty \
+  "Downloaded Web Vault archive is empty; check the download URL or network proxy." \
+  "下载的 Web Vault 归档为空，请检查下载 URL 或网络代理。" \
+  app.vaultwarden.error.web_vault_archive_small \
+  "Downloaded Web Vault archive is too small (%s bytes); it may be incomplete or intercepted." \
+  "下载的 Web Vault 归档过小（%s 字节），疑似不完整或被拦截。" \
+  app.vaultwarden.error.web_vault_archive_format \
+  "Downloaded Web Vault archive is not gzip data (magic: %s); check whether the request was redirected or intercepted." \
+  "下载的 Web Vault 归档不是 gzip 数据（magic: %s），请检查请求是否被重定向或拦截。" \
   app.vaultwarden.error.binary_install \
   "Failed to install Vaultwarden binary: %s" \
   "安装 Vaultwarden 二进制失败：%s。" \

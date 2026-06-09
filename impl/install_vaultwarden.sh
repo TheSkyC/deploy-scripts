@@ -87,6 +87,38 @@ get_latest_webvault_ver() {
     echo ""
   fi
 }
+_verify_web_vault_archive() {
+  local archive="$1"
+  local mode="${2:-fatal}"
+  if [[ ! -s "$archive" ]]; then
+    rm -f "$archive"
+    if [[ "$mode" == "fatal" ]]; then
+      error "$(t app.vaultwarden.error.web_vault_archive_empty)"
+    fi
+    warn "$(t app.vaultwarden.error.web_vault_archive_empty)"
+    return 1
+  fi
+  local size
+  size=$(wc -c < "$archive")
+  if [[ "$size" -lt 65536 ]]; then
+    rm -f "$archive"
+    if [[ "$mode" == "fatal" ]]; then
+      error "$(t app.vaultwarden.error.web_vault_archive_small "$size")"
+    fi
+    warn "$(t app.vaultwarden.error.web_vault_archive_small "$size")"
+    return 1
+  fi
+  local magic
+  magic=$(od -A n -t x1 -N 2 "$archive" 2>/dev/null | tr -d ' \n' || true)
+  if [[ "$magic" != "1f8b" ]]; then
+    rm -f "$archive"
+    if [[ "$mode" == "fatal" ]]; then
+      error "$(t app.vaultwarden.error.web_vault_archive_format "${magic:-read failed}")"
+    fi
+    warn "$(t app.vaultwarden.error.web_vault_archive_format "${magic:-read failed}")"
+    return 1
+  fi
+}
 extract_binary() {
   local workdir="$1"
   local platform="$2"
@@ -416,6 +448,7 @@ do_install() {
     info "$(t app.vaultwarden.info.download "$WV_URL")"
     wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
       || error "$(t app.vaultwarden.error.web_vault_download)"
+    _verify_web_vault_archive "${WORK_DIR}/web-vault.tar.gz"
     local _wv_extract_root="${WORK_DIR}/web-vault-extract"
     if ! mkdir -p "$_wv_extract_root"; then
       error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
@@ -1103,15 +1136,19 @@ do_update() {
     if [[ -n "$_fetched_wv_ver" ]]; then
       local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_fetched_wv_ver}/bw_web_v${_fetched_wv_ver}.tar.gz"
       if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
-        local _wv_extract_root="${WORK_DIR}/web-vault-extract"
-        if ! mkdir -p "$_wv_extract_root"; then
-          error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
-        fi
-        if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
-          local _wv_source_dir
-          _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
-          if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_bak_ts"; then
-            success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
+        if _verify_web_vault_archive "${WORK_DIR}/web-vault.tar.gz" nonfatal; then
+          local _wv_extract_root="${WORK_DIR}/web-vault-extract"
+          if ! mkdir -p "$_wv_extract_root"; then
+            error "$(t app.vaultwarden.error.web_vault_extract_dir "$_wv_extract_root")"
+          fi
+          if tar -xzf "${WORK_DIR}/web-vault.tar.gz" -C "$_wv_extract_root"; then
+            local _wv_source_dir
+            _wv_source_dir=$(find "$_wv_extract_root" -type d -name "web-vault" | head -1)
+            if [[ -n "$_wv_source_dir" ]] && deploy_web_vault_from_dir "$_wv_source_dir" "$_wv_bak_ts"; then
+              success "$(t app.vaultwarden.success.web_vault_updated_version "$_fetched_wv_ver")"
+            else
+              warn "$(t app.vaultwarden.warn.web_vault_update_extract "$VW_WEB_DIR")"
+            fi
           else
             warn "$(t app.vaultwarden.warn.web_vault_update_extract "$VW_WEB_DIR")"
           fi

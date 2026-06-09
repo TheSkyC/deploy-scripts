@@ -4004,6 +4004,53 @@ check_vaultwarden_webvault_update_warnings_are_actionable() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_webvault_archives_are_validated() {
+  awk '
+      /app\.vaultwarden\.error\.web_vault_archive_empty/ { saw_empty=1 }
+      /app\.vaultwarden\.error\.web_vault_archive_small/ { saw_small=1 }
+      /app\.vaultwarden\.error\.web_vault_archive_format/ { saw_format=1 }
+      END {
+        if (!(saw_empty && saw_small && saw_format)) {
+          print "Vaultwarden Web Vault archive validation messages must cover empty, tiny, and non-gzip downloads." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  local file
+  for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+    awk '
+        /_verify_web_vault_archive\(\)/ {
+          in_helper=1
+          saw_empty=0
+          saw_small=0
+          saw_magic=0
+          saw_nonfatal=0
+          next
+        }
+        in_helper && /^}/ {
+          if (!(saw_empty && saw_small && saw_magic && saw_nonfatal)) {
+            printf "%s must validate downloaded Web Vault archives before extraction\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+          in_helper=0
+        }
+        in_helper && /\[\[ ! -s "\$archive" \]\]/ { saw_empty=1 }
+        in_helper && /\[\[ "\$size" -lt 65536 \]\]/ { saw_small=1 }
+        in_helper && /"\$magic" != "1f8b"/ { saw_magic=1 }
+        in_helper && /local mode="\$\{2:-fatal\}"/ { saw_nonfatal=1 }
+        /wget -q --show-progress -O "\$\{WORK_DIR\}\/web-vault\.tar\.gz" "\$WV_URL"/ { saw_download=1; next }
+        saw_download && /^[[:space:]]*_verify_web_vault_archive "\$\{WORK_DIR\}\/web-vault\.tar\.gz"$/ { saw_install_verify=1; saw_download=0 }
+        saw_download && /^[[:space:]]*if _verify_web_vault_archive "\$\{WORK_DIR\}\/web-vault\.tar\.gz" nonfatal; then/ { saw_update_verify=1; saw_download=0 }
+        END {
+          if (!(saw_install_verify && saw_update_verify)) {
+            printf "%s must validate Web Vault archives after install and update downloads\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
+}
+
 check_blog_static_deploy_swaps_tree() {
   if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not copy directly into the live Nginx root." >&2
@@ -4307,6 +4354,7 @@ main() {
   check_vaultwarden_webvault_replacements_are_atomic
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_vaultwarden_webvault_update_warnings_are_actionable
+  check_vaultwarden_webvault_archives_are_validated
   check_blog_static_deploy_swaps_tree
   check_blog_static_deploy_failures_are_actionable
   check_blog_site_files_are_atomic
