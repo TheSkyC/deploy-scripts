@@ -40,7 +40,7 @@ preflight_check() {
     aarch64) BIN_ARCH="arm64" ; ELF_MACHINE="b7" ;;
     *) error "$(t app.sub2api.error.arch "$ARCH")" ;;
   esac
-  _validate_port
+  _validate_config_values
 }
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
 check_connectivity() {
@@ -74,11 +74,17 @@ _validate_port() {
     error "$(t app.sub2api.error.port_invalid "$PORT")"
   fi
 }
+_validate_config_values() {
+  _validate_port
+  if [[ -n "${SUB2API_DOMAIN:-}" ]] && ! is_valid_dns_name "$SUB2API_DOMAIN"; then
+    error "$(t app.sub2api.error.domain_invalid "$SUB2API_DOMAIN")"
+  fi
+}
 load_config() {
   [[ -f "$CONF_FILE" ]] || return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   BIN_PATH="${INSTALL_DIR}/sub2api"
-  _validate_port
+  _validate_config_values
   success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {

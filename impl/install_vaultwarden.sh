@@ -79,6 +79,9 @@ _validate_config_values() {
   if ! [[ "$VW_PORT" =~ ^[0-9]+$ ]] || [[ "$VW_PORT" -lt 1 || "$VW_PORT" -gt 65535 ]]; then
     error "$(t app.vaultwarden.error.port_invalid "$VW_PORT")"
   fi
+  if ! is_valid_dns_name "$VW_DOMAIN"; then
+    error "$(t app.vaultwarden.error.domain_invalid "$VW_DOMAIN")"
+  fi
   _validate_bool_value "ENABLE_HTTPS" "$ENABLE_HTTPS"
   _validate_bool_value "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
 }
@@ -348,7 +351,7 @@ do_install() {
       prompt "$(t app.vaultwarden.prompt.domain)"
       local _input; read -r _input
       [[ -z "$_input" ]] && { warn "$(t app.vaultwarden.warn.domain_empty)"; continue; }
-      if [[ ! "$_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
+      if ! is_valid_dns_name "$_input"; then
         warn "$(t app.vaultwarden.warn.domain_invalid "$_input")"
         continue
       fi

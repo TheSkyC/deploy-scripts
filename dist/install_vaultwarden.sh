@@ -336,6 +336,15 @@ check_connectivity_urls() {
   return 1
 }
 
+is_valid_dns_name() {
+  local name="${1:-}"
+  [[ -n "$name" && ${#name} -le 253 ]] || return 1
+  [[ "$name" != *..* ]] || return 1
+  [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1
+  [[ "$name" == *.* ]] || return 1
+  return 0
+}
+
 # ----- lib/app_loader.sh -----
 BUNDLED_APP_IMPL_SCRIPT_NAME="install_vaultwarden_impl.sh"
 
@@ -641,6 +650,9 @@ i18n_register_many \
   app.vaultwarden.error.bool_invalid \
   "%s is invalid: '%s'. Set it to true or false in the script or config file." \
   "%s 无效：'%s'，请在脚本或配置文件中设置为 true 或 false。" \
+  app.vaultwarden.error.domain_invalid \
+  "VW_DOMAIN is invalid: '%s'. Use a DNS name such as vault.example.com." \
+  "VW_DOMAIN 无效：'%s'，请使用类似 vault.example.com 的 DNS 名称。" \
   app.vaultwarden.info.domain \
   "Domain     : %s" \
   "域名     : %s" \
@@ -1463,6 +1475,9 @@ _validate_config_values() {
   if ! [[ "$VW_PORT" =~ ^[0-9]+$ ]] || [[ "$VW_PORT" -lt 1 || "$VW_PORT" -gt 65535 ]]; then
     error "$(t app.vaultwarden.error.port_invalid "$VW_PORT")"
   fi
+  if ! is_valid_dns_name "$VW_DOMAIN"; then
+    error "$(t app.vaultwarden.error.domain_invalid "$VW_DOMAIN")"
+  fi
   _validate_bool_value "ENABLE_HTTPS" "$ENABLE_HTTPS"
   _validate_bool_value "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
 }
@@ -1732,7 +1747,7 @@ do_install() {
       prompt "$(t app.vaultwarden.prompt.domain)"
       local _input; read -r _input
       [[ -z "$_input" ]] && { warn "$(t app.vaultwarden.warn.domain_empty)"; continue; }
-      if [[ ! "$_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
+      if ! is_valid_dns_name "$_input"; then
         warn "$(t app.vaultwarden.warn.domain_invalid "$_input")"
         continue
       fi

@@ -336,6 +336,15 @@ check_connectivity_urls() {
   return 1
 }
 
+is_valid_dns_name() {
+  local name="${1:-}"
+  [[ -n "$name" && ${#name} -le 253 ]] || return 1
+  [[ "$name" != *..* ]] || return 1
+  [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1
+  [[ "$name" == *.* ]] || return 1
+  return 0
+}
+
 # ----- lib/app_loader.sh -----
 BUNDLED_APP_IMPL_SCRIPT_NAME="install_blog_impl.sh"
 

@@ -850,7 +850,7 @@ check_api_ports_are_validated() {
       }
       /_validate_port\(\)/ { saw_helper=1 }
       /error "\$\(t app\.newapi\.error\.port_invalid "\$PORT"\)"/ { saw_error=1 }
-      in_preflight && /_validate_port/ { saw_preflight=1 }
+      in_preflight && /_validate_(port|config_values)/ { saw_preflight=1 }
       /load_config\(\)/ { in_load=1; next }
       in_load && /^}/ {
         if (!saw_load) {
@@ -859,7 +859,7 @@ check_api_ports_are_validated() {
         }
         in_load=0
       }
-      in_load && /_validate_port/ { saw_load=1 }
+      in_load && /_validate_(port|config_values)/ { saw_load=1 }
       END {
         if (!(saw_helper && saw_error && saw_preflight && saw_load)) {
           printf "%s NewAPI must validate PORT range before using it\n", FILENAME > "/dev/stderr"
@@ -878,7 +878,7 @@ check_api_ports_are_validated() {
       }
       /_validate_port\(\)/ { saw_helper=1 }
       /error "\$\(t app\.sub2api\.error\.port_invalid "\$PORT"\)"/ { saw_error=1 }
-      in_preflight && /_validate_port/ { saw_preflight=1 }
+      in_preflight && /_validate_(port|config_values)/ { saw_preflight=1 }
       /load_config\(\)/ { in_load=1; next }
       in_load && /^}/ {
         if (!saw_load) {
@@ -887,7 +887,7 @@ check_api_ports_are_validated() {
         }
         in_load=0
       }
-      in_load && /_validate_port/ { saw_load=1 }
+      in_load && /_validate_(port|config_values)/ { saw_load=1 }
       END {
         if (!(saw_helper && saw_error && saw_preflight && saw_load)) {
           printf "%s Sub2API must validate PORT range before using it\n", FILENAME > "/dev/stderr"
@@ -984,6 +984,77 @@ check_cyberstrikeai_booleans_are_validated() {
         }
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
+check_nginx_domains_are_validated() {
+  awk '
+      /is_valid_dns_name\(\)/ { saw_helper=1 }
+      /name=.*\{1:-\}/ { saw_name=1 }
+      /\[\[ "\$name" != \*\.\.\* \]\] \|\| return 1/ { saw_dots=1 }
+      /\[\[ "\$name" == \*\.\* \]\] \|\| return 1/ { saw_dot_required=1 }
+      END {
+        if (!(saw_helper && saw_name && saw_dots && saw_dot_required)) {
+          print "Shared DNS validation helper must reject empty, overlong, malformed, and single-label server names." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/network.sh
+  awk '
+      /app\.cyberstrikeai\.error\.domain_invalid/ { saw_csai=1 }
+      /app\.sub2api\.error\.domain_invalid/ { saw_sub2api=1 }
+      /app\.vaultwarden\.error\.domain_invalid/ { saw_vw=1 }
+      END {
+        if (!(saw_csai && saw_sub2api && saw_vw)) {
+          print "Nginx domain validation errors must be localized for reverse-proxy apps." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh apps/sub2api.sh apps/vaultwarden.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_error=0; next }
+      in_func && /\[\[ -n "\$\{CSAI_DOMAIN:-\}" \]\] && ! is_valid_dns_name "\$CSAI_DOMAIN"/ { saw_domain=1 }
+      in_func && /error "\$\(t app\.cyberstrikeai\.error\.domain_invalid "CSAI_DOMAIN" "\$CSAI_DOMAIN"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_domain && saw_error)) {
+          printf "%s CyberStrikeAI must validate CSAI_DOMAIN before writing Nginx server_name\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_error=0; next }
+      in_func && /\[\[ -n "\$\{SUB2API_DOMAIN:-\}" \]\] && ! is_valid_dns_name "\$SUB2API_DOMAIN"/ { saw_domain=1 }
+      in_func && /error "\$\(t app\.sub2api\.error\.domain_invalid "\$SUB2API_DOMAIN"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_domain && saw_error)) {
+          printf "%s Sub2API must validate SUB2API_DOMAIN before writing Nginx server_name\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_error=0; next }
+      in_func && /if ! is_valid_dns_name "\$VW_DOMAIN"; then/ { saw_domain=1 }
+      in_func && /error "\$\(t app\.vaultwarden\.error\.domain_invalid "\$VW_DOMAIN"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_domain && saw_error)) {
+          printf "%s Vaultwarden must validate VW_DOMAIN before writing Nginx server_name\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      /prompt "\$\(t app\.vaultwarden\.prompt\.domain\)"/ { in_prompt=1; next }
+      in_prompt && /if ! is_valid_dns_name "\$_input"; then/ { saw_prompt=1 }
+      in_prompt && /VW_DOMAIN="\$_input"/ {
+        if (!saw_prompt) {
+          printf "%s Vaultwarden domain wizard must use shared DNS validation\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_prompt=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
 check_vaultwarden_config_values_are_validated() {
@@ -4900,6 +4971,7 @@ main() {
   check_api_ports_are_validated
   check_cyberstrikeai_ports_are_validated
   check_cyberstrikeai_booleans_are_validated
+  check_nginx_domains_are_validated
   check_vaultwarden_config_values_are_validated
   check_status_port_matches_are_bounded
   check_go_tarball_failures_cleanup

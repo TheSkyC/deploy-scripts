@@ -21,6 +21,9 @@ i18n_register_many \
   app.cyberstrikeai.error.bool_invalid \
   "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0 in the script or config file." \
   "%s 无效：'%s'，请在脚本或配置文件中使用 true/false、yes/no、on/off 或 1/0。" \
+  app.cyberstrikeai.error.domain_invalid \
+  "%s is invalid: '%s'. Use a DNS name such as app.example.com, or leave it empty." \
+  "%s 无效：'%s'，请使用类似 app.example.com 的 DNS 名称，或留空。" \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \

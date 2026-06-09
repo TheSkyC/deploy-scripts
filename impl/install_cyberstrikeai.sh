@@ -64,6 +64,9 @@ _validate_ports() {
 }
 _validate_config_values() {
   _validate_ports
+  if [[ -n "${CSAI_DOMAIN:-}" ]] && ! is_valid_dns_name "$CSAI_DOMAIN"; then
+    error "$(t app.cyberstrikeai.error.domain_invalid "CSAI_DOMAIN" "$CSAI_DOMAIN")"
+  fi
   _validate_bool_value "ENABLE_NGINX" "$ENABLE_NGINX"
   _validate_bool_value "CSAI_HTTPS" "$CSAI_HTTPS"
   _validate_bool_value "OPEN_FIREWALL" "$OPEN_FIREWALL"

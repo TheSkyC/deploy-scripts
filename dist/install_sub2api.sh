@@ -336,6 +336,15 @@ check_connectivity_urls() {
   return 1
 }
 
+is_valid_dns_name() {
+  local name="${1:-}"
+  [[ -n "$name" && ${#name} -le 253 ]] || return 1
+  [[ "$name" != *..* ]] || return 1
+  [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1
+  [[ "$name" == *.* ]] || return 1
+  return 0
+}
+
 # ----- lib/app_loader.sh -----
 BUNDLED_APP_IMPL_SCRIPT_NAME="install_sub2api_impl.sh"
 
@@ -542,6 +551,9 @@ i18n_register_many \
   app.sub2api.error.port_invalid \
   "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
   "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
+  app.sub2api.error.domain_invalid \
+  "SUB2API_DOMAIN is invalid: '%s'. Use a DNS name such as sub2api.example.com, or leave it empty." \
+  "SUB2API_DOMAIN 无效：'%s'，请使用类似 sub2api.example.com 的 DNS 名称，或留空。" \
   app.sub2api.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
@@ -1511,7 +1523,7 @@ preflight_check() {
     aarch64) BIN_ARCH="arm64" ; ELF_MACHINE="b7" ;;
     *) error "$(t app.sub2api.error.arch "$ARCH")" ;;
   esac
-  _validate_port
+  _validate_config_values
 }
 LOCK_FILE="/var/lock/sub2api-deploy.lock"
 check_connectivity() {
@@ -1545,11 +1557,17 @@ _validate_port() {
     error "$(t app.sub2api.error.port_invalid "$PORT")"
   fi
 }
+_validate_config_values() {
+  _validate_port
+  if [[ -n "${SUB2API_DOMAIN:-}" ]] && ! is_valid_dns_name "$SUB2API_DOMAIN"; then
+    error "$(t app.sub2api.error.domain_invalid "$SUB2API_DOMAIN")"
+  fi
+}
 load_config() {
   [[ -f "$CONF_FILE" ]] || return 0
   load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
   BIN_PATH="${INSTALL_DIR}/sub2api"
-  _validate_port
+  _validate_config_values
   success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {

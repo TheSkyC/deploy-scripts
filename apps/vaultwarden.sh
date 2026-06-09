@@ -117,6 +117,9 @@ i18n_register_many \
   app.vaultwarden.error.bool_invalid \
   "%s is invalid: '%s'. Set it to true or false in the script or config file." \
   "%s 无效：'%s'，请在脚本或配置文件中设置为 true 或 false。" \
+  app.vaultwarden.error.domain_invalid \
+  "VW_DOMAIN is invalid: '%s'. Use a DNS name such as vault.example.com." \
+  "VW_DOMAIN 无效：'%s'，请使用类似 vault.example.com 的 DNS 名称。" \
   app.vaultwarden.info.domain \
   "Domain     : %s" \
   "域名     : %s" \
