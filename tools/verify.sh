@@ -1830,11 +1830,17 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
 }
 
 check_cyberstrikeai_build_temp_cleanup() {
+  if grep -R -n '\${BIN_PATH}\.tmp\.\$\$' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI binary build must use mktemp instead of a pid-derived temporary binary path." >&2
+    return 1
+  fi
   if grep -R -nE '^[[:space:]]*(go build|chmod 0755 "\$tmp_bin"|mv "\$tmp_bin" "\$BIN_PATH")' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI binary build must clean up the temporary binary on build, chmod, and move failures." >&2
     return 1
   fi
   awk '
+      /if ! tmp_bin=\$\(mktemp "\$\{BIN_PATH\}\.tmp\.XXXXXX"\); then/ { saw_tmp=1 }
+      /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ { saw_tmp_error=1 }
       /if ! go build .*"\$tmp_bin"/ { in_block=1; saw_build_cleanup=0; next }
       in_block && /rm -f "\$tmp_bin"/ { saw_build_cleanup=1 }
       in_block && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ {
@@ -1843,6 +1849,12 @@ check_cyberstrikeai_build_temp_cleanup() {
           exit 1
         }
         in_block=0
+      }
+      END {
+        if (!(saw_tmp && saw_tmp_error)) {
+          print "CyberStrikeAI build must report temporary binary creation failures." > "/dev/stderr"
+          exit 1
+        }
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }

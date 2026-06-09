@@ -363,7 +363,10 @@ build_binary() {
   if ! go mod download; then
     error "$(t app.cyberstrikeai.error.go_modules "$INSTALL_DIR")"
   fi
-  local tmp_bin="${BIN_PATH}.tmp.$$"
+  local tmp_bin
+  if ! tmp_bin=$(mktemp "${BIN_PATH}.tmp.XXXXXX"); then
+    error "$(t app.cyberstrikeai.error.binary_build)"
+  fi
   if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go; then
     rm -f "$tmp_bin"
     error "$(t app.cyberstrikeai.error.binary_build)"
