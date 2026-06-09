@@ -2156,13 +2156,14 @@ check_vaultwarden_admin_token_file_is_private() {
     return 1
   fi
   awk '
-      /_token_tmp=\$\(mktemp \/root\/\.vaultwarden-admin-token\.XXXXXX\)/ { saw_tmp=1 }
+      /if ! _token_tmp=\$\(mktemp \/root\/\.vaultwarden-admin-token\.XXXXXX\); then/ { saw_tmp=1 }
+      /error "\$\(t app\.vaultwarden\.error\.admin_token_hash\)"/ { saw_tmp_error=1 }
       /chmod 600 "\$_token_tmp"/ { saw_chmod=1 }
       /printf .*\$ADMIN_PLAIN.*> "\$_token_tmp"/ { saw_write=1 }
       /rm -f "\$_token_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_chmod && saw_write && saw_cleanup)) {
-          print "Vaultwarden admin token display files must be private and cleaned up on write failure." > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_chmod && saw_write && saw_cleanup)) {
+          print "Vaultwarden admin token display files must report temp creation failures, be private, and clean up on write failure." > "/dev/stderr"
           exit 1
         }
       }

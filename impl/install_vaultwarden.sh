@@ -960,7 +960,9 @@ LOGR
   if [[ "$ENABLE_HTTPS" == "true" ]]; then PROTO="https"; else PROTO="http"; fi
   INSTALLED_VER=$(get_installed_version)
   local _token_tmp
-  _token_tmp=$(mktemp /root/.vaultwarden-admin-token.XXXXXX)
+  if ! _token_tmp=$(mktemp /root/.vaultwarden-admin-token.XXXXXX); then
+    error "$(t app.vaultwarden.error.admin_token_hash)"
+  fi
   if ! chmod 600 "$_token_tmp" || ! printf '%s\n' "$ADMIN_PLAIN" > "$_token_tmp"; then
     rm -f "$_token_tmp"
     error "$(t app.vaultwarden.error.admin_token_hash)"
