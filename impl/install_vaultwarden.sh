@@ -1478,6 +1478,7 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
+  require_safe_path "VW_BIN_DIR" "$(dirname "$VW_BIN")"
   find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -delete 2>/dev/null || true
   success "$(t app.vaultwarden.success.removed_binary)"
   rm -f /etc/nginx/sites-enabled/vaultwarden /etc/nginx/sites-available/vaultwarden

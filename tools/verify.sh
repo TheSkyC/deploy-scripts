@@ -329,6 +329,24 @@ check_safe_path_guard() {
         in_blog=0
       }
     ' impl/install_blog.sh impl/install_vaultwarden.sh
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_install_dir_guard=0; saw_vw_bin_guard=0; next }
+      in_uninstall && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_dir_guard=1 }
+      in_uninstall && /require_safe_path "VW_BIN_DIR" "\$\(dirname "\$VW_BIN"\)"/ { saw_vw_bin_guard=1 }
+      in_uninstall && /find "\$INSTALL_DIR" -maxdepth 1 -name "(new-api|sub2api)\./ {
+        if (!saw_install_dir_guard) {
+          printf "%s uninstall cleanup must validate INSTALL_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_uninstall && /find "\$\(dirname "\$VW_BIN"\)" -maxdepth 1 -name "vaultwarden\.bak\./ {
+        if (!saw_vw_bin_guard) {
+          printf "%s uninstall cleanup must validate VW_BIN_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_uninstall && /^}/ { in_uninstall=0 }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
 check_service_status_label() {

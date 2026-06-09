@@ -997,6 +997,7 @@ do_uninstall() {
   fi
   success "$(t app.newapi.success.removed_systemd)"
   rm -f "$BIN_PATH"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "new-api.tmp.*" -type f -delete 2>/dev/null || true
   success "$(t app.newapi.success.removed_binary)"

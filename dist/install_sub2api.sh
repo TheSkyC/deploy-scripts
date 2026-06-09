@@ -3085,6 +3085,7 @@ do_uninstall() {
   fi
   success "$(t app.sub2api.success.removed_systemd)"
   rm -f "$BIN_PATH"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*"       -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.tmp.*"       -type f -delete 2>/dev/null || true
   find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-release.*.tar.gz" -type f -delete 2>/dev/null || true
