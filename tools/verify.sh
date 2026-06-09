@@ -1756,12 +1756,13 @@ check_mutating_installs_acquire_locks() {
     done
   '
   awk '
-      /acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; next }
+      /acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; saw_exec=0; next }
       in_func && /if ! mkdir -p "\$\(dirname "\$lock_file"\)"; then/ { saw_mkdir=1 }
+      in_func && /if ! exec 9>"\$lock_file"; then/ { saw_exec=1 }
       in_func && /error "\$\(t error\.lock_failed "\$lock_file"\)"/ { saw_error=1 }
       in_func && /^}/ {
-        if (!(saw_mkdir && saw_error)) {
-          print "Lock acquisition must report lock directory creation failures." > "/dev/stderr"
+        if (!(saw_mkdir && saw_exec && saw_error)) {
+          print "Lock acquisition must report lock directory and lock file creation failures." > "/dev/stderr"
           exit 1
         }
         in_func=0

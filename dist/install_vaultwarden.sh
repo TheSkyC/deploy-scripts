@@ -184,7 +184,9 @@ acquire_lock() {
   if ! mkdir -p "$(dirname "$lock_file")"; then
     error "$(t error.lock_failed "$lock_file")"
   fi
-  exec 9>"$lock_file"
+  if ! exec 9>"$lock_file"; then
+    error "$(t error.lock_failed "$lock_file")"
+  fi
   flock -n 9 || error "$(t error.lock_failed "$lock_file")"
   trap 'release_lock' EXIT
 }
