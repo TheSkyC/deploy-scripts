@@ -2117,12 +2117,13 @@ check_vaultwarden_env_file_is_atomic() {
     return 1
   fi
   awk '
-      /_vw_env_tmp=\$\(mktemp "\$\(dirname "\$VW_ENV_FILE"\)\/\.vaultwarden\.env\./ { saw_tmp=1 }
+      /if ! _vw_env_tmp=\$\(mktemp "\$\(dirname "\$VW_ENV_FILE"\)\/\.vaultwarden\.env\./ { saw_tmp=1 }
+      /error "\$\(t app\.vaultwarden\.error\.env_file "\$VW_ENV_FILE"\)"/ { saw_tmp_error=1 }
       /mv "\$_vw_env_tmp" "\$VW_ENV_FILE"/ { saw_mv=1 }
       /rm -f "\$_vw_env_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_mv && saw_cleanup)) {
-          print "Vaultwarden env file writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
+          print "Vaultwarden env file writes must report temp creation failures, stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }
@@ -2295,12 +2296,13 @@ check_backup_scripts_are_atomic() {
     return 1
   fi
   awk '
-      /backup_tmp=\$\(mktemp/ { saw_tmp=1 }
+      /if ! backup_tmp=\$\(mktemp/ { saw_tmp=1 }
+      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(backup_script|backup_write)\)"/ { saw_tmp_error=1 }
       /mv "\$backup_tmp" "(\$backup_script|\$BACKUP_SCRIPT)"/ { saw_mv=1 }
       /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_mv && saw_cleanup)) {
-          print "Backup script writes must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
+          print "Backup script writes must report temp creation failures, stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }

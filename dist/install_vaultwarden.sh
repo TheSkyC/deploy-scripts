@@ -1785,7 +1785,9 @@ do_install() {
   success "$(t app.vaultwarden.success.admin_token)"
   step "$(t app.vaultwarden.step.env_file "$VW_ENV_FILE")"
   local _vw_env_tmp
-  _vw_env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX")
+  if ! _vw_env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX"); then
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
   if ! cat > "$_vw_env_tmp" << ENV
 # Vaultwarden environment file.
 # This file contains secrets; keep mode 600 and do not commit it.
@@ -2515,7 +2517,9 @@ do_update() {
 _write_backup_script() {
   local backup_script="/usr/local/bin/vaultwarden-backup"
   local backup_tmp
-  backup_tmp=$(mktemp "${backup_script}.XXXXXX")
+  if ! backup_tmp=$(mktemp "${backup_script}.XXXXXX"); then
+    error "$(t app.vaultwarden.error.backup_script)"
+  fi
   if ! cat > "$backup_tmp" << 'BKSH'
 #!/bin/bash
 # Auto-generated Vaultwarden backup script.
