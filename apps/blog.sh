@@ -305,6 +305,15 @@ i18n_register app.blog.error.public_dir \
 i18n_register app.blog.error.site_access \
   "Cannot access the Hugo site directory: %s. Recreate the site or rerun the initialization step." \
   "无法访问 Hugo 站点目录：%s。请重新创建站点，或重新执行初始化步骤。"
+i18n_register app.blog.error.git_stage \
+  "Failed to stage site content in %s. Inspect Git status and filesystem permissions, then retry." \
+  "无法在 %s 中暂存站点内容。请检查 Git 状态和文件系统权限后重试。"
+i18n_register app.blog.error.git_diff \
+  "Failed to inspect staged site changes in %s. Inspect the repository state and retry." \
+  "无法检查 %s 中已暂存的站点改动。请检查仓库状态后重试。"
+i18n_register app.blog.error.git_commit \
+  "Failed to commit initial site content in %s. Inspect Git config and repository state, then retry." \
+  "无法在 %s 中提交初始站点内容。请检查 Git 配置和仓库状态后重试。"
 i18n_register app.blog.git_committed \
   "Git commit complete; Hugo can read file modification times." \
   "Git 提交完成，Hugo 可读取文件修改时间"

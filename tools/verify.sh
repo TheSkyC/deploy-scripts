@@ -795,10 +795,13 @@ check_blog_site_setup_failures_are_explicit() {
       /build output directory/ { saw_public_guidance=1 }
       /app\.blog\.error\.site_access/ { saw_access_key=1 }
       /rerun the initialization step/ { saw_access_guidance=1 }
+      /app\.blog\.error\.git_stage/ { saw_git_stage_key=1 }
+      /app\.blog\.error\.git_diff/ { saw_git_diff_key=1 }
+      /app\.blog\.error\.git_commit/ { saw_git_commit_key=1 }
       /app\.blog\.error\.nginx_root_parent/ { saw_nginx_parent_key=1 }
       /site root parent directory/ { saw_nginx_parent_guidance=1 }
       END {
-        if (!(saw_parent_key && saw_parent_guidance && saw_site_create_key && saw_site_create_guidance && saw_git_init_key && saw_git_init_guidance && saw_git_config_key && saw_theme_key && saw_theme_guidance && saw_content_key && saw_content_guidance && saw_cms_key && saw_cms_guidance && saw_public_key && saw_public_guidance && saw_access_key && saw_access_guidance && saw_nginx_parent_key && saw_nginx_parent_guidance)) {
+        if (!(saw_parent_key && saw_parent_guidance && saw_site_create_key && saw_site_create_guidance && saw_git_init_key && saw_git_init_guidance && saw_git_config_key && saw_theme_key && saw_theme_guidance && saw_content_key && saw_content_guidance && saw_cms_key && saw_cms_guidance && saw_public_key && saw_public_guidance && saw_access_key && saw_access_guidance && saw_git_stage_key && saw_git_diff_key && saw_git_commit_key && saw_nginx_parent_key && saw_nginx_parent_guidance)) {
           print "Blog site setup failures must provide actionable initialization, Git, theme, content, CMS, build, and Nginx root guidance." > "/dev/stderr"
           exit 1
         }
@@ -851,14 +854,20 @@ check_blog_site_setup_failures_are_explicit() {
         }
         in_cms=0
       }
-      /step "\$\(t app\.blog\.step_build\)"/ { in_build=1; saw_public_if=0; saw_public_error=0; saw_cd_if=0; saw_cd_error=0; next }
+      /step "\$\(t app\.blog\.step_build\)"/ { in_build=1; saw_public_if=0; saw_public_error=0; saw_cd_if=0; saw_cd_error=0; saw_git_add_if=0; saw_git_add_error=0; saw_git_diff_if=0; saw_git_diff_error=0; saw_git_commit_if=0; saw_git_commit_error=0; next }
       in_build && /if ! mkdir -p "\$PUBLIC_DIR"; then/ { saw_public_if=1 }
       in_build && /error "\$\(t app\.blog\.error\.public_dir "\$PUBLIC_DIR"\)"/ { saw_public_error=1 }
       in_build && /if ! cd "\$SITE_DIR"; then/ { saw_cd_if=1 }
       in_build && /error "\$\(t app\.blog\.error\.site_access "\$SITE_DIR"\)"/ { saw_cd_error=1 }
-      in_build && /git add -A/ {
-        if (!(saw_public_if && saw_public_error && saw_cd_if && saw_cd_error)) {
-          printf "%s Blog build prep must fail explicitly when the public dir cannot be created or the site dir cannot be accessed\n", FILENAME > "/dev/stderr"
+      in_build && /if ! git add -A; then/ { saw_git_add_if=1 }
+      in_build && /error "\$\(t app\.blog\.error\.git_stage "\$SITE_DIR"\)"/ { saw_git_add_error=1 }
+      in_build && /if git diff --cached --quiet; then/ { saw_git_diff_if=1 }
+      in_build && /error "\$\(t app\.blog\.error\.git_diff "\$SITE_DIR"\)"/ { saw_git_diff_error=1 }
+      in_build && /if ! git commit -q -m "init: add site content"; then/ { saw_git_commit_if=1 }
+      in_build && /error "\$\(t app\.blog\.error\.git_commit "\$SITE_DIR"\)"/ { saw_git_commit_error=1 }
+      in_build && /info "\$\(t app\.blog\.git_committed\)"/ {
+        if (!(saw_public_if && saw_public_error && saw_cd_if && saw_cd_error && saw_git_add_if && saw_git_add_error && saw_git_diff_if && saw_git_diff_error && saw_git_commit_if && saw_git_commit_error)) {
+          printf "%s Blog build prep must fail explicitly when the public dir, site dir, git staging, staged-diff inspection, or commit fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_build=0

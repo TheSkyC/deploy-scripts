@@ -498,8 +498,21 @@ fi
 if ! cd "$SITE_DIR"; then
   error "$(t app.blog.error.site_access "$SITE_DIR")"
 fi
-git add -A
-git diff --cached --quiet || git commit -q -m "init: add site content"
+if ! git add -A; then
+  error "$(t app.blog.error.git_stage "$SITE_DIR")"
+fi
+if git diff --cached --quiet; then
+  :
+else
+  _git_diff_status=$?
+  if [[ "$_git_diff_status" -eq 1 ]]; then
+    if ! git commit -q -m "init: add site content"; then
+      error "$(t app.blog.error.git_commit "$SITE_DIR")"
+    fi
+  else
+    error "$(t app.blog.error.git_diff "$SITE_DIR")"
+  fi
+fi
 info "$(t app.blog.git_committed)"
 hugo --destination "$PUBLIC_DIR" --gc --minify \
   || error "$(t app.blog.error.hugo_build)"
