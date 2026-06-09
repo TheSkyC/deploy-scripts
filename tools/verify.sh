@@ -855,6 +855,8 @@ check_blog_hugo_install_failures_are_actionable() {
   awk '
       /if ! HUGO_DEB="\$\(mktemp \/tmp\/hugo\.XXXXXX\.deb\)"; then/ { saw_tmp_if=1 }
       /error "\$\(t app\.blog\.error\.hugo_download\)"/ { saw_tmp_error=1 }
+      /if \[\[ ! -s "\$HUGO_DEB" \]\]; then/ { saw_empty_if=1 }
+      saw_empty_if && /rm -f "\$HUGO_DEB"/ { saw_empty_cleanup=1 }
       /if ! dpkg -i "\$HUGO_DEB"; then/ { in_block=1; saw_error=0; next }
       in_block && /error "\$\(t app\.blog\.error\.hugo_install\)"/ { saw_error=1 }
       in_block && /rm -f "\$HUGO_DEB"/ { saw_cleanup=1 }
@@ -866,8 +868,8 @@ check_blog_hugo_install_failures_are_actionable() {
         in_block=0
       }
       END {
-        if (!(saw_tmp_if && saw_tmp_error)) {
-          print "Blog Hugo package download must report temporary file creation failures." > "/dev/stderr"
+        if (!(saw_tmp_if && saw_tmp_error && saw_empty_if && saw_empty_cleanup)) {
+          print "Blog Hugo package download must report temporary file creation and empty download failures." > "/dev/stderr"
           exit 1
         }
       }

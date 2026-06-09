@@ -207,6 +207,10 @@ if ! wget -q --show-progress -O "$HUGO_DEB" "$DEB_URL"; then
   rm -f "$HUGO_DEB"
   error "$(t app.blog.error.hugo_download)"
 fi
+if [[ ! -s "$HUGO_DEB" ]]; then
+  rm -f "$HUGO_DEB"
+  error "$(t app.blog.error.hugo_download)"
+fi
 if ! dpkg -i "$HUGO_DEB"; then
   rm -f "$HUGO_DEB"
   error "$(t app.blog.error.hugo_install)"
