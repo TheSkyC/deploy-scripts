@@ -863,6 +863,12 @@ i18n_register_many \
   app.cyberstrikeai.warn.preupdate_backup \
   "Pre-update backup failed; continuing cautiously. Inspect /opt/cyberstrike-ai/logs/backup.log or run /usr/local/bin/cyberstrike-ai-backup manually before proceeding further." \
   "更新前备份失败；将谨慎继续。请检查 /opt/cyberstrike-ai/logs/backup.log，或先手动执行 /usr/local/bin/cyberstrike-ai-backup 再继续后续操作。" \
+  app.cyberstrikeai.warn.cleanup_old_binary_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
+  app.cyberstrikeai.info.cleaned_old_binaries \
+  "Removed %s old binary backups (keeping the latest 3)." \
+  "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
   app.cyberstrikeai.step.update_source \
   "Update source" \
   "更新源码" \
@@ -2014,8 +2020,20 @@ do_update() {
   else
     success "$(t app.cyberstrikeai.success.update_inactive "$old_rev" "$new_rev")"
   fi
-  find "$INSTALL_DIR" -maxdepth 1 -name "${BIN_NAME}.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | tail -n +4 | awk '{print $2}' | xargs -r rm -f
+  local _cleaned_old=0 _old_bak
+  while IFS= read -r -d '' _old_bak; do
+    if rm -f "$_old_bak"; then
+      _cleaned_old=$(( _cleaned_old + 1 ))
+    else
+      warn "$(t app.cyberstrikeai.warn.cleanup_old_binary_failed "$_old_bak")"
+    fi
+  done < <(
+    find "$INSTALL_DIR" -maxdepth 1 -name "${BIN_NAME}.bak.*" -type f -printf '%T@ %p\0' 2>/dev/null \
+      | sort -z -rn | tail -z -n +4 | cut -z -d ' ' -f 2-
+  )
+  if [[ $_cleaned_old -gt 0 ]]; then
+    info "$(t app.cyberstrikeai.info.cleaned_old_binaries "$_cleaned_old")"
+  fi
   release_lock
 }
 do_status() {

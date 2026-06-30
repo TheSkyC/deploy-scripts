@@ -987,8 +987,20 @@ do_update() {
   else
     success "$(t app.cyberstrikeai.success.update_inactive "$old_rev" "$new_rev")"
   fi
-  find "$INSTALL_DIR" -maxdepth 1 -name "${BIN_NAME}.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | tail -n +4 | awk '{print $2}' | xargs -r rm -f
+  local _cleaned_old=0 _old_bak
+  while IFS= read -r -d '' _old_bak; do
+    if rm -f "$_old_bak"; then
+      _cleaned_old=$(( _cleaned_old + 1 ))
+    else
+      warn "$(t app.cyberstrikeai.warn.cleanup_old_binary_failed "$_old_bak")"
+    fi
+  done < <(
+    find "$INSTALL_DIR" -maxdepth 1 -name "${BIN_NAME}.bak.*" -type f -printf '%T@ %p\0' 2>/dev/null \
+      | sort -z -rn | tail -z -n +4 | cut -z -d ' ' -f 2-
+  )
+  if [[ $_cleaned_old -gt 0 ]]; then
+    info "$(t app.cyberstrikeai.info.cleaned_old_binaries "$_cleaned_old")"
+  fi
   release_lock
 }
 do_status() {

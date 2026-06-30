@@ -330,6 +330,12 @@ i18n_register_many \
   app.cyberstrikeai.warn.preupdate_backup \
   "Pre-update backup failed; continuing cautiously. Inspect /opt/cyberstrike-ai/logs/backup.log or run /usr/local/bin/cyberstrike-ai-backup manually before proceeding further." \
   "更新前备份失败；将谨慎继续。请检查 /opt/cyberstrike-ai/logs/backup.log，或先手动执行 /usr/local/bin/cyberstrike-ai-backup 再继续后续操作。" \
+  app.cyberstrikeai.warn.cleanup_old_binary_failed \
+  "Could not remove old binary backup: %s" \
+  "旧二进制备份删除失败：%s" \
+  app.cyberstrikeai.info.cleaned_old_binaries \
+  "Removed %s old binary backups (keeping the latest 3)." \
+  "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
   app.cyberstrikeai.step.update_source \
   "Update source" \
   "更新源码" \

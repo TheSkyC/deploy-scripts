@@ -2390,6 +2390,33 @@ check_update_binary_backups_are_atomic() {
 
 check_old_backup_cleanup_reports_failures() {
   local file
+  awk '
+      /app\.cyberstrikeai\.warn\.cleanup_old_binary_failed/ { saw_warn_key=1 }
+      /app\.cyberstrikeai\.info\.cleaned_old_binaries/ { saw_count_key=1 }
+      END {
+        if (!(saw_warn_key && saw_count_key)) {
+          print "CyberStrikeAI old binary cleanup messages must be localized." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  for file in impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh; do
+    awk '
+        /while IFS= read -r -d '\'''\'' _old_bak; do/ { saw_loop=1 }
+        /warn "\$\(t app\.cyberstrikeai\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_warn=1 }
+        /info "\$\(t app\.cyberstrikeai\.info\.cleaned_old_binaries "\$_cleaned_old"\)"/ { saw_count=1 }
+        /xargs -r rm -f/ {
+          printf "%s CyberStrikeAI must not silently batch-remove old binary backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        END {
+          if (!(saw_loop && saw_warn && saw_count)) {
+            printf "%s CyberStrikeAI old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file"
+  done
   for file in impl/install_newapi.sh dist/install_newapi.sh; do
     awk '
         /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
