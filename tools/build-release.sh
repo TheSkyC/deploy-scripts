@@ -5,7 +5,7 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 
 usage() {
-  echo "Usage: bash tools/build-release.sh [all|newapi|sub2api|vaultwarden|cyberstrikeai|blog]" >&2
+  echo "Usage: bash tools/build-release.sh [all|newapi|sub2api|vaultwarden|cyberstrikeai|blog|tickflow]" >&2
 }
 
 fail() {
@@ -20,6 +20,7 @@ app_file_for() {
     vaultwarden) echo "apps/vaultwarden.sh" ;;
     cyberstrikeai) echo "apps/cyberstrikeai.sh" ;;
     blog) echo "apps/blog.sh" ;;
+    tickflow) echo "apps/tickflow.sh" ;;
     *) return 1 ;;
   esac
 }
@@ -31,6 +32,7 @@ impl_file_for() {
     vaultwarden) echo "impl/install_vaultwarden.sh" ;;
     cyberstrikeai) echo "impl/install_cyberstrikeai.sh" ;;
     blog) echo "impl/install_blog.sh" ;;
+    tickflow) echo "impl/install_tickflow.sh" ;;
     *) return 1 ;;
   esac
 }
@@ -137,8 +139,9 @@ main() {
       build_one vaultwarden
       build_one cyberstrikeai
       build_one blog
+      build_one tickflow
       ;;
-    newapi|sub2api|vaultwarden|cyberstrikeai|blog)
+    newapi|sub2api|vaultwarden|cyberstrikeai|blog|tickflow)
       build_one "$target"
       ;;
     *)

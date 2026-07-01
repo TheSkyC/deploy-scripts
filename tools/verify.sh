@@ -52,6 +52,10 @@ check_localized_dispatch() {
   expect_failure_output zh install_blog.sh "暂不支持 update" update
   expect_failure_output en dist/install_blog.sh "does not support update" update
   expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
+  expect_failure_output en install_tickflow.sh "Invalid choice"
+  expect_failure_output zh install_tickflow.sh "无效选项"
+  expect_failure_output en dist/install_tickflow.sh "Invalid choice"
+  expect_failure_output zh dist/install_tickflow.sh "无效选项"
 }
 
 expect_menu_output() {
@@ -73,6 +77,10 @@ check_no_argument_menu() {
   expect_menu_output zh install_blog.sh "请选择操作"
   expect_menu_output en dist/install_blog.sh "Choose an action"
   expect_menu_output zh dist/install_blog.sh "请选择操作"
+  expect_menu_output en install_tickflow.sh "Choose an action"
+  expect_menu_output zh install_tickflow.sh "请选择操作"
+  expect_menu_output en dist/install_tickflow.sh "Choose an action"
+  expect_menu_output zh dist/install_tickflow.sh "请选择操作"
 }
 
 expect_blog_defaults() {
@@ -125,6 +133,8 @@ check_app_localized_descriptions() {
   expect_app_description sub2api zh "包含数据库、缓存、systemd 和备份的 API 网关部署脚本。"
   expect_app_description vaultwarden en "Vaultwarden deployment with Web Vault, Nginx, TLS, and backups."
   expect_app_description vaultwarden zh "包含 Web Vault、Nginx、TLS 和备份的 Vaultwarden 部署脚本。"
+  expect_app_description tickflow en "Docker Compose deployment for the TickFlow stock analysis panel."
+  expect_app_description tickflow zh "TickFlow 股票分析面板的 Docker Compose 部署脚本。"
 }
 
 check_no_hardcoded_chinese_impl() {
@@ -347,6 +357,105 @@ check_safe_path_guard() {
       }
       in_uninstall && /^}/ { in_uninstall=0 }
     ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
+}
+
+check_tickflow_preflight_defers_docker_runtime_checks() {
+  awk '
+      /preflight_check\(\)/ { in_func=1; saw_docker=0; saw_compose=0; next }
+      in_func && /command -v docker/ { saw_docker=1 }
+      in_func && /docker compose version/ { saw_compose=1 }
+      in_func && /^}/ {
+        if (saw_docker || saw_compose) {
+          printf "%s TickFlow preflight must not require Docker before install dependencies are present\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
+check_tickflow_env_rewrites_preserve_existing_secrets() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_tickflow.sh
+
+    tmp_dir="$(mktemp -d)"
+    trap '"'"'rm -rf "$tmp_dir"'"'"' EXIT
+
+    TICKFLOW_INSTALL_DIR="${tmp_dir}/tickflow"
+    TICKFLOW_ENV_FILE="${TICKFLOW_INSTALL_DIR}/.env"
+    TICKFLOW_PORT="4010"
+    TICKFLOW_AUTH_PASSWORD="newpass123"
+    TICKFLOW_BACKEND_EXTRAS="alpha,beta"
+
+    mkdir -p "$TICKFLOW_INSTALL_DIR"
+    cat > "$TICKFLOW_ENV_FILE" <<'"'"'EOF'"'"'
+TICKFLOW_API_KEY=existing-panel-key
+AI_PROVIDER=anthropic_compat
+AI_BASE_URL=https://example.com/v1
+AI_API_KEY=existing-ai-key
+AI_MODEL=claude-like
+AI_DAILY_TOKEN_BUDGET=123
+HOST=127.0.0.1
+PORT=9999
+LOG_LEVEL=DEBUG
+AUTH_PASSWORD=oldpass
+BACKEND_EXTRAS=old
+DATA_DIR=./old-data
+EOF
+
+    _write_env_file
+
+    grep -Fxq "TICKFLOW_API_KEY=existing-panel-key" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "AI_PROVIDER=anthropic_compat" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "AI_BASE_URL=https://example.com/v1" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "AI_API_KEY=existing-ai-key" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "AI_MODEL=claude-like" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "AI_DAILY_TOKEN_BUDGET=123" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "LOG_LEVEL=DEBUG" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "PORT=4010" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "AUTH_PASSWORD=newpass123" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "BACKEND_EXTRAS=alpha,beta" "$TICKFLOW_ENV_FILE"
+    grep -Fxq "DATA_DIR=./data" "$TICKFLOW_ENV_FILE"
+  '
+}
+
+check_tickflow_paths_are_guarded() {
+  awk '
+      /_clone_or_update_repo\(\)/ { in_clone=1; saw_clone_guard=0; saw_clone_rm=0; next }
+      in_clone && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$repo_dir"/ { saw_clone_guard=1 }
+      in_clone && /safe_rm_dir "\$repo_dir" "TICKFLOW_INSTALL_DIR"/ {
+        if (!saw_clone_guard) {
+          printf "%s TickFlow repo reset must validate TICKFLOW_INSTALL_DIR before deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_clone_rm=1
+      }
+      in_clone && /^}/ {
+        if (!(saw_clone_guard && saw_clone_rm)) {
+          printf "%s TickFlow repo setup must guard and safely reset the install directory\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_clone=0
+      }
+      /do_uninstall\(\)/ { in_uninstall=1; saw_uninstall_guard=0; saw_uninstall_rm=0; next }
+      in_uninstall && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$TICKFLOW_INSTALL_DIR"/ { saw_uninstall_guard=1 }
+      in_uninstall && /safe_rm_dir "\$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR"/ {
+        if (!saw_uninstall_guard) {
+          printf "%s TickFlow uninstall must validate TICKFLOW_INSTALL_DIR before deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_uninstall_rm=1
+      }
+      in_uninstall && /^}/ {
+        if (!(saw_uninstall_guard && saw_uninstall_rm)) {
+          printf "%s TickFlow uninstall must use safe_rm_dir for TICKFLOW_INSTALL_DIR\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
 check_safe_rm_dir_is_idempotent() {
@@ -4994,6 +5103,9 @@ main() {
   check_bundled_impl_cleanup
   check_bundled_impl_failure_cleanup
   check_safe_path_guard
+  check_tickflow_preflight_defers_docker_runtime_checks
+  check_tickflow_env_rewrites_preserve_existing_secrets
+  check_tickflow_paths_are_guarded
   check_safe_rm_dir_is_idempotent
   check_service_status_label
   check_config_crlf_handling
