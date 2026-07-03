@@ -474,6 +474,12 @@ _write_nginx_site_link() {
     error "$(t app.cyberstrikeai.error.nginx "$target")"
   fi
 }
+_write_nginx_config_file() {
+  local nginx_conf="$1"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t app.cyberstrikeai.error.nginx "$nginx_conf")"
+  fi
+}
 write_nginx_config() {
   _bool_true "$ENABLE_NGINX" || return 0
   step "$(t app.cyberstrikeai.step.nginx)"
@@ -484,11 +490,7 @@ write_nginx_config() {
   if ! mkdir -p "$(dirname "$NGINX_CONF")" "$(dirname "$NGINX_LINK")"; then
     error "$(t app.cyberstrikeai.error.nginx_dirs "$NGINX_CONF")"
   fi
-  local nginx_tmp
-  if ! nginx_tmp=$(mktemp "${NGINX_CONF}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
-  fi
-  if ! cat > "$nginx_tmp" <<NGINX
+  _write_nginx_config_file "$NGINX_CONF" <<NGINX
 server {
     listen ${PUBLIC_PORT};
     listen [::]:${PUBLIC_PORT};
@@ -533,16 +535,6 @@ server {
     error_log  /var/log/nginx/cyberstrike-ai_error.log;
 }
 NGINX
-  then
-    rm -f "$nginx_tmp"
-    error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
-  fi
-  if ! chmod 644 "$nginx_tmp" \
-      || ! chown root:root "$nginx_tmp" \
-      || ! mv "$nginx_tmp" "$NGINX_CONF"; then
-    rm -f "$nginx_tmp"
-    error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
-  fi
   _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
     || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
   if ! nginx -t; then

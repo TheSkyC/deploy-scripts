@@ -1948,18 +1948,7 @@ backup_vaultwarden_binary() {
 }
 _write_nginx_config_file() {
   local nginx_conf="$1"
-  local nginx_tmp
-  if ! nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
-  fi
-  if ! cat > "$nginx_tmp"; then
-    rm -f "$nginx_tmp"
-    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
-  fi
-  if ! chmod 644 "$nginx_tmp" \
-      || ! chown root:root "$nginx_tmp" \
-      || ! mv "$nginx_tmp" "$nginx_conf"; then
-    rm -f "$nginx_tmp"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
     error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
   fi
 }

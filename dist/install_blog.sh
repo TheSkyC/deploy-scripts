@@ -1439,6 +1439,12 @@ _write_nginx_site_link() {
     error "$(t app.blog.error.nginx_write "$target")"
   fi
 }
+_write_nginx_config_file() {
+  local nginx_conf="$1"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t app.blog.error.nginx_write "$nginx_conf")"
+  fi
+}
 
 _write_blog_file() {
   local target_path="$1"
@@ -1884,10 +1890,7 @@ fi
 success "$(t app.blog.static_deployed "$NGINX_ROOT")"
 _write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
-if ! NGINX_TMP=$(mktemp "${NGINX_CONF}.XXXXXX"); then
-  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
-fi
-if ! cat > "$NGINX_TMP" << NGINX
+_write_nginx_config_file "$NGINX_CONF" << NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -1945,16 +1948,6 @@ server {
     error_log  /var/log/nginx/blog_error.log;
 }
 NGINX
-then
-  rm -f "$NGINX_TMP"
-  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
-fi
-if ! chmod 644 "$NGINX_TMP" \
-    || ! chown root:root "$NGINX_TMP" \
-    || ! mv "$NGINX_TMP" "$NGINX_CONF"; then
-  rm -f "$NGINX_TMP"
-  error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
-fi
 _write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog \
   || error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
 rm -f /etc/nginx/sites-enabled/default

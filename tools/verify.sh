@@ -3613,14 +3613,21 @@ check_nginx_configs_are_atomic() {
   fi
   awk '
       /if ! mkdir -p \/etc\/nginx\/sites-available \/etc\/nginx\/sites-enabled; then/ { saw_nginx_dirs=1 }
-      /if ! (nginx_tmp|NGINX_TMP)=\$\(mktemp/ { saw_tmp=1 }
-      /error "\$\(t app\.(sub2api|cyberstrikeai|vaultwarden|blog)\.error\.(nginx_config_write|nginx|nginx_write|nginx_conf)/ { saw_tmp_error=1 }
-      /mv "\$(nginx_tmp|NGINX_TMP)" "\$(nginx_conf|NGINX_CONF)"/ { saw_mv=1 }
-      /rm -f "\$(nginx_tmp|NGINX_TMP)"/ { saw_cleanup=1 }
+      /_write_nginx_config_file\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
+      in_func && /atomic_write_file "\$(nginx_conf|NGINX_CONF)" 644 root:root/ { saw_atomic=1 }
+      in_func && /error "\$\(t app\.(sub2api|cyberstrikeai|vaultwarden|blog)\.error\.(nginx_config_write|nginx|nginx_write|nginx_conf)/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_atomic && saw_error)) {
+          printf "%s Nginx config helper must use atomic_write_file and report failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
       /_write_nginx_config_file "\$NGINX_CONF"/ { saw_helper=1 }
+      /_write_nginx_config_file "\$nginx_conf"/ { saw_helper=1 }
       END {
-        if (!(saw_nginx_dirs && saw_tmp && saw_tmp_error && saw_mv && saw_cleanup && saw_helper)) {
-          print "Nginx site config writes must prepare directories, stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
+        if (!(saw_nginx_dirs && saw_helper)) {
+          print "Nginx site config writes must prepare directories and use _write_nginx_config_file." > "/dev/stderr"
           exit 1
         }
       }

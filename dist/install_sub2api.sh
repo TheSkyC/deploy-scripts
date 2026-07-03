@@ -2277,6 +2277,12 @@ _write_nginx_site_link() {
     error "$(t app.sub2api.error.nginx_config_write)"
   fi
 }
+_write_nginx_config_file() {
+  local nginx_conf="$1"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t app.sub2api.error.nginx_config_write)"
+  fi
+}
 _write_nginx_config() {
   local server_name_line
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
@@ -2288,11 +2294,7 @@ _write_nginx_config() {
     error "$(t app.sub2api.error.nginx_config_write)"
   fi
   local nginx_conf="/etc/nginx/sites-available/sub2api"
-  local nginx_tmp
-  if ! nginx_tmp=$(mktemp "${nginx_conf}.XXXXXX"); then
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
-  if ! cat > "$nginx_tmp" << NGINX
+  _write_nginx_config_file "$nginx_conf" << NGINX
 server {
     listen 80;
 ${server_name_line}
@@ -2324,16 +2326,6 @@ ${server_name_line}
     }
 }
 NGINX
-  then
-    rm -f "$nginx_tmp"
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
-  if ! chmod 644 "$nginx_tmp" \
-      || ! chown root:root "$nginx_tmp" \
-      || ! mv "$nginx_tmp" "$nginx_conf"; then
-    rm -f "$nginx_tmp"
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
   _write_nginx_site_link "$nginx_conf" /etc/nginx/sites-enabled/sub2api \
     || error "$(t app.sub2api.error.nginx_config_write)"
   if [[ "$PKG_MANAGER" != "apt" ]]; then
