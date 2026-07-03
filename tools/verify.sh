@@ -484,6 +484,54 @@ check_safe_rm_dir_is_idempotent() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_atomic_helpers_are_atomic() {
+  awk '
+      /atomic_write_file\(\)/ { in_write=1; saw_dir=0; saw_tmp=0; saw_cat=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_write && /mkdir -p "\$target_dir"/ { saw_dir=1 }
+      in_write && /mktemp "\$\{target_dir\}\/\.\$\(basename "\$target_path"\)\.XXXXXX"/ { saw_tmp=1 }
+      in_write && /cat > "\$target_tmp"/ { saw_cat=1 }
+      in_write && /chmod "\$mode" "\$target_tmp"/ { saw_chmod=1 }
+      in_write && /chown "\$owner" "\$target_tmp"/ { saw_chown=1 }
+      in_write && /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
+      in_write && /rm -f "\$target_tmp"/ { saw_cleanup=1 }
+      in_write && /^}/ {
+        if (!(saw_dir && saw_tmp && saw_cat && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+          printf "%s atomic_write_file must stage, permission, replace, and clean up temporary files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_write=0
+      }
+      /atomic_copy_file\(\)/ { in_copy=1; saw_dir=0; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_copy && /mkdir -p "\$target_dir"/ { saw_dir=1 }
+      in_copy && /mktemp "\$\{target_path\}\.XXXXXX"/ { saw_tmp=1 }
+      in_copy && /cp "\$source_path" "\$target_tmp"/ { saw_cp=1 }
+      in_copy && /chmod "\$mode" "\$target_tmp"/ { saw_chmod=1 }
+      in_copy && /chown "\$owner" "\$target_tmp"/ { saw_chown=1 }
+      in_copy && /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
+      in_copy && /rm -f "\$target_tmp"/ { saw_cleanup=1 }
+      in_copy && /^}/ {
+        if (!(saw_dir && saw_tmp && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+          printf "%s atomic_copy_file must stage, permission, replace, and clean up temporary files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_copy=0
+      }
+      /atomic_symlink\(\)/ { in_link=1; saw_dir=0; saw_tmp=0; saw_unlink=0; saw_ln=0; saw_mv=0; saw_cleanup=0; next }
+      in_link && /mkdir -p "\$link_dir"/ { saw_dir=1 }
+      in_link && /mktemp "\$\{link_path\}\.XXXXXX"/ { saw_tmp=1 }
+      in_link && /rm -f "\$link_tmp"/ { saw_unlink=1; saw_cleanup=1 }
+      in_link && /ln -s "\$target_path" "\$link_tmp"/ { saw_ln=1 }
+      in_link && /mv -Tf "\$link_tmp" "\$link_path"/ { saw_mv=1 }
+      in_link && /^}/ {
+        if (!(saw_dir && saw_tmp && saw_unlink && saw_ln && saw_mv && saw_cleanup)) {
+          printf "%s atomic_symlink must stage, replace, and clean up temporary symlinks\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_link=0
+      }
+    ' lib/atomic.sh dist/install_newapi.sh
+}
+
 check_service_status_label() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -1252,17 +1300,12 @@ check_go_tarball_failures_cleanup() {
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
   awk '
-      /write_tool_symlink\(\)/ { in_func=1; saw_dir=0; saw_dir_error=0; saw_tmp=0; saw_tmp_error=0; saw_unlink=0; saw_ln=0; saw_mv=0; saw_cleanup=0; next }
-      in_func && /if ! mkdir -p "\$\(dirname "\$link_path"\)"; then/ { saw_dir=1 }
-      in_func && saw_dir && /error "\$\(t app\.cyberstrikeai\.error\.go_failed\)"/ { saw_dir_error=1 }
-      in_func && /if ! link_tmp=\$\(mktemp "\$\{link_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
-      in_func && /error "\$\(t app\.cyberstrikeai\.error\.go_failed\)"/ { saw_tmp_error=1 }
-      in_func && /rm -f "\$link_tmp"/ { saw_unlink=1; saw_cleanup=1 }
-      in_func && /ln -s "\$target" "\$link_tmp"/ { saw_ln=1 }
-      in_func && /mv -Tf "\$link_tmp" "\$link_path"/ { saw_mv=1 }
+      /write_tool_symlink\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
+      in_func && /atomic_symlink "\$target" "\$link_path"/ { saw_atomic=1 }
+      in_func && /error "\$\(t app\.cyberstrikeai\.error\.go_failed\)"/ { saw_error=1 }
       in_func && /^}/ {
-        if (!(saw_dir && saw_dir_error && saw_tmp && saw_tmp_error && saw_unlink && saw_ln && saw_mv && saw_cleanup)) {
-          printf "%s Go tool symlink helper must report directory/temp creation failures, stage, replace, and clean up temporary symlinks\n", FILENAME > "/dev/stderr"
+        if (!(saw_atomic && saw_error)) {
+          printf "%s Go tool symlink helper must use atomic_symlink and report failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
@@ -2440,14 +2483,15 @@ check_update_binary_backups_are_atomic() {
     return 1
   fi
   awk '
-      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_error=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_error=0; saw_cp=0; saw_mv=0; saw_cleanup=0; saw_atomic=0; next }
+      in_func && /atomic_copy_file "\$(BIN_PATH|VW_BIN)" "\$backup_path"/ { saw_atomic=1 }
       in_func && /if ! backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
       in_func && /error "\$\(t app\.(newapi|sub2api|vaultwarden)\.error\.binary_install/ { saw_tmp_error=1 }
       in_func && /cp "\$(BIN_PATH|VW_BIN)" "\$backup_tmp"/ { saw_cp=1 }
       in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup)) {
+        if (!((saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup) || (saw_atomic && saw_tmp_error))) {
           printf "%s binary backup helper must report temp creation failures, stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -2739,14 +2783,15 @@ check_cyberstrikeai_backups_are_atomic() {
     return 1
   fi
   awk '
-      /write_backup_file\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      /write_backup_file\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_mv=0; saw_cleanup=0; saw_atomic=0; next }
+      in_func && /atomic_copy_file "\$source_path" "\$backup_path"/ { saw_atomic=1 }
       in_func && /if ! backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
       in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_func && /cp "\$source_path" "\$backup_tmp"/ { saw_cp=1 }
       in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_mv && saw_cleanup)) {
+        if (!((saw_tmp && saw_tmp_return && saw_cp && saw_mv && saw_cleanup) || saw_atomic)) {
           printf "%s CyberStrikeAI backup helper must stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -3499,17 +3544,12 @@ check_nginx_configs_are_atomic() {
     ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
       dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh
   awk '
-      /_write_nginx_site_link\(\)/ { in_func=1; saw_dir=0; saw_dir_error=0; saw_tmp=0; saw_tmp_error=0; saw_unlink=0; saw_ln=0; saw_mv=0; saw_cleanup=0; next }
-      in_func && /if ! mkdir -p "\$\(dirname "\$link_path"\)"; then/ { saw_dir=1 }
-      in_func && saw_dir && /error "\$\(t app\.(blog|sub2api|cyberstrikeai|vaultwarden)\.error\.(nginx_write|nginx_config_write|nginx)/ { saw_dir_error=1 }
-      in_func && /if ! link_tmp=\$\(mktemp "\$\{link_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
-      in_func && /error "\$\(t app\.(blog|sub2api|cyberstrikeai|vaultwarden)\.error\.(nginx_write|nginx_config_write|nginx)/ { saw_tmp_error=1 }
-      in_func && /rm -f "\$link_tmp"/ { saw_unlink=1; saw_cleanup=1 }
-      in_func && /ln -s "\$target" "\$link_tmp"/ { saw_ln=1 }
-      in_func && /mv -Tf "\$link_tmp" "\$link_path"/ { saw_mv=1 }
+      /_write_nginx_site_link\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
+      in_func && /atomic_symlink "\$target" "\$link_path"/ { saw_atomic=1 }
+      in_func && /error "\$\(t app\.(blog|sub2api|cyberstrikeai|vaultwarden)\.error\.(nginx_write|nginx_config_write|nginx)/ { saw_error=1 }
       in_func && /^}/ {
-        if (!(saw_dir && saw_dir_error && saw_tmp && saw_tmp_error && saw_unlink && saw_ln && saw_mv && saw_cleanup)) {
-          printf "%s Nginx site link helper must report directory/temp creation failures, stage, replace, and clean up temporary symlinks\n", FILENAME > "/dev/stderr"
+        if (!(saw_atomic && saw_error)) {
+          printf "%s Nginx site link helper must use atomic_symlink and report failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
@@ -4950,28 +4990,34 @@ check_blog_site_files_are_atomic() {
     return 1
   fi
   awk '
-      /backup_blog_file\(\)/ { in_backup=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_mv=0; saw_cleanup=0; next }
+      /backup_blog_file\(\)/ { in_backup=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_mv=0; saw_cleanup=0; saw_atomic_copy=0; next }
+      in_backup && /atomic_copy_file "\$source_path" "\$backup_path"/ { saw_atomic_copy=1 }
       in_backup && /if ! backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
       in_backup && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_backup && /cp "\$source_path" "\$backup_tmp"/ { saw_cp=1 }
       in_backup && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_backup && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       in_backup && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_mv && saw_cleanup)) {
+        if (!((saw_tmp && saw_tmp_return && saw_cp && saw_mv && saw_cleanup) || saw_atomic_copy)) {
           print "Blog config backup helper must stage, replace, and clean up temporary backups." > "/dev/stderr"
           exit 1
         }
         in_backup=0
       }
-      /if ! mkdir -p "\$target_dir"; then/ { saw_dir_if=1 }
-      /if ! target_tmp=\$\(mktemp "\$\{target_dir\}\/\.\$\(basename "\$target_path"\)\.XXXXXX"\); then/ { saw_tmp=1 }
-      /error "\$\(t app\.blog\.error\.file_write "\$target_path"\)"/ { saw_write_error=1 }
-      /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
-      /rm -f "\$target_tmp"/ { saw_cleanup=1 }
+      /_write_blog_file\(\)/ { in_write=1; saw_atomic_write=0; saw_write_error=0; next }
+      in_write && /atomic_write_file "\$target_path" 644/ { saw_atomic_write=1 }
+      in_write && /error "\$\(t app\.blog\.error\.file_write "\$target_path"\)"/ { saw_write_error=1 }
+      in_write && /^}/ {
+        if (!(saw_atomic_write && saw_write_error)) {
+          print "Blog site file writes must use atomic_write_file and report write failures." > "/dev/stderr"
+          exit 1
+        }
+        in_write=0
+      }
       /_write_blog_file "?\$\{?(SITE_DIR|CMS_ADMIN_DIR)\}?/ || /_write_blog_file "\$CONFIG_FILE"/ { saw_helper=1 }
       END {
-        if (!(saw_dir_if && saw_tmp && saw_write_error && saw_mv && saw_cleanup && saw_helper)) {
-          print "Blog site file writes must prepare directories, stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
+        if (!saw_helper) {
+          print "Blog site setup must write generated files through _write_blog_file." > "/dev/stderr"
           exit 1
         }
       }
@@ -5067,6 +5113,7 @@ main() {
   check_tickflow_env_rewrites_preserve_existing_secrets
   check_tickflow_paths_are_guarded
   check_safe_rm_dir_is_idempotent
+  check_atomic_helpers_are_atomic
   check_service_status_label
   check_config_crlf_handling
   check_config_write_failure_cleanup

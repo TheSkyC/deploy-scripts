@@ -1892,17 +1892,8 @@ _write_nginx_config_file() {
 }
 _write_nginx_site_link() {
   local target="$1" link_path="$2"
-  local link_tmp
-  if ! mkdir -p "$(dirname "$link_path")"; then
+  if ! atomic_symlink "$target" "$link_path"; then
     error "$(t app.vaultwarden.error.nginx_write "$target")"
-  fi
-  if ! link_tmp=$(mktemp "${link_path}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.nginx_write "$target")"
-  fi
-  rm -f "$link_tmp"
-  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
-    rm -f "$link_tmp"
-    return 1
   fi
 }
 _write_fail2ban_config_file() {

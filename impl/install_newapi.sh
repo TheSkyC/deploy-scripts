@@ -153,13 +153,8 @@ _restore_binary_backup() {
 }
 _backup_current_binary() {
   local backup_path="$1"
-  local backup_tmp
-  if ! backup_tmp=$(mktemp "${backup_path}.XXXXXX"); then
+  if ! atomic_copy_file "$BIN_PATH" "$backup_path"; then
     error "$(t app.newapi.error.binary_install "$BIN_PATH")"
-  fi
-  if ! cp "$BIN_PATH" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
-    rm -f "$backup_tmp"
-    return 1
   fi
 }
 _health_check() {

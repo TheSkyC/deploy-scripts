@@ -81,30 +81,14 @@ restore_old_go_toolchain() {
 }
 write_tool_symlink() {
   local target="$1" link_path="$2"
-  local link_tmp
-  if ! mkdir -p "$(dirname "$link_path")"; then
+  if ! atomic_symlink "$target" "$link_path"; then
     error "$(t app.cyberstrikeai.error.go_failed)"
-  fi
-  if ! link_tmp=$(mktemp "${link_path}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.go_failed)"
-  fi
-  rm -f "$link_tmp"
-  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
-    rm -f "$link_tmp"
-    return 1
   fi
 }
 write_backup_file() {
   local source_path="$1" backup_path="$2"
-  local backup_tmp
   [[ -f "$source_path" ]] || return 0
-  if ! backup_tmp=$(mktemp "${backup_path}.XXXXXX"); then
-    return 1
-  fi
-  if ! cp "$source_path" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
-    rm -f "$backup_tmp"
-    return 1
-  fi
+  atomic_copy_file "$source_path" "$backup_path"
 }
 apt_install_base() {
   step "$(t app.cyberstrikeai.step.install_deps)"
@@ -497,17 +481,8 @@ SERVICE
 }
 _write_nginx_site_link() {
   local target="$1" link_path="$2"
-  local link_tmp
-  if ! mkdir -p "$(dirname "$link_path")"; then
+  if ! atomic_symlink "$target" "$link_path"; then
     error "$(t app.cyberstrikeai.error.nginx "$target")"
-  fi
-  if ! link_tmp=$(mktemp "${link_path}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.nginx "$target")"
-  fi
-  rm -f "$link_tmp"
-  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
-    rm -f "$link_tmp"
-    return 1
   fi
 }
 write_nginx_config() {

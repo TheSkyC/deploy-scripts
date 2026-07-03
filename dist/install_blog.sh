@@ -1357,49 +1357,19 @@ BKSH
 
 backup_blog_file() {
   local source_path="$1" backup_path="$2"
-  local backup_tmp
-  if ! backup_tmp=$(mktemp "${backup_path}.XXXXXX"); then
-    return 1
-  fi
-  if ! cp "$source_path" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
-    rm -f "$backup_tmp"
-    return 1
-  fi
+  atomic_copy_file "$source_path" "$backup_path"
 }
 
 _write_nginx_site_link() {
   local target="$1" link_path="$2"
-  local link_tmp
-  if ! mkdir -p "$(dirname "$link_path")"; then
+  if ! atomic_symlink "$target" "$link_path"; then
     error "$(t app.blog.error.nginx_write "$target")"
-  fi
-  if ! link_tmp=$(mktemp "${link_path}.XXXXXX"); then
-    error "$(t app.blog.error.nginx_write "$target")"
-  fi
-  rm -f "$link_tmp"
-  if ! ln -s "$target" "$link_tmp" || ! mv -Tf "$link_tmp" "$link_path"; then
-    rm -f "$link_tmp"
-    return 1
   fi
 }
 
 _write_blog_file() {
   local target_path="$1"
-  local target_dir target_tmp
-  target_dir="$(dirname "$target_path")"
-  if ! mkdir -p "$target_dir"; then
-    error "$(t app.blog.error.file_write "$target_path")"
-  fi
-  if ! target_tmp=$(mktemp "${target_dir}/.$(basename "$target_path").XXXXXX"); then
-    error "$(t app.blog.error.file_write "$target_path")"
-  fi
-  if ! cat > "$target_tmp"; then
-    rm -f "$target_tmp"
-    error "$(t app.blog.error.file_write "$target_path")"
-  fi
-  if ! chmod 644 "$target_tmp" \
-      || ! mv "$target_tmp" "$target_path"; then
-    rm -f "$target_tmp"
+  if ! atomic_write_file "$target_path" 644; then
     error "$(t app.blog.error.file_write "$target_path")"
   fi
 }
