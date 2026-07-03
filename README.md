@@ -65,9 +65,11 @@ Shared framework behavior includes:
 - Menu and action dispatch.
 - Logging helpers.
 - File and path safety helpers.
+- Atomic file writes, symlink replacement, and copy-backed backups.
 - Lock handling.
 - Config file loading and saving.
-- Service wait helpers.
+- Shared binary replacement and rollback helpers.
+- Service wait helpers and systemd unit writes.
 - Connectivity checks.
 - Single-file release bundling.
 
