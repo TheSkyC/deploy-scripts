@@ -130,11 +130,7 @@ _health_check() {
 _write_systemd_unit() {
   local session_secret="$1"
   local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
-  local unit_tmp
-  if ! unit_tmp=$(mktemp "${unit_path}.XXXXXX"); then
-    error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
-  fi
-  if ! cat > "$unit_tmp" << EOF
+  if ! systemd_write_unit "$unit_path" << EOF
 [Unit]
 Description=New API - LLM API Aggregation Gateway
 Documentation=https://github.com/${GITHUB_REPO}
@@ -185,13 +181,6 @@ SyslogIdentifier=${SERVICE_NAME}
 WantedBy=multi-user.target
 EOF
   then
-    rm -f "$unit_tmp"
-    error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
-  fi
-  if ! chmod 644 "$unit_tmp" \
-      || ! chown root:root "$unit_tmp" \
-      || ! mv "$unit_tmp" "$unit_path"; then
-    rm -f "$unit_tmp"
     error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
   fi
 }

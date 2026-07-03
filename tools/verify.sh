@@ -589,6 +589,20 @@ check_binary_helpers_are_atomic() {
     ' lib/binary.sh dist/install_newapi.sh
 }
 
+check_systemd_helper_is_atomic() {
+  awk '
+      /systemd_write_unit\(\)/ { in_func=1; saw_atomic=0; next }
+      in_func && /atomic_write_file "\$unit_path" 644 root:root/ { saw_atomic=1 }
+      in_func && /^}/ {
+        if (!saw_atomic) {
+          printf "%s systemd_write_unit must use atomic_write_file with root ownership\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' lib/service.sh dist/install_newapi.sh
+}
+
 check_service_status_label() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -3128,18 +3142,16 @@ check_systemd_units_are_atomic() {
     return 1
   fi
   awk '
-      /if ! unit_tmp=\$\(mktemp "\$\{?unit_path\}?\.XXXXXX"\); then/ { saw_tmp=1 }
-      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(systemd_unit|systemd)/ { saw_tmp_error=1 }
-      /mv "\$unit_tmp" "\$unit_path"/ { saw_mv=1 }
-      /rm -f "\$unit_tmp"/ { saw_cleanup=1 }
+      /systemd_write_unit "\$unit_path"/ { saw_helper=1 }
+      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden|tickflow)\.error\.(systemd_unit|systemd|service_write)/ { saw_error=1 }
       END {
-        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
-          print "systemd unit writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
+        if (!(saw_helper && saw_error)) {
+          print "systemd unit writes must use systemd_write_unit and report write failures." > "/dev/stderr"
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_tickflow.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_tickflow.sh
 }
 
 check_systemd_daemon_reloads_are_explicit() {
@@ -5186,6 +5198,7 @@ main() {
   check_safe_rm_dir_is_idempotent
   check_atomic_helpers_are_atomic
   check_binary_helpers_are_atomic
+  check_systemd_helper_is_atomic
   check_service_status_label
   check_config_crlf_handling
   check_config_write_failure_cleanup

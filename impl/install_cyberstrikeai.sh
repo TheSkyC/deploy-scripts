@@ -428,11 +428,7 @@ write_systemd_unit() {
   local https_env="false"
   _bool_true "$CSAI_HTTPS" && https_env="true"
   local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
-  local unit_tmp
-  if ! unit_tmp=$(mktemp "${unit_path}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
-  fi
-  if ! cat > "$unit_tmp" <<SERVICE
+  if ! systemd_write_unit "$unit_path" <<SERVICE
 [Unit]
 Description=CyberStrikeAI
 After=network-online.target
@@ -462,13 +458,6 @@ StandardError=journal
 WantedBy=multi-user.target
 SERVICE
   then
-    rm -f "$unit_tmp"
-    error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
-  fi
-  if ! chmod 644 "$unit_tmp" \
-      || ! chown root:root "$unit_tmp" \
-      || ! mv "$unit_tmp" "$unit_path"; then
-    rm -f "$unit_tmp"
     error "$(t app.cyberstrikeai.error.systemd "$unit_path")"
   fi
   if ! systemctl daemon-reload; then

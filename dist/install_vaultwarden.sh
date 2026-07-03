@@ -466,6 +466,11 @@ wait_for_service() {
   return 1
 }
 
+systemd_write_unit() {
+  local unit_path="$1"
+  atomic_write_file "$unit_path" 644 root:root
+}
+
 service_status_label() {
   local service_name="$1"
   if systemctl is-active --quiet "$service_name" 2>/dev/null; then
@@ -2235,11 +2240,7 @@ ENV
   success "$(t app.vaultwarden.success.env_file "$VW_ENV_FILE")"
   step "$(t app.vaultwarden.step.systemd)"
   local unit_path="/etc/systemd/system/vaultwarden.service"
-  local unit_tmp
-  if ! unit_tmp=$(mktemp "${unit_path}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.systemd)"
-  fi
-  if ! cat > "$unit_tmp" << UNIT
+  if ! systemd_write_unit "$unit_path" << UNIT
 [Unit]
 Description=Vaultwarden Password Manager (Bitwarden-compatible)
 Documentation=https://github.com/dani-garcia/vaultwarden
@@ -2287,13 +2288,6 @@ SyslogIdentifier=vaultwarden
 WantedBy=multi-user.target
 UNIT
   then
-    rm -f "$unit_tmp"
-    error "$(t app.vaultwarden.error.systemd)"
-  fi
-  if ! chmod 644 "$unit_tmp" \
-      || ! chown root:root "$unit_tmp" \
-      || ! mv "$unit_tmp" "$unit_path"; then
-    rm -f "$unit_tmp"
     error "$(t app.vaultwarden.error.systemd)"
   fi
   if ! systemctl daemon-reload; then

@@ -466,6 +466,11 @@ wait_for_service() {
   return 1
 }
 
+systemd_write_unit() {
+  local unit_path="$1"
+  atomic_write_file "$unit_path" 644 root:root
+}
+
 service_status_label() {
   local service_name="$1"
   if systemctl is-active --quiet "$service_name" 2>/dev/null; then
@@ -1183,17 +1188,13 @@ EOF
 
 _write_systemd_unit() {
   local unit_path="/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service"
-  local unit_tmp
   local compose_cmd
-  if ! unit_tmp=$(mktemp "${unit_path}.XXXXXX"); then
-    error "$(t app.tickflow.error.service_write "$unit_path")"
-  fi
   if docker compose version >/dev/null 2>&1; then
     compose_cmd='docker compose'
   else
     compose_cmd='docker-compose'
   fi
-  cat > "$unit_tmp" <<EOF
+  if ! systemd_write_unit "$unit_path" <<EOF
 [Unit]
 Description=TickFlow Stock Panel
 After=network-online.target docker.service
@@ -1212,9 +1213,7 @@ TimeoutStopSec=120
 [Install]
 WantedBy=multi-user.target
 EOF
-  chmod 644 "$unit_tmp"
-  if ! mv "$unit_tmp" "$unit_path"; then
-    rm -f "$unit_tmp"
+  then
     error "$(t app.tickflow.error.service_write "$unit_path")"
   fi
   systemctl daemon-reload || error "$(t app.tickflow.error.service_reload "$TICKFLOW_SERVICE_NAME")"

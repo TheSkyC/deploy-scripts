@@ -17,6 +17,11 @@ wait_for_service() {
   return 1
 }
 
+systemd_write_unit() {
+  local unit_path="$1"
+  atomic_write_file "$unit_path" 644 root:root
+}
+
 service_status_label() {
   local service_name="$1"
   if systemctl is-active --quiet "$service_name" 2>/dev/null; then
