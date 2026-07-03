@@ -1309,7 +1309,7 @@ exit 0
 __DEPLOY_APP_IMPL_SCRIPT__
 #!/bin/bash
 set -euo pipefail
-BLOG_DOMAIN="blog.tarxf.com"
+BLOG_DOMAIN="blog.example.com"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"
 BLOG_AUTHOR="Abyte"
 BLOG_DESCRIPTION="${BLOG_DESCRIPTION:-$(t app.blog.site_description)}"

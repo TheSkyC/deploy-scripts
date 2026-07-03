@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 umask 077
-DOMAIN="${DOMAIN:-api.tarxf.com}"
+DOMAIN="${DOMAIN:-api.example.com}"
 PORT="${PORT:-8080}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/new-api}"
 DATA_DIR="${DATA_DIR:-/opt/new-api/data}"

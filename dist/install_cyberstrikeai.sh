@@ -1322,7 +1322,7 @@ __DEPLOY_APP_IMPL_SCRIPT__
 set -euo pipefail
 umask 077
 CSAI_DOMAIN="${CSAI_DOMAIN:-}"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8083}"
 PUBLIC_PORT="${PUBLIC_PORT:-80}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/cyberstrike-ai}"
 SERVICE_NAME="${SERVICE_NAME:-cyberstrike-ai}"
