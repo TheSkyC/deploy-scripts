@@ -91,6 +91,9 @@ build_one() {
     echo '# ----- lib/atomic.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/atomic.sh"
     echo
+    echo '# ----- lib/binary.sh -----'
+    emit_without_shebang "${ROOT_DIR}/lib/binary.sh"
+    echo
     echo '# ----- lib/lock.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/lock.sh"
     echo

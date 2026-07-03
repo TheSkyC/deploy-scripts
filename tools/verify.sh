@@ -532,6 +532,63 @@ check_atomic_helpers_are_atomic() {
     ' lib/atomic.sh dist/install_newapi.sh
 }
 
+check_binary_helpers_are_atomic() {
+  awk '
+      /app_binary_restore_moved_backup\(\)/ { in_moved=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_moved && /mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"/ { saw_tmp=1 }
+      in_moved && saw_tmp && /return 1/ { saw_tmp_return=1 }
+      in_moved && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
+      in_moved && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
+      in_moved && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
+      in_moved && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
+      in_moved && /rm -f "\$backup_path"/ { saw_cleanup=1 }
+      in_moved && /^}/ {
+        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+          printf "%s app_binary_restore_moved_backup must stage, restore atomically, and remove moved backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_moved=0
+      }
+      /app_binary_install_candidate\(\)/ { in_install=1; saw_backup=0; saw_mv=0; saw_restore=0; saw_chmod=0; saw_chown=0; saw_cleanup=0; next }
+      in_install && /mv "\$BIN_PATH" "\$backup_path"/ { saw_backup=1 }
+      in_install && /mv "\$tmp_bin" "\$BIN_PATH"/ { saw_mv=1 }
+      in_install && /app_binary_restore_moved_backup "\$backup_path"/ { saw_restore=1 }
+      in_install && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
+      in_install && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_chown=1 }
+      in_install && /rm -f "\$tmp_bin"/ { saw_cleanup=1 }
+      in_install && /^}/ {
+        if (!(saw_backup && saw_mv && saw_restore && saw_chmod && saw_chown && saw_cleanup)) {
+          printf "%s app_binary_install_candidate must back up, replace, restore on failure, and clean up candidates\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+      /app_binary_restore_backup\(\)/ { in_restore=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; next }
+      in_restore && /mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"/ { saw_tmp=1 }
+      in_restore && saw_tmp && /return 1/ { saw_tmp_return=1 }
+      in_restore && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
+      in_restore && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
+      in_restore && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
+      in_restore && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
+      in_restore && /^}/ {
+        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv)) {
+          printf "%s app_binary_restore_backup must stage and atomically restore binary mode and ownership\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_restore=0
+      }
+      /app_binary_backup_current\(\)/ { in_backup=1; saw_atomic=0; next }
+      in_backup && /atomic_copy_file "\$BIN_PATH" "\$backup_path"/ { saw_atomic=1 }
+      in_backup && /^}/ {
+        if (!saw_atomic) {
+          printf "%s app_binary_backup_current must use atomic_copy_file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+    ' lib/binary.sh dist/install_newapi.sh
+}
+
 check_service_status_label() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
@@ -2483,15 +2540,16 @@ check_update_binary_backups_are_atomic() {
     return 1
   fi
   awk '
-      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_error=0; saw_cp=0; saw_mv=0; saw_cleanup=0; saw_atomic=0; next }
+      /_backup_current_binary\(\)|backup_vaultwarden_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_error=0; saw_cp=0; saw_mv=0; saw_cleanup=0; saw_atomic=0; saw_app_helper=0; next }
       in_func && /atomic_copy_file "\$(BIN_PATH|VW_BIN)" "\$backup_path"/ { saw_atomic=1 }
+      in_func && /app_binary_backup_current "\$backup_path"/ { saw_app_helper=1 }
       in_func && /if ! backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
       in_func && /error "\$\(t app\.(newapi|sub2api|vaultwarden)\.error\.binary_install/ { saw_tmp_error=1 }
       in_func && /cp "\$(BIN_PATH|VW_BIN)" "\$backup_tmp"/ { saw_cp=1 }
       in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!((saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup) || (saw_atomic && saw_tmp_error))) {
+        if (!((saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup) || (saw_atomic && saw_tmp_error) || (saw_app_helper && saw_tmp_error))) {
           printf "%s binary backup helper must report temp creation failures, stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -2844,7 +2902,19 @@ check_binary_replacements_handle_failure() {
     return 1
   fi
   awk '
-      /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      /_install_binary_candidate\(\)/ { in_func=1; saw_helper=0; next }
+      in_func && /app_binary_install_candidate "\$@"/ { saw_helper=1 }
+      in_func && /^}/ {
+        if (!saw_helper) {
+          printf "%s install binary wrapper must call app_binary_install_candidate\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+  awk '
+      /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; saw_app_helper=0; next }
+      in_func && /app_binary_restore_moved_backup "\$1"/ { saw_app_helper=1 }
       in_func && /if ! restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\); then/ { saw_tmp=1 }
       in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_func && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
@@ -2853,7 +2923,7 @@ check_binary_replacements_handle_failure() {
       in_func && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_path"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+        if (!((saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup) || saw_app_helper)) {
           printf "%s moved binary backup restores must stage, restore atomically, and clean up the moved backup\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -2874,7 +2944,8 @@ check_binary_restores_validate_permissions() {
     return 1
   fi
   awk '
-      /_restore_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; next }
+      /_restore_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_app_helper=0; next }
+      in_func && /app_binary_restore_backup "\$1"/ { saw_app_helper=1 }
       in_func && /if ! restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\); then/ { saw_tmp=1 }
       in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
       in_func && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
@@ -2882,7 +2953,7 @@ check_binary_restores_validate_permissions() {
       in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
       in_func && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv)) {
+        if (!((saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv) || saw_app_helper)) {
           printf "%s restore helper must stage and atomically restore binary mode and ownership\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -5114,6 +5185,7 @@ main() {
   check_tickflow_paths_are_guarded
   check_safe_rm_dir_is_idempotent
   check_atomic_helpers_are_atomic
+  check_binary_helpers_are_atomic
   check_service_status_label
   check_config_crlf_handling
   check_config_write_failure_cleanup
