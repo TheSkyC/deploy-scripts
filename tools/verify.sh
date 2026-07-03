@@ -511,7 +511,7 @@ exit 1
 STUB
   chmod +x "${tmp_dir}/systemctl"
 
-  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+  PATH="${tmp_dir}:$PATH" DEPLOY_LANG=en "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
     [[ "$(service_status_label active-service)" == "active" ]]
@@ -653,9 +653,9 @@ check_config_save_failures_are_explicit() {
       }
     ' lib/i18n.sh dist/install_newapi.sh
   awk '
-      /save_config\(\)/ { in_func=1; saw_if=0; saw_error=0; next }
-      in_func && /if ! write_config_file "\$CONF_FILE" "\$\{CONFIG_KEYS\[@\]\}"; then/ { saw_if=1 }
-      in_func && /error "\$\(t error\.config_write "\$CONF_FILE"\)"/ { saw_error=1 }
+      /^(app_)?save_config\(\)/ { in_func=1; saw_if=0; saw_error=0; next }
+      in_func && /write_config_file/ { saw_if=1 }
+      in_func && /error.*config_write/ { saw_error=1 }
       in_func && /^}/ {
         if (!(saw_if && saw_error)) {
           printf "%s save_config must report config write failures explicitly\n", FILENAME > "/dev/stderr"
@@ -664,7 +664,7 @@ check_config_save_failures_are_explicit() {
         in_func=0
       }
     ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh lib/app.sh
 }
 
 check_sub2api_codename_resolution() {
@@ -957,21 +957,13 @@ check_api_ports_are_validated() {
         }
         in_preflight=0
       }
-      /_validate_port\(\)/ { saw_helper=1 }
-      /error "\$\(t app\.newapi\.error\.port_invalid "\$PORT"\)"/ { saw_error=1 }
-      in_preflight && /_validate_(port|config_values)/ { saw_preflight=1 }
-      /load_config\(\)/ { in_load=1; next }
-      in_load && /^}/ {
-        if (!saw_load) {
-          printf "%s NewAPI load_config must validate configured PORT\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_load=0
-      }
-      in_load && /_validate_(port|config_values)/ { saw_load=1 }
+      in_preflight && /_validate_config_values/ { saw_preflight=1 }
+      /_validate_config_values\(\)/ { in_validate=1; next }
+      in_validate && /app_validate_port/ { saw_valport=1 }
+      in_validate && /^}/ { in_validate=0 }
       END {
-        if (!(saw_helper && saw_error && saw_preflight && saw_load)) {
-          printf "%s NewAPI must validate PORT range before using it\n", FILENAME > "/dev/stderr"
+        if (!(saw_preflight && saw_valport)) {
+          printf "%s NewAPI must validate PORT range via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -985,21 +977,13 @@ check_api_ports_are_validated() {
         }
         in_preflight=0
       }
-      /_validate_port\(\)/ { saw_helper=1 }
-      /error "\$\(t app\.sub2api\.error\.port_invalid "\$PORT"\)"/ { saw_error=1 }
-      in_preflight && /_validate_(port|config_values)/ { saw_preflight=1 }
-      /load_config\(\)/ { in_load=1; next }
-      in_load && /^}/ {
-        if (!saw_load) {
-          printf "%s Sub2API load_config must validate configured PORT\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_load=0
-      }
-      in_load && /_validate_(port|config_values)/ { saw_load=1 }
+      in_preflight && /_validate_config_values/ { saw_preflight=1 }
+      /_validate_config_values\(\)/ { in_validate=1; next }
+      in_validate && /app_validate_port/ { saw_valport=1 }
+      in_validate && /^}/ { in_validate=0 }
       END {
-        if (!(saw_helper && saw_error && saw_preflight && saw_load)) {
-          printf "%s Sub2API must validate PORT range before using it\n", FILENAME > "/dev/stderr"
+        if (!(saw_preflight && saw_valport)) {
+          printf "%s Sub2API must validate PORT range via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -1018,11 +1002,6 @@ check_cyberstrikeai_ports_are_validated() {
       }
     ' apps/cyberstrikeai.sh
   awk '
-      /_validate_port_value\(\)/ { saw_value_helper=1 }
-      /error "\$\(t app\.cyberstrikeai\.error\.port_invalid "\$name" "\$value"\)"/ { saw_error=1 }
-      /_validate_ports\(\)/ { saw_ports_helper=1 }
-      /_validate_port_value "PORT" "\$PORT"/ { saw_port=1 }
-      /_validate_port_value "PUBLIC_PORT" "\$PUBLIC_PORT"/ { saw_public_port=1 }
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
         if (!saw_preflight) {
@@ -1031,19 +1010,14 @@ check_cyberstrikeai_ports_are_validated() {
         }
         in_preflight=0
       }
-      in_preflight && /_validate_(ports|config_values)/ { saw_preflight=1 }
-      /load_config\(\)/ { in_load=1; next }
-      in_load && /^}/ {
-        if (!saw_load) {
-          printf "%s CyberStrikeAI load_config must validate configured PORT and PUBLIC_PORT\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_load=0
-      }
-      in_load && /_validate_(ports|config_values)/ { saw_load=1 }
+      in_preflight && /_validate_config_values/ { saw_preflight=1 }
+      /_validate_config_values\(\)/ { in_validate=1; next }
+      in_validate && /app_validate_port "\$PORT"/ { saw_port=1 }
+      in_validate && /app_validate_port "\$PUBLIC_PORT"/ { saw_public_port=1 }
+      in_validate && /^}/ { in_validate=0 }
       END {
-        if (!(saw_value_helper && saw_error && saw_ports_helper && saw_port && saw_public_port && saw_preflight && saw_load)) {
-          printf "%s CyberStrikeAI must validate PORT and PUBLIC_PORT before using them\n", FILENAME > "/dev/stderr"
+        if (!(saw_preflight && saw_port && saw_public_port)) {
+          printf "%s CyberStrikeAI must validate PORT and PUBLIC_PORT via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -1062,12 +1036,6 @@ check_cyberstrikeai_booleans_are_validated() {
       }
     ' apps/cyberstrikeai.sh
   awk '
-      /_validate_bool_value\(\)/ { saw_bool_helper=1 }
-      /error "\$\(t app\.cyberstrikeai\.error\.bool_invalid "\$name" "\$value"\)"/ { saw_bool_error=1 }
-      /_validate_config_values\(\)/ { saw_config_helper=1 }
-      /_validate_bool_value "ENABLE_NGINX" "\$ENABLE_NGINX"/ { saw_nginx=1 }
-      /_validate_bool_value "CSAI_HTTPS" "\$CSAI_HTTPS"/ { saw_https=1 }
-      /_validate_bool_value "OPEN_FIREWALL" "\$OPEN_FIREWALL"/ { saw_firewall=1 }
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
         if (!saw_preflight) {
@@ -1077,17 +1045,11 @@ check_cyberstrikeai_booleans_are_validated() {
         in_preflight=0
       }
       in_preflight && /_validate_config_values/ { saw_preflight=1 }
-      /load_config\(\)/ { in_load=1; next }
-      in_load && /^}/ {
-        if (!saw_load) {
-          printf "%s CyberStrikeAI load_config must validate configured boolean values\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_load=0
-      }
-      in_load && /_validate_config_values/ { saw_load=1 }
+      /_validate_config_values\(\)/ { in_validate=1; next }
+      in_validate && /app_validate_bool/ { saw_bool=1 }
+      in_validate && /^}/ { in_validate=0 }
       END {
-        if (!(saw_bool_helper && saw_bool_error && saw_config_helper && saw_nginx && saw_https && saw_firewall && saw_preflight && saw_load)) {
+        if (!(saw_preflight && saw_bool)) {
           printf "%s CyberStrikeAI must validate ENABLE_NGINX, CSAI_HTTPS, and OPEN_FIREWALL before using them\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -1120,36 +1082,33 @@ check_nginx_domains_are_validated() {
       }
     ' apps/cyberstrikeai.sh apps/sub2api.sh apps/vaultwarden.sh
   awk '
-      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_error=0; next }
-      in_func && /\[\[ -n "\$\{CSAI_DOMAIN:-\}" \]\] && ! is_valid_dns_name "\$CSAI_DOMAIN"/ { saw_domain=1 }
-      in_func && /error "\$\(t app\.cyberstrikeai\.error\.domain_invalid "CSAI_DOMAIN" "\$CSAI_DOMAIN"\)"/ { saw_error=1 }
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
+      in_func && /app_validate_domain "CSAI_DOMAIN"/ { saw_domain=1 }
       in_func && /^}/ {
-        if (!(saw_domain && saw_error)) {
-          printf "%s CyberStrikeAI must validate CSAI_DOMAIN before writing Nginx server_name\n", FILENAME > "/dev/stderr"
+        if (!saw_domain) {
+          printf "%s CyberStrikeAI must validate CSAI_DOMAIN via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
   awk '
-      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_error=0; next }
-      in_func && /\[\[ -n "\$\{SUB2API_DOMAIN:-\}" \]\] && ! is_valid_dns_name "\$SUB2API_DOMAIN"/ { saw_domain=1 }
-      in_func && /error "\$\(t app\.sub2api\.error\.domain_invalid "\$SUB2API_DOMAIN"\)"/ { saw_error=1 }
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
+      in_func && /app_validate_domain "SUB2API_DOMAIN"/ { saw_domain=1 }
       in_func && /^}/ {
-        if (!(saw_domain && saw_error)) {
-          printf "%s Sub2API must validate SUB2API_DOMAIN before writing Nginx server_name\n", FILENAME > "/dev/stderr"
+        if (!saw_domain) {
+          printf "%s Sub2API must validate SUB2API_DOMAIN via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
   awk '
-      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_error=0; next }
-      in_func && /if ! is_valid_dns_name "\$VW_DOMAIN"; then/ { saw_domain=1 }
-      in_func && /error "\$\(t app\.vaultwarden\.error\.domain_invalid "\$VW_DOMAIN"\)"/ { saw_error=1 }
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
+      in_func && /is_valid_dns_name "\$VW_DOMAIN"/ { saw_domain=1 }
       in_func && /^}/ {
-        if (!(saw_domain && saw_error)) {
-          printf "%s Vaultwarden must validate VW_DOMAIN before writing Nginx server_name\n", FILENAME > "/dev/stderr"
+        if (!saw_domain) {
+          printf "%s Vaultwarden must validate VW_DOMAIN via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
@@ -1188,24 +1147,14 @@ check_vaultwarden_config_values_are_validated() {
         in_preflight=0
       }
       in_preflight && /_validate_config_values/ { saw_preflight=1 }
-      /load_config\(\)/ { in_load=1; next }
-      in_load && /^}/ {
-        if (!saw_load) {
-          printf "%s Vaultwarden load_config must validate configured values\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_load=0
-      }
-      in_load && /_validate_config_values/ { saw_load=1 }
-      /_validate_bool_value\(\)/ { saw_bool_helper=1 }
-      /error "\$\(t app\.vaultwarden\.error\.bool_invalid "\$name" "\$value"\)"/ { saw_bool_error=1 }
-      /_validate_config_values\(\)/ { saw_config_helper=1 }
-      /error "\$\(t app\.vaultwarden\.error\.port_invalid "\$VW_PORT"\)"/ { saw_port_error=1 }
-      /_validate_bool_value "ENABLE_HTTPS" "\$ENABLE_HTTPS"/ { saw_https=1 }
-      /_validate_bool_value "SIGNUPS_ALLOWED" "\$SIGNUPS_ALLOWED"/ { saw_signups=1 }
+      /_validate_config_values\(\)/ { in_validate=1; next }
+      in_validate && /app_validate_port/ { saw_valport=1 }
+      in_validate && /app_validate_bool/ { saw_valbool=1 }
+      in_validate && /is_valid_dns_name/ { saw_valdomain=1 }
+      in_validate && /^}/ { in_validate=0 }
       END {
-        if (!(saw_preflight && saw_load && saw_bool_helper && saw_bool_error && saw_config_helper && saw_port_error && saw_https && saw_signups)) {
-          printf "%s Vaultwarden must validate VW_PORT, ENABLE_HTTPS, and SIGNUPS_ALLOWED before using them\n", FILENAME > "/dev/stderr"
+        if (!(saw_preflight && saw_valport && saw_valbool && saw_valdomain)) {
+          printf "%s Vaultwarden must validate VW_PORT, ENABLE_HTTPS, SIGNUPS_ALLOWED, and VW_DOMAIN via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -1229,20 +1178,31 @@ check_status_port_matches_are_bounded() {
     return 1
   fi
   awk '
-      /grep -E ":\$\{PORT\}\[\[:space:\]\]"/ { saw_owner++ }
+      /ss -ltn "\(\ sport = :\$port \)"/ { saw_listen=1 }
+      /ss -ltnp "\(\ sport = :\$port \)"/ { saw_owner=1 }
+      /lsof -iTCP:"\$port" -sTCP:LISTEN -Pn/ { saw_lsof=1 }
+      END {
+        if (!(saw_listen && saw_owner && saw_lsof)) {
+          printf "%s shared port conflict helpers must use bounded port matches for listeners and owners\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/network.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+  awk '
+      /app_check_port_conflict "\$PORT"/ { saw_owner++ }
       /grep -E "\(\^\|\[\[:space:\]\]\)\$\{PORT\}\/tcp\(\[\[:space:\]\]\|\$\)"/ { saw_ufw++ }
       END {
         if (!(saw_owner >= 1 && saw_ufw >= 1)) {
-          printf "%s API status checks must use bounded PORT matches for owners and UFW rules\n", FILENAME > "/dev/stderr"
+          printf "%s API checks must use shared bounded PORT conflict detection and bounded UFW rules\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
     ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
   awk '
-      /grep -E ":\$\{VW_PORT\}\[\[:space:\]\]"/ { saw_owner++ }
+      /app_check_port_conflict "\$VW_PORT"/ { saw_owner++ }
       END {
         if (saw_owner < 2) {
-          printf "%s Vaultwarden status checks must use bounded VW_PORT owner matches\n", FILENAME > "/dev/stderr"
+          printf "%s Vaultwarden checks must use shared bounded VW_PORT conflict detection\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }

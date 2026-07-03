@@ -15,14 +15,18 @@ TICKFLOW_PORT="${TICKFLOW_PORT:-3018}"
 TICKFLOW_LOG_DIR="${TICKFLOW_LOG_DIR:-${TICKFLOW_INSTALL_DIR}/logs}"
 TICKFLOW_AUTH_PASSWORD="${TICKFLOW_AUTH_PASSWORD:-}"
 TICKFLOW_BACKEND_EXTRAS="${TICKFLOW_BACKEND_EXTRAS:-}"
-CONF_FILE="/etc/tickflow-deploy.conf"
-LOCK_FILE="/var/lock/tickflow-deploy.lock"
+
 CONFIG_KEYS=(
   TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_INSTALL_DIR
   TICKFLOW_DATA_DIR TICKFLOW_ENV_FILE TICKFLOW_COMPOSE_FILE TICKFLOW_TIERS_FILE
   TICKFLOW_SERVICE_NAME TICKFLOW_PORT TICKFLOW_LOG_DIR TICKFLOW_AUTH_PASSWORD
   TICKFLOW_BACKEND_EXTRAS
 )
+
+# Backward-compat: check for old-style config path.
+app_conf_register_legacy "/etc/tickflow-deploy.conf"
+CONF_FILE="$(app_conf_file)"
+LOCK_FILE="$(app_lock_file)"
 
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -42,27 +46,9 @@ check_connectivity() {
   error "$(t app.tickflow.error.repo_unreachable)"
 }
 
-save_config() {
-  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
-    error "$(t error.config_write "$CONF_FILE")"
-  fi
-  success "$(t config.saved "$CONF_FILE")"
-}
-
-load_config() {
-  [[ -f "$CONF_FILE" ]] || return 0
-  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
-  _validate_config_values
-  success "$(t config.loaded "$CONF_FILE")"
-}
-
 _validate_config_values() {
-  if ! [[ "$TICKFLOW_PORT" =~ ^[0-9]+$ ]] || [[ "$TICKFLOW_PORT" -lt 1 || "$TICKFLOW_PORT" -gt 65535 ]]; then
-    error "$(t app.tickflow.error.port_invalid "$TICKFLOW_PORT")"
-  fi
-  if [[ -n "$TICKFLOW_DOMAIN" ]] && ! is_valid_dns_name "$TICKFLOW_DOMAIN"; then
-    error "$(t app.tickflow.error.domain_invalid "$TICKFLOW_DOMAIN")"
-  fi
+  app_validate_port "$TICKFLOW_PORT" "TICKFLOW_PORT"
+  app_validate_domain "TICKFLOW_DOMAIN" "$TICKFLOW_DOMAIN"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
     warn "$(t app.tickflow.warn.auth_password_short)"
   fi
@@ -333,6 +319,7 @@ do_install() {
   step "$(t app.tickflow.step.systemd)"
   _write_systemd_unit
   step "$(t app.tickflow.step.start)"
+  app_check_port_conflict "$TICKFLOW_PORT" "TICKFLOW_PORT"
   systemctl enable "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl start "$TICKFLOW_SERVICE_NAME" || error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
   success "$(t app.tickflow.success.started)"
@@ -340,7 +327,7 @@ do_install() {
   if ! _health_check; then
     state="pending"
   fi
-  save_config
+  app_save_config
   _print_summary "$state"
   release_lock
 }
@@ -349,7 +336,7 @@ do_update() {
   show_banner
   preflight_check "update"
   acquire_lock
-  load_config
+  app_load_config
   _require_compose_runtime
   step "$(t app.tickflow.step.fetch_source)"
   _clone_or_update_repo
@@ -358,12 +345,13 @@ do_update() {
   _write_env_file
   _write_compose_file
   step "$(t app.tickflow.step.start)"
+  app_check_port_conflict "$TICKFLOW_PORT" "TICKFLOW_PORT"
   systemctl restart "$TICKFLOW_SERVICE_NAME" || error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
   local state="ready"
   if ! _health_check; then
     state="pending"
   fi
-  save_config
+  app_save_config
   _print_summary "$state"
   release_lock
 }
@@ -371,7 +359,7 @@ do_update() {
 do_backup() {
   show_banner
   preflight_check "backup"
-  load_config
+  app_load_config
   local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
   mkdir -p "$backup_dir"
   local archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
@@ -383,7 +371,7 @@ do_backup() {
 do_status() {
   show_banner
   preflight_check "status"
-  load_config
+  app_load_config
   echo -e "\n${BOLD}[${TICKFLOW_SERVICE_NAME}]${NC}"
   systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager || true
   echo ""
@@ -392,7 +380,7 @@ do_status() {
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
-  load_config
+  app_load_config
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl disable "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1 || true

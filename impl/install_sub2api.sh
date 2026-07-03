@@ -1,28 +1,33 @@
 #!/bin/bash
 set -euo pipefail
 umask 077
-PORT=8082
-INSTALL_DIR="/opt/sub2api"
-DATA_DIR="/opt/sub2api/data"
-LOG_DIR="/opt/sub2api/logs"
-CONFIG_DIR="/etc/sub2api"
-SERVICE_NAME="sub2api"
-SERVICE_USER="sub2api"
-GITHUB_REPO="Wei-Shaw/sub2api"
-BACKUP_DIR="/opt/sub2api-backups"
-BACKUP_KEEP_DAYS=30
-SUB2API_DOMAIN=""
-PG_USER="sub2api"
-PG_PASS=""
-PG_DB="sub2api"
-PG_DSN=""
+PORT="${PORT:-8082}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/sub2api}"
+DATA_DIR="${DATA_DIR:-/opt/sub2api/data}"
+LOG_DIR="${LOG_DIR:-/opt/sub2api/logs}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/sub2api}"
+SERVICE_NAME="${SERVICE_NAME:-sub2api}"
+SERVICE_USER="${SERVICE_USER:-sub2api}"
+GITHUB_REPO="${GITHUB_REPO:-Wei-Shaw/sub2api}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/sub2api-backups}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+SUB2API_DOMAIN="${SUB2API_DOMAIN:-}"
+PG_USER="${PG_USER:-sub2api}"
+PG_PASS="${PG_PASS:-}"
+PG_DB="${PG_DB:-sub2api}"
+PG_DSN="${PG_DSN:-}"
 BIN_PATH="${INSTALL_DIR}/sub2api"
-CONF_FILE="/etc/sub2api-deploy.conf"
 CONFIG_KEYS=(
   PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
   SUB2API_DOMAIN INSTALLED_VERSION
 )
+_SUB2API_DERIVE_PATHS() {
+  BIN_PATH="${INSTALL_DIR}/sub2api"
+}
+app_conf_register_legacy "/etc/sub2api-deploy.conf"
+CONF_FILE="$(app_conf_file)"
+LOCK_FILE="$(app_lock_file)"
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   if command -v apt-get &>/dev/null; then
@@ -42,7 +47,7 @@ preflight_check() {
   esac
   _validate_config_values
 }
-LOCK_FILE="/var/lock/sub2api-deploy.lock"
+
 check_connectivity() {
   check_connectivity_urls \
     "https://api.github.com" \
@@ -50,6 +55,7 @@ check_connectivity() {
     "https://objects.githubusercontent.com" && return 0
   error "$(t app.sub2api.error.github_unreachable)"
 }
+_APT_CODENAME_OK=false
 _apt_codename() {
   local codename=""
   if command -v lsb_release &>/dev/null; then
@@ -63,29 +69,9 @@ _apt_codename() {
   [[ -n "$codename" ]] || error "$(t app.sub2api.error.os_codename)"
   printf '%s\n' "$codename"
 }
-save_config() {
-  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
-    error "$(t error.config_write "$CONF_FILE")"
-  fi
-  success "$(t config.saved "$CONF_FILE")"
-}
-_validate_port() {
-  if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
-    error "$(t app.sub2api.error.port_invalid "$PORT")"
-  fi
-}
 _validate_config_values() {
-  _validate_port
-  if [[ -n "${SUB2API_DOMAIN:-}" ]] && ! is_valid_dns_name "$SUB2API_DOMAIN"; then
-    error "$(t app.sub2api.error.domain_invalid "$SUB2API_DOMAIN")"
-  fi
-}
-load_config() {
-  [[ -f "$CONF_FILE" ]] || return 0
-  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
-  BIN_PATH="${INSTALL_DIR}/sub2api"
-  _validate_config_values
-  success "$(t config.loaded "$CONF_FILE")"
+  app_validate_port "$PORT" "PORT"
+  app_validate_domain "SUB2API_DOMAIN" "$SUB2API_DOMAIN"
 }
 get_latest_release() {
   local json tag
@@ -1168,7 +1154,7 @@ do_install() {
   _install_postgres
   step "$(t app.sub2api.step.redis)"
   _install_redis
-  load_config
+  app_load_config _SUB2API_DERIVE_PATHS
   step "$(t app.sub2api.step.pg_account)"
   _setup_postgres
   step "$(t app.sub2api.step.user_dirs)"
@@ -1245,12 +1231,7 @@ do_install() {
   success "$(t app.sub2api.success.cron_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.sub2api.step.start_service)"
   local _install_summary_state="ready"
-  if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
-    local _port_owner
-    _port_owner=$(ss -ltnp 2>/dev/null | grep -E ":${PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.sub2api.status.unknown_process)
-    warn "$(t app.sub2api.warn.port_used "$PORT" "$_port_owner")"
-    warn "$(t app.sub2api.warn.port_hint)"
-  fi
+  app_check_port_conflict "$PORT"
   if ! systemctl daemon-reload; then
     error "$(t app.sub2api.error.systemd_reload "$SERVICE_NAME")"
   fi
@@ -1282,7 +1263,7 @@ do_install() {
   fi
   step "$(t app.sub2api.step.health_save)"
   INSTALLED_VERSION="$LATEST"
-  save_config
+  app_save_config
   if ! _health_check; then
     _install_summary_state="pending"
   fi
@@ -1291,7 +1272,7 @@ do_install() {
 do_update() {
   show_banner
   preflight_check "update"
-  load_config
+  app_load_config _SUB2API_DERIVE_PATHS
   acquire_lock
   [[ ! -x "$BIN_PATH" ]] \
     && error "$(t app.sub2api.error.binary_missing_install "$BIN_PATH")"
@@ -1353,7 +1334,7 @@ do_update() {
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.new_version_started)"
     INSTALLED_VERSION="$LATEST"
-    save_config
+    app_save_config
     local -a _old_baks
     mapfile -t _old_baks < <(
       find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*" -type f \
@@ -1401,7 +1382,7 @@ do_update() {
 do_backup() {
   show_banner
   preflight_check "backup"
-  load_config
+  app_load_config _SUB2API_DERIVE_PATHS
   acquire_lock
   step "$(t app.sub2api.step.manual_backup)"
   if ! mkdir -p "$BACKUP_DIR"; then
@@ -1475,7 +1456,7 @@ do_backup() {
 do_status() {
   show_banner
   preflight_check "status"
-  load_config
+  app_load_config _SUB2API_DERIVE_PATHS
   step "$(t app.sub2api.step.status)"
   echo -e "\n${BOLD}[$(t app.sub2api.status.systemd)]${NC}"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
@@ -1623,7 +1604,7 @@ do_status() {
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
-  load_config
+  app_load_config _SUB2API_DERIVE_PATHS
   acquire_lock
   [[ -z "${INSTALL_DIR:-}" ]] && error "$(t app.sub2api.error.install_dir_empty "$CONF_FILE")"
   [[ -z "${DATA_DIR:-}"    ]] && error "$(t app.sub2api.error.data_dir_empty)"

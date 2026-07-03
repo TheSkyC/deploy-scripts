@@ -65,6 +65,9 @@ __deploy_i18n_message() {
     error.root_required) echo "Please run as root: sudo bash %s %s|请使用 root 权限运行：sudo bash %s %s" ;;
     error.unsupported_action) echo "%s does not support %s yet.|%s 暂不支持 %s。" ;;
     error.unsafe_path) echo "Unsafe path for %s: %s|%s 的路径不安全：%s" ;;
+    error.port_invalid) echo "%s is invalid: '%s'. Must be a port between 1 and 65535.|%s 无效：'%s'，请输入 1-65535 之间的端口号。" ;;
+    error.bool_invalid) echo "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0.|%s 无效：'%s'，请输入 true/false、yes/no、on/off 或 1/0。" ;;
+    error.domain_invalid) echo "%s is invalid: '%s'. Use a DNS name like app.example.com, or leave it empty.|%s 无效：'%s'，请使用类似 app.example.com 的域名，或留空。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
@@ -77,6 +80,8 @@ __deploy_i18n_message() {
     warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
     warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
+    warn.port_in_use) echo "Port %s is already in use by %s.|端口 %s 已被 %s 占用。" ;;
+    warn.port_release_hint) echo "If this is not the application you are deploying, free the port first or the service will fail to bind.|若非你要部署的应用，请先释放端口，否则服务将无法绑定。" ;;
     *) echo "$key|$key" ;;
   esac
 }

@@ -1,23 +1,29 @@
 #!/bin/bash
 set -euo pipefail
 umask 077
-DOMAIN="api.tarxf.com"
-PORT=8080
-INSTALL_DIR="/opt/new-api"
-DATA_DIR="/opt/new-api/data"
-LOG_DIR="/opt/new-api/logs"
-SERVICE_NAME="new-api"
-SERVICE_USER="newapi"
-GITHUB_REPO="QuantumNous/new-api"
-BACKUP_DIR="/opt/new-api-backups"
-BACKUP_KEEP_DAYS=30
+DOMAIN="${DOMAIN:-api.tarxf.com}"
+PORT="${PORT:-8080}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/new-api}"
+DATA_DIR="${DATA_DIR:-/opt/new-api/data}"
+LOG_DIR="${LOG_DIR:-/opt/new-api/logs}"
+SERVICE_NAME="${SERVICE_NAME:-new-api}"
+SERVICE_USER="${SERVICE_USER:-newapi}"
+GITHUB_REPO="${GITHUB_REPO:-QuantumNous/new-api}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/new-api-backups}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BIN_PATH="${INSTALL_DIR}/new-api"
 LOG_FILE="${LOG_DIR}/new-api.log"
-CONF_FILE="/etc/new-api-deploy.conf"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
 )
+_NEWAPI_DERIVE_PATHS() {
+  BIN_PATH="${INSTALL_DIR}/new-api"
+  LOG_FILE="${LOG_DIR}/new-api.log"
+}
+app_conf_register_legacy "/etc/new-api-deploy.conf"
+CONF_FILE="$(app_conf_file)"
+LOCK_FILE="$(app_lock_file)"
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get &>/dev/null \
@@ -28,34 +34,17 @@ preflight_check() {
     aarch64) BIN_ARCH="arm64" ;;
     *) error "$(t app.newapi.error.arch "$ARCH")" ;;
   esac
-  _validate_port
+  _validate_config_values
 }
-LOCK_FILE="/var/lock/new-api-deploy.lock"
+_validate_config_values() {
+  app_validate_port "$PORT" "PORT"
+}
 check_connectivity() {
   check_connectivity_urls \
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com" && return 0
   error "$(t app.newapi.error.github_unreachable)"
-}
-save_config() {
-  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
-    error "$(t error.config_write "$CONF_FILE")"
-  fi
-  success "$(t config.saved "$CONF_FILE")"
-}
-_validate_port() {
-  if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
-    error "$(t app.newapi.error.port_invalid "$PORT")"
-  fi
-}
-load_config() {
-  [[ -f "$CONF_FILE" ]] || return 0
-  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
-  BIN_PATH="${INSTALL_DIR}/new-api"
-  LOG_FILE="${LOG_DIR}/new-api.log"
-  _validate_port
-  success "$(t config.loaded "$CONF_FILE")"
 }
 get_latest_release() {
   local json tag
@@ -670,12 +659,7 @@ do_install() {
   success "$(t app.newapi.success.cron "$BACKUP_KEEP_DAYS")"
   step "$(t app.newapi.step.start)"
   local _install_summary_state="ready"
-  if ss -ltn 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
-    local _port_owner
-    _port_owner=$(ss -ltnp 2>/dev/null | grep -E ":${PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.newapi.status.unknown_process)
-    warn "$(t app.newapi.warn.port_used "$PORT" "$_port_owner")"
-    warn "$(t app.newapi.warn.port_release)"
-  fi
+  app_check_port_conflict "$PORT"
   if ! systemctl daemon-reload; then
     error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
   fi
@@ -701,7 +685,7 @@ do_install() {
   fi
   step "$(t app.newapi.step.health)"
   INSTALLED_VERSION="$LATEST"
-  save_config
+  app_save_config
   if ! _health_check; then
     _install_summary_state="pending"
   fi
@@ -710,7 +694,7 @@ do_install() {
 do_update() {
   show_banner
   preflight_check "update"
-  load_config
+  app_load_config _NEWAPI_DERIVE_PATHS
   acquire_lock
   [[ ! -x "$BIN_PATH" ]] \
     && error "$(t app.newapi.error.not_installed "$BIN_PATH")"
@@ -772,7 +756,7 @@ do_update() {
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
     success "$(t app.newapi.success.updated_started)"
     INSTALLED_VERSION="$LATEST"
-    save_config
+    app_save_config
     local -a _old_baks
     mapfile -t _old_baks < <(
       find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f \
@@ -820,7 +804,7 @@ do_update() {
 do_backup() {
   show_banner
   preflight_check "backup"
-  load_config
+  app_load_config _NEWAPI_DERIVE_PATHS
   acquire_lock
   [[ ! -d "$DATA_DIR" ]] \
     && error "$(t app.newapi.error.data_missing_install "$DATA_DIR")"
@@ -902,7 +886,7 @@ do_backup() {
 do_status() {
   show_banner
   preflight_check "status"
-  load_config
+  app_load_config _NEWAPI_DERIVE_PATHS
   [[ $EUID -ne 0 ]] && warn "$(t app.newapi.warn.non_root_status "$0")"
   step "$(t app.newapi.step.status)"
   echo -e "\n${BOLD}[$(t app.newapi.status.systemd)]${NC}"
@@ -1003,7 +987,7 @@ do_status() {
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
-  load_config
+  app_load_config _NEWAPI_DERIVE_PATHS
   acquire_lock
   [[ -z "${INSTALL_DIR:-}" ]] && error "$(t app.newapi.error.install_dir_empty "$CONF_FILE")"
   [[ -z "${DATA_DIR:-}"    ]] && error "$(t app.newapi.error.data_dir_empty)"

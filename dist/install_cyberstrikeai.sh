@@ -74,6 +74,9 @@ __deploy_i18n_message() {
     error.root_required) echo "Please run as root: sudo bash %s %s|请使用 root 权限运行：sudo bash %s %s" ;;
     error.unsupported_action) echo "%s does not support %s yet.|%s 暂不支持 %s。" ;;
     error.unsafe_path) echo "Unsafe path for %s: %s|%s 的路径不安全：%s" ;;
+    error.port_invalid) echo "%s is invalid: '%s'. Must be a port between 1 and 65535.|%s 无效：'%s'，请输入 1-65535 之间的端口号。" ;;
+    error.bool_invalid) echo "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0.|%s 无效：'%s'，请输入 true/false、yes/no、on/off 或 1/0。" ;;
+    error.domain_invalid) echo "%s is invalid: '%s'. Use a DNS name like app.example.com, or leave it empty.|%s 无效：'%s'，请使用类似 app.example.com 的域名，或留空。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
@@ -86,6 +89,8 @@ __deploy_i18n_message() {
     warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
     warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
+    warn.port_in_use) echo "Port %s is already in use by %s.|端口 %s 已被 %s 占用。" ;;
+    warn.port_release_hint) echo "If this is not the application you are deploying, free the port first or the service will fail to bind.|若非你要部署的应用，请先释放端口，否则服务将无法绑定。" ;;
     *) echo "$key|$key" ;;
   esac
 }
@@ -343,6 +348,133 @@ is_valid_dns_name() {
   [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1
   [[ "$name" == *.* ]] || return 1
   return 0
+}
+
+# ── Unified port detection ────────────────────────────────────────
+
+# Returns 0 when a process is listening on the given TCP port.
+port_is_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn "( sport = :$port )" 2>/dev/null | tail -n +2 | grep -q .
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -Pn >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
+# Prints the process name (or pid/name from ss) bound to the port.
+# Returns 0 when a process was identified, 1 otherwise.
+port_listening_process() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "( sport = :$port )" 2>/dev/null | awk 'NR>1{
+      n=$NF; gsub(/^.*"/, "", n); gsub(/"$/,"", n); print n; exit
+    }'
+    return 0
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -Pn 2>/dev/null | awk 'NR>1{print $1; exit}'
+    return 0
+  fi
+  return 1
+}
+
+# Warns when a port is already in use.  Does NOT abort — the caller
+# decides whether to proceed.  Pass an optional label for the port
+# (e.g. "Backend port").
+app_check_port_conflict() {
+  local port="$1"
+  local label="${2:-Port $port}"
+  if port_is_listening "$port"; then
+    local owner
+    owner=$(port_listening_process "$port" 2>/dev/null || echo "unknown")
+    warn "$(t warn.port_in_use "$label" "$owner")"
+    warn "$(t warn.port_release_hint)"
+    return 0
+  fi
+  return 1
+}
+
+# ----- lib/app.sh -----
+
+# Validate a port number is in range 1-65535.
+app_validate_port() {
+  local value="$1"
+  local label="${2:-port}"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 || "$value" -gt 65535 ]]; then
+    error "$(t error.port_invalid "$label" "$value")"
+  fi
+}
+
+# Validate a boolean value.
+app_validate_bool() {
+  local name="$1" value="$2"
+  case "${value,,}" in
+    1|0|true|false|yes|no|y|n|on|off) ;;
+    *) error "$(t error.bool_invalid "$name" "$value")" ;;
+  esac
+}
+
+# Validate an optional domain name (empty string is allowed).
+app_validate_domain() {
+  local name="$1" value="$2"
+  if [[ -n "$value" ]] && ! is_valid_dns_name "$value"; then
+    error "$(t error.domain_invalid "$name" "$value")"
+  fi
+}
+
+# Echo the standard deployment config path for the current app.
+app_conf_file() {
+  local standard="/etc/${APP_ID:-app}-deploy.conf"
+  if [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
+    echo "$_APP_CONF_LEGACY"
+  else
+    echo "$standard"
+  fi
+}
+
+# Echo the standard lock file path for the current app.
+app_lock_file() {
+  echo "/var/lock/${APP_ID:-app}-deploy.lock"
+}
+
+# Standard config save — writes CONFIG_KEYS to the app conf file.
+app_save_config() {
+  local conf_file
+  conf_file="$(app_conf_file)"
+  if ! write_config_file "$conf_file" "${CONFIG_KEYS[@]}"; then
+    error "$(t error.config_write "$conf_file")"
+  fi
+  success "$(t config.saved "$conf_file")"
+}
+
+# Standard config load — loads from the app conf file, then calls
+# an optional hook to recompute derived paths, and re-validates if a
+# _validate_config_values function exists.
+# Usage: app_load_config [derive_hook_fn]
+app_load_config() {
+  local conf_file derive_hook
+  conf_file="$(app_conf_file)"
+  derive_hook="${1:-}"
+  [[ -f "$conf_file" ]] || return 0
+  load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  if [[ -n "$derive_hook" ]] && declare -f "$derive_hook" >/dev/null 2>&1; then
+    "$derive_hook"
+  fi
+  if declare -f _validate_config_values >/dev/null 2>&1; then
+    _validate_config_values
+  fi
+  success "$(t config.loaded "$conf_file")"
+}
+
+# Register a legacy config path so app_conf_file() returns it during
+# load when the old file still exists on disk.
+app_conf_register_legacy() {
+  local legacy="$1"
+  if [[ -f "$legacy" ]]; then
+    _APP_CONF_LEGACY="$legacy"
+  fi
 }
 
 # ----- lib/app_loader.sh -----
@@ -1054,8 +1186,6 @@ BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
 CONFIG_FILE="${INSTALL_DIR}/config.yaml"
 VENV_DIR="${INSTALL_DIR}/venv"
 LOG_DIR="${INSTALL_DIR}/logs"
-LOCK_FILE="/var/lock/cyberstrike-ai-deploy.lock"
-CONF_FILE="/etc/cyberstrike-ai-deploy.conf"
 NGINX_CONF="/etc/nginx/sites-available/cyberstrike-ai"
 NGINX_LINK="/etc/nginx/sites-enabled/cyberstrike-ai"
 BACKUP_SCRIPT="/usr/local/bin/cyberstrike-ai-backup"
@@ -1066,52 +1196,28 @@ CONFIG_KEYS=(
   GITHUB_REPO GITHUB_BRANCH BACKUP_DIR BACKUP_KEEP_DAYS ENABLE_NGINX
   CSAI_HTTPS OPEN_FIREWALL PIP_INDEX_URL GOPROXY
 )
+_CSAI_DERIVE_PATHS() {
+  BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
+  CONFIG_FILE="${INSTALL_DIR}/config.yaml"
+  VENV_DIR="${INSTALL_DIR}/venv"
+  LOG_DIR="${INSTALL_DIR}/logs"
+}
 _bool_true() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
 }
-_validate_bool_value() {
-  local name="$1" value="$2"
-  case "${value,,}" in
-    1|0|true|false|yes|no|y|n|on|off) ;;
-    *) error "$(t app.cyberstrikeai.error.bool_invalid "$name" "$value")" ;;
-  esac
-}
-save_config() {
-  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
-    error "$(t error.config_write "$CONF_FILE")"
-  fi
-  success "$(t config.saved "$CONF_FILE")"
-}
-_validate_port_value() {
-  local name="$1" value="$2"
-  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 || "$value" -gt 65535 ]]; then
-    error "$(t app.cyberstrikeai.error.port_invalid "$name" "$value")"
-  fi
-}
-_validate_ports() {
-  _validate_port_value "PORT" "$PORT"
-  _validate_port_value "PUBLIC_PORT" "$PUBLIC_PORT"
-}
+app_conf_register_legacy "/etc/cyberstrike-ai-deploy.conf"
+CONF_FILE="$(app_conf_file)"
+LOCK_FILE="$(app_lock_file)"
 _validate_config_values() {
-  _validate_ports
-  if [[ -n "${CSAI_DOMAIN:-}" ]] && ! is_valid_dns_name "$CSAI_DOMAIN"; then
-    error "$(t app.cyberstrikeai.error.domain_invalid "CSAI_DOMAIN" "$CSAI_DOMAIN")"
-  fi
-  _validate_bool_value "ENABLE_NGINX" "$ENABLE_NGINX"
-  _validate_bool_value "CSAI_HTTPS" "$CSAI_HTTPS"
-  _validate_bool_value "OPEN_FIREWALL" "$OPEN_FIREWALL"
-}
-load_config() {
-  [[ ! -f "$CONF_FILE" ]] && return 0
-  load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
-  BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
-  CONFIG_FILE="${INSTALL_DIR}/config.yaml"
-  VENV_DIR="${INSTALL_DIR}/venv"
-  LOG_DIR="${INSTALL_DIR}/logs"
-  _validate_config_values
+  app_validate_port "$PORT" "PORT"
+  app_validate_port "$PUBLIC_PORT" "PUBLIC_PORT"
+  app_validate_domain "CSAI_DOMAIN" "$CSAI_DOMAIN"
+  app_validate_bool "ENABLE_NGINX" "$ENABLE_NGINX"
+  app_validate_bool "CSAI_HTTPS" "$CSAI_HTTPS"
+  app_validate_bool "OPEN_FIREWALL" "$OPEN_FIREWALL"
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -1837,19 +1943,9 @@ CRON
     error "$(t app.cyberstrikeai.error.cron "$CRON_FILE")"
   fi
 }
-check_port_conflict() {
-  local port="$1"
-  if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :$port )" | tail -n +2 | grep -q .; then
-    warn "$(t app.cyberstrikeai.warn.port_in_use "$port")"
-    ss -ltnp "( sport = :$port )" 2>/dev/null | sed 's/^/  /' >&2 || true
-  elif command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$port" -sTCP:LISTEN -Pn >/dev/null 2>&1; then
-    warn "$(t app.cyberstrikeai.warn.port_in_use "$port")"
-    lsof -iTCP:"$port" -sTCP:LISTEN -Pn | sed 's/^/  /' >&2 || true
-  fi
-}
 start_service() {
   step "$(t app.cyberstrikeai.step.start)"
-  check_port_conflict "$PORT"
+  app_check_port_conflict "$PORT"
   if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
     success "$(t app.cyberstrikeai.success.running "$SERVICE_NAME")"
   else
@@ -1938,7 +2034,7 @@ do_install() {
   write_logrotate
   write_backup_script
   open_firewall_ports
-  save_config
+  app_save_config
   start_service
   local _install_summary_state="ready"
   if ! health_check; then
@@ -1950,7 +2046,7 @@ do_install() {
 do_backup() {
   show_banner
   preflight_check "backup"
-  load_config
+  app_load_config _CSAI_DERIVE_PATHS
   acquire_lock
   step "$(t app.cyberstrikeai.step.manual_backup)"
   "$BACKUP_SCRIPT"
@@ -1965,7 +2061,7 @@ do_backup() {
 do_update() {
   show_banner
   preflight_check "update"
-  load_config
+  app_load_config _CSAI_DERIVE_PATHS
   acquire_lock
   check_connectivity
   [[ -d "$INSTALL_DIR/.git" ]] || error "$(t app.cyberstrikeai.error.not_git "$INSTALL_DIR")"
@@ -2039,7 +2135,7 @@ do_update() {
 do_status() {
   show_banner
   preflight_check "status"
-  load_config
+  app_load_config _CSAI_DERIVE_PATHS
   step "$(t app.cyberstrikeai.step.service_status)"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo -e "  ${GREEN}[+]${NC} ${SERVICE_NAME}: $(t app.cyberstrikeai.status.running)"
@@ -2114,7 +2210,7 @@ do_status() {
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
-  load_config
+  app_load_config _CSAI_DERIVE_PATHS
   acquire_lock
   require_safe_path "INSTALL_DIR" "${INSTALL_DIR:-}"
   require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"

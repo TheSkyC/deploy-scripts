@@ -100,6 +100,9 @@ build_one() {
     echo '# ----- lib/network.sh -----'
     emit_without_shebang "${ROOT_DIR}/lib/network.sh"
     echo
+    echo '# ----- lib/app.sh -----'
+    emit_without_shebang "${ROOT_DIR}/lib/app.sh"
+    echo
     echo '# ----- lib/app_loader.sh -----'
     echo "BUNDLED_APP_IMPL_SCRIPT_NAME=\"install_${app}_impl.sh\""
     emit_without_shebang "${ROOT_DIR}/lib/app_loader.sh"

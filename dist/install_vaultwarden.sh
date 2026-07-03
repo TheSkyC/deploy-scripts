@@ -74,6 +74,9 @@ __deploy_i18n_message() {
     error.root_required) echo "Please run as root: sudo bash %s %s|请使用 root 权限运行：sudo bash %s %s" ;;
     error.unsupported_action) echo "%s does not support %s yet.|%s 暂不支持 %s。" ;;
     error.unsafe_path) echo "Unsafe path for %s: %s|%s 的路径不安全：%s" ;;
+    error.port_invalid) echo "%s is invalid: '%s'. Must be a port between 1 and 65535.|%s 无效：'%s'，请输入 1-65535 之间的端口号。" ;;
+    error.bool_invalid) echo "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0.|%s 无效：'%s'，请输入 true/false、yes/no、on/off 或 1/0。" ;;
+    error.domain_invalid) echo "%s is invalid: '%s'. Use a DNS name like app.example.com, or leave it empty.|%s 无效：'%s'，请使用类似 app.example.com 的域名，或留空。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
@@ -86,6 +89,8 @@ __deploy_i18n_message() {
     warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
     warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
+    warn.port_in_use) echo "Port %s is already in use by %s.|端口 %s 已被 %s 占用。" ;;
+    warn.port_release_hint) echo "If this is not the application you are deploying, free the port first or the service will fail to bind.|若非你要部署的应用，请先释放端口，否则服务将无法绑定。" ;;
     *) echo "$key|$key" ;;
   esac
 }
@@ -343,6 +348,133 @@ is_valid_dns_name() {
   [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1
   [[ "$name" == *.* ]] || return 1
   return 0
+}
+
+# ── Unified port detection ────────────────────────────────────────
+
+# Returns 0 when a process is listening on the given TCP port.
+port_is_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn "( sport = :$port )" 2>/dev/null | tail -n +2 | grep -q .
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -Pn >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
+# Prints the process name (or pid/name from ss) bound to the port.
+# Returns 0 when a process was identified, 1 otherwise.
+port_listening_process() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "( sport = :$port )" 2>/dev/null | awk 'NR>1{
+      n=$NF; gsub(/^.*"/, "", n); gsub(/"$/,"", n); print n; exit
+    }'
+    return 0
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -Pn 2>/dev/null | awk 'NR>1{print $1; exit}'
+    return 0
+  fi
+  return 1
+}
+
+# Warns when a port is already in use.  Does NOT abort — the caller
+# decides whether to proceed.  Pass an optional label for the port
+# (e.g. "Backend port").
+app_check_port_conflict() {
+  local port="$1"
+  local label="${2:-Port $port}"
+  if port_is_listening "$port"; then
+    local owner
+    owner=$(port_listening_process "$port" 2>/dev/null || echo "unknown")
+    warn "$(t warn.port_in_use "$label" "$owner")"
+    warn "$(t warn.port_release_hint)"
+    return 0
+  fi
+  return 1
+}
+
+# ----- lib/app.sh -----
+
+# Validate a port number is in range 1-65535.
+app_validate_port() {
+  local value="$1"
+  local label="${2:-port}"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 || "$value" -gt 65535 ]]; then
+    error "$(t error.port_invalid "$label" "$value")"
+  fi
+}
+
+# Validate a boolean value.
+app_validate_bool() {
+  local name="$1" value="$2"
+  case "${value,,}" in
+    1|0|true|false|yes|no|y|n|on|off) ;;
+    *) error "$(t error.bool_invalid "$name" "$value")" ;;
+  esac
+}
+
+# Validate an optional domain name (empty string is allowed).
+app_validate_domain() {
+  local name="$1" value="$2"
+  if [[ -n "$value" ]] && ! is_valid_dns_name "$value"; then
+    error "$(t error.domain_invalid "$name" "$value")"
+  fi
+}
+
+# Echo the standard deployment config path for the current app.
+app_conf_file() {
+  local standard="/etc/${APP_ID:-app}-deploy.conf"
+  if [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
+    echo "$_APP_CONF_LEGACY"
+  else
+    echo "$standard"
+  fi
+}
+
+# Echo the standard lock file path for the current app.
+app_lock_file() {
+  echo "/var/lock/${APP_ID:-app}-deploy.lock"
+}
+
+# Standard config save — writes CONFIG_KEYS to the app conf file.
+app_save_config() {
+  local conf_file
+  conf_file="$(app_conf_file)"
+  if ! write_config_file "$conf_file" "${CONFIG_KEYS[@]}"; then
+    error "$(t error.config_write "$conf_file")"
+  fi
+  success "$(t config.saved "$conf_file")"
+}
+
+# Standard config load — loads from the app conf file, then calls
+# an optional hook to recompute derived paths, and re-validates if a
+# _validate_config_values function exists.
+# Usage: app_load_config [derive_hook_fn]
+app_load_config() {
+  local conf_file derive_hook
+  conf_file="$(app_conf_file)"
+  derive_hook="${1:-}"
+  [[ -f "$conf_file" ]] || return 0
+  load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  if [[ -n "$derive_hook" ]] && declare -f "$derive_hook" >/dev/null 2>&1; then
+    "$derive_hook"
+  fi
+  if declare -f _validate_config_values >/dev/null 2>&1; then
+    _validate_config_values
+  fi
+  success "$(t config.loaded "$conf_file")"
+}
+
+# Register a legacy config path so app_conf_file() returns it during
+# load when the old file still exists on disk.
+app_conf_register_legacy() {
+  local legacy="$1"
+  if [[ -f "$legacy" ]]; then
+    _APP_CONF_LEGACY="$legacy"
+  fi
 }
 
 # ----- lib/app_loader.sh -----
@@ -1397,34 +1529,40 @@ __DEPLOY_APP_IMPL_SCRIPT__
 #!/bin/bash
 set -euo pipefail
 umask 077
-VW_DOMAIN="vault.example.com"
-VW_PORT="8081"
-VW_USER="vaultwarden"
-VW_GROUP="vaultwarden"
-VW_BIN_DIR="/usr/local/bin"
-VW_DATA_DIR="/var/lib/vaultwarden"
-VW_WEB_DIR="/var/lib/vaultwarden/web-vault"
-VW_ENV_FILE="/etc/vaultwarden.env"
-VW_LOG_FILE="/var/log/vaultwarden/vaultwarden.log"
-VW_BACKUP_DIR="/opt/vaultwarden-backups"
-BACKUP_KEEP_DAYS=30
-SIGNUPS_ALLOWED="true"
-ENABLE_HTTPS="true"
-CERTBOT_EMAIL=""
-VW_IMAGE_REPO="vaultwarden/server"
-VW_IMAGE_TAG="latest-alpine"
-WEB_VAULT_VER=""
-EXTRACT_TOOL_COMMIT="main"
-EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/main/docker-image-extract"
-EXTRACT_TOOL_SHA256=""
+VW_DOMAIN="${VW_DOMAIN:-vault.example.com}"
+VW_PORT="${VW_PORT:-8081}"
+VW_USER="${VW_USER:-vaultwarden}"
+VW_GROUP="${VW_GROUP:-vaultwarden}"
+VW_BIN_DIR="${VW_BIN_DIR:-/usr/local/bin}"
+VW_DATA_DIR="${VW_DATA_DIR:-/var/lib/vaultwarden}"
+VW_WEB_DIR="${VW_WEB_DIR:-/var/lib/vaultwarden/web-vault}"
+VW_ENV_FILE="${VW_ENV_FILE:-/etc/vaultwarden.env}"
+VW_LOG_FILE="${VW_LOG_FILE:-/var/log/vaultwarden/vaultwarden.log}"
+VW_BACKUP_DIR="${VW_BACKUP_DIR:-/opt/vaultwarden-backups}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+SIGNUPS_ALLOWED="${SIGNUPS_ALLOWED:-true}"
+ENABLE_HTTPS="${ENABLE_HTTPS:-true}"
+CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
+VW_IMAGE_REPO="${VW_IMAGE_REPO:-vaultwarden/server}"
+VW_IMAGE_TAG="${VW_IMAGE_TAG:-latest-alpine}"
+WEB_VAULT_VER="${WEB_VAULT_VER:-}"
+EXTRACT_TOOL_COMMIT="${EXTRACT_TOOL_COMMIT:-main}"
+EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
+EXTRACT_TOOL_SHA256="${EXTRACT_TOOL_SHA256:-}"
 VW_BIN="${VW_BIN_DIR}/vaultwarden"
-CONF_FILE="/etc/vaultwarden_deploy.conf"
 CONFIG_KEYS=(
   VW_DOMAIN VW_PORT VW_USER VW_GROUP VW_BIN_DIR VW_DATA_DIR VW_WEB_DIR
   VW_ENV_FILE VW_LOG_FILE VW_BACKUP_DIR BACKUP_KEEP_DAYS SIGNUPS_ALLOWED
   ENABLE_HTTPS CERTBOT_EMAIL VW_IMAGE_REPO VW_IMAGE_TAG WEB_VAULT_VER
   EXTRACT_TOOL_COMMIT EXTRACT_TOOL_SHA256
 )
+_VW_DERIVE_PATHS() {
+  VW_BIN="${VW_BIN_DIR}/vaultwarden"
+  EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
+}
+app_conf_register_legacy "/etc/vaultwarden_deploy.conf"
+CONF_FILE="$(app_conf_file)"
+LOCK_FILE="$(app_lock_file)"
 preflight_check() {
   [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "")"
   if ! command -v apt-get &>/dev/null; then
@@ -1439,7 +1577,6 @@ preflight_check() {
   esac
   _validate_config_values
 }
-LOCK_FILE="/var/lock/vaultwarden-deploy.lock"
 check_connectivity() {
   check_connectivity_urls \
     "https://auth.docker.io/token" \
@@ -1447,39 +1584,13 @@ check_connectivity() {
     "https://api.github.com" && return 0
   error "$(t app.vaultwarden.error.registry_unreachable)"
 }
-load_config() {
-  if [[ -f "$CONF_FILE" ]]; then
-    load_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"
-    VW_BIN="${VW_BIN_DIR}/vaultwarden"
-    if [[ "${VW_WEB_DIR}" == */web-vault ]]; then
-      VW_WEB_DIR="${VW_DATA_DIR}/web-vault"
-    fi
-    EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
-    _validate_config_values
-    success "$(t config.loaded "$CONF_FILE")"
-  fi
-}
-save_config() {
-  if ! write_config_file "$CONF_FILE" "${CONFIG_KEYS[@]}"; then
-    error "$(t error.config_write "$CONF_FILE")"
-  fi
-}
-_validate_bool_value() {
-  local name="$1" value="$2"
-  case "${value,,}" in
-    true|false) ;;
-    *) error "$(t app.vaultwarden.error.bool_invalid "$name" "$value")" ;;
-  esac
-}
 _validate_config_values() {
-  if ! [[ "$VW_PORT" =~ ^[0-9]+$ ]] || [[ "$VW_PORT" -lt 1 || "$VW_PORT" -gt 65535 ]]; then
-    error "$(t app.vaultwarden.error.port_invalid "$VW_PORT")"
-  fi
+  app_validate_port "$VW_PORT" "VW_PORT"
   if ! is_valid_dns_name "$VW_DOMAIN"; then
     error "$(t app.vaultwarden.error.domain_invalid "$VW_DOMAIN")"
   fi
-  _validate_bool_value "ENABLE_HTTPS" "$ENABLE_HTTPS"
-  _validate_bool_value "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
+  app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
+  app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed
@@ -2052,12 +2163,7 @@ UNIT
   fi
   success "$(t app.vaultwarden.success.systemd)"
   step "$(t app.vaultwarden.step.start_service)"
-  if ss -ltn 2>/dev/null | grep -qE ":${VW_PORT}[[:space:]]"; then
-    local _port_owner
-    _port_owner=$(ss -ltnp 2>/dev/null | grep -E ":${VW_PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
-    warn "$(t app.vaultwarden.warn.port_used "$VW_PORT" "$_port_owner")"
-    warn "$(t app.vaultwarden.warn.port_hint)"
-  fi
+  app_check_port_conflict "$VW_PORT" "VW_PORT"
   if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
     success "$(t app.vaultwarden.success.service_started)"
     systemctl status vaultwarden --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' || true
@@ -2418,7 +2524,7 @@ LOGR
   fi
   success "$(t app.vaultwarden.success.auto_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.vaultwarden.step.health)"
-  save_config
+  app_save_config
   local _hc_elapsed=0
   local HTTP_CODE
   until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${VW_PORT}/" || echo "000") \
@@ -2502,7 +2608,7 @@ LOGR
 do_update() {
   show_banner
   preflight_check
-  load_config
+  app_load_config _VW_DERIVE_PATHS
   acquire_lock
   check_connectivity
   step "$(t app.vaultwarden.step.update)"
@@ -2587,11 +2693,7 @@ do_update() {
       warn "$(t app.vaultwarden.warn.web_vault_update_version)"
     fi
   fi
-  if ss -ltn 2>/dev/null | grep -qE ":${VW_PORT}[[:space:]]"; then
-    local _port_owner_upd
-    _port_owner_upd=$(ss -ltnp 2>/dev/null | grep -E ":${VW_PORT}[[:space:]]" | awk '{print $NF}' | head -1 || t app.vaultwarden.status.unknown_process)
-    warn "$(t app.vaultwarden.warn.update_port_used "$VW_PORT" "$_port_owner_upd")"
-  fi
+  app_check_port_conflict "$VW_PORT" "VW_PORT"
   if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
     success "$(t app.vaultwarden.success.restart)"
     if [[ "$OLD_VER" != "$NEW_VER" ]]; then
@@ -2664,7 +2766,7 @@ do_update() {
       info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
     fi
   fi
-  save_config
+  app_save_config
 }
 _write_backup_script() {
   local backup_script="/usr/local/bin/vaultwarden-backup"
@@ -2821,7 +2923,7 @@ _backup_silent() {
 do_backup() {
   show_banner
   [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "")"
-  load_config
+  app_load_config _VW_DERIVE_PATHS
   acquire_lock
   step "$(t app.vaultwarden.step.manual_backup)"
   [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
@@ -2857,7 +2959,7 @@ do_backup() {
 do_status() {
   local DB_SIZE CERT_PATH EXPIRY DAYS HTTP_CODE
   show_banner
-  load_config
+  app_load_config _VW_DERIVE_PATHS
   if [[ $EUID -ne 0 ]]; then
     warn "$(t app.vaultwarden.warn.non_root_status)"
     warn "$(t app.vaultwarden.warn.root_status "$0")"
@@ -2935,7 +3037,7 @@ do_status() {
 do_uninstall() {
   show_banner
   preflight_check
-  load_config
+  app_load_config _VW_DERIVE_PATHS
   acquire_lock
   [[ -z "${VW_BIN:-}"        ]] && error "$(t app.vaultwarden.error.bin_empty)"
   [[ -z "${VW_DATA_DIR:-}"   ]] && error "$(t app.vaultwarden.error.data_dir_empty)"
