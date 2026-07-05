@@ -890,9 +890,9 @@ i18n_register_many \
   app.vaultwarden.success.extract_tool_sha \
   "docker-image-extract SHA256 verification passed." \
   "docker-image-extract SHA256 校验通过。" \
-  app.vaultwarden.warn.extract_tool_sha_missing \
-  "EXTRACT_TOOL_SHA256 is not configured; skipping checksum verification. Configure it for production." \
-  "未配置 EXTRACT_TOOL_SHA256，跳过 checksum 校验（建议为生产环境配置此项）。" \
+  app.vaultwarden.error.extract_tool_sha_missing \
+  "EXTRACT_TOOL_SHA256 is not configured. Refusing to execute an unverified docker-image-extract payload." \
+  "未配置 EXTRACT_TOOL_SHA256。拒绝执行未经校验的 docker-image-extract 载荷。" \
   app.vaultwarden.info.extract_image \
   "Extracting %s:%s from the image registry (platform: %s)..." \
   "从镜像仓库提取 %s:%s（平台：%s）..." \
@@ -1729,9 +1729,9 @@ CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 VW_IMAGE_REPO="${VW_IMAGE_REPO:-vaultwarden/server}"
 VW_IMAGE_TAG="${VW_IMAGE_TAG:-latest-alpine}"
 WEB_VAULT_VER="${WEB_VAULT_VER:-}"
-EXTRACT_TOOL_COMMIT="${EXTRACT_TOOL_COMMIT:-main}"
+EXTRACT_TOOL_COMMIT="${EXTRACT_TOOL_COMMIT:-4273b2796da5055e431b4db5efe29a71bba12b45}"
 EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
-EXTRACT_TOOL_SHA256="${EXTRACT_TOOL_SHA256:-}"
+EXTRACT_TOOL_SHA256="${EXTRACT_TOOL_SHA256:-a58f4995f568d66d9908649d4df7fc8c36f72096ca5e01f4c2c4291285125685}"
 VW_BIN="${VW_BIN_DIR}/vaultwarden"
 CONFIG_KEYS=(
   VW_DOMAIN VW_PORT VW_USER VW_GROUP VW_BIN_DIR VW_DATA_DIR VW_WEB_DIR
@@ -1843,16 +1843,15 @@ extract_binary() {
     && error "$(t app.vaultwarden.error.extract_tool_small "$_die_size")"
   grep -q 'registry' "${workdir}/docker-image-extract" \
     || error "$(t app.vaultwarden.error.extract_tool_content)"
-  if [[ -n "${EXTRACT_TOOL_SHA256:-}" ]]; then
-    local _actual_sha256
-    _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}')
-    if [[ "$_actual_sha256" != "$EXTRACT_TOOL_SHA256" ]]; then
-      error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "$_actual_sha256")"
-    fi
-    success "$(t app.vaultwarden.success.extract_tool_sha)"
-  else
-    warn "$(t app.vaultwarden.warn.extract_tool_sha_missing)"
+  if [[ -z "${EXTRACT_TOOL_SHA256:-}" ]]; then
+    error "$(t app.vaultwarden.error.extract_tool_sha_missing)"
   fi
+  local _actual_sha256
+  _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}')
+  if [[ "$_actual_sha256" != "$EXTRACT_TOOL_SHA256" ]]; then
+    error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "$_actual_sha256")"
+  fi
+  success "$(t app.vaultwarden.success.extract_tool_sha)"
   if ! chmod +x "${workdir}/docker-image-extract"; then
     error "$(t app.vaultwarden.error.extract_tool_download)"
   fi

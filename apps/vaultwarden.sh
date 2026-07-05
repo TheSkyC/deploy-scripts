@@ -42,9 +42,9 @@ i18n_register_many \
   app.vaultwarden.success.extract_tool_sha \
   "docker-image-extract SHA256 verification passed." \
   "docker-image-extract SHA256 校验通过。" \
-  app.vaultwarden.warn.extract_tool_sha_missing \
-  "EXTRACT_TOOL_SHA256 is not configured; skipping checksum verification. Configure it for production." \
-  "未配置 EXTRACT_TOOL_SHA256，跳过 checksum 校验（建议为生产环境配置此项）。" \
+  app.vaultwarden.error.extract_tool_sha_missing \
+  "EXTRACT_TOOL_SHA256 is not configured. Refusing to execute an unverified docker-image-extract payload." \
+  "未配置 EXTRACT_TOOL_SHA256。拒绝执行未经校验的 docker-image-extract 载荷。" \
   app.vaultwarden.info.extract_image \
   "Extracting %s:%s from the image registry (platform: %s)..." \
   "从镜像仓库提取 %s:%s（平台：%s）..." \

@@ -3209,6 +3209,31 @@ check_vaultwarden_admin_token_file_is_private() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_extract_tool_is_pinned_and_verified() {
+  if grep -R -n 'EXTRACT_TOOL_COMMIT="\${EXTRACT_TOOL_COMMIT:-main}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden must not default docker-image-extract to a floating branch." >&2
+    return 1
+  fi
+  if grep -R -n 'EXTRACT_TOOL_SHA256="\${EXTRACT_TOOL_SHA256:-}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden must ship a pinned docker-image-extract SHA256 by default." >&2
+    return 1
+  fi
+  awk '
+      /app\.vaultwarden\.error\.extract_tool_sha_missing/ { saw_key=1 }
+      /if \[\[ -z "\$\{EXTRACT_TOOL_SHA256:-\}" \]\]; then/ { saw_empty_guard=1 }
+      /error "\$\(t app\.vaultwarden\.error\.extract_tool_sha_missing\)"/ { saw_empty_error=1 }
+      /_actual_sha256=\$\(sha256sum "\$\{workdir\}\/docker-image-extract" \| awk '\''\{print \$1\}'\''\)/ { saw_hash=1 }
+      /if \[\[ "\$_actual_sha256" != "\$EXTRACT_TOOL_SHA256" \]\]; then/ { saw_compare=1 }
+      /success "\$\(t app\.vaultwarden\.success\.extract_tool_sha\)"/ { saw_success=1 }
+      END {
+        if (!(saw_key && saw_empty_guard && saw_empty_error && saw_hash && saw_compare && saw_success)) {
+          print "Vaultwarden docker-image-extract downloads must be pinned, fail closed without a SHA, and verify before execution." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_newapi_secret_uses_private_env_file() {
   if grep -R -n 'Environment="SESSION_SECRET=' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
     echo "NewAPI must not embed SESSION_SECRET directly in a world-readable systemd unit." >&2
@@ -5378,6 +5403,7 @@ main() {
   check_vaultwarden_env_file_is_atomic
   check_vaultwarden_binary_installs_are_atomic
   check_vaultwarden_admin_token_file_is_private
+  check_vaultwarden_extract_tool_is_pinned_and_verified
   check_newapi_secret_uses_private_env_file
   check_systemd_units_are_atomic
   check_systemd_daemon_reloads_are_explicit
