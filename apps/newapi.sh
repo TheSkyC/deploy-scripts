@@ -261,9 +261,18 @@ i18n_register_many \
   app.newapi.step.secret \
   "Step 5  Generate secure configuration" \
   "Step 5  生成安全配置" \
+  app.newapi.error.secret \
+  "Failed to generate SESSION_SECRET. Check /dev/urandom availability and retry." \
+  "生成 SESSION_SECRET 失败。请检查 /dev/urandom 是否可用后重试。" \
   app.newapi.success.secret \
-  "SESSION_SECRET generated (40 mixed characters)." \
-  "SESSION_SECRET 已随机生成（40 位混合字符）。" \
+  "SESSION_SECRET generated." \
+  "SESSION_SECRET 已生成。" \
+  app.newapi.error.env_file \
+  "Runtime environment file write failed: %s" \
+  "运行时环境文件写入失败：%s" \
+  app.newapi.success.env_file \
+  "Runtime environment file written: %s (mode 600)." \
+  "运行时环境文件已写入：%s（权限 600）。" \
   app.newapi.step.systemd \
   "Step 6  Configure systemd service" \
   "Step 6  配置 systemd 服务" \
@@ -585,6 +594,9 @@ i18n_register_many \
   app.newapi.uninstall.backup_script \
   "backup script (/usr/local/bin/new-api-backup)" \
   "备份脚本（/usr/local/bin/new-api-backup）" \
+  app.newapi.uninstall.env_file \
+  "runtime environment file (%s)" \
+  "运行时环境文件（%s）" \
   app.newapi.uninstall.deploy_config \
   "deployment config (%s)" \
   "部署配置文件（%s）" \
@@ -618,6 +630,9 @@ i18n_register_many \
   app.newapi.success.removed_scheduled \
   "Scheduled job, backup script, and logrotate config removed." \
   "定时任务、备份脚本、日志轮转配置已清除。" \
+  app.newapi.success.removed_env_file \
+  "Runtime environment file removed." \
+  "运行时环境文件已移除。" \
   app.newapi.success.removed_config \
   "Deployment config removed." \
   "部署配置文件已清除。" \

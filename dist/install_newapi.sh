@@ -1109,9 +1109,18 @@ i18n_register_many \
   app.newapi.step.secret \
   "Step 5  Generate secure configuration" \
   "Step 5  生成安全配置" \
+  app.newapi.error.secret \
+  "Failed to generate SESSION_SECRET. Check /dev/urandom availability and retry." \
+  "生成 SESSION_SECRET 失败。请检查 /dev/urandom 是否可用后重试。" \
   app.newapi.success.secret \
-  "SESSION_SECRET generated (40 mixed characters)." \
-  "SESSION_SECRET 已随机生成（40 位混合字符）。" \
+  "SESSION_SECRET generated." \
+  "SESSION_SECRET 已生成。" \
+  app.newapi.error.env_file \
+  "Runtime environment file write failed: %s" \
+  "运行时环境文件写入失败：%s" \
+  app.newapi.success.env_file \
+  "Runtime environment file written: %s (mode 600)." \
+  "运行时环境文件已写入：%s（权限 600）。" \
   app.newapi.step.systemd \
   "Step 6  Configure systemd service" \
   "Step 6  配置 systemd 服务" \
@@ -1433,6 +1442,9 @@ i18n_register_many \
   app.newapi.uninstall.backup_script \
   "backup script (/usr/local/bin/new-api-backup)" \
   "备份脚本（/usr/local/bin/new-api-backup）" \
+  app.newapi.uninstall.env_file \
+  "runtime environment file (%s)" \
+  "运行时环境文件（%s）" \
   app.newapi.uninstall.deploy_config \
   "deployment config (%s)" \
   "部署配置文件（%s）" \
@@ -1466,6 +1478,9 @@ i18n_register_many \
   app.newapi.success.removed_scheduled \
   "Scheduled job, backup script, and logrotate config removed." \
   "定时任务、备份脚本、日志轮转配置已清除。" \
+  app.newapi.success.removed_env_file \
+  "Runtime environment file removed." \
+  "运行时环境文件已移除。" \
   app.newapi.success.removed_config \
   "Deployment config removed." \
   "部署配置文件已清除。" \
@@ -1532,6 +1547,7 @@ BACKUP_DIR="${BACKUP_DIR:-/opt/new-api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BIN_PATH="${INSTALL_DIR}/new-api"
 LOG_FILE="${LOG_DIR}/new-api.log"
+ENV_FILE="/etc/${SERVICE_NAME}.env"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
@@ -1539,6 +1555,7 @@ CONFIG_KEYS=(
 _NEWAPI_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/new-api"
   LOG_FILE="${LOG_DIR}/new-api.log"
+  ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
 app_conf_register_legacy "/etc/new-api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
@@ -1646,8 +1663,22 @@ _health_check() {
     return 1
   fi
 }
-_write_systemd_unit() {
+_write_env_file() {
   local session_secret="$1"
+  if ! atomic_write_file "$ENV_FILE" 600 root:root << EOF
+# Managed by deploy-scripts.
+PORT=${PORT}
+SESSION_SECRET=${session_secret}
+TZ=Asia/Shanghai
+SQLITE_BUSY_TIMEOUT=3000
+GODEBUG=netdns=go
+EOF
+  then
+    error "$(t app.newapi.error.env_file "$ENV_FILE")"
+  fi
+  success "$(t app.newapi.success.env_file "$ENV_FILE")"
+}
+_write_systemd_unit() {
   local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
   if ! systemd_write_unit "$unit_path" << EOF
 [Unit]
@@ -1672,13 +1703,8 @@ RestartSec=5
 StartLimitInterval=60
 StartLimitBurst=5
 
-# Environment variables.
-Environment="PORT=${PORT}"
-Environment="SESSION_SECRET=${session_secret}"
-Environment="TZ=Asia/Shanghai"
-Environment="SQLITE_BUSY_TIMEOUT=3000"
-# Prefer Go DNS resolution to reduce SSE timeout stalls.
-Environment="GODEBUG=netdns=go"
+# Runtime environment.
+EnvironmentFile=${ENV_FILE}
 
 # File descriptor and process limits for API gateway workloads.
 LimitNOFILE=65536
@@ -2087,10 +2113,12 @@ do_install() {
   success "$(t app.newapi.success.binary_installed "$BIN_PATH")"
   step "$(t app.newapi.step.secret)"
   local SESSION_SECRET
-  SESSION_SECRET=$(tr -dc 'A-Za-z0-9!@#$%^&*' </dev/urandom 2>/dev/null | head -c 40; true)
+  SESSION_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 48; true)
+  [[ -n "$SESSION_SECRET" ]] || error "$(t app.newapi.error.secret)"
   success "$(t app.newapi.success.secret)"
+  _write_env_file "$SESSION_SECRET"
   step "$(t app.newapi.step.systemd)"
-  _write_systemd_unit "$SESSION_SECRET"
+  _write_systemd_unit
   success "$(t app.newapi.success.systemd "$SERVICE_NAME")"
   step "$(t app.newapi.step.firewall)"
   _configure_firewall
@@ -2457,6 +2485,7 @@ do_uninstall() {
   echo "     - $(t app.newapi.uninstall.logrotate)"
   echo "     - $(t app.newapi.uninstall.cron)"
   echo "     - $(t app.newapi.uninstall.backup_script)"
+  echo "     - $(t app.newapi.uninstall.env_file "$ENV_FILE")"
   echo "     - $(t app.newapi.uninstall.deploy_config "$CONF_FILE")"
   echo ""
   echo "  $(t app.newapi.uninstall.keep_data "$DATA_DIR")"
@@ -2494,6 +2523,8 @@ do_uninstall() {
         /usr/local/bin/new-api-backup \
         /etc/logrotate.d/new-api
   success "$(t app.newapi.success.removed_scheduled)"
+  rm -f "$ENV_FILE"
+  success "$(t app.newapi.success.removed_env_file)"
   rm -f "$CONF_FILE"
   success "$(t app.newapi.success.removed_config)"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then

@@ -3209,6 +3209,35 @@ check_vaultwarden_admin_token_file_is_private() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_newapi_secret_uses_private_env_file() {
+  if grep -R -n 'Environment="SESSION_SECRET=' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+    echo "NewAPI must not embed SESSION_SECRET directly in a world-readable systemd unit." >&2
+    return 1
+  fi
+  awk '
+      /_write_env_file\(\)/ { in_func=1; saw_atomic=0; saw_secret=0; next }
+      in_func && /atomic_write_file "\$ENV_FILE" 600 root:root/ { saw_atomic=1 }
+      in_func && /SESSION_SECRET=\$\{session_secret\}/ { saw_secret=1 }
+      in_func && /^}/ {
+        if (!(saw_atomic && saw_secret)) {
+          printf "%s NewAPI runtime secrets must be written through a private environment file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      /EnvironmentFile=\$\{ENV_FILE\}/ { saw_envfile=1 }
+      /error "\$\(t app\.newapi\.error\.env_file "\$ENV_FILE"\)"/ { saw_error=1 }
+      /success "\$\(t app\.newapi\.success\.env_file "\$ENV_FILE"\)"/ { saw_success=1 }
+      /rm -f "\$ENV_FILE"/ { saw_remove=1 }
+      END {
+        if (!(saw_envfile && saw_error && saw_success && saw_remove)) {
+          printf "%s NewAPI must wire the private environment file through install and uninstall\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_systemd_units_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > "?/etc/systemd/system/|^[[:space:]]*cat > "\/etc\/systemd\/system/\$\{SERVICE_NAME\}\.service"' impl dist 2>/dev/null; then
     echo "systemd unit files must be written through temporary files before replacement." >&2
@@ -5349,6 +5378,7 @@ main() {
   check_vaultwarden_env_file_is_atomic
   check_vaultwarden_binary_installs_are_atomic
   check_vaultwarden_admin_token_file_is_private
+  check_newapi_secret_uses_private_env_file
   check_systemd_units_are_atomic
   check_systemd_daemon_reloads_are_explicit
   check_backup_scripts_are_atomic
