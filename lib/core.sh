@@ -13,8 +13,10 @@ source "${DEPLOY_FRAMEWORK_DIR}/config.sh"
 source "${DEPLOY_FRAMEWORK_DIR}/service.sh"
 source "${DEPLOY_FRAMEWORK_DIR}/network.sh"
 source "${DEPLOY_FRAMEWORK_DIR}/app.sh"
+source "${DEPLOY_FRAMEWORK_DIR}/app_registry.sh"
 source "${DEPLOY_FRAMEWORK_DIR}/app_loader.sh"
 source "${DEPLOY_FRAMEWORK_DIR}/cli.sh"
+source "${DEPLOY_FRAMEWORK_DIR}/manager_cli.sh"
 
 main() {
   dispatch_action "${1:-menu}"

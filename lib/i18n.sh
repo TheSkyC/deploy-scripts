@@ -73,6 +73,16 @@ __deploy_i18n_message() {
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
     menu.uninstall_desc) echo "remove service and related files|卸载服务和相关文件" ;;
     menu.update_desc) echo "update to the latest available version|更新到可用的最新版本" ;;
+    manager.app_file_missing) echo "App definition file not found: %s|应用定义文件不存在：%s" ;;
+    manager.app_definition_missing) echo "Bundled app definition not found: %s|内置应用定义不存在：%s" ;;
+    manager.available_apps) echo "Available apps: %s|可用应用：%s" ;;
+    manager.choose_app) echo "Choose an application:|请选择应用：" ;;
+    manager.description) echo "Central deployment scheduler for all bundled application scripts.|所有内置应用部署脚本的中央统一调度器。" ;;
+    manager.invalid_app) echo "Unknown application: %s|未知应用：%s" ;;
+    manager.selection_prompt) echo "Application [number/name/q]:|请输入应用 [序号/名称/q]：" ;;
+    manager.title) echo "Deployment Scheduler|部署调度器" ;;
+    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, status, uninstall]|用法：sudo bash %s <应用> [install, update, backup, status, uninstall]" ;;
+    manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden status; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden status；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
     status.unknown) echo "unknown|未知" ;;

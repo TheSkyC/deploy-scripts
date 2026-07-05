@@ -7,6 +7,9 @@ Shared deployment framework for application install scripts. The repository keep
 Run a script from the repository checkout:
 
 ```bash
+sudo bash deploy.sh newapi install
+sudo bash deploy.sh vaultwarden status
+sudo bash deploy.sh list
 sudo bash install_newapi.sh install
 sudo bash install_sub2api.sh update
 sudo bash install_vaultwarden.sh status
@@ -14,9 +17,10 @@ sudo bash install_cyberstrikeai.sh backup
 sudo bash install_blog.sh install
 ```
 
-Run without arguments to open the interactive menu:
+Run the central scheduler or an app script without arguments to open the interactive menu:
 
 ```bash
+sudo bash deploy.sh
 sudo bash install_newapi.sh
 ```
 
@@ -45,6 +49,7 @@ Localization is intentionally layered:
 
 ```text
 install_*.sh     Compatibility wrappers for existing user commands.
+deploy.sh        Central scheduler for choosing an app and action.
 bin/             Framework entrypoints for each script.
 apps/            Application metadata, localization registration, and implementation loading.
 impl/            Application-specific install/update/backup/status/uninstall functions.

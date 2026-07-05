@@ -10,14 +10,14 @@ check_shell_syntax() {
   local file
   while IFS= read -r file; do
     "$BASH_BIN" -n "$file"
-  done < <(find apps bin impl lib tools -name '*.sh' -type f | sort)
+  done < <(find apps bin impl lib tools -name '*.sh' -type f | sort; printf '%s\n' deploy.sh)
 }
 
 check_release_syntax() {
   local file
   while IFS= read -r file; do
     "$BASH_BIN" -n "$file"
-  done < <(find dist -maxdepth 1 -name 'install_*.sh' -type f | sort)
+  done < <(find dist -maxdepth 1 \( -name 'install_*.sh' -o -name 'deploy.sh' \) -type f | sort)
 }
 
 expect_failure_output() {
@@ -48,14 +48,50 @@ check_localized_dispatch() {
   expect_failure_output zh install_newapi.sh "无效选项"
   expect_failure_output en dist/install_newapi.sh "Invalid choice"
   expect_failure_output zh dist/install_newapi.sh "无效选项"
+  expect_manager_failure_output en deploy.sh newapi "Invalid choice"
+  expect_manager_failure_output zh deploy.sh newapi "无效选项"
+  expect_manager_failure_output en dist/deploy.sh newapi "Invalid choice"
+  expect_manager_failure_output zh dist/deploy.sh newapi "无效选项"
+  expect_manager_failure_output en deploy.sh " newapi " "Invalid choice" " not-a-command "
+  expect_manager_failure_output zh deploy.sh " newapi " "无效选项" " not-a-command "
+  expect_manager_failure_output en dist/deploy.sh " newapi " "Invalid choice" " not-a-command "
+  expect_manager_failure_output zh dist/deploy.sh " newapi " "无效选项" " not-a-command "
   expect_failure_output en install_blog.sh "does not support update" update
   expect_failure_output zh install_blog.sh "暂不支持 update" update
   expect_failure_output en dist/install_blog.sh "does not support update" update
   expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
+  expect_manager_failure_output en deploy.sh blog "does not support update" update
+  expect_manager_failure_output zh deploy.sh blog "暂不支持 update" update
+  expect_manager_failure_output en dist/deploy.sh blog "does not support update" update
+  expect_manager_failure_output zh dist/deploy.sh blog "暂不支持 update" update
   expect_failure_output en install_tickflow.sh "Invalid choice"
   expect_failure_output zh install_tickflow.sh "无效选项"
   expect_failure_output en dist/install_tickflow.sh "Invalid choice"
   expect_failure_output zh dist/install_tickflow.sh "无效选项"
+}
+
+expect_manager_failure_output() {
+  local lang="$1"
+  local script="$2"
+  local app="$3"
+  local expected="$4"
+  local action="${5:-not-a-command}"
+  local output status
+
+  set +e
+  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" "$script" "$app" "$action" 2>&1)"
+  status=$?
+  set -e
+
+  [[ "$status" -ne 0 ]] || {
+    echo "Expected ${script} ${app} to reject ${action}" >&2
+    return 1
+  }
+  [[ "$output" == *"$expected"* ]] || {
+    echo "Expected ${script} ${app} output to contain: ${expected}" >&2
+    echo "$output" >&2
+    return 1
+  }
 }
 
 expect_menu_output() {
@@ -73,6 +109,10 @@ expect_menu_output() {
 }
 
 check_no_argument_menu() {
+  expect_menu_output en deploy.sh "Choose an application"
+  expect_menu_output zh deploy.sh "请选择应用"
+  expect_menu_output en dist/deploy.sh "Choose an application"
+  expect_menu_output zh dist/deploy.sh "请选择应用"
   expect_menu_output en install_blog.sh "Choose an action"
   expect_menu_output zh install_blog.sh "请选择操作"
   expect_menu_output en dist/install_blog.sh "Choose an action"
@@ -81,6 +121,26 @@ check_no_argument_menu() {
   expect_menu_output zh install_tickflow.sh "请选择操作"
   expect_menu_output en dist/install_tickflow.sh "Choose an action"
   expect_menu_output zh dist/install_tickflow.sh "请选择操作"
+}
+
+expect_manager_list_output() {
+  local script="$1"
+  local command="${2:-list}"
+  local output
+
+  output="$("$BASH_BIN" "$script" "$command")"
+  [[ "$output" == *"newapi"* && "$output" == *"vaultwarden"* && "$output" == *"tickflow"* ]] || {
+    echo "Expected ${script} ${command} to show registered applications" >&2
+    echo "$output" >&2
+    return 1
+  }
+}
+
+check_manager_list() {
+  expect_manager_list_output deploy.sh
+  expect_manager_list_output deploy.sh " list "
+  expect_manager_list_output dist/deploy.sh
+  expect_manager_list_output dist/deploy.sh " list "
 }
 
 expect_blog_defaults() {
@@ -145,7 +205,7 @@ check_no_hardcoded_chinese_impl() {
 }
 
 check_no_chinese_comments() {
-  if LC_ALL=C.UTF-8 grep -R -nP '^\s*#.*[\p{Han}]' apps bin impl lib tools dist install_*.sh; then
+  if LC_ALL=C.UTF-8 grep -R -nP '^\s*#.*[\p{Han}]' apps bin impl lib tools dist install_*.sh deploy.sh; then
     echo "Comments must be written in English." >&2
     return 1
   fi
@@ -157,9 +217,9 @@ check_no_release_temp_files() {
     find dist -maxdepth 1 -name '*_impl.sh' -type f >&2
     return 1
   fi
-  if find dist -maxdepth 1 -name 'install_*.sh.*' -type f | grep -q .; then
+  if find dist -maxdepth 1 \( -name 'install_*.sh.*' -o -name 'deploy.sh.*' \) -type f | grep -q .; then
     echo "Unexpected release build temporary file in dist/" >&2
-    find dist -maxdepth 1 -name 'install_*.sh.*' -type f >&2
+    find dist -maxdepth 1 \( -name 'install_*.sh.*' -o -name 'deploy.sh.*' \) -type f >&2
     return 1
   fi
 }
@@ -5188,6 +5248,7 @@ main() {
   check_release_syntax
   check_localized_dispatch
   check_no_argument_menu
+  check_manager_list
   check_blog_localized_defaults
   check_app_localized_descriptions
   check_no_hardcoded_chinese_impl

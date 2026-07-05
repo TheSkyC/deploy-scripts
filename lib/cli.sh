@@ -29,6 +29,9 @@ show_menu() {
 
 dispatch_action() {
   local action="${1:-menu}"
+  if declare -f deploy_trim >/dev/null 2>&1; then
+    action="$(deploy_trim "$action")"
+  fi
   case "${action,,}" in
     install|1) do_install ;;
     update|2) do_update ;;

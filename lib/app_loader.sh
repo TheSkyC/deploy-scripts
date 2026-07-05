@@ -38,7 +38,19 @@ ensure_bundled_app_impl_script() {
   script_path="$(app_impl_script_path)"
   tmp_path="$(mktemp "${script_path}.XXXXXX")" \
     || error "Failed to create bundled app implementation payload"
-  if ! awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$tmp_path"; then
+  local marker
+  marker="__DEPLOY_APP_IMPL_SCRIPT__ ${BUNDLED_APP_IMPL_SCRIPT_NAME:-}"
+  if grep -qxF "$marker" "${BASH_SOURCE[0]}"; then
+    if ! awk -v marker="$marker" '
+        $0 == marker { found=1; next }
+        found && $0 == "__DEPLOY_APP_IMPL_SCRIPT_END__" { exit }
+        found { print }
+      ' "${BASH_SOURCE[0]}" > "$tmp_path"; then
+      rm -f "$tmp_path"
+      cleanup_bundled_app_impl_script
+      error "Failed to extract bundled implementation payload"
+    fi
+  elif ! awk "/^__DEPLOY_APP_IMPL_SCRIPT__$/ { found=1; next } found { print }" "${BASH_SOURCE[0]}" > "$tmp_path"; then
     rm -f "$tmp_path"
     cleanup_bundled_app_impl_script
     error "Failed to extract bundled app implementation payload"
@@ -104,6 +116,9 @@ restore_framework_functions() {
 
   dispatch_action() {
     local action="${1:-menu}"
+    if declare -f deploy_trim >/dev/null 2>&1; then
+      action="$(deploy_trim "$action")"
+    fi
     case "${action,,}" in
       install|1) do_install ;;
       update|2) do_update ;;
