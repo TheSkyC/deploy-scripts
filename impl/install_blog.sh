@@ -888,3 +888,65 @@ do_backup() {
     fi
   done < <(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name 'blog_*.tar.gz' -type f -mtime "+${BLOG_BACKUP_KEEP_DAYS}" -print0 2>/dev/null)
 }
+
+_blog_remove_file() {
+  local path="$1"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  if rm -f "$path"; then
+    success "$(t app.blog.uninstall.removed_file "$path")"
+  else
+    error "$(t app.blog.uninstall.remove_failed "$path")"
+  fi
+}
+
+_blog_remove_dir() {
+  local name="$1" path="$2"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  if safe_rm_dir "$path" "$name"; then
+    success "$(t app.blog.uninstall.removed_dir "$path")"
+  else
+    error "$(t app.blog.uninstall.remove_failed "$path")"
+  fi
+}
+
+do_uninstall() {
+  show_banner
+  require_root "uninstall"
+  acquire_lock
+  require_safe_path "SITE_DIR" "$SITE_DIR"
+  require_safe_path "PUBLIC_DIR" "$PUBLIC_DIR"
+  require_safe_path "NGINX_ROOT" "$NGINX_ROOT"
+  require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+
+  warn "$(t app.blog.uninstall.warning)"
+  prompt "$(t app.blog.uninstall.continue_prompt)"
+  local confirm delete_backups
+  read -r confirm
+  [[ "$confirm" == "YES" ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 0; }
+  prompt "$(t app.blog.uninstall.delete_backups_prompt "$BLOG_BACKUP_DIR")"
+  read -r delete_backups
+
+  _blog_remove_file /etc/nginx/sites-enabled/blog
+  _blog_remove_file /etc/nginx/sites-available/blog
+  _blog_remove_file /usr/local/bin/blog-publish
+  _blog_remove_dir "PUBLIC_DIR" "$PUBLIC_DIR"
+  _blog_remove_dir "NGINX_ROOT" "$NGINX_ROOT"
+  _blog_remove_dir "SITE_DIR" "$SITE_DIR"
+
+  if [[ "${delete_backups,,}" == "y" || "${delete_backups,,}" == "yes" ]]; then
+    _blog_remove_dir "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+  else
+    info "$(t app.blog.uninstall.kept_backups "$BLOG_BACKUP_DIR")"
+  fi
+
+  if command -v nginx >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
+      success "$(t app.blog.uninstall.nginx_reloaded)"
+    else
+      nginx -t >&2 || true
+      warn "$(t app.blog.uninstall.nginx_reload_failed)"
+    fi
+  fi
+
+  success "$(t app.blog.uninstall.success)"
+}

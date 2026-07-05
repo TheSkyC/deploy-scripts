@@ -1446,7 +1446,40 @@ i18n_register_many \
   "已删除过期备份：%s" \
   app.blog.backup.clean_failed \
   "Failed to remove expired backup: %s" \
-  "删除过期备份失败：%s"
+  "删除过期备份失败：%s" \
+  app.blog.uninstall.warning \
+  "This removes Blog files, Nginx site config, and the publish helper. Nginx itself is kept." \
+  "这会删除 Blog 文件、Nginx 站点配置和发布辅助脚本，但保留 Nginx 本身。" \
+  app.blog.uninstall.continue_prompt \
+  "Type YES to continue:" \
+  "请输入 YES 继续：" \
+  app.blog.uninstall.cancelled \
+  "Uninstall cancelled." \
+  "卸载已取消。" \
+  app.blog.uninstall.delete_backups_prompt \
+  "Delete backup directory %s too? [y/N]:" \
+  "是否同时删除备份目录 %s？[y/N]：" \
+  app.blog.uninstall.removed_file \
+  "Removed file: %s" \
+  "已删除文件：%s" \
+  app.blog.uninstall.removed_dir \
+  "Removed directory: %s" \
+  "已删除目录：%s" \
+  app.blog.uninstall.kept_backups \
+  "Backup directory kept: %s" \
+  "备份目录已保留：%s" \
+  app.blog.uninstall.nginx_reloaded \
+  "Nginx configuration reloaded." \
+  "Nginx 配置已重新加载。" \
+  app.blog.uninstall.nginx_reload_failed \
+  "Nginx config was removed, but reload failed. Check manually: nginx -t && systemctl reload nginx" \
+  "Nginx 配置已删除，但 reload 失败。请手动检查：nginx -t && systemctl reload nginx" \
+  app.blog.uninstall.success \
+  "Hugo Blog files were removed." \
+  "Hugo Blog 文件已删除。" \
+  app.blog.uninstall.remove_failed \
+  "Failed to remove: %s" \
+  "删除失败：%s"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
@@ -2358,4 +2391,66 @@ do_backup() {
       warn "$(t app.blog.backup.clean_failed "$old_backup")"
     fi
   done < <(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name 'blog_*.tar.gz' -type f -mtime "+${BLOG_BACKUP_KEEP_DAYS}" -print0 2>/dev/null)
+}
+
+_blog_remove_file() {
+  local path="$1"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  if rm -f "$path"; then
+    success "$(t app.blog.uninstall.removed_file "$path")"
+  else
+    error "$(t app.blog.uninstall.remove_failed "$path")"
+  fi
+}
+
+_blog_remove_dir() {
+  local name="$1" path="$2"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  if safe_rm_dir "$path" "$name"; then
+    success "$(t app.blog.uninstall.removed_dir "$path")"
+  else
+    error "$(t app.blog.uninstall.remove_failed "$path")"
+  fi
+}
+
+do_uninstall() {
+  show_banner
+  require_root "uninstall"
+  acquire_lock
+  require_safe_path "SITE_DIR" "$SITE_DIR"
+  require_safe_path "PUBLIC_DIR" "$PUBLIC_DIR"
+  require_safe_path "NGINX_ROOT" "$NGINX_ROOT"
+  require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+
+  warn "$(t app.blog.uninstall.warning)"
+  prompt "$(t app.blog.uninstall.continue_prompt)"
+  local confirm delete_backups
+  read -r confirm
+  [[ "$confirm" == "YES" ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 0; }
+  prompt "$(t app.blog.uninstall.delete_backups_prompt "$BLOG_BACKUP_DIR")"
+  read -r delete_backups
+
+  _blog_remove_file /etc/nginx/sites-enabled/blog
+  _blog_remove_file /etc/nginx/sites-available/blog
+  _blog_remove_file /usr/local/bin/blog-publish
+  _blog_remove_dir "PUBLIC_DIR" "$PUBLIC_DIR"
+  _blog_remove_dir "NGINX_ROOT" "$NGINX_ROOT"
+  _blog_remove_dir "SITE_DIR" "$SITE_DIR"
+
+  if [[ "${delete_backups,,}" == "y" || "${delete_backups,,}" == "yes" ]]; then
+    _blog_remove_dir "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+  else
+    info "$(t app.blog.uninstall.kept_backups "$BLOG_BACKUP_DIR")"
+  fi
+
+  if command -v nginx >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
+      success "$(t app.blog.uninstall.nginx_reloaded)"
+    else
+      nginx -t >&2 || true
+      warn "$(t app.blog.uninstall.nginx_reload_failed)"
+    fi
+  fi
+
+  success "$(t app.blog.uninstall.success)"
 }

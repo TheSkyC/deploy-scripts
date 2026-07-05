@@ -545,7 +545,40 @@ i18n_register_many \
   "已删除过期备份：%s" \
   app.blog.backup.clean_failed \
   "Failed to remove expired backup: %s" \
-  "删除过期备份失败：%s"
+  "删除过期备份失败：%s" \
+  app.blog.uninstall.warning \
+  "This removes Blog files, Nginx site config, and the publish helper. Nginx itself is kept." \
+  "这会删除 Blog 文件、Nginx 站点配置和发布辅助脚本，但保留 Nginx 本身。" \
+  app.blog.uninstall.continue_prompt \
+  "Type YES to continue:" \
+  "请输入 YES 继续：" \
+  app.blog.uninstall.cancelled \
+  "Uninstall cancelled." \
+  "卸载已取消。" \
+  app.blog.uninstall.delete_backups_prompt \
+  "Delete backup directory %s too? [y/N]:" \
+  "是否同时删除备份目录 %s？[y/N]：" \
+  app.blog.uninstall.removed_file \
+  "Removed file: %s" \
+  "已删除文件：%s" \
+  app.blog.uninstall.removed_dir \
+  "Removed directory: %s" \
+  "已删除目录：%s" \
+  app.blog.uninstall.kept_backups \
+  "Backup directory kept: %s" \
+  "备份目录已保留：%s" \
+  app.blog.uninstall.nginx_reloaded \
+  "Nginx configuration reloaded." \
+  "Nginx 配置已重新加载。" \
+  app.blog.uninstall.nginx_reload_failed \
+  "Nginx config was removed, but reload failed. Check manually: nginx -t && systemctl reload nginx" \
+  "Nginx 配置已删除，但 reload 失败。请手动检查：nginx -t && systemctl reload nginx" \
+  app.blog.uninstall.success \
+  "Hugo Blog files were removed." \
+  "Hugo Blog 文件已删除。" \
+  app.blog.uninstall.remove_failed \
+  "Failed to remove: %s" \
+  "删除失败：%s"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"

@@ -110,6 +110,10 @@ check_blog_status_dispatch() {
   expect_failure_output zh install_blog.sh "请使用 root 权限运行" backup
   expect_failure_output en dist/install_blog.sh "Please run as root" backup
   expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" backup
+  expect_failure_output en install_blog.sh "Please run as root" uninstall
+  expect_failure_output zh install_blog.sh "请使用 root 权限运行" uninstall
+  expect_failure_output en dist/install_blog.sh "Please run as root" uninstall
+  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" uninstall
   expect_failure_output en install_blog.sh "does not support update" update
   expect_failure_output zh install_blog.sh "暂不支持 update" update
   expect_failure_output en dist/install_blog.sh "does not support update" update
