@@ -992,6 +992,18 @@ i18n_register_many \
   app.cyberstrikeai.info.download \
   "Downloading %s" \
   "正在下载 %s" \
+  app.cyberstrikeai.error.go_checksum_missing \
+  "Official Go release metadata does not include a SHA-256 checksum for %s; refusing to install an unverified archive." \
+  "官方 Go 发布元数据中没有 %s 的 SHA-256 校验值，拒绝安装未经校验的归档文件。" \
+  app.cyberstrikeai.error.go_sha_tool_missing \
+  "sha256sum / shasum was not found; refusing to install an unverified Go archive." \
+  "未找到 sha256sum / shasum，拒绝安装未经校验的 Go 归档文件。" \
+  app.cyberstrikeai.error.go_sha_failed \
+  "Go archive checksum verification failed. Expected %s, got %s." \
+  "Go 归档文件校验失败。期望 %s，实际 %s。" \
+  app.cyberstrikeai.info.go_sha_ok \
+  "Go archive checksum verified: %s..." \
+  "Go 归档文件校验通过：%s..." \
   app.cyberstrikeai.error.go_empty \
   "Downloaded Go archive is empty" \
   "下载的 Go 压缩包为空" \
@@ -1523,6 +1535,45 @@ write_backup_file() {
   [[ -f "$source_path" ]] || return 0
   atomic_copy_file "$source_path" "$backup_path"
 }
+go_release_sha256() {
+  local release_json="$1" tarball="$2"
+  printf '%s\n' "$release_json" | awk -v target="$tarball" '
+    index($0, "\"filename\": \"" target "\"") { in_file=1; next }
+    in_file && /"sha256"[[:space:]]*:/ {
+      sub(/^.*"sha256"[[:space:]]*:[[:space:]]*"/, "")
+      sub(/".*$/, "")
+      print
+      exit
+    }
+    in_file && /^[[:space:]]*}/ { in_file=0 }
+  '
+}
+verify_go_archive_checksum() {
+  local archive="$1" expected_sha="$2" tarball="$3" actual_sha=""
+  if ! [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    rm -f "$archive"
+    error "$(t app.cyberstrikeai.error.go_checksum_missing "$tarball")"
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    if ! actual_sha=$(sha256sum "$archive" | awk '{print $1}'); then
+      rm -f "$archive"
+      error "$(t app.cyberstrikeai.error.go_sha_failed "$expected_sha" "${actual_sha:-unavailable}")"
+    fi
+  elif command -v shasum >/dev/null 2>&1; then
+    if ! actual_sha=$(shasum -a 256 "$archive" | awk '{print $1}'); then
+      rm -f "$archive"
+      error "$(t app.cyberstrikeai.error.go_sha_failed "$expected_sha" "${actual_sha:-unavailable}")"
+    fi
+  else
+    rm -f "$archive"
+    error "$(t app.cyberstrikeai.error.go_sha_tool_missing)"
+  fi
+  if [[ "$actual_sha" != "$expected_sha" ]]; then
+    rm -f "$archive"
+    error "$(t app.cyberstrikeai.error.go_sha_failed "$expected_sha" "$actual_sha")"
+  fi
+  info "$(t app.cyberstrikeai.info.go_sha_ok "${actual_sha:0:16}")"
+}
 apt_install_base() {
   step "$(t app.cyberstrikeai.step.install_deps)"
   if ! apt-get update -qq; then
@@ -1574,7 +1625,7 @@ install_go_if_needed() {
     fi
     warn "$(t app.cyberstrikeai.warn.go_repo_old "$ver")"
   fi
-  local arch go_arch latest_json version tarball url tmp extract_dir old_go_backup
+  local arch go_arch latest_json version tarball expected_sha url tmp extract_dir old_go_backup
   arch=$(uname -m)
   case "$arch" in
     x86_64) go_arch="amd64" ;;
@@ -1586,6 +1637,7 @@ install_go_if_needed() {
   version=$(printf '%s\n' "$latest_json" | grep -oE '"version"[[:space:]]*:[[:space:]]*"go[0-9]+\.[0-9]+(\.[0-9]+)?"' | head -1 | sed 's/.*"\(go[^"]*\)".*/\1/' || true)
   [[ -n "$version" ]] || error "$(t app.cyberstrikeai.error.go_parse)"
   tarball="${version}.linux-${go_arch}.tar.gz"
+  expected_sha=$(go_release_sha256 "$latest_json" "$tarball" || true)
   url="https://go.dev/dl/${tarball}"
   if ! tmp=$(mktemp); then
     error "$(t app.cyberstrikeai.error.go_query)"
@@ -1599,6 +1651,7 @@ install_go_if_needed() {
     rm -f "$tmp"
     error "$(t app.cyberstrikeai.error.go_empty)"
   fi
+  verify_go_archive_checksum "$tmp" "$expected_sha" "$tarball"
   if ! extract_dir=$(mktemp -d /usr/local/go.extract.XXXXXX); then
     rm -f "$tmp"
     error "$(t app.cyberstrikeai.error.go_extract)"

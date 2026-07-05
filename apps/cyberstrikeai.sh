@@ -69,6 +69,18 @@ i18n_register_many \
   app.cyberstrikeai.info.download \
   "Downloading %s" \
   "正在下载 %s" \
+  app.cyberstrikeai.error.go_checksum_missing \
+  "Official Go release metadata does not include a SHA-256 checksum for %s; refusing to install an unverified archive." \
+  "官方 Go 发布元数据中没有 %s 的 SHA-256 校验值，拒绝安装未经校验的归档文件。" \
+  app.cyberstrikeai.error.go_sha_tool_missing \
+  "sha256sum / shasum was not found; refusing to install an unverified Go archive." \
+  "未找到 sha256sum / shasum，拒绝安装未经校验的 Go 归档文件。" \
+  app.cyberstrikeai.error.go_sha_failed \
+  "Go archive checksum verification failed. Expected %s, got %s." \
+  "Go 归档文件校验失败。期望 %s，实际 %s。" \
+  app.cyberstrikeai.info.go_sha_ok \
+  "Go archive checksum verified: %s..." \
+  "Go 归档文件校验通过：%s..." \
   app.cyberstrikeai.error.go_empty \
   "Downloaded Go archive is empty" \
   "下载的 Go 压缩包为空" \

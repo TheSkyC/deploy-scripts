@@ -3453,6 +3453,42 @@ check_download_validation_failures_cleanup() {
       }
       in_extract && /^}/ { in_extract=0 }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /verify_go_archive_checksum\(\)/ { in_func=1; saw_archive_rm=0; saw_compare=0; next }
+      in_func && /rm -f "\$archive"/ { saw_archive_rm=1 }
+      in_func && /error "\$\(t app\.cyberstrikeai\.error\.(go_checksum_missing|go_sha_tool_missing|go_sha_failed)/ {
+        if (!saw_archive_rm) {
+          printf "%s does not remove the downloaded Go archive before checksum verification failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_archive_rm=0
+      }
+      in_func && /if \[\[ "\$actual_sha" != "\$expected_sha" \]\]; then/ { saw_compare=1 }
+      in_func && /info "\$\(t app\.cyberstrikeai\.info\.go_sha_ok "\$\{actual_sha:0:16\}"\)"/ {
+        if (!saw_compare) {
+          printf "%s Go checksum verification must compare the downloaded archive against release metadata\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      END {
+        if (in_func) {
+          printf "%s Go checksum verifier did not reach a successful verification path\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /tarball="\$\{version\}\.linux-\$\{go_arch\}\.tar\.gz"/ { saw_tarball=1 }
+      /expected_sha=\$\(go_release_sha256 "\$latest_json" "\$tarball" \|\| true\)/ { saw_expected=1 }
+      /verify_go_archive_checksum "\$tmp" "\$expected_sha" "\$tarball"/ { saw_verify=1 }
+      END {
+        if (!(saw_tarball && saw_expected && saw_verify)) {
+          printf "%s CyberStrikeAI Go install must verify official release checksums before extraction\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
 check_download_temp_creation_failures_are_explicit() {
