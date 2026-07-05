@@ -937,6 +937,9 @@ i18n_register app.blog.error.systemd_required \
 i18n_register app.blog.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。"
+i18n_register app.blog.error.keep_days_invalid \
+  "BLOG_BACKUP_KEEP_DAYS is invalid: '%s'. Set it to a non-negative integer." \
+  "BLOG_BACKUP_KEEP_DAYS 无效：'%s'。请设置为非负整数。"
 i18n_register app.blog.site_title \
   "Abyte's Blog" \
   "Abyte 的个人博客"
@@ -1553,24 +1556,56 @@ exit 0
 __DEPLOY_APP_IMPL_SCRIPT__
 #!/bin/bash
 set -euo pipefail
-BLOG_DOMAIN="blog.example.com"
+BLOG_DOMAIN="${BLOG_DOMAIN:-blog.example.com}"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"
-BLOG_AUTHOR="Abyte"
+BLOG_AUTHOR="${BLOG_AUTHOR:-Abyte}"
 BLOG_DESCRIPTION="${BLOG_DESCRIPTION:-$(t app.blog.site_description)}"
 BLOG_LANG="${BLOG_LANG:-$(t app.blog.site_lang)}"
-SITE_DIR="/opt/blog/site"
-PUBLIC_DIR="/opt/blog/public"
-NGINX_ROOT="/var/www/blog"
-BLOG_BACKUP_DIR="/opt/blog-backups"
+SITE_DIR="${SITE_DIR:-/opt/blog/site}"
+PUBLIC_DIR="${PUBLIC_DIR:-/opt/blog/public}"
+NGINX_ROOT="${NGINX_ROOT:-/var/www/blog}"
+BLOG_BACKUP_DIR="${BLOG_BACKUP_DIR:-/opt/blog-backups}"
 BLOG_BACKUP_KEEP_DAYS="${BLOG_BACKUP_KEEP_DAYS:-30}"
-THEME_NAME="hugo-theme-stack"
-THEME_REPO="https://github.com/CaiJimmy/hugo-theme-stack.git"
-ENABLE_CMS=true
-CMS_BACKEND="github"
-CMS_REPO="TheSkyC/my-hugo-blog"
-CMS_BRANCH="main"
-CMS_SITE_URL="https://${BLOG_DOMAIN}"
+THEME_NAME="${THEME_NAME:-hugo-theme-stack}"
+THEME_REPO="${THEME_REPO:-https://github.com/CaiJimmy/hugo-theme-stack.git}"
+ENABLE_CMS="${ENABLE_CMS:-true}"
+CMS_BACKEND="${CMS_BACKEND:-github}"
+CMS_REPO="${CMS_REPO:-TheSkyC/my-hugo-blog}"
+CMS_BRANCH="${CMS_BRANCH:-main}"
+CMS_SITE_URL="${CMS_SITE_URL:-https://${BLOG_DOMAIN}}"
+CONFIG_KEYS=(
+  BLOG_DOMAIN BLOG_TITLE BLOG_AUTHOR BLOG_DESCRIPTION BLOG_LANG
+  SITE_DIR PUBLIC_DIR NGINX_ROOT BLOG_BACKUP_DIR BLOG_BACKUP_KEEP_DAYS
+  THEME_NAME THEME_REPO ENABLE_CMS CMS_BACKEND CMS_REPO CMS_BRANCH CMS_SITE_URL
+)
 LOCK_FILE="/var/lock/blog-deploy.lock"
+
+_BLOG_DERIVE_PATHS() {
+  if [[ -z "${CMS_SITE_URL:-}" && -n "${BLOG_DOMAIN:-}" ]]; then
+    CMS_SITE_URL="https://${BLOG_DOMAIN}"
+  fi
+}
+
+_validate_config_values() {
+  app_validate_domain "BLOG_DOMAIN" "$BLOG_DOMAIN"
+  app_validate_bool "ENABLE_CMS" "$ENABLE_CMS"
+  app_validate_system_name "THEME_NAME" "$THEME_NAME"
+  app_validate_system_name "CMS_BACKEND" "$CMS_BACKEND"
+  app_validate_github_repo "CMS_REPO" "$CMS_REPO"
+  app_validate_git_ref "CMS_BRANCH" "$CMS_BRANCH"
+  [[ "$BLOG_BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] \
+    || error "$(t app.blog.error.keep_days_invalid "$BLOG_BACKUP_KEEP_DAYS")"
+  require_safe_path "SITE_DIR" "$SITE_DIR"
+  require_safe_path "PUBLIC_DIR" "$PUBLIC_DIR"
+  require_safe_path "NGINX_ROOT" "$NGINX_ROOT"
+  require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+}
+
+_blog_load_config_if_root() {
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    app_load_config _BLOG_DERIVE_PATHS
+  fi
+}
 
 restore_nginx_root_backup() {
   [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] || return 0
@@ -1799,6 +1834,7 @@ case $ARCH in
   aarch64) DEB_ARCH="arm64" ;;
   *)       error "$(t app.blog.error.arch "$ARCH")" ;;
 esac
+_validate_config_values
 acquire_lock
 step "$(t app.blog.step_install_deps)"
 if ! apt-get update -qq; then
@@ -2252,6 +2288,7 @@ if systemctl restart nginx && wait_for_service nginx 10; then
 else
   error "$(t app.blog.error.nginx_start)"
 fi
+app_save_config
 step "$(t app.blog.step_health)"
 local _blog_summary_state="ready"
 HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
@@ -2341,6 +2378,7 @@ _blog_status_path() {
 do_status() {
   show_banner
   [[ $EUID -ne 0 ]] && warn "$(t app.blog.warn.non_root_status "$0")"
+  _blog_load_config_if_root
   step "$(t app.blog.step_status)"
 
   _blog_status_path "$(t app.blog.status.site)" "$SITE_DIR"
@@ -2378,6 +2416,7 @@ do_status() {
 do_update() {
   show_banner
   require_root "update"
+  _blog_load_config_if_root
   command -v systemctl >/dev/null 2>&1 || error "$(t app.blog.error.systemd_required)"
   command -v nginx >/dev/null 2>&1 || error "$(t app.blog.update.error_nginx_missing)"
   command -v hugo >/dev/null 2>&1 || error "$(t app.blog.update.error_hugo_missing)"
@@ -2419,6 +2458,7 @@ do_update() {
 do_backup() {
   show_banner
   require_root "backup"
+  _blog_load_config_if_root
   acquire_lock
   step "$(t app.blog.step_backup)"
   require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
@@ -2518,6 +2558,7 @@ _blog_remove_dir() {
 do_uninstall() {
   show_banner
   require_root "uninstall"
+  _blog_load_config_if_root
   acquire_lock
   require_safe_path "SITE_DIR" "$SITE_DIR"
   require_safe_path "PUBLIC_DIR" "$PUBLIC_DIR"

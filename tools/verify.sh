@@ -633,6 +633,20 @@ check_managed_paths_are_validated() {
         in_func=0
       }
     ' impl/install_tickflow.sh dist/install_tickflow.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; next }
+      in_func && /require_safe_path "SITE_DIR" "\$SITE_DIR"/ { saw_site=1 }
+      in_func && /require_safe_path "PUBLIC_DIR" "\$PUBLIC_DIR"/ { saw_public=1 }
+      in_func && /require_safe_path "NGINX_ROOT" "\$NGINX_ROOT"/ { saw_nginx=1 }
+      in_func && /require_safe_path "BLOG_BACKUP_DIR" "\$BLOG_BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /^}/ {
+        if (!(saw_site && saw_public && saw_nginx && saw_backup)) {
+          printf "%s Blog must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
 }
 
 check_tickflow_preflight_defers_docker_runtime_checks() {
@@ -1058,8 +1072,38 @@ check_config_save_failures_are_explicit() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh lib/app.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh lib/app.sh
+}
+
+check_blog_config_persistence() {
+  awk '
+      /^CONFIG_KEYS=\(/ { saw_keys=1; next }
+      saw_keys && /BLOG_DOMAIN/ { saw_domain=1 }
+      saw_keys && /SITE_DIR PUBLIC_DIR NGINX_ROOT BLOG_BACKUP_DIR BLOG_BACKUP_KEEP_DAYS/ { saw_paths=1 }
+      saw_keys && /THEME_NAME THEME_REPO ENABLE_CMS CMS_BACKEND CMS_REPO CMS_BRANCH CMS_SITE_URL/ { saw_cms=1 }
+      /_BLOG_DERIVE_PATHS\(\)/ { saw_derive=1 }
+      /_blog_load_config_if_root\(\)/ { in_load=1; saw_root_guard=0; saw_app_load=0; next }
+      in_load && /\[\[ \$\{EUID:-\$\(id -u\)\} -eq 0 \]\]/ { saw_root_guard=1 }
+      in_load && /app_load_config _BLOG_DERIVE_PATHS/ { saw_app_load=1 }
+      in_load && /^}/ { in_load=0 }
+      /^_validate_config_values$/ { saw_install_validate=1 }
+      /^app_save_config$/ { saw_install_save=1 }
+      /^do_status\(\) \{/ { current="status"; saw_status=1; next }
+      /^do_update\(\) \{/ { current="update"; saw_update=1; next }
+      /^do_backup\(\) \{/ { current="backup"; saw_backup=1; next }
+      /^do_uninstall\(\) \{/ { current="uninstall"; saw_uninstall=1; next }
+      current == "status" && /_blog_load_config_if_root/ { loaded_status=1; current="" }
+      current == "update" && /_blog_load_config_if_root/ { loaded_update=1; current="" }
+      current == "backup" && /_blog_load_config_if_root/ { loaded_backup=1; current="" }
+      current == "uninstall" && /_blog_load_config_if_root/ { loaded_uninstall=1; current="" }
+      END {
+        if (!(saw_keys && saw_domain && saw_paths && saw_cms && saw_derive && saw_root_guard && saw_app_load && saw_install_validate && saw_install_save && saw_status && saw_update && saw_backup && saw_uninstall && loaded_status && loaded_update && loaded_backup && loaded_uninstall)) {
+          printf "%s Blog must persist install config and load it for status/update/backup/uninstall\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
 }
 
 check_sub2api_codename_resolution() {
@@ -1504,13 +1548,14 @@ check_nginx_domains_are_validated() {
       /app\.cyberstrikeai\.error\.domain_invalid/ { saw_csai=1 }
       /app\.sub2api\.error\.domain_invalid/ { saw_sub2api=1 }
       /app\.vaultwarden\.error\.domain_invalid/ { saw_vw=1 }
+      /app\.blog\.error\.keep_days_invalid/ { saw_blog_keep_days=1 }
       END {
-        if (!(saw_csai && saw_sub2api && saw_vw)) {
-          print "Nginx domain validation errors must be localized for reverse-proxy apps." > "/dev/stderr"
+        if (!(saw_csai && saw_sub2api && saw_vw && saw_blog_keep_days)) {
+          print "Nginx domain and Blog retention validation errors must be localized." > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/cyberstrikeai.sh apps/sub2api.sh apps/vaultwarden.sh
+    ' apps/cyberstrikeai.sh apps/sub2api.sh apps/vaultwarden.sh apps/blog.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
       in_func && /app_validate_domain "CSAI_DOMAIN"/ { saw_domain=1 }
@@ -1553,6 +1598,21 @@ check_nginx_domains_are_validated() {
         in_prompt=0
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_bool=0; saw_repo=0; saw_ref=0; saw_keep_days=0; next }
+      in_func && /app_validate_domain "BLOG_DOMAIN"/ { saw_domain=1 }
+      in_func && /app_validate_bool "ENABLE_CMS"/ { saw_bool=1 }
+      in_func && /app_validate_github_repo "CMS_REPO"/ { saw_repo=1 }
+      in_func && /app_validate_git_ref "CMS_BRANCH"/ { saw_ref=1 }
+      in_func && /app\.blog\.error\.keep_days_invalid/ { saw_keep_days=1 }
+      in_func && /^}/ {
+        if (!(saw_domain && saw_bool && saw_repo && saw_ref && saw_keep_days)) {
+          printf "%s Blog must validate domain, CMS settings, and backup retention config values\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
 }
 
 check_config_value_validators() {
@@ -5853,6 +5913,7 @@ main() {
   check_config_write_failure_cleanup
   check_unsafe_config_loads_fail_closed
   check_config_save_failures_are_explicit
+  check_blog_config_persistence
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads

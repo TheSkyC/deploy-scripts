@@ -14,6 +14,9 @@ i18n_register app.blog.error.systemd_required \
 i18n_register app.blog.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。"
+i18n_register app.blog.error.keep_days_invalid \
+  "BLOG_BACKUP_KEEP_DAYS is invalid: '%s'. Set it to a non-negative integer." \
+  "BLOG_BACKUP_KEEP_DAYS 无效：'%s'。请设置为非负整数。"
 i18n_register app.blog.site_title \
   "Abyte's Blog" \
   "Abyte 的个人博客"
