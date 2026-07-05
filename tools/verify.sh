@@ -3962,6 +3962,27 @@ check_manual_backup_retention_is_normalized() {
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
       in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
     ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /^do_backup\(\) \{/ {
+        in_func=1
+        saw_assignment=0
+        saw_guard=0
+        saw_positive_guard=0
+        saw_find=0
+        next
+      }
+      in_func && /^}/ {
+        if (!(saw_assignment && saw_guard && saw_positive_guard && saw_find)) {
+          printf "%s Blog manual backup retention cleanup must normalize BLOG_BACKUP_KEEP_DAYS and skip cleanup when it is zero\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      in_func && /local _keep_days="\$\{BLOG_BACKUP_KEEP_DAYS\}"/ { saw_assignment=1 }
+      in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
+      in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
+      in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
+    ' impl/install_blog.sh dist/install_blog.sh
 }
 
 check_backup_retention_cleanup_reports_failures() {

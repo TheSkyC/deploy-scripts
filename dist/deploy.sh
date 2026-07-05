@@ -11291,14 +11291,18 @@ do_backup() {
   fi
   success "$(t app.blog.backup.success "$archive")"
 
-  local old_backup
-  while IFS= read -r -d '' old_backup; do
-    if rm -f "$old_backup"; then
-      info "$(t app.blog.backup.cleaned "$old_backup")"
-    else
-      warn "$(t app.blog.backup.clean_failed "$old_backup")"
-    fi
-  done < <(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name 'blog_*.tar.gz' -type f -mtime "+${BLOG_BACKUP_KEEP_DAYS}" -print0 2>/dev/null)
+  local _keep_days="${BLOG_BACKUP_KEEP_DAYS}"
+  [[ "$_keep_days" =~ ^[0-9]+$ ]] || _keep_days=0
+  if [[ "$_keep_days" -gt 0 ]]; then
+    local old_backup
+    while IFS= read -r -d '' old_backup; do
+      if rm -f "$old_backup"; then
+        info "$(t app.blog.backup.cleaned "$old_backup")"
+      else
+        warn "$(t app.blog.backup.clean_failed "$old_backup")"
+      fi
+    done < <(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name 'blog_*.tar.gz' -type f -mtime "+${_keep_days}" -print0 2>/dev/null)
+  fi
 }
 
 _blog_remove_file() {
