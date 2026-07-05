@@ -29,7 +29,7 @@ CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 
 preflight_check() {
-  [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get >/dev/null 2>&1 || error "$(t app.tickflow.error.apt_only)"
   command -v systemctl >/dev/null 2>&1 || error "$(t app.tickflow.error.systemd_required)"
   case "$(uname -m)" in
@@ -372,6 +372,7 @@ do_status() {
   show_banner
   preflight_check "status"
   app_load_config
+  [[ $EUID -ne 0 ]] && warn "$(t app.tickflow.warn.non_root_status "$0")"
   echo -e "\n${BOLD}[${TICKFLOW_SERVICE_NAME}]${NC}"
   systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager || true
   echo ""

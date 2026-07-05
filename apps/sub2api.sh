@@ -660,6 +660,9 @@ i18n_register_many \
   app.sub2api.error.backup_dir_create \
   "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
   "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
+  app.sub2api.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.sub2api.step.status \
   "Sub2API runtime status" \
   "Sub2API 运行状态" \

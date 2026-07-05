@@ -1098,6 +1098,41 @@ check_systemctl_status_diagnostics_are_nonfatal() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh
 }
 
+check_status_commands_allow_non_root() {
+  awk '
+      /app\.sub2api\.warn\.non_root_status/ { saw_sub2api=1 }
+      /app\.cyberstrikeai\.warn\.non_root_status/ { saw_csai=1 }
+      /app\.tickflow\.warn\.non_root_status/ { saw_tickflow=1 }
+      END {
+        if (!(saw_sub2api && saw_csai && saw_tickflow)) {
+          print "Status commands that run without root must warn when details may be incomplete." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh apps/cyberstrikeai.sh apps/tickflow.sh
+  awk '
+      /preflight_check\(\)/ { in_preflight=1; saw_status_exemption=0; next }
+      in_preflight && /status/ && /\$EUID/ { saw_status_exemption=1 }
+      in_preflight && /^}/ {
+        if (!saw_status_exemption) {
+          printf "%s preflight must allow the status action without root\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_preflight=0
+      }
+      /do_status\(\)/ { in_status=1; saw_warn=0; next }
+      in_status && /warn "\$\(t app\.(newapi|sub2api|cyberstrikeai|tickflow)\.warn\.non_root_status "\$0"\)"/ { saw_warn=1 }
+      in_status && /^}/ {
+        if (!saw_warn) {
+          printf "%s status must warn when running without root\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_tickflow.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_tickflow.sh
+}
+
 check_vaultwarden_status_display_commands_are_nonfatal() {
   awk '
       /do_status\(\)/ { in_status=1; next }
@@ -5422,6 +5457,7 @@ main() {
   check_random_head_pipelines_handle_sigpipe
   check_summary_ip_detection_has_fallback
   check_systemctl_status_diagnostics_are_nonfatal
+  check_status_commands_allow_non_root
   check_vaultwarden_status_display_commands_are_nonfatal
   check_vaultwarden_find_head_pipelines_are_nonfatal
   check_cyberstrikeai_display_sizes_are_nonfatal

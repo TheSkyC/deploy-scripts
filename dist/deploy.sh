@@ -2386,6 +2386,9 @@ i18n_register_many \
   app.sub2api.error.backup_dir_create \
   "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
   "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
+  app.sub2api.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.sub2api.step.status \
   "Sub2API runtime status" \
   "Sub2API 运行状态" \
@@ -3961,6 +3964,9 @@ i18n_register_many \
   app.cyberstrikeai.status.disabled \
   "disabled by config" \
   "已通过配置禁用" \
+  app.cyberstrikeai.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.cyberstrikeai.step.uninstall \
   "Uninstall CyberStrikeAI" \
   "卸载 CyberStrikeAI" \
@@ -4577,6 +4583,9 @@ i18n_register_many \
   app.tickflow.error.health \
   "Health check failed. The panel may still be starting; run status again later." \
   "健康检查失败，面板可能仍在启动；稍后可再次执行 status。" \
+  app.tickflow.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
@@ -4701,7 +4710,7 @@ app_conf_register_legacy "/etc/new-api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" != "status" && $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get &>/dev/null \
     || error "$(t app.newapi.error.apt_only)"
   ARCH=$(uname -m)
@@ -5746,7 +5755,7 @@ app_conf_register_legacy "/etc/sub2api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" != "status" && $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt"
   elif command -v dnf &>/dev/null; then
@@ -7099,6 +7108,7 @@ do_status() {
   show_banner
   preflight_check "status"
   app_load_config _SUB2API_DERIVE_PATHS
+  [[ $EUID -ne 0 ]] && warn "$(t app.sub2api.warn.non_root_status "$0")"
   step "$(t app.sub2api.step.status)"
   echo -e "\n${BOLD}[$(t app.sub2api.status.systemd)]${NC}"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
@@ -9025,7 +9035,7 @@ _validate_config_values() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 preflight_check() {
-  [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.apt_only)"
   command -v systemctl >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.systemd_required)"
   local arch
@@ -9898,6 +9908,7 @@ do_status() {
   show_banner
   preflight_check "status"
   app_load_config _CSAI_DERIVE_PATHS
+  [[ $EUID -ne 0 ]] && warn "$(t app.cyberstrikeai.warn.non_root_status "$0")"
   step "$(t app.cyberstrikeai.step.service_status)"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo -e "  ${GREEN}[+]${NC} ${SERVICE_NAME}: $(t app.cyberstrikeai.status.running)"
@@ -10841,7 +10852,7 @@ CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 
 preflight_check() {
-  [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get >/dev/null 2>&1 || error "$(t app.tickflow.error.apt_only)"
   command -v systemctl >/dev/null 2>&1 || error "$(t app.tickflow.error.systemd_required)"
   case "$(uname -m)" in
@@ -11184,6 +11195,7 @@ do_status() {
   show_banner
   preflight_check "status"
   app_load_config
+  [[ $EUID -ne 0 ]] && warn "$(t app.tickflow.warn.non_root_status "$0")"
   echo -e "\n${BOLD}[${TICKFLOW_SERVICE_NAME}]${NC}"
   systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager || true
   echo ""

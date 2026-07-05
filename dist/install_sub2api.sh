@@ -1508,6 +1508,9 @@ i18n_register_many \
   app.sub2api.error.backup_dir_create \
   "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
   "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
+  app.sub2api.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.sub2api.step.status \
   "Sub2API runtime status" \
   "Sub2API 运行状态" \
@@ -1827,7 +1830,7 @@ app_conf_register_legacy "/etc/sub2api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" != "status" && $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt"
   elif command -v dnf &>/dev/null; then
@@ -3180,6 +3183,7 @@ do_status() {
   show_banner
   preflight_check "status"
   app_load_config _SUB2API_DERIVE_PATHS
+  [[ $EUID -ne 0 ]] && warn "$(t app.sub2api.warn.non_root_status "$0")"
   step "$(t app.sub2api.step.status)"
   echo -e "\n${BOLD}[$(t app.sub2api.status.systemd)]${NC}"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then

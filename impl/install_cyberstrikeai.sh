@@ -58,7 +58,7 @@ _validate_config_values() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 preflight_check() {
-  [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.apt_only)"
   command -v systemctl >/dev/null 2>&1 || error "$(t app.cyberstrikeai.error.systemd_required)"
   local arch
@@ -931,6 +931,7 @@ do_status() {
   show_banner
   preflight_check "status"
   app_load_config _CSAI_DERIVE_PATHS
+  [[ $EUID -ne 0 ]] && warn "$(t app.cyberstrikeai.warn.non_root_status "$0")"
   step "$(t app.cyberstrikeai.step.service_status)"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo -e "  ${GREEN}[+]${NC} ${SERVICE_NAME}: $(t app.cyberstrikeai.status.running)"

@@ -57,6 +57,9 @@ i18n_register_many \
   app.tickflow.error.health \
   "Health check failed. The panel may still be starting; run status again later." \
   "健康检查失败，面板可能仍在启动；稍后可再次执行 status。" \
+  app.tickflow.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \

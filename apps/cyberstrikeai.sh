@@ -426,6 +426,9 @@ i18n_register_many \
   app.cyberstrikeai.status.disabled \
   "disabled by config" \
   "已通过配置禁用" \
+  app.cyberstrikeai.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   app.cyberstrikeai.step.uninstall \
   "Uninstall CyberStrikeAI" \
   "卸载 CyberStrikeAI" \

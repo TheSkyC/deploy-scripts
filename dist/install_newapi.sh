@@ -1561,7 +1561,7 @@ app_conf_register_legacy "/etc/new-api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 preflight_check() {
-  [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
+  [[ "${1:-}" != "status" && $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get &>/dev/null \
     || error "$(t app.newapi.error.apt_only)"
   ARCH=$(uname -m)
