@@ -72,6 +72,11 @@ _apt_codename() {
 _validate_config_values() {
   app_validate_port "$PORT" "PORT"
   app_validate_domain "SUB2API_DOMAIN" "$SUB2API_DOMAIN"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 get_latest_release() {
   local json tag
@@ -1084,12 +1089,14 @@ do_install() {
   else
     info "$(t app.sub2api.info.user_exists "$SERVICE_USER")"
   fi
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"; then
     error "$(t app.sub2api.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
   fi

@@ -1574,6 +1574,10 @@ preflight_check() {
 }
 _validate_config_values() {
   app_validate_port "$PORT" "PORT"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 check_connectivity() {
   check_connectivity_urls \
@@ -2075,12 +2079,13 @@ do_install() {
   else
     info "$(t app.newapi.info.user_exists "$SERVICE_USER")"
   fi
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
     error "$(t app.newapi.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
     error "$(t app.newapi.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
   fi

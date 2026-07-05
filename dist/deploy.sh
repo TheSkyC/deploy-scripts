@@ -4714,6 +4714,10 @@ preflight_check() {
 }
 _validate_config_values() {
   app_validate_port "$PORT" "PORT"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 check_connectivity() {
   check_connectivity_urls \
@@ -5215,12 +5219,13 @@ do_install() {
   else
     info "$(t app.newapi.info.user_exists "$SERVICE_USER")"
   fi
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
     error "$(t app.newapi.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
     error "$(t app.newapi.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
   fi
@@ -5784,6 +5789,11 @@ _apt_codename() {
 _validate_config_values() {
   app_validate_port "$PORT" "PORT"
   app_validate_domain "SUB2API_DOMAIN" "$SUB2API_DOMAIN"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 get_latest_release() {
   local json tag
@@ -6796,12 +6806,14 @@ do_install() {
   else
     info "$(t app.sub2api.info.user_exists "$SERVICE_USER")"
   fi
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$CONFIG_DIR" "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR"; then
     error "$(t app.sub2api.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
   fi
@@ -7429,6 +7441,12 @@ _validate_config_values() {
   fi
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
   app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
+  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
+    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed
@@ -7732,11 +7750,12 @@ do_install() {
   else
     warn "$(t app.vaultwarden.warn.user_exists "$VW_USER")"
   fi
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   if ! mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"; then
     error "$(t app.vaultwarden.error.dir_create "$VW_DATA_DIR" "$VW_BACKUP_DIR")"
   fi
-  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
-  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"; then
     error "$(t app.vaultwarden.error.dir_owner "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR")"
   fi
@@ -8879,7 +8898,8 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
-  require_safe_path "VW_BIN_DIR" "$(dirname "$VW_BIN")"
+  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
+    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
   local _cleanup_path
   while IFS= read -r -d '' _cleanup_path; do
     if ! rm -f "$_cleanup_path"; then
@@ -9000,6 +9020,9 @@ _validate_config_values() {
   app_validate_bool "ENABLE_NGINX" "$ENABLE_NGINX"
   app_validate_bool "CSAI_HTTPS" "$CSAI_HTTPS"
   app_validate_bool "OPEN_FIREWALL" "$OPEN_FIREWALL"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -9354,11 +9377,12 @@ restore_update_backup() {
 }
 install_runtime_dirs() {
   step "$(t app.cyberstrikeai.step.runtime_dirs)"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"; then
     error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$BACKUP_DIR"; then
     error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
@@ -10837,6 +10861,9 @@ check_connectivity() {
 _validate_config_values() {
   app_validate_port "$TICKFLOW_PORT" "TICKFLOW_PORT"
   app_validate_domain "TICKFLOW_DOMAIN" "$TICKFLOW_DOMAIN"
+  require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  require_safe_path "TICKFLOW_DATA_DIR" "$TICKFLOW_DATA_DIR"
+  require_safe_path "TICKFLOW_LOG_DIR" "$TICKFLOW_LOG_DIR"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
     warn "$(t app.tickflow.warn.auth_password_short)"
   fi

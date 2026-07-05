@@ -1774,6 +1774,12 @@ _validate_config_values() {
   fi
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
   app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
+  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
+    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
 }
 get_installed_version() {
   [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed
@@ -2077,11 +2083,12 @@ do_install() {
   else
     warn "$(t app.vaultwarden.warn.user_exists "$VW_USER")"
   fi
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   if ! mkdir -p "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")" "$VW_BACKUP_DIR"; then
     error "$(t app.vaultwarden.error.dir_create "$VW_DATA_DIR" "$VW_BACKUP_DIR")"
   fi
-  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
-  require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR" "$(dirname "$VW_LOG_FILE")"; then
     error "$(t app.vaultwarden.error.dir_owner "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR")"
   fi
@@ -3224,7 +3231,8 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_systemd)"
   rm -f "${VW_BIN}"
-  require_safe_path "VW_BIN_DIR" "$(dirname "$VW_BIN")"
+  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
+    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
   local _cleanup_path
   while IFS= read -r -d '' _cleanup_path; do
     if ! rm -f "$_cleanup_path"; then

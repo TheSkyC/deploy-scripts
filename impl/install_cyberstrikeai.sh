@@ -53,6 +53,9 @@ _validate_config_values() {
   app_validate_bool "ENABLE_NGINX" "$ENABLE_NGINX"
   app_validate_bool "CSAI_HTTPS" "$CSAI_HTTPS"
   app_validate_bool "OPEN_FIREWALL" "$OPEN_FIREWALL"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 preflight_check() {
   [[ $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
@@ -407,11 +410,12 @@ restore_update_backup() {
 }
 install_runtime_dirs() {
   step "$(t app.cyberstrikeai.step.runtime_dirs)"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! mkdir -p "$LOG_DIR" "$INSTALL_DIR/data" "$INSTALL_DIR/tmp" "$BACKUP_DIR"; then
     error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
   fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$BACKUP_DIR"; then
     error "$(t app.cyberstrikeai.error.runtime_dirs "$INSTALL_DIR" "$BACKUP_DIR")"
   fi

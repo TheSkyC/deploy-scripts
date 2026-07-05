@@ -1052,6 +1052,9 @@ check_connectivity() {
 _validate_config_values() {
   app_validate_port "$TICKFLOW_PORT" "TICKFLOW_PORT"
   app_validate_domain "TICKFLOW_DOMAIN" "$TICKFLOW_DOMAIN"
+  require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  require_safe_path "TICKFLOW_DATA_DIR" "$TICKFLOW_DATA_DIR"
+  require_safe_path "TICKFLOW_LOG_DIR" "$TICKFLOW_LOG_DIR"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
     warn "$(t app.tickflow.warn.auth_password_short)"
   fi

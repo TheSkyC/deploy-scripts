@@ -402,7 +402,7 @@ check_safe_path_guard() {
   awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_install_dir_guard=0; saw_vw_bin_guard=0; next }
       in_uninstall && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_dir_guard=1 }
-      in_uninstall && /require_safe_path "VW_BIN_DIR" "\$\(dirname "\$VW_BIN"\)"/ { saw_vw_bin_guard=1 }
+      in_uninstall && /error "\$\(t error\.unsafe_path "VW_BIN" "\$\{VW_BIN:-empty\}"\)"/ { saw_vw_bin_guard=1 }
       in_uninstall && /find "\$INSTALL_DIR" -maxdepth 1 -name "(new-api|sub2api)\./ {
         if (!saw_install_dir_guard) {
           printf "%s uninstall cleanup must validate INSTALL_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
@@ -411,12 +411,85 @@ check_safe_path_guard() {
       }
       in_uninstall && /find "\$\(dirname "\$VW_BIN"\)" -maxdepth 1 -name "vaultwarden\.bak\./ {
         if (!saw_vw_bin_guard) {
-          printf "%s uninstall cleanup must validate VW_BIN_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
+          printf "%s Vaultwarden uninstall must validate VW_BIN before deleting generated binary backups\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
       in_uninstall && /^}/ { in_uninstall=0 }
     ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
+}
+
+check_managed_paths_are_validated() {
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; next }
+      in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
+      in_func && /require_safe_path "DATA_DIR" "\$DATA_DIR"/ { saw_data=1 }
+      in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
+      in_func && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /^}/ {
+        if (!(saw_install && saw_data && saw_log && saw_backup)) {
+          printf "%s NewAPI must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; next }
+      in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
+      in_func && /require_safe_path "DATA_DIR" "\$DATA_DIR"/ { saw_data=1 }
+      in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
+      in_func && /require_safe_path "CONFIG_DIR" "\$CONFIG_DIR"/ { saw_config=1 }
+      in_func && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /^}/ {
+        if (!(saw_install && saw_data && saw_log && saw_config && saw_backup)) {
+          printf "%s Sub2API must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; next }
+      in_func && /require_safe_path "VW_DATA_DIR" "\$VW_DATA_DIR"/ { saw_data=1 }
+      in_func && /require_safe_path "VW_WEB_DIR" "\$VW_WEB_DIR"/ { saw_web=1 }
+      in_func && /require_safe_path "LOG_DIR" "\$\(dirname "\$VW_LOG_FILE"\)"/ { saw_log=1 }
+      in_func && /require_safe_path "VW_BACKUP_DIR" "\$VW_BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /error "\$\(t error\.unsafe_path "VW_BIN" "\$\{VW_BIN:-empty\}"\)"/ { saw_bin=1 }
+      in_func && /^}/ {
+        if (!(saw_data && saw_web && saw_log && saw_backup && saw_bin)) {
+          printf "%s Vaultwarden must validate managed paths and VW_BIN before use\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; next }
+      in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
+      in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
+      in_func && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /^}/ {
+        if (!(saw_install && saw_log && saw_backup)) {
+          printf "%s CyberStrikeAI must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  awk '
+      /_validate_config_values\(\)/ { in_func=1; next }
+      in_func && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$TICKFLOW_INSTALL_DIR"/ { saw_install=1 }
+      in_func && /require_safe_path "TICKFLOW_DATA_DIR" "\$TICKFLOW_DATA_DIR"/ { saw_data=1 }
+      in_func && /require_safe_path "TICKFLOW_LOG_DIR" "\$TICKFLOW_LOG_DIR"/ { saw_log=1 }
+      in_func && /^}/ {
+        if (!(saw_install && saw_data && saw_log)) {
+          printf "%s TickFlow must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
 check_tickflow_preflight_defers_docker_runtime_checks() {
@@ -5327,6 +5400,7 @@ main() {
   check_bundled_impl_cleanup
   check_bundled_impl_failure_cleanup
   check_safe_path_guard
+  check_managed_paths_are_validated
   check_tickflow_preflight_defers_docker_runtime_checks
   check_tickflow_env_rewrites_preserve_existing_secrets
   check_tickflow_paths_are_guarded
