@@ -63,6 +63,8 @@ _validate_config_values() {
   fi
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
   app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
+  app_validate_system_name "VW_USER" "$VW_USER"
+  app_validate_system_name "VW_GROUP" "$VW_GROUP"
   require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
   require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
   require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"

@@ -26,6 +26,44 @@ app_validate_domain() {
   fi
 }
 
+app_validate_system_name() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,63}$ ]]; then
+    error "$(t error.system_name_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_systemd_name() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Za-z0-9_.@-]+$ ]] \
+      || [[ "$value" == .* || "$value" == *. || "$value" == *..* || "$value" == *"/"* ]]; then
+    error "$(t error.systemd_name_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_github_repo() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+      || [[ "$value" == *..* || "$value" == .* || "$value" == */.* || "$value" == *. || "$value" == *.*/ ]]; then
+    error "$(t error.github_repo_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_git_ref() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Za-z0-9._/-]+$ ]] \
+      || [[ "$value" == -* || "$value" == */ || "$value" == *. || "$value" == *..* || "$value" == *@\{* || "$value" == *//* ]]; then
+    error "$(t error.git_ref_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_db_identifier() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then
+    error "$(t error.db_identifier_invalid "$name" "$value")"
+  fi
+}
+
 # Echo the standard deployment config path for the current app.
 app_conf_file() {
   local standard="/etc/${APP_ID:-app}-deploy.conf"

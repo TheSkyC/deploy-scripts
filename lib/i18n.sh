@@ -68,6 +68,11 @@ __deploy_i18n_message() {
     error.port_invalid) echo "%s is invalid: '%s'. Must be a port between 1 and 65535.|%s 无效：'%s'，请输入 1-65535 之间的端口号。" ;;
     error.bool_invalid) echo "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0.|%s 无效：'%s'，请输入 true/false、yes/no、on/off 或 1/0。" ;;
     error.domain_invalid) echo "%s is invalid: '%s'. Use a DNS name like app.example.com, or leave it empty.|%s 无效：'%s'，请使用类似 app.example.com 的域名，或留空。" ;;
+    error.system_name_invalid) echo "%s is invalid: '%s'. Use a Linux user/group style name: letters, numbers, underscore, or dash; start with a letter or underscore.|%s 无效：'%s'，请使用 Linux 用户/组风格名称：字母、数字、下划线或短横线，并以字母或下划线开头。" ;;
+    error.systemd_name_invalid) echo "%s is invalid: '%s'. Use a systemd-safe unit name with letters, numbers, dot, underscore, at-sign, or dash only.|%s 无效：'%s'，请使用 systemd 安全名称，仅包含字母、数字、点、下划线、@ 或短横线。" ;;
+    error.github_repo_invalid) echo "%s is invalid: '%s'. Use owner/repository with GitHub-safe name characters.|%s 无效：'%s'，请使用 owner/repository 格式，并仅包含 GitHub 安全名称字符。" ;;
+    error.git_ref_invalid) echo "%s is invalid: '%s'. Use a simple branch/tag ref without spaces, shell metacharacters, '..', or '@{'.|%s 无效：'%s'，请使用简单分支/标签引用，不包含空格、shell 特殊字符、'..' 或 '@{'。" ;;
+    error.db_identifier_invalid) echo "%s is invalid: '%s'. Use a database identifier with letters, numbers, or underscore; start with a letter or underscore.|%s 无效：'%s'，请使用数据库标识符：字母、数字或下划线，并以字母或下划线开头。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;

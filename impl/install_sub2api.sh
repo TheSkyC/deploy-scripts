@@ -72,6 +72,11 @@ _apt_codename() {
 _validate_config_values() {
   app_validate_port "$PORT" "PORT"
   app_validate_domain "SUB2API_DOMAIN" "$SUB2API_DOMAIN"
+  app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"
+  app_validate_system_name "SERVICE_USER" "$SERVICE_USER"
+  app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"
+  app_validate_db_identifier "PG_USER" "$PG_USER"
+  app_validate_db_identifier "PG_DB" "$PG_DB"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"

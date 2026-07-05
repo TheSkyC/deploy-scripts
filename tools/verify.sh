@@ -1483,6 +1483,53 @@ check_nginx_domains_are_validated() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_config_value_validators() {
+  "$BASH_BIN" -c '
+    source lib/core.sh
+
+    app_validate_systemd_name SERVICE_NAME new-api
+    app_validate_system_name SERVICE_USER newapi
+    app_validate_github_repo GITHUB_REPO QuantumNous/new-api
+    app_validate_git_ref GITHUB_BRANCH release/v1.2.3
+    app_validate_db_identifier PG_DB sub2api_db
+
+    validator_must_reject() {
+      local label="$1"
+      shift
+      if ( "$@" ) >/dev/null 2>&1; then
+        echo "Validator unexpectedly accepted invalid ${label}." >&2
+        exit 1
+      fi
+    }
+
+    validator_must_reject systemd-name app_validate_systemd_name SERVICE_NAME "../new-api"
+    validator_must_reject system-name app_validate_system_name SERVICE_USER "new api"
+    validator_must_reject github-repo app_validate_github_repo GITHUB_REPO "owner/repo;rm"
+    validator_must_reject git-ref app_validate_git_ref GITHUB_BRANCH "feature/../main"
+    validator_must_reject db-identifier app_validate_db_identifier PG_DB "sub2api-db"
+  '
+
+  local checks=(
+    'impl/install_newapi.sh|app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"'
+    'impl/install_newapi.sh|app_validate_system_name "SERVICE_USER" "$SERVICE_USER"'
+    'impl/install_newapi.sh|app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"'
+    'impl/install_sub2api.sh|app_validate_db_identifier "PG_USER" "$PG_USER"'
+    'impl/install_sub2api.sh|app_validate_db_identifier "PG_DB" "$PG_DB"'
+    'impl/install_cyberstrikeai.sh|app_validate_git_ref "GITHUB_BRANCH" "$GITHUB_BRANCH"'
+    'impl/install_tickflow.sh|app_validate_git_ref "TICKFLOW_BRANCH" "$TICKFLOW_BRANCH"'
+    'impl/install_vaultwarden.sh|app_validate_system_name "VW_USER" "$VW_USER"'
+  )
+  local check file pattern
+  for check in "${checks[@]}"; do
+    file="${check%%|*}"
+    pattern="${check#*|}"
+    if ! grep -Fq "$pattern" "$file"; then
+      echo "${file} must validate config value with: ${pattern}" >&2
+      return 1
+    fi
+  done
+}
+
 check_vaultwarden_config_values_are_validated() {
   awk '
       /app\.vaultwarden\.error\.port_invalid/ { saw_port=1 }
@@ -5538,6 +5585,7 @@ main() {
   check_cyberstrikeai_ports_are_validated
   check_cyberstrikeai_booleans_are_validated
   check_nginx_domains_are_validated
+  check_config_value_validators
   check_vaultwarden_config_values_are_validated
   check_status_port_matches_are_bounded
   check_go_tarball_failures_cleanup

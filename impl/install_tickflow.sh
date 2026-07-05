@@ -49,6 +49,9 @@ check_connectivity() {
 _validate_config_values() {
   app_validate_port "$TICKFLOW_PORT" "TICKFLOW_PORT"
   app_validate_domain "TICKFLOW_DOMAIN" "$TICKFLOW_DOMAIN"
+  app_validate_systemd_name "TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME"
+  app_validate_github_repo "TICKFLOW_REPO" "$TICKFLOW_REPO"
+  app_validate_git_ref "TICKFLOW_BRANCH" "$TICKFLOW_BRANCH"
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   require_safe_path "TICKFLOW_DATA_DIR" "$TICKFLOW_DATA_DIR"
   require_safe_path "TICKFLOW_LOG_DIR" "$TICKFLOW_LOG_DIR"
