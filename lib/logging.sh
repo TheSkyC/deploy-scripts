@@ -8,6 +8,16 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == "dumb" ]]; then
+  RED=''
+  GREEN=''
+  YELLOW=''
+  BLUE=''
+  CYAN=''
+  BOLD=''
+  NC=''
+fi
+
 info() { echo -e "${BLUE}[i]${NC} $*" >&2; }
 success() { echo -e "${GREEN}[+]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[!]${NC} $*" >&2; }

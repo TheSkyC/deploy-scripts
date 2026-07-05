@@ -86,6 +86,28 @@ check_localized_dispatch() {
   expect_failure_output zh dist/install_tickflow.sh "无效选项"
 }
 
+check_no_color_output() {
+  local output
+
+  set +e
+  output="$(NO_COLOR=1 DEPLOY_LANG=en "$BASH_BIN" install_newapi.sh not-a-command 2>&1)"
+  set -e
+  [[ "$output" != *$'\033'* ]] || {
+    echo "NO_COLOR=1 output must not contain ANSI escape sequences." >&2
+    echo "$output" >&2
+    return 1
+  }
+
+  set +e
+  output="$(TERM=dumb DEPLOY_LANG=en "$BASH_BIN" dist/install_newapi.sh not-a-command 2>&1)"
+  set -e
+  [[ "$output" != *$'\033'* ]] || {
+    echo "TERM=dumb output must not contain ANSI escape sequences." >&2
+    echo "$output" >&2
+    return 1
+  }
+}
+
 expect_manager_failure_output() {
   local lang="$1"
   local script="$2"
@@ -5584,6 +5606,7 @@ main() {
     dispatch)
       build_verified_release
       check_localized_dispatch
+      check_no_color_output
       check_no_argument_menu
       check_manager_list
       check_app_registry_metadata
@@ -5608,6 +5631,7 @@ main() {
   build_verified_release
   check_release_syntax
   check_localized_dispatch
+  check_no_color_output
   check_no_argument_menu
   check_manager_list
   check_app_registry_metadata
