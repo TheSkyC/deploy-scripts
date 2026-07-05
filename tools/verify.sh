@@ -106,6 +106,10 @@ check_blog_status_dispatch() {
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
   expect_success_output en dist/install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh dist/install_blog.sh status "检查 Hugo Blog 部署状态"
+  expect_failure_output en install_blog.sh "Please run as root" backup
+  expect_failure_output zh install_blog.sh "请使用 root 权限运行" backup
+  expect_failure_output en dist/install_blog.sh "Please run as root" backup
+  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" backup
   expect_failure_output en install_blog.sh "does not support update" update
   expect_failure_output zh install_blog.sh "暂不支持 update" update
   expect_failure_output en dist/install_blog.sh "does not support update" update

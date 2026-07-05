@@ -521,7 +521,31 @@ i18n_register_many \
   "访问 http://127.0.0.1/ 返回 HTTP %s（Host: %s）" \
   app.blog.status.local_skip \
   "curl is not installed; skipping local HTTP health check" \
-  "curl 未安装，跳过本机 HTTP 健康检查"
+  "curl 未安装，跳过本机 HTTP 健康检查" \
+  app.blog.step_backup \
+  "Create Hugo Blog backup" \
+  "创建 Hugo Blog 备份" \
+  app.blog.backup.warn_missing \
+  "Skipping missing backup source: %s" \
+  "跳过不存在的备份来源：%s" \
+  app.blog.backup.error_no_sources \
+  "No Blog files were found to back up." \
+  "未找到可备份的 Blog 文件。" \
+  app.blog.backup.error_dir \
+  "Cannot prepare backup directory: %s" \
+  "无法准备备份目录：%s" \
+  app.blog.backup.error_archive \
+  "Failed to create backup archive: %s" \
+  "创建备份归档失败：%s" \
+  app.blog.backup.success \
+  "Backup created: %s" \
+  "备份已创建：%s" \
+  app.blog.backup.cleaned \
+  "Removed expired backup: %s" \
+  "已删除过期备份：%s" \
+  app.blog.backup.clean_failed \
+  "Failed to remove expired backup: %s" \
+  "删除过期备份失败：%s"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"

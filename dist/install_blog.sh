@@ -1422,7 +1422,31 @@ i18n_register_many \
   "访问 http://127.0.0.1/ 返回 HTTP %s（Host: %s）" \
   app.blog.status.local_skip \
   "curl is not installed; skipping local HTTP health check" \
-  "curl 未安装，跳过本机 HTTP 健康检查"
+  "curl 未安装，跳过本机 HTTP 健康检查" \
+  app.blog.step_backup \
+  "Create Hugo Blog backup" \
+  "创建 Hugo Blog 备份" \
+  app.blog.backup.warn_missing \
+  "Skipping missing backup source: %s" \
+  "跳过不存在的备份来源：%s" \
+  app.blog.backup.error_no_sources \
+  "No Blog files were found to back up." \
+  "未找到可备份的 Blog 文件。" \
+  app.blog.backup.error_dir \
+  "Cannot prepare backup directory: %s" \
+  "无法准备备份目录：%s" \
+  app.blog.backup.error_archive \
+  "Failed to create backup archive: %s" \
+  "创建备份归档失败：%s" \
+  app.blog.backup.success \
+  "Backup created: %s" \
+  "备份已创建：%s" \
+  app.blog.backup.cleaned \
+  "Removed expired backup: %s" \
+  "已删除过期备份：%s" \
+  app.blog.backup.clean_failed \
+  "Failed to remove expired backup: %s" \
+  "删除过期备份失败：%s"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
@@ -1455,6 +1479,8 @@ BLOG_LANG="${BLOG_LANG:-$(t app.blog.site_lang)}"
 SITE_DIR="/opt/blog/site"
 PUBLIC_DIR="/opt/blog/public"
 NGINX_ROOT="/var/www/blog"
+BLOG_BACKUP_DIR="/opt/blog-backups"
+BLOG_BACKUP_KEEP_DAYS="${BLOG_BACKUP_KEEP_DAYS:-30}"
 THEME_NAME="hugo-theme-stack"
 THEME_REPO="https://github.com/CaiJimmy/hugo-theme-stack.git"
 ENABLE_CMS=true
@@ -2257,4 +2283,79 @@ do_status() {
   else
     printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_skip)"
   fi
+}
+
+do_backup() {
+  show_banner
+  require_root "backup"
+  acquire_lock
+  step "$(t app.blog.step_backup)"
+  require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+  if ! mkdir -p "$BLOG_BACKUP_DIR"; then
+    error "$(t app.blog.backup.error_dir "$BLOG_BACKUP_DIR")"
+  fi
+
+  local timestamp archive archive_tmp stage copied=false
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  archive="${BLOG_BACKUP_DIR}/blog_${timestamp}.tar.gz"
+  archive_tmp="${archive}.tmp"
+  if ! stage=$(mktemp -d "${BLOG_BACKUP_DIR}/.blog-backup.XXXXXX"); then
+    error "$(t app.blog.backup.error_dir "$BLOG_BACKUP_DIR")"
+  fi
+
+  _backup_dir_into_stage() {
+    local source="$1" target_name="$2"
+    if [[ ! -d "$source" ]]; then
+      warn "$(t app.blog.backup.warn_missing "$source")"
+      return 0
+    fi
+    if ! mkdir -p "${stage}/${target_name}" || ! cp -a "${source}/." "${stage}/${target_name}/"; then
+      rm -rf "$stage" "$archive_tmp"
+      error "$(t app.blog.backup.error_archive "$archive")"
+    fi
+    copied=true
+  }
+
+  _backup_file_into_stage() {
+    local source="$1" target_name="$2"
+    if [[ ! -f "$source" ]]; then
+      warn "$(t app.blog.backup.warn_missing "$source")"
+      return 0
+    fi
+    if ! cp -a "$source" "${stage}/${target_name}"; then
+      rm -rf "$stage" "$archive_tmp"
+      error "$(t app.blog.backup.error_archive "$archive")"
+    fi
+    copied=true
+  }
+
+  _backup_dir_into_stage "$SITE_DIR" site
+  _backup_dir_into_stage "$PUBLIC_DIR" public
+  _backup_dir_into_stage "$NGINX_ROOT" nginx-root
+  _backup_file_into_stage /etc/nginx/sites-available/blog nginx-site.conf
+  _backup_file_into_stage /usr/local/bin/blog-publish blog-publish
+
+  if [[ "$copied" != "true" ]]; then
+    rm -rf "$stage" "$archive_tmp"
+    error "$(t app.blog.backup.error_no_sources)"
+  fi
+  if ! tar -czf "$archive_tmp" -C "$stage" .; then
+    rm -rf "$stage" "$archive_tmp"
+    error "$(t app.blog.backup.error_archive "$archive")"
+  fi
+  rm -rf "$stage"
+  if ! chmod 600 "$archive_tmp" || ! mv "$archive_tmp" "$archive"; then
+    rm -f "$archive_tmp"
+    error "$(t app.blog.backup.error_archive "$archive")"
+  fi
+  success "$(t app.blog.backup.success "$archive")"
+
+  local old_backup
+  while IFS= read -r -d '' old_backup; do
+    if rm -f "$old_backup"; then
+      info "$(t app.blog.backup.cleaned "$old_backup")"
+    else
+      warn "$(t app.blog.backup.clean_failed "$old_backup")"
+    fi
+  done < <(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name 'blog_*.tar.gz' -type f -mtime "+${BLOG_BACKUP_KEEP_DAYS}" -print0 2>/dev/null)
 }
