@@ -87,14 +87,14 @@ check_localized_dispatch() {
   expect_manager_failure_output zh deploy.sh " newapi " "无效选项" " not-a-command "
   expect_manager_failure_output en dist/deploy.sh " newapi " "Invalid choice" " not-a-command "
   expect_manager_failure_output zh dist/deploy.sh " newapi " "无效选项" " not-a-command "
-  expect_failure_output en install_blog.sh "does not support update" update
-  expect_failure_output zh install_blog.sh "暂不支持 update" update
-  expect_failure_output en dist/install_blog.sh "does not support update" update
-  expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
-  expect_manager_failure_output en deploy.sh blog "does not support update" update
-  expect_manager_failure_output zh deploy.sh blog "暂不支持 update" update
-  expect_manager_failure_output en dist/deploy.sh blog "does not support update" update
-  expect_manager_failure_output zh dist/deploy.sh blog "暂不支持 update" update
+  expect_failure_output en install_blog.sh "Please run as root" update
+  expect_failure_output zh install_blog.sh "请使用 root 权限运行" update
+  expect_failure_output en dist/install_blog.sh "Please run as root" update
+  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" update
+  expect_manager_failure_output en deploy.sh blog "Please run as root" update
+  expect_manager_failure_output zh deploy.sh blog "请使用 root 权限运行" update
+  expect_manager_failure_output en dist/deploy.sh blog "Please run as root" update
+  expect_manager_failure_output zh dist/deploy.sh blog "请使用 root 权限运行" update
   expect_failure_output en install_tickflow.sh "Invalid choice"
   expect_failure_output zh install_tickflow.sh "无效选项"
   expect_failure_output en dist/install_tickflow.sh "Invalid choice"
@@ -114,10 +114,10 @@ check_blog_status_dispatch() {
   expect_failure_output zh install_blog.sh "请使用 root 权限运行" uninstall
   expect_failure_output en dist/install_blog.sh "Please run as root" uninstall
   expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" uninstall
-  expect_failure_output en install_blog.sh "does not support update" update
-  expect_failure_output zh install_blog.sh "暂不支持 update" update
-  expect_failure_output en dist/install_blog.sh "does not support update" update
-  expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
+  expect_failure_output en install_blog.sh "Please run as root" update
+  expect_failure_output zh install_blog.sh "请使用 root 权限运行" update
+  expect_failure_output en dist/install_blog.sh "Please run as root" update
+  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" update
 }
 
 check_no_color_output() {

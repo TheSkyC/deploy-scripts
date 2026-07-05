@@ -160,6 +160,70 @@ wait_for_service() {
   systemctl is-active --quiet "$service"
 }
 
+_blog_build_site() {
+  step "$(t app.blog.step_build)"
+  if ! mkdir -p "$PUBLIC_DIR"; then
+    error "$(t app.blog.error.public_dir "$PUBLIC_DIR")"
+  fi
+  if ! cd "$SITE_DIR"; then
+    error "$(t app.blog.error.site_access "$SITE_DIR")"
+  fi
+  if ! git add -A; then
+    error "$(t app.blog.error.git_stage "$SITE_DIR")"
+  fi
+  if git diff --cached --quiet; then
+    :
+  else
+    _git_diff_status=$?
+    if [[ "$_git_diff_status" -eq 1 ]]; then
+      if ! git commit -q -m "init: add site content"; then
+        error "$(t app.blog.error.git_commit "$SITE_DIR")"
+      fi
+    else
+      error "$(t app.blog.error.git_diff "$SITE_DIR")"
+    fi
+  fi
+  info "$(t app.blog.git_committed)"
+  hugo --destination "$PUBLIC_DIR" --gc --minify \
+    || error "$(t app.blog.error.hugo_build)"
+  PAGE_COUNT=$(find "$PUBLIC_DIR" -name "*.html" | wc -l)
+  success "$(t app.blog.build_complete "$PAGE_COUNT")"
+}
+
+_blog_deploy_public() {
+  step "$(t app.blog.step_nginx)"
+  NGINX_ROOT_PARENT="$(dirname "$NGINX_ROOT")"
+  NGINX_ROOT_NAME="$(basename "$NGINX_ROOT")"
+  if ! mkdir -p "$NGINX_ROOT_PARENT"; then
+    error "$(t app.blog.error.nginx_root_parent "$NGINX_ROOT_PARENT")"
+  fi
+  if ! DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"; then
+    error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+  fi
+  DEPLOY_BAK="${NGINX_ROOT}.bak.$(date +%Y%m%d%H%M%S)"
+  if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
+    if [[ -e "$NGINX_ROOT" || -L "$NGINX_ROOT" ]]; then
+      if ! mv "$NGINX_ROOT" "$DEPLOY_BAK"; then
+        rm -rf "$DEPLOY_TMP"
+        error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+      fi
+    fi
+    if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
+      if [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]]; then
+        rm -rf "$DEPLOY_BAK"
+      fi
+    else
+      rm -rf "$DEPLOY_TMP"
+      restore_nginx_root_backup || error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+      error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+    fi
+  else
+    rm -rf "$DEPLOY_TMP"
+    error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
+  fi
+  success "$(t app.blog.static_deployed "$NGINX_ROOT")"
+}
+
 do_install() {
 echo -e "\n${BOLD}${CYAN}"
 cat << 'EOF'
@@ -523,64 +587,8 @@ YAML
   success "$(t app.blog.cms_config_created "${CMS_ADMIN_DIR}/")"
   info "$(t app.blog.cms_admin_url "$CMS_SITE_URL")"
 fi
-step "$(t app.blog.step_build)"
-if ! mkdir -p "$PUBLIC_DIR"; then
-  error "$(t app.blog.error.public_dir "$PUBLIC_DIR")"
-fi
-if ! cd "$SITE_DIR"; then
-  error "$(t app.blog.error.site_access "$SITE_DIR")"
-fi
-if ! git add -A; then
-  error "$(t app.blog.error.git_stage "$SITE_DIR")"
-fi
-if git diff --cached --quiet; then
-  :
-else
-  _git_diff_status=$?
-  if [[ "$_git_diff_status" -eq 1 ]]; then
-    if ! git commit -q -m "init: add site content"; then
-      error "$(t app.blog.error.git_commit "$SITE_DIR")"
-    fi
-  else
-    error "$(t app.blog.error.git_diff "$SITE_DIR")"
-  fi
-fi
-info "$(t app.blog.git_committed)"
-hugo --destination "$PUBLIC_DIR" --gc --minify \
-  || error "$(t app.blog.error.hugo_build)"
-PAGE_COUNT=$(find "$PUBLIC_DIR" -name "*.html" | wc -l)
-success "$(t app.blog.build_complete "$PAGE_COUNT")"
-step "$(t app.blog.step_nginx)"
-NGINX_ROOT_PARENT="$(dirname "$NGINX_ROOT")"
-NGINX_ROOT_NAME="$(basename "$NGINX_ROOT")"
-if ! mkdir -p "$NGINX_ROOT_PARENT"; then
-  error "$(t app.blog.error.nginx_root_parent "$NGINX_ROOT_PARENT")"
-fi
-if ! DEPLOY_TMP="$(mktemp -d "${NGINX_ROOT_PARENT}/.${NGINX_ROOT_NAME}.new.XXXXXX")"; then
-  error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
-fi
-DEPLOY_BAK="${NGINX_ROOT}.bak.$(date +%Y%m%d%H%M%S)"
-if cp -a "${PUBLIC_DIR}/." "$DEPLOY_TMP/"; then
-  if [[ -e "$NGINX_ROOT" || -L "$NGINX_ROOT" ]]; then
-    if ! mv "$NGINX_ROOT" "$DEPLOY_BAK"; then
-      rm -rf "$DEPLOY_TMP"
-      error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
-    fi
-  fi
-  if mv "$DEPLOY_TMP" "$NGINX_ROOT"; then
-    if [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]]; then
-      rm -rf "$DEPLOY_BAK"
-    fi
-  else
-    rm -rf "$DEPLOY_TMP"
-    restore_nginx_root_backup || error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
-    error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
-  fi
-else
-  rm -rf "$DEPLOY_TMP"
-  error "$(t app.blog.error.static_deploy "$NGINX_ROOT")"
-fi
-success "$(t app.blog.static_deployed "$NGINX_ROOT")"
+_blog_build_site
+_blog_deploy_public
 _write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
 _write_nginx_config_file "$NGINX_CONF" << NGINX
@@ -812,6 +820,47 @@ do_status() {
   else
     printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_skip)"
   fi
+}
+
+do_update() {
+  show_banner
+  require_root "update"
+  command -v systemctl >/dev/null 2>&1 || error "$(t app.blog.error.systemd_required)"
+  command -v nginx >/dev/null 2>&1 || error "$(t app.blog.update.error_nginx_missing)"
+  command -v hugo >/dev/null 2>&1 || error "$(t app.blog.update.error_hugo_missing)"
+  acquire_lock
+  require_safe_path "SITE_DIR" "$SITE_DIR"
+  require_safe_path "PUBLIC_DIR" "$PUBLIC_DIR"
+  require_safe_path "NGINX_ROOT" "$NGINX_ROOT"
+  [[ -d "$SITE_DIR" ]] || error "$(t app.blog.update.error_not_installed "$SITE_DIR")"
+  [[ -d "${SITE_DIR}/.git" ]] || error "$(t app.blog.update.error_git_missing "$SITE_DIR")"
+  [[ -f /etc/nginx/sites-available/blog || -L /etc/nginx/sites-enabled/blog ]] \
+    || error "$(t app.blog.update.error_nginx_site_missing)"
+
+  _blog_build_site
+  _blog_deploy_public
+  _write_publish_script
+
+  if nginx -t >/dev/null 2>&1; then
+    if systemctl reload nginx; then
+      success "$(t app.blog.update.nginx_reloaded)"
+    else
+      warn "$(t app.blog.update.nginx_reload_failed)"
+    fi
+  else
+    nginx -t >&2 || true
+    warn "$(t app.blog.update.nginx_config_failed)"
+  fi
+
+  step "$(t app.blog.step_health)"
+  local http_code
+  http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || echo "000")
+  if [[ "$http_code" == "200" ]]; then
+    success "$(t app.blog.http_ok)"
+  else
+    warn "$(t app.blog.http_warn "$http_code")"
+  fi
+  success "$(t app.blog.update.success "$NGINX_ROOT")"
 }
 
 do_backup() {

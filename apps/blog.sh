@@ -522,6 +522,33 @@ i18n_register_many \
   app.blog.status.local_skip \
   "curl is not installed; skipping local HTTP health check" \
   "curl 未安装，跳过本机 HTTP 健康检查" \
+  app.blog.update.error_nginx_missing \
+  "nginx is not installed or not in PATH. Install or repair Nginx before updating the Blog." \
+  "nginx 未安装或不在 PATH 中。请先安装或修复 Nginx，再更新 Blog。" \
+  app.blog.update.error_hugo_missing \
+  "hugo is not installed or not in PATH. Install Hugo before updating the Blog." \
+  "hugo 未安装或不在 PATH 中。请先安装 Hugo，再更新 Blog。" \
+  app.blog.update.error_not_installed \
+  "Hugo Blog source is missing: %s. Run install before update." \
+  "Hugo Blog 源码目录不存在：%s。请先执行 install。" \
+  app.blog.update.error_git_missing \
+  "Hugo Blog source is not a Git repository: %s. Reinitialize it or rerun install before update." \
+  "Hugo Blog 源码目录不是 Git 仓库：%s。请重新初始化，或先重新执行 install。" \
+  app.blog.update.error_nginx_site_missing \
+  "Blog Nginx site config is missing. Run install before update, or recreate /etc/nginx/sites-available/blog." \
+  "Blog 的 Nginx 站点配置不存在。请先执行 install，或重建 /etc/nginx/sites-available/blog。" \
+  app.blog.update.nginx_reloaded \
+  "Nginx reloaded with the updated Blog files." \
+  "Nginx 已重载并使用更新后的 Blog 文件。" \
+  app.blog.update.nginx_reload_failed \
+  "Updated Blog files were deployed, but Nginx reload failed. Check manually: nginx -t && systemctl reload nginx" \
+  "Blog 文件已更新，但 Nginx reload 失败。请手动检查：nginx -t && systemctl reload nginx" \
+  app.blog.update.nginx_config_failed \
+  "Updated Blog files were deployed, but Nginx config validation failed. Check nginx -t before relying on the site." \
+  "Blog 文件已更新，但 Nginx 配置校验失败。请先检查 nginx -t，再继续使用站点。" \
+  app.blog.update.success \
+  "Hugo Blog update finished: %s" \
+  "Hugo Blog 更新完成：%s" \
   app.blog.step_backup \
   "Create Hugo Blog backup" \
   "创建 Hugo Blog 备份" \
