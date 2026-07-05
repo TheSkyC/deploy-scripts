@@ -3619,6 +3619,10 @@ check_vaultwarden_extract_tool_is_pinned_and_verified() {
     echo "Vaultwarden must not default docker-image-extract to a floating branch." >&2
     return 1
   fi
+  if grep -R -nE 'VW_IMAGE_TAG="\$\{VW_IMAGE_TAG:-(latest|latest-[^}]*)\}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden must not default to a mutable image tag." >&2
+    return 1
+  fi
   if grep -R -n 'EXTRACT_TOOL_SHA256="\${EXTRACT_TOOL_SHA256:-}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden must ship a pinned docker-image-extract SHA256 by default." >&2
     return 1
