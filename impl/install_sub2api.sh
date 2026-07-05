@@ -118,20 +118,20 @@ verify_checksum() {
   local checksum_url; checksum_url=$(get_checksum_url "$tag")
   local tmp_sum
   if ! tmp_sum=$(mktemp); then
-    warn "$(t app.sub2api.warn.checksum_download)"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.checksum_temp)"
   fi
   if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
-    warn "$(t app.sub2api.warn.checksum_download)"
     rm -f "$tmp_sum"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.checksum_download)"
   fi
   local expected_hash
   expected_hash=$(grep " ${expected_name}$" "$tmp_sum" 2>/dev/null | awk '{print $1}' || true)
   rm -f "$tmp_sum"
   if [[ -z "$expected_hash" ]]; then
-    warn "$(t app.sub2api.warn.checksum_missing "$expected_name")"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.checksum_missing "$expected_name")"
   fi
   local actual_hash
   if command -v sha256sum &>/dev/null; then
@@ -139,8 +139,8 @@ verify_checksum() {
   elif command -v shasum &>/dev/null; then
     actual_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
   else
-    warn "$(t app.sub2api.warn.sha_tool_missing)"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.sha_tool_missing)"
   fi
   if [[ "$actual_hash" != "$expected_hash" ]]; then
     rm -f "$archive"

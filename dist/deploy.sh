@@ -1809,15 +1809,18 @@ i18n_register_many \
   app.sub2api.warn.github_api \
   "Cannot reach GitHub API." \
   "无法访问 GitHub API。" \
-  app.sub2api.warn.checksum_download \
-  "Cannot download checksums.txt; skipping SHA256 verification. Manual verification is recommended." \
-  "无法下载 checksums.txt，跳过 SHA256 校验（建议手动核验）。" \
-  app.sub2api.warn.checksum_missing \
-  "checksums.txt does not contain a checksum for %s; skipping verification." \
-  "checksums.txt 中未找到 %s 的校验值，跳过校验。" \
-  app.sub2api.warn.sha_tool_missing \
-  "sha256sum / shasum was not found; skipping SHA256 verification." \
-  "未找到 sha256sum / shasum，跳过 SHA256 校验。" \
+  app.sub2api.error.checksum_temp \
+  "Cannot create a temporary checksum file; refusing to install an unverified archive." \
+  "无法创建临时校验文件，拒绝安装未经校验的归档文件。" \
+  app.sub2api.error.checksum_download \
+  "Cannot download checksums.txt; refusing to install an unverified archive." \
+  "无法下载 checksums.txt，拒绝安装未经校验的归档文件。" \
+  app.sub2api.error.checksum_missing \
+  "checksums.txt does not contain a checksum for %s; refusing to install an unverified archive." \
+  "checksums.txt 中未找到 %s 的校验值，拒绝安装未经校验的归档文件。" \
+  app.sub2api.error.sha_tool_missing \
+  "sha256sum / shasum was not found; refusing to install an unverified archive." \
+  "未找到 sha256sum / shasum，拒绝安装未经校验的归档文件。" \
   app.sub2api.error.sha_failed \
   "SHA256 verification failed!\n  expected: %s\n  actual: %s" \
   "SHA256 校验失败！\n  期望：%s\n  实际：%s" \
@@ -5903,20 +5906,20 @@ verify_checksum() {
   local checksum_url; checksum_url=$(get_checksum_url "$tag")
   local tmp_sum
   if ! tmp_sum=$(mktemp); then
-    warn "$(t app.sub2api.warn.checksum_download)"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.checksum_temp)"
   fi
   if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
-    warn "$(t app.sub2api.warn.checksum_download)"
     rm -f "$tmp_sum"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.checksum_download)"
   fi
   local expected_hash
   expected_hash=$(grep " ${expected_name}$" "$tmp_sum" 2>/dev/null | awk '{print $1}' || true)
   rm -f "$tmp_sum"
   if [[ -z "$expected_hash" ]]; then
-    warn "$(t app.sub2api.warn.checksum_missing "$expected_name")"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.checksum_missing "$expected_name")"
   fi
   local actual_hash
   if command -v sha256sum &>/dev/null; then
@@ -5924,8 +5927,8 @@ verify_checksum() {
   elif command -v shasum &>/dev/null; then
     actual_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
   else
-    warn "$(t app.sub2api.warn.sha_tool_missing)"
-    return 0
+    rm -f "$archive"
+    error "$(t app.sub2api.error.sha_tool_missing)"
   fi
   if [[ "$actual_hash" != "$expected_hash" ]]; then
     rm -f "$archive"

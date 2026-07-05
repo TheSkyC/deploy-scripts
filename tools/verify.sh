@@ -3292,6 +3292,11 @@ check_binary_restores_validate_permissions() {
 }
 
 check_download_validation_failures_cleanup() {
+  if grep -R -n 'app\.sub2api\.warn\.\(checksum_download\|checksum_missing\|sha_tool_missing\)' \
+      apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API checksum verification must fail closed instead of warning and continuing." >&2
+    return 1
+  fi
   awk '
       /verify_binary\(\)/ { in_func=1; saw_rm=0; next }
       in_func && /rm -f "\$bin"/ { saw_rm=1 }
@@ -3305,7 +3310,15 @@ check_download_validation_failures_cleanup() {
       in_func && /^}/ { in_func=0 }
     ' impl/install_newapi.sh dist/install_newapi.sh
   awk '
-      /verify_checksum\(\)/ { in_checksum=1; next }
+      /verify_checksum\(\)/ { in_checksum=1; saw_checksum_archive_rm=0; next }
+      in_checksum && /rm -f "\$archive"/ { saw_checksum_archive_rm=1 }
+      in_checksum && /error "\$\(t app\.sub2api\.error\.(checksum_temp|checksum_download|checksum_missing|sha_tool_missing)/ {
+        if (!saw_checksum_archive_rm) {
+          printf "%s does not remove the downloaded archive before checksum verification availability failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_checksum_archive_rm=0
+      }
       in_checksum && /if \[\[ "\$actual_hash" != "\$expected_hash" \]\]/ { in_sha_failure=1; saw_rm=0; next }
       in_sha_failure && /rm -f "\$archive"/ { saw_rm=1 }
       in_sha_failure && /error "\$\(t app\.sub2api\.error\.sha_failed/ {
@@ -3331,12 +3344,13 @@ check_download_validation_failures_cleanup() {
 
 check_download_temp_creation_failures_are_explicit() {
   awk '
-      /verify_checksum\(\)/ { in_func=1; saw_tmp=0; saw_warn=0; next }
+      /verify_checksum\(\)/ { in_func=1; saw_tmp=0; saw_rm=0; saw_error=0; next }
       in_func && index($0, "if ! tmp_sum=$(mktemp); then") { saw_tmp=1; next }
-      in_func && saw_tmp && index($0, "warn \"$(t app.sub2api.warn.checksum_download)\"") { saw_warn=1; next }
+      in_func && saw_tmp && /rm -f "\$archive"/ { saw_rm=1; next }
+      in_func && saw_tmp && index($0, "error \"$(t app.sub2api.error.checksum_temp)\"") { saw_error=1; next }
       in_func && index($0, "success \"$(t app.sub2api.success.sha_ok \"${actual_hash:0:16}\")\"") {
-        if (!(saw_tmp && saw_warn)) {
-          printf "%s Sub2API checksum temporary file creation failures must be explicit\n", FILENAME > "/dev/stderr"
+        if (!(saw_tmp && saw_rm && saw_error)) {
+          printf "%s Sub2API checksum temporary file creation failures must remove the archive and fail explicitly\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0

@@ -27,15 +27,18 @@ i18n_register_many \
   app.sub2api.warn.github_api \
   "Cannot reach GitHub API." \
   "无法访问 GitHub API。" \
-  app.sub2api.warn.checksum_download \
-  "Cannot download checksums.txt; skipping SHA256 verification. Manual verification is recommended." \
-  "无法下载 checksums.txt，跳过 SHA256 校验（建议手动核验）。" \
-  app.sub2api.warn.checksum_missing \
-  "checksums.txt does not contain a checksum for %s; skipping verification." \
-  "checksums.txt 中未找到 %s 的校验值，跳过校验。" \
-  app.sub2api.warn.sha_tool_missing \
-  "sha256sum / shasum was not found; skipping SHA256 verification." \
-  "未找到 sha256sum / shasum，跳过 SHA256 校验。" \
+  app.sub2api.error.checksum_temp \
+  "Cannot create a temporary checksum file; refusing to install an unverified archive." \
+  "无法创建临时校验文件，拒绝安装未经校验的归档文件。" \
+  app.sub2api.error.checksum_download \
+  "Cannot download checksums.txt; refusing to install an unverified archive." \
+  "无法下载 checksums.txt，拒绝安装未经校验的归档文件。" \
+  app.sub2api.error.checksum_missing \
+  "checksums.txt does not contain a checksum for %s; refusing to install an unverified archive." \
+  "checksums.txt 中未找到 %s 的校验值，拒绝安装未经校验的归档文件。" \
+  app.sub2api.error.sha_tool_missing \
+  "sha256sum / shasum was not found; refusing to install an unverified archive." \
+  "未找到 sha256sum / shasum，拒绝安装未经校验的归档文件。" \
   app.sub2api.error.sha_failed \
   "SHA256 verification failed!\n  expected: %s\n  actual: %s" \
   "SHA256 校验失败！\n  期望：%s\n  实际：%s" \
