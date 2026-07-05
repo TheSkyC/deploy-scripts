@@ -143,6 +143,73 @@ check_manager_list() {
   expect_manager_list_output dist/deploy.sh " list "
 }
 
+check_app_registry_metadata() {
+  "$BASH_BIN" -c '
+    source lib/app_registry.sh
+
+    [[ "${#DEPLOY_APP_IDS[@]}" -gt 0 ]] || {
+      echo "Application registry must not be empty." >&2
+      exit 1
+    }
+
+    mapfile -t app_ids_from_function < <(deploy_app_ids)
+    [[ "${app_ids_from_function[*]}" == "${DEPLOY_APP_IDS[*]}" ]] || {
+      echo "deploy_app_ids output must match DEPLOY_APP_IDS." >&2
+      exit 1
+    }
+
+    duplicate_ids="$(printf "%s\n" "${DEPLOY_APP_IDS[@]}" | sort | uniq -d)"
+    [[ -z "$duplicate_ids" ]] || {
+      echo "Application registry contains duplicate ids:" >&2
+      echo "$duplicate_ids" >&2
+      exit 1
+    }
+
+    index=1
+    for app_id in "${DEPLOY_APP_IDS[@]}"; do
+      app_file="$(deploy_app_file_for "$app_id")" || {
+        echo "Missing app definition path for ${app_id}." >&2
+        exit 1
+      }
+      impl_file="$(deploy_app_impl_file_for "$app_id")" || {
+        echo "Missing implementation path for ${app_id}." >&2
+        exit 1
+      }
+      app_name="$(deploy_app_name_for "$app_id")" || {
+        echo "Missing display name for ${app_id}." >&2
+        exit 1
+      }
+
+      [[ -n "$app_name" ]] || {
+        echo "Application display name must not be empty for ${app_id}." >&2
+        exit 1
+      }
+      [[ -f "$app_file" ]] || {
+        echo "Application definition file is missing: ${app_file}" >&2
+        exit 1
+      }
+      [[ -f "$impl_file" ]] || {
+        echo "Application implementation file is missing: ${impl_file}" >&2
+        exit 1
+      }
+      [[ "$(deploy_app_index_for "$app_id")" == "$index" ]] || {
+        echo "Application index mismatch for ${app_id}." >&2
+        exit 1
+      }
+      [[ "$(deploy_app_id_from_selection "$index")" == "$app_id" ]] || {
+        echo "Numeric selection must resolve to ${app_id}." >&2
+        exit 1
+      }
+      [[ "$(deploy_app_id_from_selection "$app_id")" == "$app_id" ]] || {
+        echo "String selection must resolve to ${app_id}." >&2
+        exit 1
+      }
+
+      index=$((index + 1))
+    done
+  '
+}
+
 expect_blog_defaults() {
   local lang="$1"
   local expected_title="$2"
@@ -5424,6 +5491,7 @@ main() {
   check_localized_dispatch
   check_no_argument_menu
   check_manager_list
+  check_app_registry_metadata
   check_blog_localized_defaults
   check_app_localized_descriptions
   check_no_hardcoded_chinese_impl

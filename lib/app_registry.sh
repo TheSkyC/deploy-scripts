@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 
-DEPLOY_APP_IDS=(newapi sub2api vaultwarden cyberstrikeai blog tickflow)
+DEPLOY_APP_SPECS=(
+  "newapi|New API|apps/newapi.sh|impl/install_newapi.sh"
+  "sub2api|Sub2API|apps/sub2api.sh|impl/install_sub2api.sh"
+  "vaultwarden|Vaultwarden|apps/vaultwarden.sh|impl/install_vaultwarden.sh"
+  "cyberstrikeai|CyberStrikeAI|apps/cyberstrikeai.sh|impl/install_cyberstrikeai.sh"
+  "blog|Hugo Blog|apps/blog.sh|impl/install_blog.sh"
+  "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh"
+)
+
+DEPLOY_APP_IDS=()
+DEPLOY_APP_NAMES=()
+DEPLOY_APP_FILES=()
+DEPLOY_APP_IMPL_FILES=()
+
+for deploy_app_spec in "${DEPLOY_APP_SPECS[@]}"; do
+  IFS='|' read -r deploy_app_id deploy_app_name deploy_app_file deploy_app_impl_file <<< "$deploy_app_spec"
+  DEPLOY_APP_IDS+=("$deploy_app_id")
+  DEPLOY_APP_NAMES+=("$deploy_app_name")
+  DEPLOY_APP_FILES+=("$deploy_app_file")
+  DEPLOY_APP_IMPL_FILES+=("$deploy_app_impl_file")
+done
+unset deploy_app_spec deploy_app_id deploy_app_name deploy_app_file deploy_app_impl_file
 
 deploy_trim() {
   local value="${1:-}"
@@ -13,52 +34,44 @@ deploy_app_ids() {
   printf '%s\n' "${DEPLOY_APP_IDS[@]}"
 }
 
-deploy_app_file_for() {
-  case "$1" in
-    newapi) echo "apps/newapi.sh" ;;
-    sub2api) echo "apps/sub2api.sh" ;;
-    vaultwarden) echo "apps/vaultwarden.sh" ;;
-    cyberstrikeai) echo "apps/cyberstrikeai.sh" ;;
-    blog) echo "apps/blog.sh" ;;
-    tickflow) echo "apps/tickflow.sh" ;;
+deploy_app_offset_for() {
+  local app_id="$1" offset
+  for offset in "${!DEPLOY_APP_IDS[@]}"; do
+    if [[ "${DEPLOY_APP_IDS[$offset]}" == "$app_id" ]]; then
+      echo "$offset"
+      return 0
+    fi
+  done
+  return 1
+}
+
+deploy_app_metadata_for() {
+  local app_id="$1" field="$2" offset
+  offset="$(deploy_app_offset_for "$app_id")" || return 1
+  case "$field" in
+    file) echo "${DEPLOY_APP_FILES[$offset]}" ;;
+    impl_file) echo "${DEPLOY_APP_IMPL_FILES[$offset]}" ;;
+    name) echo "${DEPLOY_APP_NAMES[$offset]}" ;;
     *) return 1 ;;
   esac
+}
+
+deploy_app_file_for() {
+  deploy_app_metadata_for "$1" file
 }
 
 deploy_app_impl_file_for() {
-  case "$1" in
-    newapi) echo "impl/install_newapi.sh" ;;
-    sub2api) echo "impl/install_sub2api.sh" ;;
-    vaultwarden) echo "impl/install_vaultwarden.sh" ;;
-    cyberstrikeai) echo "impl/install_cyberstrikeai.sh" ;;
-    blog) echo "impl/install_blog.sh" ;;
-    tickflow) echo "impl/install_tickflow.sh" ;;
-    *) return 1 ;;
-  esac
+  deploy_app_metadata_for "$1" impl_file
 }
 
 deploy_app_name_for() {
-  case "$1" in
-    newapi) echo "New API" ;;
-    sub2api) echo "Sub2API" ;;
-    vaultwarden) echo "Vaultwarden" ;;
-    cyberstrikeai) echo "CyberStrikeAI" ;;
-    blog) echo "Hugo Blog" ;;
-    tickflow) echo "TickFlow Stock Panel" ;;
-    *) return 1 ;;
-  esac
+  deploy_app_metadata_for "$1" name
 }
 
 deploy_app_index_for() {
-  local app_id="$1" index=1 id
-  for id in "${DEPLOY_APP_IDS[@]}"; do
-    if [[ "$id" == "$app_id" ]]; then
-      echo "$index"
-      return 0
-    fi
-    index=$((index + 1))
-  done
-  return 1
+  local offset
+  offset="$(deploy_app_offset_for "$1")" || return 1
+  echo "$((offset + 1))"
 }
 
 deploy_app_id_from_selection() {
