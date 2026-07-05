@@ -1893,9 +1893,15 @@ check_vaultwarden_workdir_cleanup_traps_are_nonfatal() {
           count++
           in_func=0
         }
+        /deploy_add_exit_handler _cleanup_install/ { saw_install_handler=1 }
+        /deploy_add_exit_handler _cleanup_update/ { saw_update_handler=1 }
+        /trap '\''_cleanup_(install|update)'\'' EXIT/ {
+          printf "%s Vaultwarden cleanup must register with deploy_add_exit_handler instead of replacing EXIT trap\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
         END {
-          if (count != 2) {
-            printf "%s verifier expected install and update WORK_DIR cleanup traps\n", FILENAME > "/dev/stderr"
+          if (count != 2 || !saw_install_handler || !saw_update_handler) {
+            printf "%s verifier expected install and update WORK_DIR cleanup handlers\n", FILENAME > "/dev/stderr"
             exit 1
           }
         }
@@ -2887,18 +2893,69 @@ check_mutating_actions_acquire_locks() {
     done
   '
   awk '
-      /acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; saw_exec=0; next }
+      /deploy_add_exit_handler\(\)/ { in_add=1; saw_array_append=0; saw_trap=0; next }
+      in_add && /__DEPLOY_EXIT_HANDLERS\+=\("\$handler"\)/ { saw_array_append=1 }
+      in_add && /trap '\''__deploy_run_exit_handlers'\'' EXIT/ { saw_trap=1 }
+      in_add && /^}/ {
+        if (!(saw_array_append && saw_trap)) {
+          print "Exit handlers must be appended and installed through the shared dispatcher." > "/dev/stderr"
+          exit 1
+        }
+        in_add=0
+      }
+      /__deploy_run_exit_handlers\(\)/ { in_run=1; saw_status=0; saw_reverse=0; saw_handler_call=0; next }
+      in_run && /local status=\$\?/ { saw_status=1 }
+      in_run && /index=\$\{#__DEPLOY_EXIT_HANDLERS\[@\]\} - 1/ { saw_reverse=1 }
+      in_run && /"\$handler" \|\| true/ { saw_handler_call=1 }
+      in_run && /^}/ {
+        if (!(saw_status && saw_reverse && saw_handler_call)) {
+          print "Exit handler dispatcher must preserve exit status and run handlers best-effort in reverse order." > "/dev/stderr"
+          exit 1
+        }
+        in_run=0
+      }
+      /acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; saw_exec=0; saw_handler=0; next }
       in_func && /if ! mkdir -p "\$\(dirname "\$lock_file"\)"; then/ { saw_mkdir=1 }
       in_func && /if ! exec 9>"\$lock_file"; then/ { saw_exec=1 }
       in_func && /error "\$\(t error\.lock_failed "\$lock_file"\)"/ { saw_error=1 }
+      in_func && /deploy_add_exit_handler release_lock/ { saw_handler=1 }
+      in_func && /trap '\''release_lock'\'' EXIT/ {
+        print "Lock acquisition must use deploy_add_exit_handler instead of replacing EXIT trap." > "/dev/stderr"
+        exit 1
+      }
       in_func && /^}/ {
-        if (!(saw_mkdir && saw_exec && saw_error)) {
-          print "Lock acquisition must report lock directory and lock file creation failures." > "/dev/stderr"
+        if (!(saw_mkdir && saw_exec && saw_error && saw_handler)) {
+          print "Lock acquisition must report creation failures and register lock release with the shared exit handler stack." > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
     ' lib/lock.sh dist/install_newapi.sh
+
+  local handler_tmp handler_status handler_output
+  handler_tmp="$(mktemp -d)"
+  set +e
+  HANDLER_LOG="${handler_tmp}/handlers.log" "$BASH_BIN" -c '
+    source lib/core.sh
+    h1() { echo h1 >> "$HANDLER_LOG"; }
+    h2() { echo h2 >> "$HANDLER_LOG"; }
+    deploy_add_exit_handler h1
+    deploy_add_exit_handler h2
+    exit 7
+  '
+  handler_status=$?
+  set -e
+  handler_output="$(cat "${handler_tmp}/handlers.log" 2>/dev/null || true)"
+  rm -rf "$handler_tmp"
+  [[ "$handler_status" -eq 7 ]] || {
+    echo "Exit handler dispatcher must preserve the original exit status." >&2
+    return 1
+  }
+  [[ "$handler_output" == $'h2\nh1' ]] || {
+    echo "Exit handler dispatcher must run handlers in reverse registration order." >&2
+    echo "$handler_output" >&2
+    return 1
+  }
 }
 
 check_update_backs_up_before_stop() {

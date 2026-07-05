@@ -399,12 +399,11 @@ do_install() {
     error "$(t app.vaultwarden.error.image_extract)"
   fi
   _cleanup_install() {
-    flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
     if [[ -d "${WORK_DIR:-}" ]]; then
       rm -rf "$WORK_DIR"
     fi
   }
-  trap '_cleanup_install' EXIT
+  deploy_add_exit_handler _cleanup_install
   local BIN_PATH EXTRACTED_WEBVAULT_PATH VW_VER
   BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
@@ -1087,12 +1086,11 @@ do_update() {
     error "$(t app.vaultwarden.error.image_extract)"
   fi
   _cleanup_update() {
-    flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
     if [[ -d "${WORK_DIR:-}" ]]; then
       rm -rf "$WORK_DIR"
     fi
   }
-  trap '_cleanup_update' EXIT
+  deploy_add_exit_handler _cleanup_update
   step "$(t app.vaultwarden.step.extract_update_binary)"
   NEW_BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)

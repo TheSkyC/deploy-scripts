@@ -361,6 +361,25 @@ app_binary_backup_current() {
 
 # ----- lib/lock.sh -----
 
+declare -ga __DEPLOY_EXIT_HANDLERS=()
+
+deploy_add_exit_handler() {
+  local handler="$1"
+  [[ -n "$handler" ]] || return 0
+  __DEPLOY_EXIT_HANDLERS+=("$handler")
+  trap '__deploy_run_exit_handlers' EXIT
+}
+
+__deploy_run_exit_handlers() {
+  local status=$? handler index
+  trap - EXIT
+  for (( index=${#__DEPLOY_EXIT_HANDLERS[@]} - 1; index >= 0; index-- )); do
+    handler="${__DEPLOY_EXIT_HANDLERS[$index]}"
+    "$handler" || true
+  done
+  exit "$status"
+}
+
 acquire_lock() {
   local lock_file="${1:-${LOCK_FILE:-}}"
   [[ -n "$lock_file" ]] || return 0
@@ -371,7 +390,10 @@ acquire_lock() {
     error "$(t error.lock_failed "$lock_file")"
   fi
   flock -n 9 || error "$(t error.lock_failed "$lock_file")"
-  trap 'release_lock' EXIT
+  if [[ "${__DEPLOY_LOCK_EXIT_REGISTERED:-0}" != "1" ]]; then
+    deploy_add_exit_handler release_lock
+    __DEPLOY_LOCK_EXIT_REGISTERED=1
+  fi
 }
 
 release_lock() {
@@ -7978,12 +8000,11 @@ do_install() {
     error "$(t app.vaultwarden.error.image_extract)"
   fi
   _cleanup_install() {
-    flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
     if [[ -d "${WORK_DIR:-}" ]]; then
       rm -rf "$WORK_DIR"
     fi
   }
-  trap '_cleanup_install' EXIT
+  deploy_add_exit_handler _cleanup_install
   local BIN_PATH EXTRACTED_WEBVAULT_PATH VW_VER
   BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
@@ -8666,12 +8687,11 @@ do_update() {
     error "$(t app.vaultwarden.error.image_extract)"
   fi
   _cleanup_update() {
-    flock -u 9 2>/dev/null; exec 9>&- 2>/dev/null
     if [[ -d "${WORK_DIR:-}" ]]; then
       rm -rf "$WORK_DIR"
     fi
   }
-  trap '_cleanup_update' EXIT
+  deploy_add_exit_handler _cleanup_update
   step "$(t app.vaultwarden.step.extract_update_binary)"
   NEW_BIN_PATH=$(extract_binary "$WORK_DIR" "$PLATFORM")
   EXTRACTED_WEBVAULT_PATH=$(cat "${WORK_DIR}/.webvault_path" 2>/dev/null || true)
