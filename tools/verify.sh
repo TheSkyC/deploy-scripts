@@ -297,19 +297,23 @@ check_release_build_outputs_are_atomic() {
     return 1
   fi
   awk '
-      /fail\(\)/ { saw_fail=1 }
-      /output_tmp=""/ { saw_tmp_init=1 }
-      /if ! mkdir -p "\$DIST_DIR"; then/ { saw_dir_if=1 }
-      /fail "cannot create output directory: \$\{DIST_DIR\}"/ { saw_dir_error=1 }
-      /if ! output_tmp="\$\(mktemp "\$\{output\}\.XXXXXX"\)"; then/ { saw_tmp=1 }
-      /fail "cannot create temporary output for \$\{output\}"/ { saw_tmp_error=1 }
+      /prepare_output_file\(\)/ { in_prepare=1; next }
+      in_prepare && /if ! mkdir -p "\$DIST_DIR"; then/ { saw_dir_if=1 }
+      in_prepare && /fail "cannot create output directory: \$\{DIST_DIR\}"/ { saw_dir_error=1 }
+      in_prepare && /if ! output_tmp="\$\(mktemp "\$\{output\}\.XXXXXX"\)"; then/ { saw_tmp=1 }
+      in_prepare && /fail "cannot create temporary output for \$\{output\}"/ { saw_tmp_error=1 }
+      in_prepare && /^}/ { in_prepare=0 }
+      /install_output_file\(\)/ { in_install=1; next }
+      in_install && /chmod 755 "\$output_tmp"/ { saw_chmod=1 }
+      in_install && /mv "\$output_tmp" "\$output"/ { saw_mv=1 }
+      in_install && /rm -f "\$output_tmp"/ { saw_cleanup=1 }
+      in_install && /fail "failed to install release script: \$\{output\}"/ { saw_install_error=1 }
+      in_install && /^}/ { in_install=0 }
       /} > "\$output_tmp"/ { saw_write=1 }
-      /fail "failed to compose release script for \$\{app\}: \$\{output\}"/ { saw_write_error=1 }
-      /mv "\$output_tmp" "\$output"/ { saw_mv=1 }
-      /rm -f "\$output_tmp"/ { saw_cleanup=1 }
-      /fail "failed to install release script: \$\{output\}"/ { saw_install_error=1 }
+      /fail "failed to compose release script for \$\{app\}: \$\{output\}"/ { saw_app_write_error=1 }
+      /fail "failed to compose release script for manager: \$\{output\}"/ { saw_manager_write_error=1 }
       END {
-        if (!(saw_fail && saw_tmp_init && saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_write && saw_write_error && saw_mv && saw_cleanup && saw_install_error)) {
+        if (!(saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_chmod && saw_mv && saw_cleanup && saw_install_error && saw_write && saw_app_write_error && saw_manager_write_error)) {
           print "Release script generation must prepare output directories, stage, replace, clean up temporary files, and report failures." > "/dev/stderr"
           exit 1
         }
