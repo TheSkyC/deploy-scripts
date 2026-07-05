@@ -1357,8 +1357,8 @@ check_status_port_matches_are_bounded() {
     return 1
   fi
   awk '
-      /ss -ltn "\(\ sport = :\$port \)"/ { saw_listen=1 }
-      /ss -ltnp "\(\ sport = :\$port \)"/ { saw_owner=1 }
+      index($0, "ss -ltn \"( sport = :$port )\"") { saw_listen=1 }
+      index($0, "ss -ltnp \"( sport = :$port )\"") { saw_owner=1 }
       /lsof -iTCP:"\$port" -sTCP:LISTEN -Pn/ { saw_lsof=1 }
       END {
         if (!(saw_listen && saw_owner && saw_lsof)) {
@@ -2565,14 +2565,27 @@ check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
-check_mutating_installs_acquire_locks() {
+check_mutating_actions_acquire_locks() {
   "$BASH_BIN" -c '
     set -euo pipefail
     for file in impl/install_*.sh; do
-      if grep -q "do_install()" "$file" && ! grep -q "acquire_lock" "$file"; then
-        echo "Install script does not acquire a deployment lock: $file" >&2
-        exit 1
-      fi
+      for action in install update backup uninstall; do
+        if grep -q "do_${action}()" "$file"; then
+          if ! awk -v fn="do_${action}()" "
+              index(\$0, fn \" {\") == 1 { in_func=1; saw_lock=0; next }
+              in_func && /acquire_lock/ { saw_lock=1 }
+              in_func && /^}/ {
+                if (!saw_lock) {
+                  printf \"%s %s does not acquire a deployment lock\\n\", FILENAME, fn > \"/dev/stderr\"
+                  exit 1
+                }
+                in_func=0
+              }
+            " "$file"; then
+            exit 1
+          fi
+        fi
+      done
     done
   '
   awk '
@@ -5314,7 +5327,7 @@ main() {
   check_vaultwarden_backup_failures_include_followup_guidance
   check_preupdate_backup_warnings_include_followup_guidance
   check_preupdate_backup_logs_match_guidance
-  check_mutating_installs_acquire_locks
+  check_mutating_actions_acquire_locks
   check_update_backs_up_before_stop
   check_update_binary_backups_are_atomic
   check_old_backup_cleanup_reports_failures

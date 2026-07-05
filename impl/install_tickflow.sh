@@ -353,8 +353,11 @@ do_update() {
 do_backup() {
   show_banner
   preflight_check "backup"
+  acquire_lock
   app_load_config
+  require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  require_safe_path "TICKFLOW_BACKUP_DIR" "$backup_dir"
   mkdir -p "$backup_dir"
   local archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
   tar -czf "$archive" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env
@@ -374,6 +377,7 @@ do_status() {
 do_uninstall() {
   show_banner
   preflight_check "uninstall"
+  acquire_lock
   app_load_config
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1 || true
