@@ -6,6 +6,22 @@ BASH_BIN="${BASH_BIN:-bash}"
 
 cd "$ROOT_DIR"
 
+usage() {
+  cat >&2 <<'EOF'
+Usage: bash tools/verify.sh [all|syntax|release|dispatch|help]
+
+Targets:
+  all       Run the full repository verification suite. This is the default.
+  syntax    Check Bash syntax for source scripts only.
+  release   Rebuild dist/ with deterministic metadata and check release syntax.
+  dispatch  Rebuild dist/ and check CLI dispatch, menus, registry, and localization.
+EOF
+}
+
+build_verified_release() {
+  DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
+}
+
 check_shell_syntax() {
   local file
   while IFS= read -r file; do
@@ -5536,8 +5552,46 @@ check_blog_publish_helper_is_atomic() {
 }
 
 main() {
+  local target="${1:-all}"
+  case "$target" in
+    syntax)
+      check_shell_syntax
+      echo "Syntax verification passed"
+      return 0
+      ;;
+    release)
+      check_shell_syntax
+      build_verified_release
+      check_release_syntax
+      check_no_release_temp_files
+      echo "Release verification passed"
+      return 0
+      ;;
+    dispatch)
+      build_verified_release
+      check_localized_dispatch
+      check_no_argument_menu
+      check_manager_list
+      check_app_registry_metadata
+      check_blog_localized_defaults
+      check_app_localized_descriptions
+      echo "Dispatch verification passed"
+      return 0
+      ;;
+    all) ;;
+    help|-h|--help)
+      usage
+      return 0
+      ;;
+    *)
+      usage
+      echo "Unknown verification target: ${target}" >&2
+      return 1
+      ;;
+  esac
+
   check_shell_syntax
-  DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 "$BASH_BIN" tools/build-release.sh all >/dev/null
+  build_verified_release
   check_release_syntax
   check_localized_dispatch
   check_no_argument_menu

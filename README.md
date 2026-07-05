@@ -115,6 +115,14 @@ Use Git Bash on Windows for Bash validation:
 & 'C:\Program Files\Git\bin\bash.exe' tools\verify.sh
 ```
 
+For faster local iteration, run a focused verification target:
+
+```bash
+bash tools/verify.sh syntax
+bash tools/verify.sh release
+bash tools/verify.sh dispatch
+```
+
 The verification script checks:
 
 - Bash syntax for source scripts.
