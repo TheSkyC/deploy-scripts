@@ -2471,6 +2471,12 @@ i18n_register_many \
   app.sub2api.warn.data_backup_failed \
   "Data directory backup failed. Inspect the tar output above; partial archives may still exist in the backup directory." \
   "数据目录备份失败。请检查上方 tar 输出；备份目录中可能仍保留了部分归档。" \
+  app.sub2api.info.cleaned_old_backups \
+  "Removed %s old backup archives older than %s days." \
+  "已清理 %s 个超过 %s 天的旧备份归档。" \
+  app.sub2api.warn.backup_cleanup_failed \
+  "Could not remove old backup archive: %s" \
+  "旧备份归档删除失败：%s" \
   app.sub2api.success.backup_done \
   "Backup flow complete. Archive directory: %s" \
   "备份流程完成，归档目录：%s。" \
@@ -7355,6 +7361,24 @@ do_backup() {
     fi
   else
     warn "$(t app.sub2api.warn.data_missing "$DATA_DIR")"
+  fi
+  local _keep_days="${BACKUP_KEEP_DAYS}"
+  [[ "$_keep_days" =~ ^[0-9]+$ ]] || _keep_days=0
+  if [[ "$_keep_days" -gt 0 ]]; then
+    local _cleaned=0 _old_backup
+    while IFS= read -r -d '' _old_backup; do
+      if rm -f "$_old_backup"; then
+        _cleaned=$(( _cleaned + 1 ))
+      else
+        warn "$(t app.sub2api.warn.backup_cleanup_failed "$_old_backup")"
+      fi
+    done < <(find "$BACKUP_DIR" -maxdepth 1 \
+      \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
+      -o -name "sub2api_conf_*.tar.gz" \) \
+      -mtime "+${_keep_days}" -type f -print0 2>/dev/null)
+    if [[ $_cleaned -gt 0 ]]; then
+      info "$(t app.sub2api.info.cleaned_old_backups "$_cleaned" "$_keep_days")"
+    fi
   fi
   release_lock
   success "$(t app.sub2api.success.backup_done "$BACKUP_DIR")"

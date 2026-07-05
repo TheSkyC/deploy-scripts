@@ -1380,6 +1380,24 @@ do_backup() {
   else
     warn "$(t app.sub2api.warn.data_missing "$DATA_DIR")"
   fi
+  local _keep_days="${BACKUP_KEEP_DAYS}"
+  [[ "$_keep_days" =~ ^[0-9]+$ ]] || _keep_days=0
+  if [[ "$_keep_days" -gt 0 ]]; then
+    local _cleaned=0 _old_backup
+    while IFS= read -r -d '' _old_backup; do
+      if rm -f "$_old_backup"; then
+        _cleaned=$(( _cleaned + 1 ))
+      else
+        warn "$(t app.sub2api.warn.backup_cleanup_failed "$_old_backup")"
+      fi
+    done < <(find "$BACKUP_DIR" -maxdepth 1 \
+      \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
+      -o -name "sub2api_conf_*.tar.gz" \) \
+      -mtime "+${_keep_days}" -type f -print0 2>/dev/null)
+    if [[ $_cleaned -gt 0 ]]; then
+      info "$(t app.sub2api.info.cleaned_old_backups "$_cleaned" "$_keep_days")"
+    fi
+  fi
   release_lock
   success "$(t app.sub2api.success.backup_done "$BACKUP_DIR")"
 }

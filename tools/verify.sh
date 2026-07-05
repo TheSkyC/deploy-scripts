@@ -3983,6 +3983,27 @@ check_manual_backup_retention_is_normalized() {
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
       in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
     ' impl/install_blog.sh dist/install_blog.sh
+  awk '
+      /^do_backup\(\) \{/ {
+        in_func=1
+        saw_assignment=0
+        saw_guard=0
+        saw_positive_guard=0
+        saw_find=0
+        next
+      }
+      in_func && /^}/ {
+        if (!(saw_assignment && saw_guard && saw_positive_guard && saw_find)) {
+          printf "%s Sub2API manual backup retention cleanup must normalize BACKUP_KEEP_DAYS and skip cleanup when it is zero\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      in_func && /local _keep_days="\$\{BACKUP_KEEP_DAYS\}"/ { saw_assignment=1 }
+      in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
+      in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
+      in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
 check_backup_retention_cleanup_reports_failures() {
@@ -3996,9 +4017,10 @@ check_backup_retention_cleanup_reports_failures() {
       /app\.newapi\.backup\.log\.remove_failed/ { saw_newapi_log_key=1 }
       /app\.newapi\.warn\.backup_cleanup_failed/ { saw_newapi_warn_key=1 }
       /app\.sub2api\.backup\.log\.remove_failed/ { saw_sub2api_log_key=1 }
+      /app\.sub2api\.warn\.backup_cleanup_failed/ { saw_sub2api_warn_key=1 }
       /app\.cyberstrikeai\.backup\.warn\.remove_failed/ { saw_csai_log_key=1 }
       END {
-        if (!(saw_newapi_log_key && saw_newapi_warn_key && saw_sub2api_log_key && saw_csai_log_key)) {
+        if (!(saw_newapi_log_key && saw_newapi_warn_key && saw_sub2api_log_key && saw_sub2api_warn_key && saw_csai_log_key)) {
           print "Backup cleanup failure messages must be localized." > "/dev/stderr"
           exit 1
         }
@@ -4023,6 +4045,19 @@ check_backup_retention_cleanup_reports_failures() {
           printf "%s Sub2API generated backup retention cleanup must log per-file removal failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+  awk '
+      /^do_backup\(\) \{/ { in_backup=1; saw_warn=0; saw_info=0; saw_pattern=0; next }
+      in_backup && /warn "\$\(t app\.sub2api\.warn\.backup_cleanup_failed "\$_old_backup"\)"/ { saw_warn=1 }
+      in_backup && /info "\$\(t app\.sub2api\.info\.cleaned_old_backups "\$_cleaned" "\$_keep_days"\)"/ { saw_info=1 }
+      in_backup && /-name "sub2api_db_\*\.sql\.gz"/ { saw_pattern=1 }
+      in_backup && /success "\$\(t app\.sub2api\.success\.backup_done "\$BACKUP_DIR"\)"/ {
+        if (!(saw_warn && saw_info && saw_pattern)) {
+          printf "%s Sub2API manual backup retention cleanup must report per-file failures and include database backup archives\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
   awk '

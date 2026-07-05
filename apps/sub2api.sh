@@ -657,6 +657,12 @@ i18n_register_many \
   app.sub2api.warn.data_backup_failed \
   "Data directory backup failed. Inspect the tar output above; partial archives may still exist in the backup directory." \
   "数据目录备份失败。请检查上方 tar 输出；备份目录中可能仍保留了部分归档。" \
+  app.sub2api.info.cleaned_old_backups \
+  "Removed %s old backup archives older than %s days." \
+  "已清理 %s 个超过 %s 天的旧备份归档。" \
+  app.sub2api.warn.backup_cleanup_failed \
+  "Could not remove old backup archive: %s" \
+  "旧备份归档删除失败：%s" \
   app.sub2api.success.backup_done \
   "Backup flow complete. Archive directory: %s" \
   "备份流程完成，归档目录：%s。" \
