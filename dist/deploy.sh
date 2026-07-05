@@ -2813,6 +2813,9 @@ i18n_register_many \
   app.vaultwarden.error.extract_tool_sha_missing \
   "EXTRACT_TOOL_SHA256 is not configured. Refusing to execute an unverified docker-image-extract payload." \
   "未配置 EXTRACT_TOOL_SHA256。拒绝执行未经校验的 docker-image-extract 载荷。" \
+  app.vaultwarden.error.extract_tool_sha_tool_missing \
+  "sha256sum / shasum was not found. Refusing to execute an unverified docker-image-extract payload." \
+  "未找到 sha256sum / shasum。拒绝执行未经校验的 docker-image-extract 载荷。" \
   app.vaultwarden.info.extract_image \
   "Extracting %s:%s from the image registry (platform: %s)..." \
   "从镜像仓库提取 %s:%s（平台：%s）..." \
@@ -7784,7 +7787,17 @@ extract_binary() {
     error "$(t app.vaultwarden.error.extract_tool_sha_missing)"
   fi
   local _actual_sha256
-  _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}')
+  if command -v sha256sum >/dev/null 2>&1; then
+    if ! _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}'); then
+      error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "${_actual_sha256:-unavailable}")"
+    fi
+  elif command -v shasum >/dev/null 2>&1; then
+    if ! _actual_sha256=$(shasum -a 256 "${workdir}/docker-image-extract" | awk '{print $1}'); then
+      error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "${_actual_sha256:-unavailable}")"
+    fi
+  else
+    error "$(t app.vaultwarden.error.extract_tool_sha_tool_missing)"
+  fi
   if [[ "$_actual_sha256" != "$EXTRACT_TOOL_SHA256" ]]; then
     error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "$_actual_sha256")"
   fi

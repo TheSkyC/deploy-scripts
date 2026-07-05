@@ -3629,14 +3629,19 @@ check_vaultwarden_extract_tool_is_pinned_and_verified() {
   fi
   awk '
       /app\.vaultwarden\.error\.extract_tool_sha_missing/ { saw_key=1 }
+      /app\.vaultwarden\.error\.extract_tool_sha_tool_missing/ { saw_tool_key=1 }
       /if \[\[ -z "\$\{EXTRACT_TOOL_SHA256:-\}" \]\]; then/ { saw_empty_guard=1 }
       /error "\$\(t app\.vaultwarden\.error\.extract_tool_sha_missing\)"/ { saw_empty_error=1 }
+      /if command -v sha256sum >\/dev\/null 2>&1; then/ { saw_sha256sum=1 }
       /_actual_sha256=\$\(sha256sum "\$\{workdir\}\/docker-image-extract" \| awk '\''\{print \$1\}'\''\)/ { saw_hash=1 }
+      /elif command -v shasum >\/dev\/null 2>&1; then/ { saw_shasum=1 }
+      /_actual_sha256=\$\(shasum -a 256 "\$\{workdir\}\/docker-image-extract" \| awk '\''\{print \$1\}'\''\)/ { saw_shasum_hash=1 }
+      /error "\$\(t app\.vaultwarden\.error\.extract_tool_sha_tool_missing\)"/ { saw_tool_error=1 }
       /if \[\[ "\$_actual_sha256" != "\$EXTRACT_TOOL_SHA256" \]\]; then/ { saw_compare=1 }
       /success "\$\(t app\.vaultwarden\.success\.extract_tool_sha\)"/ { saw_success=1 }
       END {
-        if (!(saw_key && saw_empty_guard && saw_empty_error && saw_hash && saw_compare && saw_success)) {
-          print "Vaultwarden docker-image-extract downloads must be pinned, fail closed without a SHA, and verify before execution." > "/dev/stderr"
+        if (!(saw_key && saw_tool_key && saw_empty_guard && saw_empty_error && saw_sha256sum && saw_hash && saw_shasum && saw_shasum_hash && saw_tool_error && saw_compare && saw_success)) {
+          print "Vaultwarden docker-image-extract downloads must be pinned, fail closed without a SHA or SHA tool, and verify before execution." > "/dev/stderr"
           exit 1
         }
       }

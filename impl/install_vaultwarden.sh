@@ -144,7 +144,17 @@ extract_binary() {
     error "$(t app.vaultwarden.error.extract_tool_sha_missing)"
   fi
   local _actual_sha256
-  _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}')
+  if command -v sha256sum >/dev/null 2>&1; then
+    if ! _actual_sha256=$(sha256sum "${workdir}/docker-image-extract" | awk '{print $1}'); then
+      error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "${_actual_sha256:-unavailable}")"
+    fi
+  elif command -v shasum >/dev/null 2>&1; then
+    if ! _actual_sha256=$(shasum -a 256 "${workdir}/docker-image-extract" | awk '{print $1}'); then
+      error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "${_actual_sha256:-unavailable}")"
+    fi
+  else
+    error "$(t app.vaultwarden.error.extract_tool_sha_tool_missing)"
+  fi
   if [[ "$_actual_sha256" != "$EXTRACT_TOOL_SHA256" ]]; then
     error "$(t app.vaultwarden.error.extract_tool_sha "$EXTRACT_TOOL_SHA256" "$_actual_sha256")"
   fi
