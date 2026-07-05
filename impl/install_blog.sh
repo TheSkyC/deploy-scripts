@@ -765,3 +765,49 @@ echo ""
 echo -e "  ${YELLOW}${BOLD}[i]${NC} $(t app.blog.rebuild_hint "$PUBLIC_DIR")"
 echo ""
 }
+
+_blog_status_path() {
+  local label="$1" path="$2"
+  if [[ -e "$path" || -L "$path" ]]; then
+    printf '  %s: %b%s%b (%s)\n' "$label" "$GREEN" "$(t app.blog.status.exists)" "$NC" "$path"
+  else
+    printf '  %s: %b%s%b (%s)\n' "$label" "$RED" "$(t app.blog.status.missing)" "$NC" "$path"
+  fi
+}
+
+do_status() {
+  show_banner
+  [[ $EUID -ne 0 ]] && warn "$(t app.blog.warn.non_root_status "$0")"
+  step "$(t app.blog.step_status)"
+
+  _blog_status_path "$(t app.blog.status.site)" "$SITE_DIR"
+  _blog_status_path "$(t app.blog.status.public)" "$PUBLIC_DIR"
+  _blog_status_path "$(t app.blog.status.nginx_root)" "$NGINX_ROOT"
+  _blog_status_path "$(t app.blog.status.nginx_config)" "/etc/nginx/sites-available/blog"
+  _blog_status_path "$(t app.blog.status.publish_helper)" "/usr/local/bin/blog-publish"
+
+  if [[ -d "$PUBLIC_DIR" ]]; then
+    local html_count
+    html_count=$(find "$PUBLIC_DIR" -name "*.html" 2>/dev/null | wc -l | tr -d '[:space:]')
+    printf '  %s\n' "$(t app.blog.status.html_count "${html_count:-0}")"
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    printf '  %s: %s\n' "$(t app.blog.status.nginx)" "$(service_status_label nginx)"
+  fi
+
+  if command -v hugo >/dev/null 2>&1; then
+    printf '  %s: %s\n' "$(t app.blog.status.hugo)" "$(hugo version 2>/dev/null | head -1 || t status.unknown)"
+  else
+    printf '  %s: %b%s%b\n' "$(t app.blog.status.hugo)" "$YELLOW" "$(t app.blog.status.hugo_missing)" "$NC"
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    local http_code
+    http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || true)
+    http_code="${http_code:-000}"
+    printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_response "$http_code" "${BLOG_DOMAIN:-localhost}")"
+  else
+    printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_skip)"
+  fi
+}

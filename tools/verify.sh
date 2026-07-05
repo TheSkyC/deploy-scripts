@@ -59,6 +59,21 @@ expect_failure_output() {
   }
 }
 
+expect_success_output() {
+  local lang="$1"
+  local script="$2"
+  local action="$3"
+  local expected="$4"
+  local output
+
+  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" "$script" "$action" 2>&1)"
+  [[ "$output" == *"$expected"* ]] || {
+    echo "Expected ${script} ${action} output to contain: ${expected}" >&2
+    echo "$output" >&2
+    return 1
+  }
+}
+
 check_localized_dispatch() {
   expect_failure_output en install_newapi.sh "Invalid choice"
   expect_failure_output zh install_newapi.sh "无效选项"
@@ -84,6 +99,17 @@ check_localized_dispatch() {
   expect_failure_output zh install_tickflow.sh "无效选项"
   expect_failure_output en dist/install_tickflow.sh "Invalid choice"
   expect_failure_output zh dist/install_tickflow.sh "无效选项"
+}
+
+check_blog_status_dispatch() {
+  expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
+  expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
+  expect_success_output en dist/install_blog.sh status "Inspect Hugo Blog deployment status"
+  expect_success_output zh dist/install_blog.sh status "检查 Hugo Blog 部署状态"
+  expect_failure_output en install_blog.sh "does not support update" update
+  expect_failure_output zh install_blog.sh "暂不支持 update" update
+  expect_failure_output en dist/install_blog.sh "does not support update" update
+  expect_failure_output zh dist/install_blog.sh "暂不支持 update" update
 }
 
 check_no_color_output() {
@@ -5606,6 +5632,7 @@ main() {
     dispatch)
       build_verified_release
       check_localized_dispatch
+      check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
       check_manager_list
@@ -5631,6 +5658,7 @@ main() {
   build_verified_release
   check_release_syntax
   check_localized_dispatch
+  check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu
   check_manager_list

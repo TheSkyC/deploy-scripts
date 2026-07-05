@@ -1374,16 +1374,73 @@ i18n_register app.blog.theme_docs \
 i18n_register app.blog.rebuild_hint \
   "Rebuild after changing config: hugo --destination %s --gc --minify, then run /usr/local/bin/blog-publish." \
   "修改配置后需重新构建：hugo --destination %s --gc --minify，然后再运行 /usr/local/bin/blog-publish。"
+i18n_register_many \
+  app.blog.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
+  app.blog.step_status \
+  "Inspect Hugo Blog deployment status" \
+  "检查 Hugo Blog 部署状态" \
+  app.blog.status.site \
+  "Site source" \
+  "站点源码" \
+  app.blog.status.public \
+  "Generated public files" \
+  "生成的静态文件" \
+  app.blog.status.nginx_root \
+  "Nginx web root" \
+  "Nginx Web 根目录" \
+  app.blog.status.exists \
+  "exists" \
+  "存在" \
+  app.blog.status.missing \
+  "missing" \
+  "缺失" \
+  app.blog.status.html_count \
+  "HTML files: %s" \
+  "HTML 文件数：%s" \
+  app.blog.status.nginx \
+  "Nginx service" \
+  "Nginx 服务" \
+  app.blog.status.nginx_config \
+  "Nginx site config" \
+  "Nginx 站点配置" \
+  app.blog.status.publish_helper \
+  "Publish helper" \
+  "发布辅助脚本" \
+  app.blog.status.hugo \
+  "Hugo" \
+  "Hugo" \
+  app.blog.status.hugo_missing \
+  "hugo command is not installed or not in PATH" \
+  "hugo 命令未安装或不在 PATH 中" \
+  app.blog.status.local_health \
+  "Local HTTP health" \
+  "本机 HTTP 健康检查" \
+  app.blog.status.local_response \
+  "HTTP %s from http://127.0.0.1/ with Host: %s" \
+  "访问 http://127.0.0.1/ 返回 HTTP %s（Host: %s）" \
+  app.blog.status.local_skip \
+  "curl is not installed; skipping local HTTP health check" \
+  "curl 未安装，跳过本机 HTTP 健康检查"
 
 APP_DESCRIPTION="$(t app.blog.description)"
 APP_IMPL_SCRIPT="impl/install_blog.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
 
-do_update() { error "$(t error.unsupported_action "$APP_NAME" update)"; }
-do_backup() { error "$(t error.unsupported_action "$APP_NAME" backup)"; }
-do_status() { error "$(t error.unsupported_action "$APP_NAME" status)"; }
-do_uninstall() { error "$(t error.unsupported_action "$APP_NAME" uninstall)"; }
+if ! declare -f do_update >/dev/null 2>&1; then
+  do_update() { error "$(t error.unsupported_action "$APP_NAME" update)"; }
+fi
+if ! declare -f do_backup >/dev/null 2>&1; then
+  do_backup() { error "$(t error.unsupported_action "$APP_NAME" backup)"; }
+fi
+if ! declare -f do_status >/dev/null 2>&1; then
+  do_status() { error "$(t error.unsupported_action "$APP_NAME" status)"; }
+fi
+if ! declare -f do_uninstall >/dev/null 2>&1; then
+  do_uninstall() { error "$(t error.unsupported_action "$APP_NAME" uninstall)"; }
+fi
 
 main "$@"
 exit 0
@@ -2154,4 +2211,50 @@ echo -e "  ${BOLD}📖  Decap CMS：${NC} https://decapcms.org/docs/"
 echo ""
 echo -e "  ${YELLOW}${BOLD}[i]${NC} $(t app.blog.rebuild_hint "$PUBLIC_DIR")"
 echo ""
+}
+
+_blog_status_path() {
+  local label="$1" path="$2"
+  if [[ -e "$path" || -L "$path" ]]; then
+    printf '  %s: %b%s%b (%s)\n' "$label" "$GREEN" "$(t app.blog.status.exists)" "$NC" "$path"
+  else
+    printf '  %s: %b%s%b (%s)\n' "$label" "$RED" "$(t app.blog.status.missing)" "$NC" "$path"
+  fi
+}
+
+do_status() {
+  show_banner
+  [[ $EUID -ne 0 ]] && warn "$(t app.blog.warn.non_root_status "$0")"
+  step "$(t app.blog.step_status)"
+
+  _blog_status_path "$(t app.blog.status.site)" "$SITE_DIR"
+  _blog_status_path "$(t app.blog.status.public)" "$PUBLIC_DIR"
+  _blog_status_path "$(t app.blog.status.nginx_root)" "$NGINX_ROOT"
+  _blog_status_path "$(t app.blog.status.nginx_config)" "/etc/nginx/sites-available/blog"
+  _blog_status_path "$(t app.blog.status.publish_helper)" "/usr/local/bin/blog-publish"
+
+  if [[ -d "$PUBLIC_DIR" ]]; then
+    local html_count
+    html_count=$(find "$PUBLIC_DIR" -name "*.html" 2>/dev/null | wc -l | tr -d '[:space:]')
+    printf '  %s\n' "$(t app.blog.status.html_count "${html_count:-0}")"
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    printf '  %s: %s\n' "$(t app.blog.status.nginx)" "$(service_status_label nginx)"
+  fi
+
+  if command -v hugo >/dev/null 2>&1; then
+    printf '  %s: %s\n' "$(t app.blog.status.hugo)" "$(hugo version 2>/dev/null | head -1 || t status.unknown)"
+  else
+    printf '  %s: %b%s%b\n' "$(t app.blog.status.hugo)" "$YELLOW" "$(t app.blog.status.hugo_missing)" "$NC"
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    local http_code
+    http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || true)
+    http_code="${http_code:-000}"
+    printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_response "$http_code" "${BLOG_DOMAIN:-localhost}")"
+  else
+    printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_skip)"
+  fi
 }
