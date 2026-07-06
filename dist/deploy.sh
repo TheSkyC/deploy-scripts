@@ -11853,6 +11853,9 @@ _validate_config_values() {
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   require_safe_path "TICKFLOW_DATA_DIR" "$TICKFLOW_DATA_DIR"
   require_safe_path "TICKFLOW_LOG_DIR" "$TICKFLOW_LOG_DIR"
+  require_safe_path "TICKFLOW_ENV_FILE" "$TICKFLOW_ENV_FILE"
+  require_safe_path "TICKFLOW_COMPOSE_FILE" "$TICKFLOW_COMPOSE_FILE"
+  require_safe_path "TICKFLOW_TIERS_FILE" "$TICKFLOW_TIERS_FILE"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
     warn "$(t app.tickflow.warn.auth_password_short)"
   fi

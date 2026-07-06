@@ -633,9 +633,12 @@ check_managed_paths_are_validated() {
       in_func && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$TICKFLOW_INSTALL_DIR"/ { saw_install=1 }
       in_func && /require_safe_path "TICKFLOW_DATA_DIR" "\$TICKFLOW_DATA_DIR"/ { saw_data=1 }
       in_func && /require_safe_path "TICKFLOW_LOG_DIR" "\$TICKFLOW_LOG_DIR"/ { saw_log=1 }
+      in_func && /require_safe_path "TICKFLOW_ENV_FILE" "\$TICKFLOW_ENV_FILE"/ { saw_env=1 }
+      in_func && /require_safe_path "TICKFLOW_COMPOSE_FILE" "\$TICKFLOW_COMPOSE_FILE"/ { saw_compose=1 }
+      in_func && /require_safe_path "TICKFLOW_TIERS_FILE" "\$TICKFLOW_TIERS_FILE"/ { saw_tiers=1 }
       in_func && /^}/ {
-        if (!(saw_install && saw_data && saw_log)) {
-          printf "%s TickFlow must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+        if (!(saw_install && saw_data && saw_log && saw_env && saw_compose && saw_tiers)) {
+          printf "%s TickFlow must validate managed directory and file paths before use\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
