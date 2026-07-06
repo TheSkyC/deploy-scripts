@@ -1194,6 +1194,34 @@ check_tickflow_directory_setup_failures_are_explicit() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_dependency_failures_are_reported() {
+  awk '
+      /app\.tickflow\.warn\.apt_update/ { saw_update_key=1 }
+      /app\.tickflow\.error\.deps_install/ { saw_install_key=1 }
+      END {
+        if (!(saw_update_key && saw_install_key)) {
+          print "TickFlow dependency failures must provide localized update/install guidance." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /step "\$\(t app\.tickflow\.step\.deps\)"/ { in_deps=1; saw_update_if=0; saw_update_warn=0; saw_plugin_if=0; saw_fallback_if=0; saw_install_error=0; next }
+      in_deps && /if ! apt-get update -qq; then/ { saw_update_if=1 }
+      in_deps && /warn "\$\(t app\.tickflow\.warn\.apt_update\)"/ { saw_update_warn=1 }
+      in_deps && /if ! apt-get install -y -qq git curl ca-certificates docker\.io docker-compose-plugin; then/ { saw_plugin_if=1 }
+      in_deps && /if ! apt-get install -y -qq git curl ca-certificates docker\.io docker-compose; then/ { saw_fallback_if=1 }
+      in_deps && /error "\$\(t app\.tickflow\.error\.deps_install\)"/ { saw_install_error=1 }
+      in_deps && /systemctl enable --now docker/ {
+        if (!(saw_update_if && saw_update_warn && saw_plugin_if && saw_fallback_if && saw_install_error)) {
+          printf "%s TickFlow install must warn on apt-get update failures and error explicitly when both compose dependency installs fail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_deps=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_safe_rm_dir_is_idempotent() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -7007,6 +7035,7 @@ main() {
   check_tickflow_env_rewrites_preserve_existing_secrets
   check_tickflow_paths_are_guarded
   check_tickflow_directory_setup_failures_are_explicit
+  check_tickflow_dependency_failures_are_reported
   check_safe_rm_dir_is_idempotent
   check_atomic_helpers_are_atomic
   check_binary_helpers_are_atomic

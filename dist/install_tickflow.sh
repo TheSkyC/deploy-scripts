@@ -1421,6 +1421,12 @@ i18n_register_many \
   app.tickflow.error.service_stop \
   "Failed to stop %s" \
   "停止 %s 失败" \
+  app.tickflow.warn.apt_update \
+  "apt-get update partially failed. Continuing install, but package versions may be affected. Inspect /var/log/apt/* or rerun apt-get update after fixing repository/network issues." \
+  "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。请检查 /var/log/apt/*，或在修复仓库/网络问题后重新执行 apt-get update。" \
+  app.tickflow.error.deps_install \
+  "Dependency installation failed. Run apt-get install -y git curl ca-certificates docker.io docker-compose-plugin or apt-get install -y git curl ca-certificates docker.io docker-compose after fixing the package manager state." \
+  "依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y git curl ca-certificates docker.io docker-compose-plugin，或执行 apt-get install -y git curl ca-certificates docker.io docker-compose。" \
   app.tickflow.warn.docker_enable_failed \
   "Could not enable or start Docker automatically. If the service fails later, run manually: systemctl enable --now docker" \
   "无法自动启用或启动 Docker。若后续服务失败，请手动执行：systemctl enable --now docker。" \
@@ -1869,8 +1875,14 @@ do_install() {
   preflight_check "install"
   acquire_lock
   step "$(t app.tickflow.step.deps)"
-  apt-get update -qq
-  apt-get install -y -qq git curl ca-certificates docker.io docker-compose-plugin || apt-get install -y -qq git curl ca-certificates docker.io docker-compose
+  if ! apt-get update -qq; then
+    warn "$(t app.tickflow.warn.apt_update)"
+  fi
+  if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose-plugin; then
+    if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose; then
+      error "$(t app.tickflow.error.deps_install)"
+    fi
+  fi
   if ! systemctl enable --now docker >/dev/null 2>&1; then
     warn "$(t app.tickflow.warn.docker_enable_failed)"
   fi

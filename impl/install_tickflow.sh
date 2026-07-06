@@ -293,8 +293,14 @@ do_install() {
   preflight_check "install"
   acquire_lock
   step "$(t app.tickflow.step.deps)"
-  apt-get update -qq
-  apt-get install -y -qq git curl ca-certificates docker.io docker-compose-plugin || apt-get install -y -qq git curl ca-certificates docker.io docker-compose
+  if ! apt-get update -qq; then
+    warn "$(t app.tickflow.warn.apt_update)"
+  fi
+  if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose-plugin; then
+    if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose; then
+      error "$(t app.tickflow.error.deps_install)"
+    fi
+  fi
   if ! systemctl enable --now docker >/dev/null 2>&1; then
     warn "$(t app.tickflow.warn.docker_enable_failed)"
   fi
