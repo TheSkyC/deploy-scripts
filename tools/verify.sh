@@ -1599,14 +1599,16 @@ check_nginx_domains_are_validated() {
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
   awk '
-      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_bool=0; saw_repo=0; saw_ref=0; saw_keep_days=0; next }
+      /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_bool=0; saw_theme_url=0; saw_site_url=0; saw_repo=0; saw_ref=0; saw_keep_days=0; next }
       in_func && /app_validate_domain "BLOG_DOMAIN"/ { saw_domain=1 }
       in_func && /app_validate_bool "ENABLE_CMS"/ { saw_bool=1 }
+      in_func && /app_validate_https_url "THEME_REPO"/ { saw_theme_url=1 }
+      in_func && /app_validate_http_url "CMS_SITE_URL"/ { saw_site_url=1 }
       in_func && /app_validate_github_repo "CMS_REPO"/ { saw_repo=1 }
       in_func && /app_validate_git_ref "CMS_BRANCH"/ { saw_ref=1 }
       in_func && /app\.blog\.error\.keep_days_invalid/ { saw_keep_days=1 }
       in_func && /^}/ {
-        if (!(saw_domain && saw_bool && saw_repo && saw_ref && saw_keep_days)) {
+        if (!(saw_domain && saw_bool && saw_theme_url && saw_site_url && saw_repo && saw_ref && saw_keep_days)) {
           printf "%s Blog must validate domain, CMS settings, and backup retention config values\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -1624,6 +1626,8 @@ check_config_value_validators() {
     app_validate_github_repo GITHUB_REPO QuantumNous/new-api
     app_validate_git_ref GITHUB_BRANCH release/v1.2.3
     app_validate_db_identifier PG_DB sub2api_db
+    app_validate_http_url CMS_SITE_URL http://localhost:1313/admin/
+    app_validate_https_url THEME_REPO https://github.com/CaiJimmy/hugo-theme-stack.git
 
     validator_must_reject() {
       local label="$1"
@@ -1639,6 +1643,8 @@ check_config_value_validators() {
     validator_must_reject github-repo app_validate_github_repo GITHUB_REPO "owner/repo;rm"
     validator_must_reject git-ref app_validate_git_ref GITHUB_BRANCH "feature/../main"
     validator_must_reject db-identifier app_validate_db_identifier PG_DB "sub2api-db"
+    validator_must_reject http-url app_validate_http_url CMS_SITE_URL "https://example.com/a path"
+    validator_must_reject https-url app_validate_https_url THEME_REPO "git://github.com/owner/repo.git"
   '
 
   local checks=(
@@ -1650,6 +1656,8 @@ check_config_value_validators() {
     'impl/install_cyberstrikeai.sh|app_validate_git_ref "GITHUB_BRANCH" "$GITHUB_BRANCH"'
     'impl/install_tickflow.sh|app_validate_git_ref "TICKFLOW_BRANCH" "$TICKFLOW_BRANCH"'
     'impl/install_vaultwarden.sh|app_validate_system_name "VW_USER" "$VW_USER"'
+    'impl/install_blog.sh|app_validate_https_url "THEME_REPO" "$THEME_REPO"'
+    'impl/install_blog.sh|app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"'
   )
   local check file pattern
   for check in "${checks[@]}"; do

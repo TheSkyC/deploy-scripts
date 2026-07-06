@@ -34,9 +34,11 @@ _validate_config_values() {
   app_validate_domain "BLOG_DOMAIN" "$BLOG_DOMAIN"
   app_validate_bool "ENABLE_CMS" "$ENABLE_CMS"
   app_validate_system_name "THEME_NAME" "$THEME_NAME"
+  app_validate_https_url "THEME_REPO" "$THEME_REPO"
   app_validate_system_name "CMS_BACKEND" "$CMS_BACKEND"
   app_validate_github_repo "CMS_REPO" "$CMS_REPO"
   app_validate_git_ref "CMS_BRANCH" "$CMS_BRANCH"
+  app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"
   [[ "$BLOG_BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] \
     || error "$(t app.blog.error.keep_days_invalid "$BLOG_BACKUP_KEEP_DAYS")"
   require_safe_path "SITE_DIR" "$SITE_DIR"

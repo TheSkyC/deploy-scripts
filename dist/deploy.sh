@@ -83,6 +83,8 @@ __deploy_i18n_message() {
     error.github_repo_invalid) echo "%s is invalid: '%s'. Use owner/repository with GitHub-safe name characters.|%s 无效：'%s'，请使用 owner/repository 格式，并仅包含 GitHub 安全名称字符。" ;;
     error.git_ref_invalid) echo "%s is invalid: '%s'. Use a simple branch/tag ref without spaces, shell metacharacters, '..', or '@{'.|%s 无效：'%s'，请使用简单分支/标签引用，不包含空格、shell 特殊字符、'..' 或 '@{'。" ;;
     error.db_identifier_invalid) echo "%s is invalid: '%s'. Use a database identifier with letters, numbers, or underscore; start with a letter or underscore.|%s 无效：'%s'，请使用数据库标识符：字母、数字或下划线，并以字母或下划线开头。" ;;
+    error.url_invalid) echo "%s is invalid: '%s'. Use an http(s) URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 http(s) URL。" ;;
+    error.https_url_invalid) echo "%s is invalid: '%s'. Use an https URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 https URL。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
@@ -624,6 +626,34 @@ app_validate_domain() {
   local name="$1" value="$2"
   if [[ -n "$value" ]] && ! is_valid_dns_name "$value"; then
     error "$(t error.domain_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_http_url() {
+  local name="$1" value="$2" scheme host
+  case "$value" in
+    http://*|https://*) ;;
+    *) error "$(t error.url_invalid "$name" "$value")" ;;
+  esac
+  case "$value" in
+    ""|*[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*|*"|"*)
+      error "$(t error.url_invalid "$name" "$value")"
+      ;;
+  esac
+  scheme="${value%%://*}"
+  host="${value#${scheme}://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  if [[ "$host" != "localhost" && ! "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]] && ! is_valid_dns_name "$host"; then
+    error "$(t error.url_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_https_url() {
+  local name="$1" value="$2"
+  app_validate_http_url "$name" "$value"
+  if [[ "$value" != https://* ]]; then
+    error "$(t error.https_url_invalid "$name" "$value")"
   fi
 }
 
@@ -10424,9 +10454,11 @@ _validate_config_values() {
   app_validate_domain "BLOG_DOMAIN" "$BLOG_DOMAIN"
   app_validate_bool "ENABLE_CMS" "$ENABLE_CMS"
   app_validate_system_name "THEME_NAME" "$THEME_NAME"
+  app_validate_https_url "THEME_REPO" "$THEME_REPO"
   app_validate_system_name "CMS_BACKEND" "$CMS_BACKEND"
   app_validate_github_repo "CMS_REPO" "$CMS_REPO"
   app_validate_git_ref "CMS_BRANCH" "$CMS_BRANCH"
+  app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"
   [[ "$BLOG_BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] \
     || error "$(t app.blog.error.keep_days_invalid "$BLOG_BACKUP_KEEP_DAYS")"
   require_safe_path "SITE_DIR" "$SITE_DIR"

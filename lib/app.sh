@@ -26,6 +26,34 @@ app_validate_domain() {
   fi
 }
 
+app_validate_http_url() {
+  local name="$1" value="$2" scheme host
+  case "$value" in
+    http://*|https://*) ;;
+    *) error "$(t error.url_invalid "$name" "$value")" ;;
+  esac
+  case "$value" in
+    ""|*[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*|*"|"*)
+      error "$(t error.url_invalid "$name" "$value")"
+      ;;
+  esac
+  scheme="${value%%://*}"
+  host="${value#${scheme}://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  if [[ "$host" != "localhost" && ! "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]] && ! is_valid_dns_name "$host"; then
+    error "$(t error.url_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_https_url() {
+  local name="$1" value="$2"
+  app_validate_http_url "$name" "$value"
+  if [[ "$value" != https://* ]]; then
+    error "$(t error.https_url_invalid "$name" "$value")"
+  fi
+}
+
 app_validate_system_name() {
   local name="$1" value="$2"
   if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,63}$ ]]; then

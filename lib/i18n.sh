@@ -73,6 +73,8 @@ __deploy_i18n_message() {
     error.github_repo_invalid) echo "%s is invalid: '%s'. Use owner/repository with GitHub-safe name characters.|%s 无效：'%s'，请使用 owner/repository 格式，并仅包含 GitHub 安全名称字符。" ;;
     error.git_ref_invalid) echo "%s is invalid: '%s'. Use a simple branch/tag ref without spaces, shell metacharacters, '..', or '@{'.|%s 无效：'%s'，请使用简单分支/标签引用，不包含空格、shell 特殊字符、'..' 或 '@{'。" ;;
     error.db_identifier_invalid) echo "%s is invalid: '%s'. Use a database identifier with letters, numbers, or underscore; start with a letter or underscore.|%s 无效：'%s'，请使用数据库标识符：字母、数字或下划线，并以字母或下划线开头。" ;;
+    error.url_invalid) echo "%s is invalid: '%s'. Use an http(s) URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 http(s) URL。" ;;
+    error.https_url_invalid) echo "%s is invalid: '%s'. Use an https URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 https URL。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
