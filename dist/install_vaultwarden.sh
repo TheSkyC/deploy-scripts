@@ -2340,7 +2340,13 @@ _validate_config_values() {
     || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
 }
 get_installed_version() {
-  [[ -x "$VW_BIN" ]] && "$VW_BIN" --version 2>/dev/null | awk '{print $2}' || t app.vaultwarden.status.not_installed
+  local version
+  if [[ ! -x "$VW_BIN" ]]; then
+    t app.vaultwarden.status.not_installed
+    return 0
+  fi
+  version=$("$VW_BIN" --version 2>/dev/null | awk 'NF >= 2 { print $2; exit }' || true)
+  [[ -n "$version" ]] && printf '%s\n' "$version" || t status.unknown
 }
 get_latest_webvault_ver() {
   local json tag

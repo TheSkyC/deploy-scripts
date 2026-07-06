@@ -1890,6 +1890,24 @@ check_vaultwarden_status_display_commands_are_nonfatal() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_version_probe_has_fallback() {
+  awk '
+      /get_installed_version\(\)/ { in_func=1; saw_local=0; saw_missing=0; saw_parse=0; saw_unknown=0; next }
+      in_func && /local version/ { saw_local=1 }
+      in_func && /\[\[ ! -x "\$VW_BIN" \]\]/ { saw_missing=1 }
+      in_func && /t app\.vaultwarden\.status\.not_installed/ { saw_not_installed=1 }
+      in_func && /version=\$\("\$VW_BIN" --version 2>\/dev\/null \| awk '\''NF >= 2 \{ print \$2; exit \}'\'' \|\| true\)/ { saw_parse=1 }
+      in_func && /\[\[ -n "\$version" \]\] && printf '\''%s\\n'\'' "\$version" \|\| t status\.unknown/ { saw_unknown=1 }
+      in_func && /^}/ {
+        if (!(saw_local && saw_missing && saw_not_installed && saw_parse && saw_unknown)) {
+          printf "%s Vaultwarden version probe must distinguish missing binaries from unparsable version output and fall back under pipefail.\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_find_head_pipelines_are_nonfatal() {
   if grep -R -nE '\$\(find [^)]*\| head -1\)' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
@@ -6968,6 +6986,7 @@ main() {
   check_systemctl_status_diagnostics_are_nonfatal
   check_status_commands_allow_non_root
   check_vaultwarden_status_display_commands_are_nonfatal
+  check_vaultwarden_version_probe_has_fallback
   check_vaultwarden_find_head_pipelines_are_nonfatal
   check_cyberstrikeai_display_sizes_are_nonfatal
   check_api_status_directory_sizes_are_nonfatal
