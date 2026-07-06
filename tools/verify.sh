@@ -1163,6 +1163,45 @@ check_tickflow_systemd_shell_paths_are_quoted() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_systemctl_failures_are_reported() {
+  if grep -R -nE 'systemctl (enable --now docker|enable "\$TICKFLOW_SERVICE_NAME"|stop "\$TICKFLOW_SERVICE_NAME"|disable "\$TICKFLOW_SERVICE_NAME"|daemon-reload).* \|\| true' \
+      impl/install_tickflow.sh dist/install_tickflow.sh 2>/dev/null; then
+    echo "TickFlow systemctl failures must be reported instead of silently ignored." >&2
+    return 1
+  fi
+  awk '
+      /app\.tickflow\.warn\.docker_enable_failed/ { saw_docker_key=1 }
+      /app\.tickflow\.warn\.service_enable_failed/ { saw_enable_key=1 }
+      /app\.tickflow\.warn\.service_stop_failed/ { saw_stop_key=1 }
+      /app\.tickflow\.warn\.service_disable_failed/ { saw_disable_key=1 }
+      /app\.tickflow\.warn\.systemd_reload_failed/ { saw_reload_key=1 }
+      END {
+        if (!(saw_docker_key && saw_enable_key && saw_stop_key && saw_disable_key && saw_reload_key)) {
+          print "TickFlow must provide localized warnings for nonfatal systemctl failures." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /systemctl enable --now docker/ { saw_docker=1 }
+      saw_docker && /warn "\$\(t app\.tickflow\.warn\.docker_enable_failed\)"/ { saw_docker_warn=1; saw_docker=0 }
+      /systemctl enable "\$TICKFLOW_SERVICE_NAME"/ { saw_enable=1 }
+      saw_enable && /warn "\$\(t app\.tickflow\.warn\.service_enable_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_enable_warn=1; saw_enable=0 }
+      /systemctl stop "\$TICKFLOW_SERVICE_NAME"/ { saw_stop=1 }
+      saw_stop && /warn "\$\(t app\.tickflow\.warn\.service_stop_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_stop_warn=1; saw_stop=0 }
+      /systemctl disable "\$TICKFLOW_SERVICE_NAME"/ { saw_disable=1 }
+      saw_disable && /warn "\$\(t app\.tickflow\.warn\.service_disable_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_disable_warn=1; saw_disable=0 }
+      /systemctl daemon-reload/ { saw_reload=1 }
+      saw_reload && /warn "\$\(t app\.tickflow\.warn\.systemd_reload_failed "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_reload_warn=1; saw_reload=0 }
+      END {
+        if (!(saw_docker_warn && saw_enable_warn && saw_stop_warn && saw_disable_warn && saw_reload_warn)) {
+          printf "%s TickFlow must warn on nonfatal systemctl failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_blog_restore_action() {
   grep -Fq 'app.blog.restore.success' apps/blog.sh || {
     echo "Blog restore action must provide localized success text." >&2
@@ -6055,6 +6094,7 @@ main() {
   check_blog_config_persistence
   check_tickflow_config_files_are_atomic
   check_tickflow_systemd_shell_paths_are_quoted
+  check_tickflow_systemctl_failures_are_reported
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads

@@ -57,6 +57,21 @@ i18n_register_many \
   app.tickflow.error.service_stop \
   "Failed to stop %s" \
   "停止 %s 失败" \
+  app.tickflow.warn.docker_enable_failed \
+  "Could not enable or start Docker automatically. If the service fails later, run manually: systemctl enable --now docker" \
+  "无法自动启用或启动 Docker。若后续服务失败，请手动执行：systemctl enable --now docker。" \
+  app.tickflow.warn.service_enable_failed \
+  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
+  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
+  app.tickflow.warn.service_stop_failed \
+  "Could not stop %s during uninstall. It may already be stopped; otherwise inspect systemctl status %s." \
+  "卸载时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
+  app.tickflow.warn.service_disable_failed \
+  "Could not disable %s during uninstall. Remove it manually after fixing systemd: systemctl disable %s" \
+  "卸载时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
+  app.tickflow.warn.systemd_reload_failed \
+  "Could not reload systemd after removing %s. Run manually: systemctl daemon-reload" \
+  "删除 %s 后无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
   app.tickflow.error.health \
   "Health check failed. The panel may still be starting; run status again later." \
   "健康检查失败，面板可能仍在启动；稍后可再次执行 status。" \
