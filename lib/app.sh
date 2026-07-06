@@ -54,6 +54,30 @@ app_validate_https_url() {
   fi
 }
 
+app_validate_goproxy() {
+  local name="$1" value="$2" token
+  local -a _goproxy_parts
+  [[ -n "$value" ]] || error "$(t error.goproxy_invalid "$name" "$value")"
+  case "$value" in
+    *[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*)
+      error "$(t error.goproxy_invalid "$name" "$value")"
+      ;;
+  esac
+  local normalized="${value//|/,}"
+  IFS=',' read -r -a _goproxy_parts <<< "$normalized"
+  for token in "${_goproxy_parts[@]}"; do
+    case "$token" in
+      direct|off) ;;
+      http://*|https://*)
+        app_validate_http_url "$name" "$token"
+        ;;
+      *)
+        error "$(t error.goproxy_invalid "$name" "$value")"
+        ;;
+    esac
+  done
+}
+
 app_validate_system_name() {
   local name="$1" value="$2"
   if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,63}$ ]]; then

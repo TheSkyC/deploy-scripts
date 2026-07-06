@@ -1628,6 +1628,8 @@ check_config_value_validators() {
     app_validate_db_identifier PG_DB sub2api_db
     app_validate_http_url CMS_SITE_URL http://localhost:1313/admin/
     app_validate_https_url THEME_REPO https://github.com/CaiJimmy/hugo-theme-stack.git
+    app_validate_goproxy GOPROXY "https://goproxy.cn,direct"
+    app_validate_goproxy GOPROXY "https://proxy.example.com|direct"
 
     validator_must_reject() {
       local label="$1"
@@ -1645,6 +1647,7 @@ check_config_value_validators() {
     validator_must_reject db-identifier app_validate_db_identifier PG_DB "sub2api-db"
     validator_must_reject http-url app_validate_http_url CMS_SITE_URL "https://example.com/a path"
     validator_must_reject https-url app_validate_https_url THEME_REPO "git://github.com/owner/repo.git"
+    validator_must_reject goproxy app_validate_goproxy GOPROXY "https://proxy.example.com,;rm"
   '
 
   local checks=(
@@ -1654,6 +1657,8 @@ check_config_value_validators() {
     'impl/install_sub2api.sh|app_validate_db_identifier "PG_USER" "$PG_USER"'
     'impl/install_sub2api.sh|app_validate_db_identifier "PG_DB" "$PG_DB"'
     'impl/install_cyberstrikeai.sh|app_validate_git_ref "GITHUB_BRANCH" "$GITHUB_BRANCH"'
+    'impl/install_cyberstrikeai.sh|app_validate_http_url "PIP_INDEX_URL" "$PIP_INDEX_URL"'
+    'impl/install_cyberstrikeai.sh|app_validate_goproxy "GOPROXY" "$GOPROXY"'
     'impl/install_tickflow.sh|app_validate_git_ref "TICKFLOW_BRANCH" "$TICKFLOW_BRANCH"'
     'impl/install_vaultwarden.sh|app_validate_system_name "VW_USER" "$VW_USER"'
     'impl/install_blog.sh|app_validate_https_url "THEME_REPO" "$THEME_REPO"'
