@@ -406,7 +406,14 @@ check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
     echo "CyberStrikeAI backup lists must not split paths on spaces." >&2
     return 1
   fi
+  if grep -R -nF 'find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f 2>/dev/null | while read -r db; do' \
+      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI generated backup script must not split database paths on spaces." >&2
+    return 1
+  fi
   awk '
+      /find "\\\$INSTALL_DIR\/data" -maxdepth 1 -name "\*\.db" -type f -print0/ { saw_db_print0=1 }
+      /while IFS= read -r -d '\'''\'' db; do/ { saw_db_read0=1 }
       /app\.cyberstrikeai\.info\.latest_backups/ { in_backup=1 }
       in_backup && /file="\$\{_backup_entry#\* \}"/ { saw_backup_strip=1 }
       in_backup && /-printf '\''%T@ %p\\0'\''/ { saw_backup_print0=1 }
@@ -416,8 +423,8 @@ check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
       in_status && /-printf '\''%T@ %p\\0'\''/ { saw_status_print0=1 }
       in_status && /sort -z -rn \| head -z -n 5/ { saw_status_sort=1; in_status=0 }
       END {
-        if (!(saw_backup_strip && saw_backup_print0 && saw_backup_sort && saw_status_strip && saw_status_print0 && saw_status_sort)) {
-          printf "%s CyberStrikeAI backup lists must use NUL-delimited sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
+        if (!(saw_db_print0 && saw_db_read0 && saw_backup_strip && saw_backup_print0 && saw_backup_sort && saw_status_strip && saw_status_print0 && saw_status_sort)) {
+          printf "%s CyberStrikeAI backup lists must use NUL-delimited reads and sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }

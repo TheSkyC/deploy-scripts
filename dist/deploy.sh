@@ -10749,14 +10749,14 @@ if [[ ! -d "\$INSTALL_DIR" ]]; then
 fi
 
 if command -v sqlite3 >/dev/null 2>&1; then
-  find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f 2>/dev/null | while read -r db; do
+  while IFS= read -r -d '' db; do
     sqlite3 "\$db" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1 || true
     integrity=\$(sqlite3 "\$db" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
     if [[ "\$integrity" != "ok" ]]; then
       _log "[WARN] \$(printf "\$MSG_SQLITE_INTEGRITY" "\$db" "\$integrity")"
       printf "\$(date '+%F %T') [WARN] %s\n" "\$(printf "\$MSG_SQLITE_INTEGRITY" "\$db" "\$integrity")" >&2
     fi
-  done
+  done < <(find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f -print0 2>/dev/null)
 fi
 
 ts=\$(date +%Y%m%d_%H%M%S)
