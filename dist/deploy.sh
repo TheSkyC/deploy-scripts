@@ -5025,6 +5025,9 @@ i18n_register_many \
   app.tickflow.error.env_write \
   "Failed to write environment file: %s" \
   "写入环境变量文件失败：%s" \
+  app.tickflow.error.tiers_write \
+  "Failed to write tiers file: %s" \
+  "写入 tiers 文件失败：%s" \
   app.tickflow.error.service_write \
   "Failed to write systemd unit: %s" \
   "写入 systemd 单元失败：%s" \
@@ -11921,16 +11924,15 @@ _ensure_data_layout() {
   mkdir -p "$TICKFLOW_DATA_DIR"
   mkdir -p "$TICKFLOW_LOG_DIR"
   if [[ ! -f "$TICKFLOW_TIERS_FILE" ]]; then
-    cat > "$TICKFLOW_TIERS_FILE" <<'EOF'
+    atomic_write_file "$TICKFLOW_TIERS_FILE" 644 <<'EOF' \
+      || error "$(t app.tickflow.error.tiers_write "$TICKFLOW_TIERS_FILE")"
 # Managed by deploy-scripts.
 # This file is required by tickflow-stock-panel docker compose.
 EOF
-    chmod 644 "$TICKFLOW_TIERS_FILE"
   fi
 }
 
 _write_env_file() {
-  local env_tmp
   local tickflow_api_key=""
   local ai_provider="openai_compat"
   local ai_base_url="https://api.deepseek.com/v1"
@@ -11961,39 +11963,26 @@ _write_env_file() {
   if existing_value="$(_env_value_from_file LOG_LEVEL)"; then
     log_level="$existing_value"
   fi
-  if ! env_tmp=$(mktemp "${TICKFLOW_ENV_FILE}.XXXXXX"); then
-    error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
-  fi
-  {
-    printf 'TICKFLOW_API_KEY=%s\n' "$tickflow_api_key"
-    printf 'AI_PROVIDER=%s\n' "$ai_provider"
-    printf 'AI_BASE_URL=%s\n' "$ai_base_url"
-    printf 'AI_API_KEY=%s\n' "$ai_api_key"
-    printf 'AI_MODEL=%s\n' "$ai_model"
-    printf 'AI_DAILY_TOKEN_BUDGET=%s\n' "$ai_daily_token_budget"
-    printf 'HOST=0.0.0.0\n'
-    printf 'PORT=%s\n' "$TICKFLOW_PORT"
-    printf 'LOG_LEVEL=%s\n' "$log_level"
-    printf 'AUTH_PASSWORD=%s\n' "$TICKFLOW_AUTH_PASSWORD"
-    printf 'BACKEND_EXTRAS=%s\n' "$TICKFLOW_BACKEND_EXTRAS"
-    printf 'DATA_DIR=./data\n'
-  } > "$env_tmp" || {
-    rm -f "$env_tmp"
-    error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
-  }
-  chmod 600 "$env_tmp"
-  if ! mv "$env_tmp" "$TICKFLOW_ENV_FILE"; then
-    rm -f "$env_tmp"
-    error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
-  fi
+  atomic_write_file "$TICKFLOW_ENV_FILE" 600 <<EOF \
+    || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
+TICKFLOW_API_KEY=${tickflow_api_key}
+AI_PROVIDER=${ai_provider}
+AI_BASE_URL=${ai_base_url}
+AI_API_KEY=${ai_api_key}
+AI_MODEL=${ai_model}
+AI_DAILY_TOKEN_BUDGET=${ai_daily_token_budget}
+HOST=0.0.0.0
+PORT=${TICKFLOW_PORT}
+LOG_LEVEL=${log_level}
+AUTH_PASSWORD=${TICKFLOW_AUTH_PASSWORD}
+BACKEND_EXTRAS=${TICKFLOW_BACKEND_EXTRAS}
+DATA_DIR=./data
+EOF
 }
 
 _write_compose_file() {
-  local compose_tmp
-  if ! compose_tmp=$(mktemp "${TICKFLOW_COMPOSE_FILE}.XXXXXX"); then
-    error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
-  fi
-  cat > "$compose_tmp" <<'EOF'
+  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<'EOF' \
+    || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 services:
   app:
     build:
@@ -12011,11 +12000,6 @@ services:
       - ./tiers.yaml:/app/tiers.yaml:ro
     restart: unless-stopped
 EOF
-  chmod 644 "$compose_tmp"
-  if ! mv "$compose_tmp" "$TICKFLOW_COMPOSE_FILE"; then
-    rm -f "$compose_tmp"
-    error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
-  fi
 }
 
 _write_systemd_unit() {

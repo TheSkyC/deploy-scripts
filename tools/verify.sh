@@ -1117,6 +1117,31 @@ check_blog_config_persistence() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_tickflow_config_files_are_atomic() {
+  if grep -R -nE '^[[:space:]]*cat > "\$TICKFLOW_(ENV|COMPOSE|TIERS)_FILE"|^[[:space:]]*} > "\$env_tmp"' \
+      impl/install_tickflow.sh dist/install_tickflow.sh 2>/dev/null; then
+    echo "TickFlow config files must be written with atomic_write_file." >&2
+    return 1
+  fi
+  awk '
+      /_ensure_data_layout\(\)/ { in_tiers=1; saw_tiers=0; next }
+      in_tiers && /atomic_write_file "\$TICKFLOW_TIERS_FILE" 644/ { saw_tiers=1 }
+      in_tiers && /^}/ { in_tiers=0 }
+      /_write_env_file\(\)/ { in_env=1; saw_env=0; next }
+      in_env && /atomic_write_file "\$TICKFLOW_ENV_FILE" 600/ { saw_env=1 }
+      in_env && /^}/ { in_env=0 }
+      /_write_compose_file\(\)/ { in_compose=1; saw_compose=0; next }
+      in_compose && /atomic_write_file "\$TICKFLOW_COMPOSE_FILE" 644/ { saw_compose=1 }
+      in_compose && /^}/ { in_compose=0 }
+      END {
+        if (!(saw_tiers && saw_env && saw_compose)) {
+          printf "%s TickFlow must atomically write tiers, env, and compose files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_blog_restore_action() {
   grep -Fq 'app.blog.restore.success' apps/blog.sh || {
     echo "Blog restore action must provide localized success text." >&2
@@ -6007,6 +6032,7 @@ main() {
   check_unsafe_config_loads_fail_closed
   check_config_save_failures_are_explicit
   check_blog_config_persistence
+  check_tickflow_config_files_are_atomic
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads

@@ -42,6 +42,9 @@ i18n_register_many \
   app.tickflow.error.env_write \
   "Failed to write environment file: %s" \
   "写入环境变量文件失败：%s" \
+  app.tickflow.error.tiers_write \
+  "Failed to write tiers file: %s" \
+  "写入 tiers 文件失败：%s" \
   app.tickflow.error.service_write \
   "Failed to write systemd unit: %s" \
   "写入 systemd 单元失败：%s" \
