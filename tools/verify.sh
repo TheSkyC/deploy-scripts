@@ -254,6 +254,25 @@ check_sub2api_uninstall_supports_noninteractive_mode() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_backup_lists_preserve_paths_with_spaces() {
+  awk '
+      /sub2api\.bak\.\*/ { in_binary=1 }
+      in_binary && /-printf '\''%T@ %p\\0'\''/ { saw_binary_print0=1 }
+      in_binary && /sort -z -rn \| tail -z -n \+4/ { saw_binary_sort=1 }
+      in_binary && /_old_baks\+=\("\$\{_old_bak_entry#\* \}"\)/ { saw_binary_strip=1 }
+      /app\.sub2api\.status\.backup_info/ { in_status=1 }
+      in_status && /-printf '\''%T@ %p\\0'\''/ { saw_status_print0=1 }
+      in_status && /sort -z -rn \| head -z -n 5/ { saw_status_sort=1 }
+      in_status && /f="\$\{_bak_entry#\* \}"/ { saw_status_strip=1 }
+      END {
+        if (!(saw_binary_print0 && saw_binary_sort && saw_binary_strip && saw_status_print0 && saw_status_sort && saw_status_strip)) {
+          printf "%s Sub2API backup and binary retention lists must use NUL-delimited sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_vaultwarden_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.vaultwarden\.prompt\.continue\)"/ { saw_continue_prompt=1 }
@@ -6719,6 +6738,7 @@ main() {
       check_newapi_uninstall_supports_noninteractive_mode
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
+      check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_install_supports_noninteractive_mode
       check_blog_uninstall_supports_noninteractive_mode
@@ -6756,6 +6776,7 @@ main() {
   check_newapi_uninstall_supports_noninteractive_mode
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
+  check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_install_supports_noninteractive_mode
   check_blog_uninstall_supports_noninteractive_mode

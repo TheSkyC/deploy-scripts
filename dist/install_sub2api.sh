@@ -3628,9 +3628,12 @@ do_update() {
     INSTALLED_VERSION="$LATEST"
     app_save_config
     local -a _old_baks
-    mapfile -t _old_baks < <(
+    local _old_bak_entry
+    while IFS= read -r -d '' _old_bak_entry; do
+      _old_baks+=("${_old_bak_entry#* }")
+    done < <(
       find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*" -type f \
-        -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk 'NR>3{print $2}'
+        -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
     )
     if [[ ${#_old_baks[@]} -gt 0 ]]; then
       local _cleaned_old=0
@@ -3867,13 +3870,15 @@ do_status() {
     bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t app.sub2api.status.unknown)
     echo -e "  $(t app.sub2api.status.backup_dir "$BACKUP_DIR" "$bak_total_size" "$bak_count")"
     local _cnt=0
-    while IFS= read -r f; do
+    local _bak_entry
+    while IFS= read -r -d '' _bak_entry; do
+      f="${_bak_entry#* }"
       local _sz; _sz=$(du -sh "$f" 2>/dev/null | cut -f1 || echo "?")
       echo -e "  $((_cnt+1)). $(basename "$f")（${_sz}）"
       _cnt=$(( _cnt + 1 ))
     done < <(find "$BACKUP_DIR" -maxdepth 1 \
       \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \) \
-      -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -5 | awk '{print $2}')
+      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | head -z -n 5)
     if [[ $_cnt -eq 0 ]]; then
       echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.no_backup_files)"
     fi
