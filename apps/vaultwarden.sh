@@ -645,6 +645,9 @@ i18n_register_many \
   app.vaultwarden.backup.script.cleaned \
   "[OK] Removed %s expired backups (>%s days)." \
   "[OK] 已清理 %s 个过期备份（>%s 天）。" \
+  app.vaultwarden.backup.script.remove_failed \
+  "[WARN] Could not remove expired backup: %s" \
+  "[WARN] 过期备份删除失败：%s" \
   app.vaultwarden.warn.backup_data_missing \
   "Backup skipped: data directory does not exist (%s)." \
   "备份跳过：数据目录不存在（%s）。" \

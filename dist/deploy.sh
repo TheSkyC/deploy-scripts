@@ -3899,6 +3899,9 @@ i18n_register_many \
   app.vaultwarden.backup.script.cleaned \
   "[OK] Removed %s expired backups (>%s days)." \
   "[OK] 已清理 %s 个过期备份（>%s 天）。" \
+  app.vaultwarden.backup.script.remove_failed \
+  "[WARN] Could not remove expired backup: %s" \
+  "[WARN] 过期备份删除失败：%s" \
   app.vaultwarden.warn.backup_data_missing \
   "Backup skipped: data directory does not exist (%s)." \
   "备份跳过：数据目录不存在（%s）。" \
@@ -9684,6 +9687,7 @@ MSG_SQLITE_WARNING="$(t app.vaultwarden.backup.script.sqlite_warning)"
 MSG_SUCCESS="$(t app.vaultwarden.backup.script.success)"
 MSG_FAILED="$(t app.vaultwarden.backup.script.failed)"
 MSG_CLEANED="$(t app.vaultwarden.backup.script.cleaned)"
+MSG_REMOVE_FAILED="$(t app.vaultwarden.backup.script.remove_failed)"
 BKSH_VARS
   then
     rm -f "$backup_tmp"
@@ -9744,7 +9748,14 @@ fi
 
 # Remove expired backups.
 if [[ "${KEEP_DAYS}" -gt 0 ]]; then
-  REMOVED=$(find "${BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
+  REMOVED=0
+  while IFS= read -r -d '' old_backup; do
+    if rm -f "${old_backup}"; then
+      REMOVED=$((REMOVED + 1))
+    else
+      printf '%s  '"${MSG_REMOVE_FAILED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${old_backup}" >&2
+    fi
+  done < <(find "${BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" -mtime +"${KEEP_DAYS}" -type f -print0 2>/dev/null)
   if [[ "${REMOVED}" -gt 0 ]]; then
     printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
   fi
