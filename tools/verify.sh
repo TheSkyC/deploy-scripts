@@ -5124,6 +5124,39 @@ check_vaultwarden_update_stop_failure_aborts_before_replace() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_uninstall_stop_disable_failures_are_reported() {
+  awk '
+      /app\.vaultwarden\.error\.uninstall_stop_failed/ { saw_stop_error=1 }
+      /app\.vaultwarden\.warn\.uninstall_stop_failed/ { saw_stop_warn=1 }
+      /app\.vaultwarden\.warn\.uninstall_disable_failed/ { saw_disable_warn=1 }
+      END {
+        if (!(saw_stop_error && saw_stop_warn && saw_disable_warn)) {
+          print "Vaultwarden must provide localized uninstall stop and disable failure messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /do_uninstall\(\)/ { in_func=1 }
+      in_func && /info "\$\(t app\.vaultwarden\.info\.stop_service\)"/ { in_uninstall=1; saw_stop_if=0; saw_active_if=0; saw_stop_error=0; saw_stop_warn=0; saw_disable_if=0; saw_disable_warn=0; saw_suppressed=0; next }
+      in_uninstall && /systemctl (stop|disable).* \|\| true/ { saw_suppressed=1 }
+      in_uninstall && /if ! systemctl stop vaultwarden 2>\/dev\/null; then/ { saw_stop_if=1 }
+      in_uninstall && /if systemctl is-active --quiet vaultwarden 2>\/dev\/null; then/ { saw_active_if=1 }
+      in_uninstall && /error "\$\(t app\.vaultwarden\.error\.uninstall_stop_failed\)"/ { saw_stop_error=1 }
+      in_uninstall && /warn "\$\(t app\.vaultwarden\.warn\.uninstall_stop_failed\)"/ { saw_stop_warn=1 }
+      in_uninstall && /if ! systemctl disable vaultwarden 2>\/dev\/null; then/ { saw_disable_if=1 }
+      in_uninstall && /warn "\$\(t app\.vaultwarden\.warn\.uninstall_disable_failed\)"/ { saw_disable_warn=1 }
+      in_uninstall && /rm -f \/etc\/systemd\/system\/vaultwarden\.service/ {
+        if (!(saw_stop_if && saw_active_if && saw_stop_error && saw_stop_warn && saw_disable_if && saw_disable_warn) || saw_suppressed) {
+          printf "%s Vaultwarden uninstall must abort when an active service cannot be stopped and warn on disable failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+      in_func && /^}/ { in_func=0 }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -6598,6 +6631,7 @@ main() {
   check_vaultwarden_service_start_paths_are_explicit
   check_vaultwarden_install_cleanup_reports_systemctl_failures
   check_vaultwarden_update_stop_failure_aborts_before_replace
+  check_vaultwarden_uninstall_stop_disable_failures_are_reported
   check_sub2api_update_rollbacks_report_restart_failures
   check_sub2api_install_cleanup_reports_systemctl_failures
   check_sub2api_update_stop_failure_aborts_before_replace

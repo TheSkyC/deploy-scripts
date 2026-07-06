@@ -1541,8 +1541,15 @@ do_uninstall() {
   local _del_bak; read -r _del_bak
   local DELETE_BACKUP=false; [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
   info "$(t app.vaultwarden.info.stop_service)"
-  systemctl stop    vaultwarden 2>/dev/null || true
-  systemctl disable vaultwarden 2>/dev/null || true
+  if ! systemctl stop vaultwarden 2>/dev/null; then
+    if systemctl is-active --quiet vaultwarden 2>/dev/null; then
+      error "$(t app.vaultwarden.error.uninstall_stop_failed)"
+    fi
+    warn "$(t app.vaultwarden.warn.uninstall_stop_failed)"
+  fi
+  if ! systemctl disable vaultwarden 2>/dev/null; then
+    warn "$(t app.vaultwarden.warn.uninstall_disable_failed)"
+  fi
   rm -f /etc/systemd/system/vaultwarden.service
   if ! systemctl daemon-reload; then
     error "$(t app.vaultwarden.error.systemd_reload)"

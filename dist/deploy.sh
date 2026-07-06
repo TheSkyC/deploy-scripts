@@ -3797,6 +3797,15 @@ i18n_register_many \
   app.vaultwarden.prompt.delete_backup \
   "Delete backup directory too (%s)? (y/N):" \
   "是否同时删除备份目录（%s）？（y/N）：" \
+  app.vaultwarden.error.uninstall_stop_failed \
+  "Could not stop vaultwarden during uninstall, and it still appears active. Uninstall aborted before deleting files. Inspect: systemctl status vaultwarden" \
+  "卸载时无法停止 vaultwarden，且该服务仍处于 active 状态。已在删除文件前中止卸载。请检查：systemctl status vaultwarden。" \
+  app.vaultwarden.warn.uninstall_stop_failed \
+  "Could not stop vaultwarden during uninstall, but it is not active; continuing cleanup. Inspect systemd if this is unexpected: systemctl status vaultwarden" \
+  "卸载时无法停止 vaultwarden，但该服务当前不是 active，继续清理。如不符合预期，请检查：systemctl status vaultwarden。" \
+  app.vaultwarden.warn.uninstall_disable_failed \
+  "Could not disable vaultwarden during uninstall. Remove the enablement manually after fixing systemd: systemctl disable vaultwarden" \
+  "卸载时无法禁用 vaultwarden。请在修复 systemd 后手动移除开机自启：systemctl disable vaultwarden。" \
   app.vaultwarden.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \
@@ -9566,8 +9575,15 @@ do_uninstall() {
   local _del_bak; read -r _del_bak
   local DELETE_BACKUP=false; [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
   info "$(t app.vaultwarden.info.stop_service)"
-  systemctl stop    vaultwarden 2>/dev/null || true
-  systemctl disable vaultwarden 2>/dev/null || true
+  if ! systemctl stop vaultwarden 2>/dev/null; then
+    if systemctl is-active --quiet vaultwarden 2>/dev/null; then
+      error "$(t app.vaultwarden.error.uninstall_stop_failed)"
+    fi
+    warn "$(t app.vaultwarden.warn.uninstall_stop_failed)"
+  fi
+  if ! systemctl disable vaultwarden 2>/dev/null; then
+    warn "$(t app.vaultwarden.warn.uninstall_disable_failed)"
+  fi
   rm -f /etc/systemd/system/vaultwarden.service
   if ! systemctl daemon-reload; then
     error "$(t app.vaultwarden.error.systemd_reload)"
