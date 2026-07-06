@@ -5069,6 +5069,34 @@ check_vaultwarden_service_start_paths_are_explicit() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_install_cleanup_reports_systemctl_failures() {
+  awk '
+      /app\.vaultwarden\.warn\.cleanup_stop_failed/ { saw_stop_key=1 }
+      /app\.vaultwarden\.warn\.cleanup_disable_failed/ { saw_disable_key=1 }
+      /app\.vaultwarden\.warn\.cleanup_reload_failed/ { saw_reload_key=1 }
+      END {
+        if (!(saw_stop_key && saw_disable_key && saw_reload_key)) {
+          print "Vaultwarden must provide localized install rollback cleanup warnings." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /warn "\$\(t app\.vaultwarden\.warn\.service_cleanup\)"/ { in_cleanup=1; saw_stop=0; saw_disable=0; saw_reload=0; saw_suppressed=0; next }
+      in_cleanup && /\|\| true/ { saw_suppressed=1 }
+      in_cleanup && /warn "\$\(t app\.vaultwarden\.warn\.cleanup_stop_failed "vaultwarden" "vaultwarden"\)"/ { saw_stop=1 }
+      in_cleanup && /warn "\$\(t app\.vaultwarden\.warn\.cleanup_disable_failed "vaultwarden" "vaultwarden"\)"/ { saw_disable=1 }
+      in_cleanup && /warn "\$\(t app\.vaultwarden\.warn\.cleanup_reload_failed\)"/ { saw_reload=1 }
+      in_cleanup && /error "\$\(t app\.vaultwarden\.error\.install_failed_start\)"/ {
+        if (!(saw_stop && saw_disable && saw_reload) || saw_suppressed) {
+          printf "%s Vaultwarden install rollback cleanup must warn on stop, disable, and daemon-reload failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_cleanup=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -6320,6 +6348,7 @@ main() {
   check_vaultwarden_certbot_cron_failures_are_reported
   check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
+  check_vaultwarden_install_cleanup_reports_systemctl_failures
   check_sub2api_update_rollbacks_report_restart_failures
   check_sub2api_install_cleanup_reports_systemctl_failures
   check_sub2api_install_summary_matches_runtime_state

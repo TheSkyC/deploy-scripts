@@ -285,6 +285,15 @@ i18n_register_many \
   app.vaultwarden.warn.service_cleanup \
   "The service did not start within 20 seconds. Cleaning installed files..." \
   "服务在 20 秒内未能正常启动，正在清理已安装文件..." \
+  app.vaultwarden.warn.cleanup_stop_failed \
+  "Could not stop %s during install rollback. It may already be stopped; otherwise inspect systemctl status %s." \
+  "安装回滚时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
+  app.vaultwarden.warn.cleanup_disable_failed \
+  "Could not disable %s during install rollback. Run manually after fixing systemd: systemctl disable %s" \
+  "安装回滚时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
+  app.vaultwarden.warn.cleanup_reload_failed \
+  "Could not reload systemd during install rollback. Run manually: systemctl daemon-reload" \
+  "安装回滚时无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
   app.vaultwarden.error.install_failed_start \
   "Installation failed because the service could not start. The binary and systemd unit were rolled back.\n  Debug: journalctl -u vaultwarden -n 30 --no-pager\n  Data directory, env file, and Nginx config were kept. Fix the cause and rerun install." \
   "安装失败：服务无法启动，已回滚二进制与 systemd 单元。\n  调试命令：journalctl -u vaultwarden -n 30 --no-pager\n  数据目录、env 文件、Nginx 配置已保留，修复原因后重新 install。" \

@@ -637,10 +637,16 @@ UNIT
     systemctl status vaultwarden --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' || true
   else
     warn "$(t app.vaultwarden.warn.service_cleanup)"
-    systemctl stop    vaultwarden 2>/dev/null || true
-    systemctl disable vaultwarden 2>/dev/null || true
+    if ! systemctl stop vaultwarden 2>/dev/null; then
+      warn "$(t app.vaultwarden.warn.cleanup_stop_failed "vaultwarden" "vaultwarden")"
+    fi
+    if ! systemctl disable vaultwarden 2>/dev/null; then
+      warn "$(t app.vaultwarden.warn.cleanup_disable_failed "vaultwarden" "vaultwarden")"
+    fi
     rm -f /etc/systemd/system/vaultwarden.service
-    systemctl daemon-reload 2>/dev/null || true
+    if ! systemctl daemon-reload 2>/dev/null; then
+      warn "$(t app.vaultwarden.warn.cleanup_reload_failed)"
+    fi
     rm -f "$VW_BIN"
     error "$(t app.vaultwarden.error.install_failed_start)"
   fi
