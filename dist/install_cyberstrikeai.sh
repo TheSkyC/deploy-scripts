@@ -1654,6 +1654,9 @@ _validate_config_values() {
   app_validate_http_url "PIP_INDEX_URL" "$PIP_INDEX_URL"
   app_validate_goproxy "GOPROXY" "$GOPROXY"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "BIN_PATH" "$BIN_PATH"
+  require_safe_path "CONFIG_FILE" "$CONFIG_FILE"
+  require_safe_path "VENV_DIR" "$VENV_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
