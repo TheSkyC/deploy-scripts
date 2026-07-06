@@ -141,9 +141,15 @@ i18n_register_many \
   app.vaultwarden.info.data_dir \
   "Data dir   : %s" \
   "数据目录 : %s" \
+  app.vaultwarden.info.web_vault \
+  "Web Vault  : %s" \
+  "Web Vault: %s" \
   app.vaultwarden.info.run_user \
   "Run user   : %s" \
   "运行用户 : %s" \
+  app.vaultwarden.info.https \
+  "HTTPS      : %s" \
+  "HTTPS    : %s" \
   app.vaultwarden.prompt.confirm_config \
   "Is this configuration correct? (y/N):" \
   "配置是否正确？（y/N）：" \

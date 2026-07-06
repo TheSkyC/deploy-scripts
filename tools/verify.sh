@@ -330,6 +330,33 @@ check_vaultwarden_install_supports_noninteractive_mode() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_install_summary_is_localized() {
+  awk '
+      /app\.vaultwarden\.info\.web_vault/ { saw_web_key=1 }
+      /app\.vaultwarden\.info\.https/ { saw_https_key=1 }
+      END {
+        if (!(saw_web_key && saw_https_key)) {
+          print "Vaultwarden install summary fields must have localization keys." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /info "\$\(t app\.vaultwarden\.info\.web_vault "\$VW_WEB_DIR"\)"/ { saw_web=1 }
+      /info "\$\(t app\.vaultwarden\.info\.https "\$ENABLE_HTTPS"\)"/ { saw_https=1 }
+      /info "Web Vault:/ || /info "HTTPS    :/ {
+        printf "%s Vaultwarden install summary must use i18n helpers instead of hardcoded English fields.\n", FILENAME > "/dev/stderr"
+        exit 1
+      }
+      END {
+        if (!(saw_web && saw_https)) {
+          printf "%s Vaultwarden install summary must print localized Web Vault and HTTPS fields.\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_backup_lists_preserve_paths_with_spaces() {
   if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden backup and rollback lists must not split paths on spaces." >&2
@@ -6848,6 +6875,7 @@ main() {
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_install_supports_noninteractive_mode
+      check_vaultwarden_install_summary_is_localized
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
@@ -6889,6 +6917,7 @@ main() {
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_install_supports_noninteractive_mode
+  check_vaultwarden_install_summary_is_localized
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode

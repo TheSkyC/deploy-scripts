@@ -3395,9 +3395,15 @@ i18n_register_many \
   app.vaultwarden.info.data_dir \
   "Data dir   : %s" \
   "数据目录 : %s" \
+  app.vaultwarden.info.web_vault \
+  "Web Vault  : %s" \
+  "Web Vault: %s" \
   app.vaultwarden.info.run_user \
   "Run user   : %s" \
   "运行用户 : %s" \
+  app.vaultwarden.info.https \
+  "HTTPS      : %s" \
+  "HTTPS    : %s" \
   app.vaultwarden.prompt.confirm_config \
   "Is this configuration correct? (y/N):" \
   "配置是否正确？（y/N）：" \
@@ -8762,9 +8768,9 @@ do_install() {
   info "$(t app.vaultwarden.info.listen_port "$VW_PORT")"
   info "$(t app.vaultwarden.info.binary "$VW_BIN")"
   info "$(t app.vaultwarden.info.data_dir "$VW_DATA_DIR")"
-  info "Web Vault: ${VW_WEB_DIR}"
+  info "$(t app.vaultwarden.info.web_vault "$VW_WEB_DIR")"
   info "$(t app.vaultwarden.info.run_user "$VW_USER")"
-  info "HTTPS    : ${ENABLE_HTTPS}"
+  info "$(t app.vaultwarden.info.https "$ENABLE_HTTPS")"
   echo ""
   if deploy_assume_yes; then
     _c="y"

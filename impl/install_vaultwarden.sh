@@ -376,9 +376,9 @@ do_install() {
   info "$(t app.vaultwarden.info.listen_port "$VW_PORT")"
   info "$(t app.vaultwarden.info.binary "$VW_BIN")"
   info "$(t app.vaultwarden.info.data_dir "$VW_DATA_DIR")"
-  info "Web Vault: ${VW_WEB_DIR}"
+  info "$(t app.vaultwarden.info.web_vault "$VW_WEB_DIR")"
   info "$(t app.vaultwarden.info.run_user "$VW_USER")"
-  info "HTTPS    : ${ENABLE_HTTPS}"
+  info "$(t app.vaultwarden.info.https "$ENABLE_HTTPS")"
   echo ""
   if deploy_assume_yes; then
     _c="y"
