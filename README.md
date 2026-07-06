@@ -34,6 +34,8 @@ Use generated single-file release scripts when you want to copy only one file to
 sudo bash dist/install_newapi.sh install
 ```
 
+For New API automation, `DEPLOY_ASSUME_YES=1` confirms uninstall without prompts while keeping data and backups by default. Add `DEPLOY_DELETE_DATA=1` or `DEPLOY_DELETE_BACKUP=1` only when those removals are intended.
+
 ## Localization
 
 English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework messages and localized application messages for the bundled scripts.

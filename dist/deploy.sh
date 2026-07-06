@@ -879,6 +879,19 @@ app_conf_register_legacy() {
   fi
 }
 
+deploy_env_truthy() {
+  local name="$1"
+  local value="${!name:-}"
+  case "${value,,}" in
+    1|true|yes|y|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+deploy_assume_yes() {
+  deploy_env_truthy DEPLOY_ASSUME_YES
+}
+
 app_doctor_service_name() {
   if [[ -n "${SERVICE_NAME:-}" ]]; then
     printf '%s\n' "$SERVICE_NAME"
@@ -6494,17 +6507,30 @@ do_uninstall() {
   echo "  $(t app.newapi.uninstall.keep_data "$DATA_DIR")"
   echo "  $(t app.newapi.uninstall.keep_backup "$BACKUP_DIR")"
   echo -e "${NC}"
-  prompt "$(t app.newapi.prompt.continue)"
-  local _c; read -r _c
+  local _c
+  if deploy_assume_yes; then
+    _c="YES"
+  else
+    prompt "$(t app.newapi.prompt.continue)"
+    read -r _c
+  fi
   [[ "$_c" != "YES" ]] && { info "$(t app.newapi.info.cancelled)"; exit 0; }
-  prompt "$(t app.newapi.prompt.delete_data "$DATA_DIR")"
-  local _del_data; read -r _del_data
   local DELETE_DATA=false
-  [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-  prompt "$(t app.newapi.prompt.delete_backup "$BACKUP_DIR")"
-  local _del_bak; read -r _del_bak
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true
+  else
+    prompt "$(t app.newapi.prompt.delete_data "$DATA_DIR")"
+    local _del_data; read -r _del_data
+    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+  fi
   local DELETE_BACKUP=false
-  [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true
+  else
+    prompt "$(t app.newapi.prompt.delete_backup "$BACKUP_DIR")"
+    local _del_bak; read -r _del_bak
+    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+  fi
   info "$(t app.newapi.info.stop_disable "$SERVICE_NAME")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then

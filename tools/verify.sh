@@ -174,6 +174,36 @@ check_doctor_validates_saved_config() {
     ' lib/app.sh
 }
 
+check_newapi_uninstall_supports_noninteractive_mode() {
+  awk '
+      /deploy_env_truthy\(\)/ { saw_truthy=1 }
+      /deploy_assume_yes\(\)/ { saw_assume=1 }
+      END {
+        if (!(saw_truthy && saw_assume)) {
+          print "Shared app helpers must provide environment-controlled non-interactive confirmation." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/app.sh
+  awk '
+      /prompt "\$\(t app\.newapi\.prompt\.continue\)"/ { saw_continue_prompt=1 }
+      /if deploy_assume_yes; then/ && !saw_continue { saw_continue=1; next }
+      saw_continue && /_c="YES"/ { saw_yes=1 }
+      /local DELETE_DATA=false/ { in_data=1; next }
+      in_data && /deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true/ { saw_data_env=1 }
+      in_data && /prompt "\$\(t app\.newapi\.prompt\.delete_data "\$DATA_DIR"\)"/ { saw_data_prompt=1; in_data=0 }
+      /local DELETE_BACKUP=false/ { in_backup=1; next }
+      in_backup && /deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true/ { saw_backup_env=1 }
+      in_backup && /prompt "\$\(t app\.newapi\.prompt\.delete_backup "\$BACKUP_DIR"\)"/ { saw_backup_prompt=1; in_backup=0 }
+      END {
+        if (!(saw_continue_prompt && saw_continue && saw_yes && saw_data_env && saw_data_prompt && saw_backup_env && saw_backup_prompt)) {
+          printf "%s NewAPI uninstall must support DEPLOY_ASSUME_YES while requiring explicit env flags for data and backup deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_blog_status_dispatch() {
   expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
@@ -6539,6 +6569,7 @@ main() {
       check_app_help_dispatch
       check_status_json_dispatch
       check_doctor_validates_saved_config
+      check_newapi_uninstall_supports_noninteractive_mode
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6569,6 +6600,7 @@ main() {
   check_app_help_dispatch
   check_status_json_dispatch
   check_doctor_validates_saved_config
+  check_newapi_uninstall_supports_noninteractive_mode
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu

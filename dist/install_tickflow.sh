@@ -878,6 +878,19 @@ app_conf_register_legacy() {
   fi
 }
 
+deploy_env_truthy() {
+  local name="$1"
+  local value="${!name:-}"
+  case "${value,,}" in
+    1|true|yes|y|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+deploy_assume_yes() {
+  deploy_env_truthy DEPLOY_ASSUME_YES
+}
+
 app_doctor_service_name() {
   if [[ -n "${SERVICE_NAME:-}" ]]; then
     printf '%s\n' "$SERVICE_NAME"
