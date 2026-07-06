@@ -1531,15 +1531,30 @@ do_uninstall() {
   echo "     - $(t app.vaultwarden.uninstall.cron)"
   echo "  $(t app.vaultwarden.uninstall.keep_data "$VW_DATA_DIR")"
   echo -e "${NC}"
-  prompt "$(t app.vaultwarden.prompt.continue)"
-  read -r _c
+  local _c
+  if deploy_assume_yes; then
+    _c="YES"
+  else
+    prompt "$(t app.vaultwarden.prompt.continue)"
+    read -r _c
+  fi
   [[ "$_c" != "YES" ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
-  prompt "$(t app.vaultwarden.prompt.delete_data "$VW_DATA_DIR")"
-  local _del_data; read -r _del_data
-  local DELETE_DATA=false; [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-  prompt "$(t app.vaultwarden.prompt.delete_backup "$VW_BACKUP_DIR")"
-  local _del_bak; read -r _del_bak
-  local DELETE_BACKUP=false; [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+  local DELETE_DATA=false
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true
+  else
+    prompt "$(t app.vaultwarden.prompt.delete_data "$VW_DATA_DIR")"
+    local _del_data; read -r _del_data
+    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+  fi
+  local DELETE_BACKUP=false
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true
+  else
+    prompt "$(t app.vaultwarden.prompt.delete_backup "$VW_BACKUP_DIR")"
+    local _del_bak; read -r _del_bak
+    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+  fi
   info "$(t app.vaultwarden.info.stop_service)"
   if ! systemctl stop vaultwarden 2>/dev/null; then
     if systemctl is-active --quiet vaultwarden 2>/dev/null; then
