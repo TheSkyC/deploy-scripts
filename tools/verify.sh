@@ -1665,6 +1665,51 @@ check_tickflow_systemctl_failures_are_reported() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_service_start_failures_show_diagnostics() {
+  awk '
+      /app\.tickflow\.warn\.service_diagnostics/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "TickFlow service start failures must have localized diagnostics heading." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /_print_service_diagnostics\(\)/ { in_helper=1; saw_warn=0; saw_status=0; saw_nonfatal=0; next }
+      in_helper && /warn "\$\(t app\.tickflow\.warn\.service_diagnostics\)"/ { saw_warn=1 }
+      in_helper && /systemctl status "\$TICKFLOW_SERVICE_NAME" --no-pager -l 2>\/dev\/null/ { saw_status=1 }
+      in_helper && /\| head -20 \| sed '\''s\/\^\/  \/'\'' >&2 \|\| true/ { saw_nonfatal=1 }
+      in_helper && /^}/ {
+        if (!(saw_warn && saw_status && saw_nonfatal)) {
+          printf "%s TickFlow service diagnostics helper must print recent systemd status nonfatally\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_helper=0
+      }
+      /if ! systemctl start "\$TICKFLOW_SERVICE_NAME"; then/ { in_start=1; saw_start_diag=0; saw_start_error=0; next }
+      in_start && /_print_service_diagnostics/ { saw_start_diag=1 }
+      in_start && /error "\$\(t app\.tickflow\.error\.service_start "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_start_error=1 }
+      in_start && /^  fi$/ {
+        if (!(saw_start_diag && saw_start_error)) {
+          printf "%s TickFlow install start failure must print diagnostics before exiting\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_start=0
+      }
+      /if ! systemctl restart "\$TICKFLOW_SERVICE_NAME"; then/ { in_restart=1; saw_restart_diag=0; saw_restart_error=0; next }
+      in_restart && /_print_service_diagnostics/ { saw_restart_diag=1 }
+      in_restart && /error "\$\(t app\.tickflow\.error\.service_start "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_restart_error=1 }
+      in_restart && /^  fi$/ {
+        if (!(saw_restart_diag && saw_restart_error)) {
+          printf "%s TickFlow update restart failure must print diagnostics before exiting\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_restart=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_tickflow_manual_backup_is_explicit() {
   awk '
       /app\.tickflow\.backup\.error_dir/ { saw_dir_key=1 }
@@ -7049,6 +7094,7 @@ main() {
   check_tickflow_config_files_are_atomic
   check_tickflow_systemd_shell_paths_are_quoted
   check_tickflow_systemctl_failures_are_reported
+  check_tickflow_service_start_failures_show_diagnostics
   check_tickflow_manual_backup_is_explicit
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options

@@ -240,6 +240,12 @@ EOF
   success "$(t app.tickflow.success.systemd "$TICKFLOW_SERVICE_NAME")"
 }
 
+_print_service_diagnostics() {
+  warn "$(t app.tickflow.warn.service_diagnostics)"
+  systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager -l 2>/dev/null \
+    | head -20 | sed 's/^/  /' >&2 || true
+}
+
 _health_check() {
   local code elapsed=0
   until code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000) \
@@ -320,7 +326,10 @@ do_install() {
   if ! systemctl enable "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     warn "$(t app.tickflow.warn.service_enable_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
   fi
-  systemctl start "$TICKFLOW_SERVICE_NAME" || error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
+  if ! systemctl start "$TICKFLOW_SERVICE_NAME"; then
+    _print_service_diagnostics
+    error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
+  fi
   success "$(t app.tickflow.success.started)"
   local state="ready"
   if ! _health_check; then
@@ -345,7 +354,10 @@ do_update() {
   _write_compose_file
   step "$(t app.tickflow.step.start)"
   app_check_port_conflict "$TICKFLOW_PORT" "TICKFLOW_PORT"
-  systemctl restart "$TICKFLOW_SERVICE_NAME" || error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
+  if ! systemctl restart "$TICKFLOW_SERVICE_NAME"; then
+    _print_service_diagnostics
+    error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
+  fi
   local state="ready"
   if ! _health_check; then
     state="pending"

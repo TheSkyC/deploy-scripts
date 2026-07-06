@@ -78,6 +78,9 @@ i18n_register_many \
   app.tickflow.warn.service_enable_failed \
   "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
   "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
+  app.tickflow.warn.service_diagnostics \
+  "Recent service diagnostics:" \
+  "最近的服务诊断：" \
   app.tickflow.warn.service_stop_failed \
   "Could not stop %s during uninstall. It may already be stopped; otherwise inspect systemctl status %s." \
   "卸载时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
