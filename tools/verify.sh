@@ -5158,6 +5158,32 @@ check_newapi_install_cleanup_reports_systemctl_failures() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_update_stop_failure_aborts_before_replace() {
+  awk '
+      /app\.newapi\.error\.stop_service_failed/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "NewAPI must provide an actionable update stop failure error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /info "\$\(t app\.newapi\.info\.stop_service\)"/ { in_stop=1; saw_if=0; saw_cleanup=0; saw_error=0; saw_suppressed=0; next }
+      in_stop && /systemctl stop "\$SERVICE_NAME" 2>\/dev\/null \|\| true/ { saw_suppressed=1 }
+      in_stop && /if ! systemctl stop "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_if=1 }
+      in_stop && /rm -f "\$TMP_BIN"/ { saw_cleanup=1 }
+      in_stop && /error "\$\(t app\.newapi\.error\.stop_service_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_error=1 }
+      in_stop && /if ! _install_binary_candidate "\$TMP_BIN"; then/ {
+        if (!(saw_if && saw_cleanup && saw_error) || saw_suppressed) {
+          printf "%s NewAPI update must abort and clean the downloaded binary when stopping the service fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_stop=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_sub2api_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
@@ -6359,6 +6385,7 @@ main() {
   check_cyberstrikeai_health_checks_are_nonfatal_outside_install
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_cleanup_reports_systemctl_failures
+  check_newapi_update_stop_failure_aborts_before_replace
   check_newapi_install_summary_matches_health_state
   check_newapi_health_checks_are_nonfatal_outside_install
   check_vaultwarden_install_summary_matches_health_state

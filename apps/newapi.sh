@@ -378,6 +378,9 @@ i18n_register_many \
   app.newapi.info.stop_service \
   "Stopping service..." \
   "停止服务..." \
+  app.newapi.error.stop_service_failed \
+  "Could not stop %s before replacing the binary. Update aborted and the current binary was left unchanged. Inspect: systemctl status %s" \
+  "替换二进制前无法停止 %s。更新已中止，当前二进制未变更。请检查：systemctl status %s。" \
   app.newapi.info.old_binary \
   "Old binary backed up: %s" \
   "旧二进制已备份：%s。" \
