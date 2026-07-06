@@ -99,6 +99,10 @@ check_localized_dispatch() {
   expect_failure_output zh install_tickflow.sh "无效选项"
   expect_failure_output en dist/install_tickflow.sh "Invalid choice"
   expect_failure_output zh dist/install_tickflow.sh "无效选项"
+  expect_failure_output en install_newapi.sh "does not support restore" restore
+  expect_failure_output zh install_newapi.sh "暂不支持 restore" restore
+  expect_failure_output en dist/install_newapi.sh "does not support restore" restore
+  expect_failure_output zh dist/install_newapi.sh "暂不支持 restore" restore
 }
 
 check_blog_status_dispatch() {

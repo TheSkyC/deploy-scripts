@@ -104,8 +104,9 @@ restore_framework_functions() {
     echo "  1) install    - $(t menu.install_desc)"
     echo "  2) update     - $(t menu.update_desc)"
     echo "  3) backup     - $(t menu.backup_desc)"
-    echo "  4) status     - $(t menu.status_desc)"
-    echo "  5) uninstall  - $(t menu.uninstall_desc)"
+    echo "  4) restore    - $(t menu.restore_desc)"
+    echo "  5) status     - $(t menu.status_desc)"
+    echo "  6) uninstall  - $(t menu.uninstall_desc)"
     echo "  q) $(t common.quit)"
     echo
     prompt "$(t common.selection_prompt)"
@@ -123,8 +124,15 @@ restore_framework_functions() {
       install|1) do_install ;;
       update|2) do_update ;;
       backup|3) do_backup ;;
-      status|4) do_status ;;
-      uninstall|5) do_uninstall ;;
+      restore|4)
+        if declare -f do_restore >/dev/null 2>&1; then
+          do_restore
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
+        fi
+        ;;
+      status|5) do_status ;;
+      uninstall|6) do_uninstall ;;
       menu|"") show_menu ;;
       q|quit|exit) exit 0 ;;
       *) error "$(t common.invalid_choice "$action")" ;;

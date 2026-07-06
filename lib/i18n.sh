@@ -46,6 +46,7 @@ __deploy_i18n_message() {
   case "$key" in
     action.backup) echo "backup|backup" ;;
     action.install) echo "install|install" ;;
+    action.restore) echo "restore|restore" ;;
     action.status) echo "status|status" ;;
     action.uninstall) echo "uninstall|uninstall" ;;
     action.update) echo "update|update" ;;
@@ -53,8 +54,8 @@ __deploy_i18n_message() {
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
     common.quit) echo "quit|退出" ;;
-    common.selection_prompt) echo "Selection [1-5/q]:|请输入选项 [1-5/q]：" ;;
-    common.usage) echo "Usage: sudo bash %s [install|update|backup|status|uninstall]|用法：sudo bash %s [install|update|backup|status|uninstall]" ;;
+    common.selection_prompt) echo "Selection [1-6/q]:|请输入选项 [1-6/q]：" ;;
+    common.usage) echo "Usage: sudo bash %s [install|update|backup|restore|status|uninstall]|用法：sudo bash %s [install|update|backup|restore|status|uninstall]" ;;
     config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
     config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
@@ -83,6 +84,7 @@ __deploy_i18n_message() {
     error.release_version_invalid) echo "%s is invalid: '%s'. Use a release version like 2024.6.2 without spaces, slash, or shell metacharacters.|%s 无效：'%s'，请使用类似 2024.6.2 的发布版本号，不包含空格、斜杠或 shell 特殊字符。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
+    menu.restore_desc) echo "restore from a backup|从备份恢复" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
     menu.uninstall_desc) echo "remove service and related files|卸载服务和相关文件" ;;
     menu.update_desc) echo "update to the latest available version|更新到可用的最新版本" ;;
@@ -94,7 +96,7 @@ __deploy_i18n_message() {
     manager.invalid_app) echo "Unknown application: %s|未知应用：%s" ;;
     manager.selection_prompt) echo "Application [number/name/q]:|请输入应用 [序号/名称/q]：" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
-    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, status, uninstall]|用法：sudo bash %s <应用> [install, update, backup, status, uninstall]" ;;
+    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, uninstall]" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden status; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden status；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
