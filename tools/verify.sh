@@ -139,6 +139,13 @@ check_app_help_dispatch() {
   expect_success_output zh dist/install_newapi.sh --help "用法：sudo bash"
 }
 
+check_status_json_dispatch() {
+  expect_success_output en install_newapi.sh status-json '"app_id":"newapi"'
+  expect_success_output en dist/install_newapi.sh json-status '"app_name":"New API"'
+  expect_manager_success_output en deploy.sh tickflow status-json '"app_id":"tickflow"'
+  expect_manager_success_output en dist/deploy.sh tickflow json-status '"service"'
+}
+
 check_doctor_validates_saved_config() {
   awk '
       /doctor\.config_parse_ok/ { saw_ok_key=1 }
@@ -6530,6 +6537,7 @@ main() {
       check_localized_dispatch
       check_doctor_dispatch
       check_app_help_dispatch
+      check_status_json_dispatch
       check_doctor_validates_saved_config
       check_blog_status_dispatch
       check_no_color_output
@@ -6559,6 +6567,7 @@ main() {
   check_localized_dispatch
   check_doctor_dispatch
   check_app_help_dispatch
+  check_status_json_dispatch
   check_doctor_validates_saved_config
   check_blog_status_dispatch
   check_no_color_output

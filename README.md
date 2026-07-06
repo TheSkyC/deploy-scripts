@@ -9,6 +9,7 @@ Run a script from the repository checkout:
 ```bash
 sudo bash deploy.sh newapi install
 sudo bash deploy.sh vaultwarden status
+sudo bash deploy.sh newapi status-json
 sudo bash deploy.sh sub2api doctor
 sudo bash deploy.sh list
 sudo bash install_newapi.sh install
@@ -72,6 +73,7 @@ Shared framework behavior includes:
 
 - Menu and action dispatch.
 - Shared non-destructive `doctor` diagnostics for identity, config, commands, and service state.
+- Shared `status-json` output for automation-friendly application, config, and service state summaries.
 - Logging helpers.
 - File and path safety helpers.
 - Atomic file writes, symlink replacement, and copy-backed backups.

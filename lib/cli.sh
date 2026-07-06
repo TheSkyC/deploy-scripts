@@ -46,6 +46,7 @@ dispatch_action() {
         fi
         ;;
       status|5) do_status ;;
+      status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
       uninstall|7) do_uninstall ;;
     menu|"") show_menu ;;

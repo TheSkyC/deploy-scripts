@@ -66,7 +66,7 @@ __deploy_i18n_message() {
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
     common.quit) echo "quit|退出" ;;
     common.selection_prompt) echo "Selection [1-7/q]:|请输入选项 [1-7/q]：" ;;
-    common.usage) echo "Usage: sudo bash %s [install|update|backup|restore|status|doctor|uninstall]|用法：sudo bash %s [install|update|backup|restore|status|doctor|uninstall]" ;;
+    common.usage) echo "Usage: sudo bash %s [install|update|backup|restore|status|status-json|doctor|uninstall]|用法：sudo bash %s [install|update|backup|restore|status|status-json|doctor|uninstall]" ;;
     config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
     config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
@@ -127,7 +127,7 @@ __deploy_i18n_message() {
     manager.invalid_app) echo "Unknown application: %s|未知应用：%s" ;;
     manager.selection_prompt) echo "Application [number/name/q]:|请输入应用 [序号/名称/q]：" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
-    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, doctor, uninstall]" ;;
+    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
@@ -925,6 +925,98 @@ app_doctor_validate_saved_config() {
   )
 }
 
+app_json_string() {
+  local value="${1:-}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '"%s"' "$value"
+}
+
+app_json_bool() {
+  if [[ "${1:-false}" == "true" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+app_json_value() {
+  local value="${1:-}"
+  case "$value" in
+    true|false|null) printf '%s' "$value" ;;
+    *) app_json_string "$value" ;;
+  esac
+}
+
+do_status_json() {
+  local conf_file config_exists=false config_safe=null config_valid=null
+  local conf_owner=null conf_mode=null
+  conf_file="$(app_conf_file)"
+
+  if [[ -f "$conf_file" ]]; then
+    config_exists=true
+    config_safe=true
+    if command -v stat >/dev/null 2>&1; then
+      conf_owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
+      conf_mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo unknown)"
+      if [[ "$conf_owner" != "root" || ( "$conf_mode" != "600" && "$conf_mode" != "400" ) ]]; then
+        config_safe=false
+      fi
+    fi
+    if [[ "$config_safe" == "true" ]] && app_doctor_validate_saved_config "$conf_file" >/dev/null 2>&1; then
+      config_valid=true
+    elif [[ "$config_safe" == "true" ]]; then
+      config_valid=false
+    fi
+  fi
+
+  local service_name=null systemctl_available=false unit_exists=null service_active=null service_enabled=null
+  if service_name="$(app_doctor_service_name 2>/dev/null)"; then
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl_available=true
+      if systemctl list-unit-files "${service_name}.service" --no-legend 2>/dev/null | grep -q .; then
+        unit_exists=true
+        if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+          service_active=true
+        else
+          service_active=false
+        fi
+        if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+          service_enabled=true
+        else
+          service_enabled=false
+        fi
+      else
+        unit_exists=false
+      fi
+    fi
+  fi
+
+  printf '{'
+  printf '"app_id":%s,' "$(app_json_string "${APP_ID:-}")"
+  printf '"app_name":%s,' "$(app_json_string "${APP_NAME:-}")"
+  printf '"root":%s,' "$(app_json_bool "$([[ ${EUID:-$(id -u)} -eq 0 ]] && echo true || echo false)")"
+  printf '"config":{'
+  printf '"path":%s,' "$(app_json_string "$conf_file")"
+  printf '"exists":%s,' "$(app_json_bool "$config_exists")"
+  printf '"owner":%s,' "$(app_json_value "$conf_owner")"
+  printf '"mode":%s,' "$(app_json_value "$conf_mode")"
+  printf '"safe":%s,' "$(app_json_value "$config_safe")"
+  printf '"valid":%s' "$(app_json_value "$config_valid")"
+  printf '},'
+  printf '"service":{'
+  printf '"name":%s,' "$(app_json_value "$service_name")"
+  printf '"systemctl_available":%s,' "$(app_json_bool "$systemctl_available")"
+  printf '"unit_exists":%s,' "$(app_json_value "$unit_exists")"
+  printf '"active":%s,' "$(app_json_value "$service_active")"
+  printf '"enabled":%s' "$(app_json_value "$service_enabled")"
+  printf '}'
+  printf '}\n'
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -1248,6 +1340,7 @@ restore_framework_functions() {
         fi
         ;;
       status|5) do_status ;;
+      status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
       uninstall|7) do_uninstall ;;
       menu|"") show_menu ;;
@@ -1325,6 +1418,7 @@ dispatch_action() {
         fi
         ;;
       status|5) do_status ;;
+      status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
       uninstall|7) do_uninstall ;;
     menu|"") show_menu ;;
