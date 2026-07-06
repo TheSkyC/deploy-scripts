@@ -34,7 +34,7 @@ Use generated single-file release scripts when you want to copy only one file to
 sudo bash dist/install_newapi.sh install
 ```
 
-For New API, Sub2API, and Vaultwarden automation, `DEPLOY_ASSUME_YES=1` confirms uninstall without prompts while keeping data, config, and backups by default. Add `DEPLOY_DELETE_DATA=1`, `DEPLOY_DELETE_CONFIG=1`, or `DEPLOY_DELETE_BACKUP=1` only when those removals are intended.
+For New API, Sub2API, Vaultwarden, and Blog automation, `DEPLOY_ASSUME_YES=1` confirms uninstall without prompts while keeping data, config, and backups by default. Add `DEPLOY_DELETE_DATA=1`, `DEPLOY_DELETE_CONFIG=1`, or `DEPLOY_DELETE_BACKUP=1` only when those removals are intended.
 
 ## Localization
 

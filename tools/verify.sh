@@ -247,6 +247,24 @@ check_vaultwarden_uninstall_supports_noninteractive_mode() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_blog_uninstall_supports_noninteractive_mode() {
+  awk '
+      /prompt "\$\(t app\.blog\.uninstall\.continue_prompt\)"/ { saw_continue_prompt=1 }
+      /if deploy_assume_yes; then/ && !saw_continue { saw_continue=1; next }
+      saw_continue && /confirm="YES"/ { saw_yes=1 }
+      /if deploy_env_truthy DEPLOY_DELETE_BACKUP; then/ { saw_backup_env=1 }
+      /delete_backups="yes"/ { saw_backup_yes=1 }
+      /delete_backups="no"/ { saw_backup_no=1 }
+      /prompt "\$\(t app\.blog\.uninstall\.delete_backups_prompt "\$BLOG_BACKUP_DIR"\)"/ { saw_backup_prompt=1 }
+      END {
+        if (!(saw_continue_prompt && saw_continue && saw_yes && saw_backup_env && saw_backup_yes && saw_backup_no && saw_backup_prompt)) {
+          printf "%s Blog uninstall must support DEPLOY_ASSUME_YES while requiring DEPLOY_DELETE_BACKUP for backup deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_blog_status_dispatch() {
   expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
@@ -6615,6 +6633,7 @@ main() {
       check_newapi_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_supports_noninteractive_mode
+      check_blog_uninstall_supports_noninteractive_mode
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6648,6 +6667,7 @@ main() {
   check_newapi_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_supports_noninteractive_mode
+  check_blog_uninstall_supports_noninteractive_mode
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu

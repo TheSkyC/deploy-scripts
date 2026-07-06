@@ -12274,12 +12274,24 @@ do_uninstall() {
   require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
 
   warn "$(t app.blog.uninstall.warning)"
-  prompt "$(t app.blog.uninstall.continue_prompt)"
   local confirm delete_backups
-  read -r confirm
+  if deploy_assume_yes; then
+    confirm="YES"
+  else
+    prompt "$(t app.blog.uninstall.continue_prompt)"
+    read -r confirm
+  fi
   [[ "$confirm" == "YES" ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 0; }
-  prompt "$(t app.blog.uninstall.delete_backups_prompt "$BLOG_BACKUP_DIR")"
-  read -r delete_backups
+  if deploy_assume_yes; then
+    if deploy_env_truthy DEPLOY_DELETE_BACKUP; then
+      delete_backups="yes"
+    else
+      delete_backups="no"
+    fi
+  else
+    prompt "$(t app.blog.uninstall.delete_backups_prompt "$BLOG_BACKUP_DIR")"
+    read -r delete_backups
+  fi
 
   _blog_remove_file /etc/nginx/sites-enabled/blog
   _blog_remove_file /etc/nginx/sites-available/blog
