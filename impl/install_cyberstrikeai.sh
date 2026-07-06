@@ -1082,8 +1082,16 @@ do_uninstall() {
   prompt "$(t app.cyberstrikeai.prompt.delete_backup "$BACKUP_DIR")"
   local del_backup
   read -r del_backup
-  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-  systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+  info "$(t app.cyberstrikeai.info.stop_disable "$SERVICE_NAME")"
+  if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+      error "$(t app.cyberstrikeai.error.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    fi
+    warn "$(t app.cyberstrikeai.warn.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
+  if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
+    warn "$(t app.cyberstrikeai.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   if ! systemctl daemon-reload; then
     error "$(t app.cyberstrikeai.error.systemd_reload "$SERVICE_NAME")"
