@@ -15,6 +15,7 @@ sudo bash install_newapi.sh install
 sudo bash install_sub2api.sh update
 sudo bash install_vaultwarden.sh status
 sudo bash install_tickflow.sh doctor
+sudo bash install_newapi.sh --help
 sudo bash install_cyberstrikeai.sh backup
 sudo bash install_blog.sh install
 ```

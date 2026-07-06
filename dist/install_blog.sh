@@ -1159,6 +1159,7 @@ restore_framework_functions() {
       doctor|6) do_doctor ;;
       uninstall|7) do_uninstall ;;
       menu|"") show_menu ;;
+      help|-h|--help) usage ;;
       q|quit|exit) exit 0 ;;
       *) error "$(t common.invalid_choice "$action")" ;;
     esac
@@ -1235,6 +1236,7 @@ dispatch_action() {
       doctor|6) do_doctor ;;
       uninstall|7) do_uninstall ;;
     menu|"") show_menu ;;
+    help|-h|--help) usage ;;
     q|quit|exit) exit 0 ;;
     *) error "$(t common.invalid_choice "$action")" ;;
   esac
