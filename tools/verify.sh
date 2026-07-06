@@ -5102,6 +5102,34 @@ check_newapi_update_rollbacks_report_restart_failures() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_install_cleanup_reports_systemctl_failures() {
+  awk '
+      /app\.newapi\.warn\.cleanup_stop_failed/ { saw_stop_key=1 }
+      /app\.newapi\.warn\.cleanup_disable_failed/ { saw_disable_key=1 }
+      /app\.newapi\.warn\.cleanup_reload_failed/ { saw_reload_key=1 }
+      END {
+        if (!(saw_stop_key && saw_disable_key && saw_reload_key)) {
+          print "NewAPI must provide localized install rollback cleanup warnings." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /warn "\$\(t app\.newapi\.warn\.start_rollback\)"/ { in_cleanup=1; saw_stop=0; saw_disable=0; saw_reload=0; saw_suppressed=0; next }
+      in_cleanup && /\|\| true/ { saw_suppressed=1 }
+      in_cleanup && /warn "\$\(t app\.newapi\.warn\.cleanup_stop_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_stop=1 }
+      in_cleanup && /warn "\$\(t app\.newapi\.warn\.cleanup_disable_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_disable=1 }
+      in_cleanup && /warn "\$\(t app\.newapi\.warn\.cleanup_reload_failed\)"/ { saw_reload=1 }
+      in_cleanup && /error "\$\(t app\.newapi\.error\.install_start_failed "\$SERVICE_NAME"\)"/ {
+        if (!(saw_stop && saw_disable && saw_reload) || saw_suppressed) {
+          printf "%s NewAPI install rollback cleanup must warn on stop, disable, and daemon-reload failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_cleanup=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_sub2api_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
@@ -6272,6 +6300,7 @@ main() {
   check_cyberstrikeai_nginx_health_probe_matches_server_name
   check_cyberstrikeai_health_checks_are_nonfatal_outside_install
   check_newapi_update_rollbacks_report_restart_failures
+  check_newapi_install_cleanup_reports_systemctl_failures
   check_newapi_install_summary_matches_health_state
   check_newapi_health_checks_are_nonfatal_outside_install
   check_vaultwarden_install_summary_matches_health_state

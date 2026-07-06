@@ -321,6 +321,15 @@ i18n_register_many \
   app.newapi.warn.start_rollback \
   "Service did not start within 20 seconds; rolling back installed files..." \
   "服务在 20 秒内未能正常启动，正在回滚已安装文件..." \
+  app.newapi.warn.cleanup_stop_failed \
+  "Could not stop %s during install rollback. It may already be stopped; otherwise inspect systemctl status %s." \
+  "安装回滚时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
+  app.newapi.warn.cleanup_disable_failed \
+  "Could not disable %s during install rollback. Run manually after fixing systemd: systemctl disable %s" \
+  "安装回滚时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
+  app.newapi.warn.cleanup_reload_failed \
+  "Could not reload systemd during install rollback. Run manually: systemctl daemon-reload" \
+  "安装回滚时无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
   app.newapi.error.install_start_failed \
   "Install failed: service could not start, binary and systemd unit rolled back.\n  Debug command: journalctl -u %s -n 30 --no-pager\n  Data and log directories were kept; fix the issue and rerun install." \
   "安装失败：服务无法启动，已回滚二进制与 systemd unit。\n  调试命令：journalctl -u %s -n 30 --no-pager\n  （数据目录、日志目录已保留，修复原因后可重新执行 install）。" \
