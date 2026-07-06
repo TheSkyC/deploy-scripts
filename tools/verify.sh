@@ -401,6 +401,29 @@ check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
+  if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+    echo "CyberStrikeAI backup lists must not split paths on spaces." >&2
+    return 1
+  fi
+  awk '
+      /app\.cyberstrikeai\.info\.latest_backups/ { in_backup=1 }
+      in_backup && /file="\$\{_backup_entry#\* \}"/ { saw_backup_strip=1 }
+      in_backup && /-printf '\''%T@ %p\\0'\''/ { saw_backup_print0=1 }
+      in_backup && /sort -z -rn \| head -z -n 10/ { saw_backup_sort=1; in_backup=0 }
+      /app\.cyberstrikeai\.step\.backups/ { in_status=1 }
+      in_status && /file="\$\{_backup_entry#\* \}"/ { saw_status_strip=1 }
+      in_status && /-printf '\''%T@ %p\\0'\''/ { saw_status_print0=1 }
+      in_status && /sort -z -rn \| head -z -n 5/ { saw_status_sort=1; in_status=0 }
+      END {
+        if (!(saw_backup_strip && saw_backup_print0 && saw_backup_sort && saw_status_strip && saw_status_print0 && saw_status_sort)) {
+          printf "%s CyberStrikeAI backup lists must use NUL-delimited sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_blog_status_dispatch() {
   expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
@@ -1819,7 +1842,7 @@ check_cyberstrikeai_display_sizes_are_nonfatal() {
         in_backup=0
       }
       in_backup && /du -sh "\$file" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_backup_file_size=1 }
-      in_backup && /done \|\| true/ { saw_backup_loop=1 }
+      in_backup && /head -z -n 10\) \|\| true/ { saw_backup_loop=1 }
       /do_status\(\)/ { in_status=1; next }
       in_status && /^}/ {
         if (!(saw_binary_size && saw_backup_dir_size && saw_status_file_size && saw_status_loop)) {
@@ -1831,7 +1854,7 @@ check_cyberstrikeai_display_sizes_are_nonfatal() {
       in_status && /du -sh "\$BIN_PATH" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_binary_size=1 }
       in_status && /size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown\)/ { saw_backup_dir_size=1 }
       in_status && /du -sh "\$file" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_status_file_size=1 }
-      in_status && /done \|\| true/ { saw_status_loop=1 }
+      in_status && /head -z -n 5\) \|\| true/ { saw_status_loop=1 }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
@@ -6775,6 +6798,7 @@ main() {
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
+      check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6814,6 +6838,7 @@ main() {
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
+  check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu

@@ -10928,11 +10928,13 @@ do_backup() {
   step "$(t app.cyberstrikeai.step.manual_backup)"
   "$BACKUP_SCRIPT"
   info "$(t app.cyberstrikeai.info.latest_backups)"
-  find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | head -10 | awk '{print $2}' | while read -r file; do
-        [[ -n "$file" ]] || continue
-        printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
-      done || true
+  local _backup_entry file
+  while IFS= read -r -d '' _backup_entry; do
+    file="${_backup_entry#* }"
+    [[ -n "$file" ]] || continue
+    printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
+  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\0' 2>/dev/null \
+    | sort -z -rn | head -z -n 10) || true
   release_lock
 }
 do_update() {
@@ -11077,11 +11079,13 @@ do_status() {
     count=$(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" 2>/dev/null | wc -l)
     size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t status.unknown)
     printf '  %-12s %s (%s, %s)\n' "$(t app.cyberstrikeai.status.backup_dir):" "$BACKUP_DIR" "$size" "$(t app.cyberstrikeai.status.files "$count")"
-    find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null \
-      | sort -rn | head -5 | awk '{print $2}' | while read -r file; do
-          [[ -n "$file" ]] || continue
-          printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
-        done || true
+    local _backup_entry file
+    while IFS= read -r -d '' _backup_entry; do
+      file="${_backup_entry#* }"
+      [[ -n "$file" ]] || continue
+      printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
+    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\0' 2>/dev/null \
+      | sort -z -rn | head -z -n 5) || true
   else
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.backup_dir):" "$(t app.cyberstrikeai.status.missing)"
   fi
