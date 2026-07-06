@@ -1633,19 +1633,22 @@ check_tickflow_systemctl_failures_are_reported() {
 check_tickflow_manual_backup_is_explicit() {
   awk '
       /app\.tickflow\.backup\.error_dir/ { saw_dir_key=1 }
+      /app\.tickflow\.backup\.error_source_missing/ { saw_source_key=1 }
       /app\.tickflow\.backup\.error_archive/ { saw_archive_key=1 }
       /app\.tickflow\.backup\.success/ { saw_success_key=1 }
       END {
-        if (!(saw_dir_key && saw_archive_key && saw_success_key)) {
+        if (!(saw_dir_key && saw_source_key && saw_archive_key && saw_success_key)) {
           print "TickFlow manual backup must provide localized backup messages." > "/dev/stderr"
           exit 1
         }
       }
     ' apps/tickflow.sh
   awk '
-      /do_backup\(\)/ { in_backup=1; saw_dir=0; saw_dir_error=0; saw_tmp=0; saw_tar=0; saw_cleanup=0; saw_chmod=0; saw_mv=0; saw_success=0; next }
+      /do_backup\(\)/ { in_backup=1; saw_dir=0; saw_dir_error=0; saw_source_loop=0; saw_source_error=0; saw_tmp=0; saw_tar=0; saw_cleanup=0; saw_chmod=0; saw_mv=0; saw_success=0; next }
       in_backup && /if ! mkdir -p "\$backup_dir"; then/ { saw_dir=1 }
       in_backup && /error "\$\(t app\.tickflow\.backup\.error_dir "\$backup_dir"\)"/ { saw_dir_error=1 }
+      in_backup && /for backup_source in data tiers\.yaml \.env; do/ { saw_source_loop=1 }
+      in_backup && /error "\$\(t app\.tickflow\.backup\.error_source_missing "\$\{TICKFLOW_INSTALL_DIR\}\/\$\{backup_source\}"\)"/ { saw_source_error=1 }
       in_backup && /local archive_tmp="\$\{archive\}\.tmp"/ { saw_tmp=1 }
       in_backup && /if ! tar -czf "\$archive_tmp" -C "\$TICKFLOW_INSTALL_DIR" data tiers\.yaml \.env >&2; then/ { saw_tar=1 }
       in_backup && /rm -f "\$archive_tmp"/ { saw_cleanup=1 }
@@ -1653,8 +1656,8 @@ check_tickflow_manual_backup_is_explicit() {
       in_backup && /mv "\$archive_tmp" "\$archive"/ { saw_mv=1 }
       in_backup && /success "\$\(t app\.tickflow\.backup\.success "\$archive"\)"/ { saw_success=1 }
       in_backup && /release_lock/ {
-        if (!(saw_dir && saw_dir_error && saw_tmp && saw_tar && saw_cleanup && saw_chmod && saw_mv && saw_success)) {
-          printf "%s TickFlow manual backup must handle directory, tar, permission, and move failures explicitly\n", FILENAME > "/dev/stderr"
+        if (!(saw_dir && saw_dir_error && saw_source_loop && saw_source_error && saw_tmp && saw_tar && saw_cleanup && saw_chmod && saw_mv && saw_success)) {
+          printf "%s TickFlow manual backup must handle directory, missing source, tar, permission, and move failures explicitly\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_backup=0

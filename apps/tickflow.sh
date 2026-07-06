@@ -195,6 +195,9 @@ i18n_register_many \
   app.tickflow.backup.error_dir \
   "Cannot prepare backup directory: %s" \
   "无法准备备份目录：%s" \
+  app.tickflow.backup.error_source_missing \
+  "Cannot create backup because required source is missing: %s" \
+  "无法创建备份，缺少必要源文件：%s" \
   app.tickflow.backup.error_archive \
   "Failed to create backup archive: %s" \
   "创建备份归档失败：%s" \

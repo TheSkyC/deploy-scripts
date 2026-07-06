@@ -360,6 +360,12 @@ do_backup() {
   if ! mkdir -p "$backup_dir"; then
     error "$(t app.tickflow.backup.error_dir "$backup_dir")"
   fi
+  local backup_source
+  for backup_source in data tiers.yaml .env; do
+    if [[ ! -e "${TICKFLOW_INSTALL_DIR}/${backup_source}" ]]; then
+      error "$(t app.tickflow.backup.error_source_missing "${TICKFLOW_INSTALL_DIR}/${backup_source}")"
+    fi
+  done
   local archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if ! tar -czf "$archive_tmp" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env >&2; then
