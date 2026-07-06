@@ -11052,16 +11052,36 @@ do_uninstall() {
   echo ""
   echo "$(t app.cyberstrikeai.uninstall.keep_default)"
   echo -e "${NC}"
-  prompt "$(t app.cyberstrikeai.prompt.continue)"
   local confirm
-  read -r confirm
+  if deploy_assume_yes; then
+    confirm="YES"
+  else
+    prompt "$(t app.cyberstrikeai.prompt.continue)"
+    read -r confirm
+  fi
   [[ "$confirm" == "YES" ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 0; }
-  prompt "$(t app.cyberstrikeai.prompt.delete_install "$INSTALL_DIR")"
   local del_install
-  read -r del_install
-  prompt "$(t app.cyberstrikeai.prompt.delete_backup "$BACKUP_DIR")"
+  if deploy_assume_yes; then
+    if deploy_env_truthy DEPLOY_DELETE_INSTALL; then
+      del_install="yes"
+    else
+      del_install="no"
+    fi
+  else
+    prompt "$(t app.cyberstrikeai.prompt.delete_install "$INSTALL_DIR")"
+    read -r del_install
+  fi
   local del_backup
-  read -r del_backup
+  if deploy_assume_yes; then
+    if deploy_env_truthy DEPLOY_DELETE_BACKUP; then
+      del_backup="yes"
+    else
+      del_backup="no"
+    fi
+  else
+    prompt "$(t app.cyberstrikeai.prompt.delete_backup "$BACKUP_DIR")"
+    read -r del_backup
+  fi
   info "$(t app.cyberstrikeai.info.stop_disable "$SERVICE_NAME")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then

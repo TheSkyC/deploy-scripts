@@ -265,6 +265,28 @@ check_blog_uninstall_supports_noninteractive_mode() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
+  awk '
+      /prompt "\$\(t app\.cyberstrikeai\.prompt\.continue\)"/ { saw_continue_prompt=1 }
+      /if deploy_assume_yes; then/ && !saw_continue { saw_continue=1; next }
+      saw_continue && /confirm="YES"/ { saw_yes=1 }
+      /if deploy_env_truthy DEPLOY_DELETE_INSTALL; then/ { saw_install_env=1 }
+      /del_install="yes"/ { saw_install_yes=1 }
+      /del_install="no"/ { saw_install_no=1 }
+      /prompt "\$\(t app\.cyberstrikeai\.prompt\.delete_install "\$INSTALL_DIR"\)"/ { saw_install_prompt=1 }
+      /if deploy_env_truthy DEPLOY_DELETE_BACKUP; then/ { saw_backup_env=1 }
+      /del_backup="yes"/ { saw_backup_yes=1 }
+      /del_backup="no"/ { saw_backup_no=1 }
+      /prompt "\$\(t app\.cyberstrikeai\.prompt\.delete_backup "\$BACKUP_DIR"\)"/ { saw_backup_prompt=1 }
+      END {
+        if (!(saw_continue_prompt && saw_continue && saw_yes && saw_install_env && saw_install_yes && saw_install_no && saw_install_prompt && saw_backup_env && saw_backup_yes && saw_backup_no && saw_backup_prompt)) {
+          printf "%s CyberStrikeAI uninstall must support DEPLOY_ASSUME_YES while requiring explicit env flags for install and backup deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_blog_status_dispatch() {
   expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
@@ -6634,6 +6656,7 @@ main() {
       check_sub2api_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_blog_uninstall_supports_noninteractive_mode
+      check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6668,6 +6691,7 @@ main() {
   check_sub2api_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_blog_uninstall_supports_noninteractive_mode
+  check_cyberstrikeai_uninstall_supports_noninteractive_mode
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu
