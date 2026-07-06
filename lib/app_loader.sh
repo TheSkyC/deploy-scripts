@@ -106,7 +106,8 @@ restore_framework_functions() {
     echo "  3) backup     - $(t menu.backup_desc)"
     echo "  4) restore    - $(t menu.restore_desc)"
     echo "  5) status     - $(t menu.status_desc)"
-    echo "  6) uninstall  - $(t menu.uninstall_desc)"
+    echo "  6) doctor     - $(t menu.doctor_desc)"
+    echo "  7) uninstall  - $(t menu.uninstall_desc)"
     echo "  q) $(t common.quit)"
     echo
     prompt "$(t common.selection_prompt)"
@@ -132,7 +133,8 @@ restore_framework_functions() {
         fi
         ;;
       status|5) do_status ;;
-      uninstall|6) do_uninstall ;;
+      doctor|6) do_doctor ;;
+      uninstall|7) do_uninstall ;;
       menu|"") show_menu ;;
       q|quit|exit) exit 0 ;;
       *) error "$(t common.invalid_choice "$action")" ;;

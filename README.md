@@ -9,10 +9,12 @@ Run a script from the repository checkout:
 ```bash
 sudo bash deploy.sh newapi install
 sudo bash deploy.sh vaultwarden status
+sudo bash deploy.sh sub2api doctor
 sudo bash deploy.sh list
 sudo bash install_newapi.sh install
 sudo bash install_sub2api.sh update
 sudo bash install_vaultwarden.sh status
+sudo bash install_tickflow.sh doctor
 sudo bash install_cyberstrikeai.sh backup
 sudo bash install_blog.sh install
 ```
@@ -68,6 +70,7 @@ Each application is split into two layers:
 Shared framework behavior includes:
 
 - Menu and action dispatch.
+- Shared non-destructive `doctor` diagnostics for identity, config, commands, and service state.
 - Logging helpers.
 - File and path safety helpers.
 - Atomic file writes, symlink replacement, and copy-backed backups.

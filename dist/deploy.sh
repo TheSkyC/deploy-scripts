@@ -55,6 +55,7 @@ __deploy_i18n_message() {
   local key="$1"
   case "$key" in
     action.backup) echo "backup|backup" ;;
+    action.doctor) echo "doctor|doctor" ;;
     action.install) echo "install|install" ;;
     action.restore) echo "restore|restore" ;;
     action.status) echo "status|status" ;;
@@ -64,8 +65,8 @@ __deploy_i18n_message() {
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
     common.quit) echo "quit|退出" ;;
-    common.selection_prompt) echo "Selection [1-6/q]:|请输入选项 [1-6/q]：" ;;
-    common.usage) echo "Usage: sudo bash %s [install|update|backup|restore|status|uninstall]|用法：sudo bash %s [install|update|backup|restore|status|uninstall]" ;;
+    common.selection_prompt) echo "Selection [1-7/q]:|请输入选项 [1-7/q]：" ;;
+    common.usage) echo "Usage: sudo bash %s [install|update|backup|restore|status|doctor|uninstall]|用法：sudo bash %s [install|update|backup|restore|status|doctor|uninstall]" ;;
     config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
     config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
@@ -92,7 +93,25 @@ __deploy_i18n_message() {
     error.image_tag_invalid) echo "%s is invalid: '%s'. Use a container image tag without spaces, slash, or shell metacharacters.|%s 无效：'%s'，请使用不含空格、斜杠或 shell 特殊字符的容器镜像标签。" ;;
     error.sha256_invalid) echo "%s is invalid: '%s'. Use exactly 64 hexadecimal characters.|%s 无效：'%s'，请使用正好 64 个十六进制字符。" ;;
     error.release_version_invalid) echo "%s is invalid: '%s'. Use a release version like 2024.6.2 without spaces, slash, or shell metacharacters.|%s 无效：'%s'，请使用类似 2024.6.2 的发布版本号，不包含空格、斜杠或 shell 特殊字符。" ;;
+    doctor.command_missing) echo "Missing command: %s|缺少命令：%s" ;;
+    doctor.command_ok) echo "Command available: %s|命令可用：%s" ;;
+    doctor.config_missing) echo "Config file not found yet: %s|尚未找到配置文件：%s" ;;
+    doctor.config_mode_bad) echo "Config file permissions are too open (%s): %s|配置文件权限过于宽松（%s）：%s" ;;
+    doctor.config_ok) echo "Config file looks safe: %s|配置文件安全检查通过：%s" ;;
+    doctor.config_owner_bad) echo "Config file owner is not root (%s): %s|配置文件属主不是 root（当前：%s）：%s" ;;
+    doctor.done_ok) echo "Doctor checks completed without blocking issues.|诊断完成，未发现阻塞性问题。" ;;
+    doctor.done_warn) echo "Doctor checks completed with %s blocking issue(s) and %s warning(s).|诊断完成，发现 %s 个阻塞问题和 %s 个警告。" ;;
+    doctor.root_ok) echo "Running as root.|当前以 root 运行。" ;;
+    doctor.root_warn) echo "Running without root; service and config checks may be incomplete.|当前不是 root，服务和配置检查可能不完整。" ;;
+    doctor.service_active) echo "Service is active: %s|服务正在运行：%s" ;;
+    doctor.service_disabled) echo "Service is not enabled on boot: %s|服务未设置开机自启：%s" ;;
+    doctor.service_enabled) echo "Service is enabled on boot: %s|服务已设置开机自启：%s" ;;
+    doctor.service_inactive) echo "Service is not active: %s|服务未运行：%s" ;;
+    doctor.service_unit_missing) echo "systemd unit was not found: %s.service|未找到 systemd 单元：%s.service" ;;
+    doctor.systemctl_missing) echo "systemctl is not available; skipping service checks.|systemctl 不可用，跳过服务检查。" ;;
+    doctor.title) echo "Deployment doctor|部署诊断" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
+    menu.doctor_desc) echo "run non-destructive diagnostics|执行非破坏性诊断" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.restore_desc) echo "restore from a backup|从备份恢复" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;
@@ -106,8 +125,8 @@ __deploy_i18n_message() {
     manager.invalid_app) echo "Unknown application: %s|未知应用：%s" ;;
     manager.selection_prompt) echo "Application [number/name/q]:|请输入应用 [序号/名称/q]：" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
-    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, uninstall]" ;;
-    manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden status; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden status；sudo bash %s list" ;;
+    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, doctor, uninstall]" ;;
+    manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
     status.unknown) echo "unknown|未知" ;;
@@ -858,6 +877,109 @@ app_conf_register_legacy() {
   fi
 }
 
+app_doctor_service_name() {
+  if [[ -n "${SERVICE_NAME:-}" ]]; then
+    printf '%s\n' "$SERVICE_NAME"
+    return 0
+  fi
+  if [[ -n "${TICKFLOW_SERVICE_NAME:-}" ]]; then
+    printf '%s\n' "$TICKFLOW_SERVICE_NAME"
+    return 0
+  fi
+  if [[ "${APP_ID:-}" == "vaultwarden" ]]; then
+    printf '%s\n' "vaultwarden"
+    return 0
+  fi
+  return 1
+}
+
+do_doctor() {
+  local failures=0 warnings=0
+
+  doctor_ok() { success "$*"; }
+  doctor_warn() { warnings=$((warnings + 1)); warn "$*"; }
+  doctor_fail() {
+    failures=$((failures + 1))
+    echo -e "${RED}[x]${NC} $*" >&2
+  }
+
+  show_banner
+  step "$(t doctor.title)"
+
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    doctor_ok "$(t doctor.root_ok)"
+  else
+    doctor_warn "$(t doctor.root_warn)"
+  fi
+
+  local conf_file
+  conf_file="$(app_conf_file)"
+  if [[ -f "$conf_file" ]]; then
+    local conf_owner="unknown" conf_mode="unknown"
+    if command -v stat >/dev/null 2>&1; then
+      conf_owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
+      conf_mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo unknown)"
+    fi
+    if [[ "$conf_owner" != "root" ]]; then
+      doctor_fail "$(t doctor.config_owner_bad "$conf_owner" "$conf_file")"
+    elif [[ "$conf_mode" != "600" && "$conf_mode" != "400" ]]; then
+      doctor_fail "$(t doctor.config_mode_bad "$conf_mode" "$conf_file")"
+    else
+      doctor_ok "$(t doctor.config_ok "$conf_file")"
+    fi
+  else
+    doctor_warn "$(t doctor.config_missing "$conf_file")"
+  fi
+
+  local cmd
+  for cmd in bash awk sed grep mktemp; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      doctor_ok "$(t doctor.command_ok "$cmd")"
+    else
+      doctor_fail "$(t doctor.command_missing "$cmd")"
+    fi
+  done
+  for cmd in curl systemctl; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      doctor_ok "$(t doctor.command_ok "$cmd")"
+    else
+      doctor_warn "$(t doctor.command_missing "$cmd")"
+    fi
+  done
+
+  local service_name=""
+  if service_name="$(app_doctor_service_name 2>/dev/null)"; then
+    if command -v systemctl >/dev/null 2>&1; then
+      if systemctl list-unit-files "${service_name}.service" --no-legend 2>/dev/null | grep -q .; then
+        if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+          doctor_ok "$(t doctor.service_active "$service_name")"
+        else
+          doctor_warn "$(t doctor.service_inactive "$service_name")"
+        fi
+        if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+          doctor_ok "$(t doctor.service_enabled "$service_name")"
+        else
+          doctor_warn "$(t doctor.service_disabled "$service_name")"
+        fi
+      else
+        doctor_warn "$(t doctor.service_unit_missing "$service_name")"
+      fi
+    else
+      doctor_warn "$(t doctor.systemctl_missing)"
+    fi
+  fi
+
+  if [[ "$failures" -gt 0 ]]; then
+    echo -e "${RED}[x]${NC} $(t doctor.done_warn "$failures" "$warnings")" >&2
+    return 1
+  fi
+  if [[ "$warnings" -gt 0 ]]; then
+    doctor_warn "$(t doctor.done_warn "$failures" "$warnings")"
+  else
+    doctor_ok "$(t doctor.done_ok)"
+  fi
+}
+
 # ----- lib/app_registry.sh -----
 
 DEPLOY_APP_SPECS=(
@@ -1058,7 +1180,8 @@ restore_framework_functions() {
     echo "  3) backup     - $(t menu.backup_desc)"
     echo "  4) restore    - $(t menu.restore_desc)"
     echo "  5) status     - $(t menu.status_desc)"
-    echo "  6) uninstall  - $(t menu.uninstall_desc)"
+    echo "  6) doctor     - $(t menu.doctor_desc)"
+    echo "  7) uninstall  - $(t menu.uninstall_desc)"
     echo "  q) $(t common.quit)"
     echo
     prompt "$(t common.selection_prompt)"
@@ -1084,7 +1207,8 @@ restore_framework_functions() {
         fi
         ;;
       status|5) do_status ;;
-      uninstall|6) do_uninstall ;;
+      doctor|6) do_doctor ;;
+      uninstall|7) do_uninstall ;;
       menu|"") show_menu ;;
       q|quit|exit) exit 0 ;;
       *) error "$(t common.invalid_choice "$action")" ;;
@@ -1132,7 +1256,8 @@ show_menu() {
   echo "  3) backup     - $(t menu.backup_desc)"
   echo "  4) restore    - $(t menu.restore_desc)"
   echo "  5) status     - $(t menu.status_desc)"
-  echo "  6) uninstall  - $(t menu.uninstall_desc)"
+  echo "  6) doctor     - $(t menu.doctor_desc)"
+  echo "  7) uninstall  - $(t menu.uninstall_desc)"
   echo "  q) $(t common.quit)"
   echo
   prompt "$(t common.selection_prompt)"
@@ -1158,7 +1283,8 @@ dispatch_action() {
         fi
         ;;
       status|5) do_status ;;
-      uninstall|6) do_uninstall ;;
+      doctor|6) do_doctor ;;
+      uninstall|7) do_uninstall ;;
     menu|"") show_menu ;;
     q|quit|exit) exit 0 ;;
     *) error "$(t common.invalid_choice "$action")" ;;

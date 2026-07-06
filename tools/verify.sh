@@ -74,6 +74,22 @@ expect_success_output() {
   }
 }
 
+expect_manager_success_output() {
+  local lang="$1"
+  local script="$2"
+  local app="$3"
+  local action="$4"
+  local expected="$5"
+  local output
+
+  output="$(DEPLOY_LANG="$lang" "$BASH_BIN" "$script" "$app" "$action" 2>&1)"
+  [[ "$output" == *"$expected"* ]] || {
+    echo "Expected ${script} ${app} ${action} output to contain: ${expected}" >&2
+    echo "$output" >&2
+    return 1
+  }
+}
+
 check_localized_dispatch() {
   expect_failure_output en install_newapi.sh "Invalid choice"
   expect_failure_output zh install_newapi.sh "无效选项"
@@ -103,6 +119,17 @@ check_localized_dispatch() {
   expect_failure_output zh install_newapi.sh "暂不支持 restore" restore
   expect_failure_output en dist/install_newapi.sh "does not support restore" restore
   expect_failure_output zh dist/install_newapi.sh "暂不支持 restore" restore
+}
+
+check_doctor_dispatch() {
+  expect_success_output en install_newapi.sh doctor "Deployment doctor"
+  expect_success_output zh install_newapi.sh doctor "部署诊断"
+  expect_success_output en dist/install_newapi.sh doctor "Deployment doctor"
+  expect_success_output zh dist/install_newapi.sh doctor "部署诊断"
+  expect_manager_success_output en deploy.sh newapi doctor "Deployment doctor"
+  expect_manager_success_output zh deploy.sh newapi doctor "部署诊断"
+  expect_manager_success_output en dist/deploy.sh newapi doctor "Deployment doctor"
+  expect_manager_success_output zh dist/deploy.sh newapi doctor "部署诊断"
 }
 
 check_blog_status_dispatch() {
@@ -6466,6 +6493,7 @@ main() {
     dispatch)
       build_verified_release
       check_localized_dispatch
+      check_doctor_dispatch
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6492,6 +6520,7 @@ main() {
   build_verified_release
   check_release_syntax
   check_localized_dispatch
+  check_doctor_dispatch
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu

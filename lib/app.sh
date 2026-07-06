@@ -246,3 +246,106 @@ app_conf_register_legacy() {
     _APP_CONF_LEGACY="$legacy"
   fi
 }
+
+app_doctor_service_name() {
+  if [[ -n "${SERVICE_NAME:-}" ]]; then
+    printf '%s\n' "$SERVICE_NAME"
+    return 0
+  fi
+  if [[ -n "${TICKFLOW_SERVICE_NAME:-}" ]]; then
+    printf '%s\n' "$TICKFLOW_SERVICE_NAME"
+    return 0
+  fi
+  if [[ "${APP_ID:-}" == "vaultwarden" ]]; then
+    printf '%s\n' "vaultwarden"
+    return 0
+  fi
+  return 1
+}
+
+do_doctor() {
+  local failures=0 warnings=0
+
+  doctor_ok() { success "$*"; }
+  doctor_warn() { warnings=$((warnings + 1)); warn "$*"; }
+  doctor_fail() {
+    failures=$((failures + 1))
+    echo -e "${RED}[x]${NC} $*" >&2
+  }
+
+  show_banner
+  step "$(t doctor.title)"
+
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    doctor_ok "$(t doctor.root_ok)"
+  else
+    doctor_warn "$(t doctor.root_warn)"
+  fi
+
+  local conf_file
+  conf_file="$(app_conf_file)"
+  if [[ -f "$conf_file" ]]; then
+    local conf_owner="unknown" conf_mode="unknown"
+    if command -v stat >/dev/null 2>&1; then
+      conf_owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
+      conf_mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo unknown)"
+    fi
+    if [[ "$conf_owner" != "root" ]]; then
+      doctor_fail "$(t doctor.config_owner_bad "$conf_owner" "$conf_file")"
+    elif [[ "$conf_mode" != "600" && "$conf_mode" != "400" ]]; then
+      doctor_fail "$(t doctor.config_mode_bad "$conf_mode" "$conf_file")"
+    else
+      doctor_ok "$(t doctor.config_ok "$conf_file")"
+    fi
+  else
+    doctor_warn "$(t doctor.config_missing "$conf_file")"
+  fi
+
+  local cmd
+  for cmd in bash awk sed grep mktemp; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      doctor_ok "$(t doctor.command_ok "$cmd")"
+    else
+      doctor_fail "$(t doctor.command_missing "$cmd")"
+    fi
+  done
+  for cmd in curl systemctl; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      doctor_ok "$(t doctor.command_ok "$cmd")"
+    else
+      doctor_warn "$(t doctor.command_missing "$cmd")"
+    fi
+  done
+
+  local service_name=""
+  if service_name="$(app_doctor_service_name 2>/dev/null)"; then
+    if command -v systemctl >/dev/null 2>&1; then
+      if systemctl list-unit-files "${service_name}.service" --no-legend 2>/dev/null | grep -q .; then
+        if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+          doctor_ok "$(t doctor.service_active "$service_name")"
+        else
+          doctor_warn "$(t doctor.service_inactive "$service_name")"
+        fi
+        if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+          doctor_ok "$(t doctor.service_enabled "$service_name")"
+        else
+          doctor_warn "$(t doctor.service_disabled "$service_name")"
+        fi
+      else
+        doctor_warn "$(t doctor.service_unit_missing "$service_name")"
+      fi
+    else
+      doctor_warn "$(t doctor.systemctl_missing)"
+    fi
+  fi
+
+  if [[ "$failures" -gt 0 ]]; then
+    echo -e "${RED}[x]${NC} $(t doctor.done_warn "$failures" "$warnings")" >&2
+    return 1
+  fi
+  if [[ "$warnings" -gt 0 ]]; then
+    doctor_warn "$(t doctor.done_warn "$failures" "$warnings")"
+  else
+    doctor_ok "$(t doctor.done_ok)"
+  fi
+}
