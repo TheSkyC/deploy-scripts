@@ -330,6 +330,37 @@ check_vaultwarden_install_supports_noninteractive_mode() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_backup_lists_preserve_paths_with_spaces() {
+  if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden backup and rollback lists must not split paths on spaces." >&2
+    return 1
+  fi
+  awk '
+      /NEWEST_BAK=""/ { in_newest=1 }
+      in_newest && /NEWEST_BAK="\$\{_newest_bak_entry#\* \}"/ { saw_newest_strip=1 }
+      in_newest && /-printf '\''%T@ %p\\0'\''/ { saw_newest_print0=1 }
+      in_newest && /sort -z -rn \| head -z -n 1/ { saw_newest_sort=1; in_newest=0 }
+      /local -a _old_baks/ { in_binary=1 }
+      in_binary && /_old_baks\+=\("\$\{_old_bak_entry#\* \}"\)/ { saw_binary_strip=1 }
+      in_binary && /-printf '\''%T@ %p\\0'\''/ { saw_binary_print0=1 }
+      in_binary && /sort -z -rn \| tail -z -n \+4/ { saw_binary_sort=1; in_binary=0 }
+      /local -a _old_wv_baks/ { in_web=1 }
+      in_web && /_old_wv_baks\+=\("\$\{_old_wv_bak_entry#\* \}"\)/ { saw_web_strip=1 }
+      in_web && /-printf '\''%T@ %p\\0'\''/ { saw_web_print0=1 }
+      in_web && /sort -z -rn \| tail -z -n \+4/ { saw_web_sort=1; in_web=0 }
+      /info "\$\(t app\.vaultwarden\.info\.backup_list\)"/ { in_backup=1 }
+      in_backup && /_bak_list\+=\("\$\{_bak_entry#\* \}"\)/ { saw_backup_strip=1 }
+      in_backup && /-printf '\''%T@ %p\\0'\''/ { saw_backup_print0=1 }
+      in_backup && /sort -z -rn \| head -z -n 10/ { saw_backup_sort=1; in_backup=0 }
+      END {
+        if (!(saw_newest_strip && saw_newest_print0 && saw_newest_sort && saw_binary_strip && saw_binary_print0 && saw_binary_sort && saw_web_strip && saw_web_print0 && saw_web_sort && saw_backup_strip && saw_backup_print0 && saw_backup_sort)) {
+          printf "%s Vaultwarden backup, rollback, and retention lists must use NUL-delimited sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_blog_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.blog\.uninstall\.continue_prompt\)"/ { saw_continue_prompt=1 }
@@ -6741,6 +6772,7 @@ main() {
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_install_supports_noninteractive_mode
+      check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_blog_status_dispatch
@@ -6779,6 +6811,7 @@ main() {
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_install_supports_noninteractive_mode
+  check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
   check_blog_status_dispatch

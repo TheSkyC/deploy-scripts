@@ -9556,9 +9556,14 @@ do_update() {
     fi
   else
     warn "$(t app.vaultwarden.warn.restart_failed_rollback)"
-    NEWEST_BAK=$(find "$(dirname "$VW_BIN")" -maxdepth 1 \
-      -name "vaultwarden.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
-      | sort -rn | awk 'NR==1{print $2}' || true)
+    NEWEST_BAK=""
+    local _newest_bak_entry
+    while IFS= read -r -d '' _newest_bak_entry; do
+      NEWEST_BAK="${_newest_bak_entry#* }"
+      break
+    done < <(find "$(dirname "$VW_BIN")" -maxdepth 1 \
+      -name "vaultwarden.bak.*" -type f -printf '%T@ %p\0' 2>/dev/null \
+      | sort -z -rn | head -z -n 1)
     if [[ -n "$NEWEST_BAK" ]]; then
       install_vaultwarden_binary "$NEWEST_BAK" \
         || error "$(t app.vaultwarden.error.rollback_start_failed)"
@@ -9580,9 +9585,12 @@ do_update() {
     fi
   fi
   local -a _old_baks
-  mapfile -t _old_baks < <(find "$(dirname "$VW_BIN")" -maxdepth 1 \
-    -name "vaultwarden.bak.*" -type f -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | awk 'NR>3{print $2}')
+  local _old_bak_entry
+  while IFS= read -r -d '' _old_bak_entry; do
+    _old_baks+=("${_old_bak_entry#* }")
+  done < <(find "$(dirname "$VW_BIN")" -maxdepth 1 \
+    -name "vaultwarden.bak.*" -type f -printf '%T@ %p\0' 2>/dev/null \
+    | sort -z -rn | tail -z -n +4)
   if [[ ${#_old_baks[@]} -gt 0 ]]; then
     local _cleaned_old=0
     local _old_bak
@@ -9602,9 +9610,12 @@ do_update() {
   local _wv_basename
   _wv_basename=$(basename "$VW_WEB_DIR")
   local -a _old_wv_baks
-  mapfile -t _old_wv_baks < <(find "$_wv_parent" -maxdepth 1 \
-    -name "${_wv_basename}.bak.*" -type d -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | awk 'NR>3{print $2}')
+  local _old_wv_bak_entry
+  while IFS= read -r -d '' _old_wv_bak_entry; do
+    _old_wv_baks+=("${_old_wv_bak_entry#* }")
+  done < <(find "$_wv_parent" -maxdepth 1 \
+    -name "${_wv_basename}.bak.*" -type d -printf '%T@ %p\0' 2>/dev/null \
+    | sort -z -rn | tail -z -n +4)
   if [[ ${#_old_wv_baks[@]} -gt 0 ]]; then
     local _cleaned_wv=0
     local _old_wv_bak
@@ -9786,9 +9797,13 @@ do_backup() {
   fi
   echo ""
   info "$(t app.vaultwarden.info.backup_list)"
-  mapfile -t _bak_list < <(
+  local -a _bak_list
+  local _bak_entry
+  while IFS= read -r -d '' _bak_entry; do
+    _bak_list+=("${_bak_entry#* }")
+  done < <(
     find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" \
-      -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -10 | awk '{print $2}'
+      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | head -z -n 10
   )
   if [[ ${#_bak_list[@]} -gt 0 ]]; then
     local _sz
