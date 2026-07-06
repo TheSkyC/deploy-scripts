@@ -132,6 +132,34 @@ check_doctor_dispatch() {
   expect_manager_success_output zh dist/deploy.sh newapi doctor "部署诊断"
 }
 
+check_doctor_validates_saved_config() {
+  awk '
+      /doctor\.config_parse_ok/ { saw_ok_key=1 }
+      /doctor\.config_parse_bad/ { saw_bad_key=1 }
+      END {
+        if (!(saw_ok_key && saw_bad_key)) {
+          print "Doctor must provide localized saved-config validation results." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/i18n.sh
+  awk '
+      /app_doctor_config_derive_hook\(\)/ { saw_hook=1 }
+      /app_doctor_validate_saved_config\(\)/ { in_validate=1; saw_validate=1; next }
+      in_validate && /load_config_file "\$conf_file" "\$\{CONFIG_KEYS\[@\]\}"/ { saw_load=1 }
+      in_validate && /derive_hook="\$\(app_doctor_config_derive_hook 2>\/dev\/null\)"/ { saw_derive=1 }
+      in_validate && /_validate_config_values/ { saw_config_validate=1 }
+      in_validate && /^\}/ { in_validate=0 }
+      /if app_doctor_validate_saved_config "\$conf_file"; then/ { saw_doctor_call=1 }
+      END {
+        if (!(saw_hook && saw_validate && saw_load && saw_derive && saw_config_validate && saw_doctor_call)) {
+          print "Doctor must load, derive, and validate saved config in an isolated helper." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/app.sh
+}
+
 check_blog_status_dispatch() {
   expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
@@ -6494,6 +6522,7 @@ main() {
       build_verified_release
       check_localized_dispatch
       check_doctor_dispatch
+      check_doctor_validates_saved_config
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6521,6 +6550,7 @@ main() {
   check_release_syntax
   check_localized_dispatch
   check_doctor_dispatch
+  check_doctor_validates_saved_config
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu

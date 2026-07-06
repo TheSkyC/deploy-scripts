@@ -89,6 +89,8 @@ __deploy_i18n_message() {
     doctor.config_mode_bad) echo "Config file permissions are too open (%s): %s|配置文件权限过于宽松（%s）：%s" ;;
     doctor.config_ok) echo "Config file looks safe: %s|配置文件安全检查通过：%s" ;;
     doctor.config_owner_bad) echo "Config file owner is not root (%s): %s|配置文件属主不是 root（当前：%s）：%s" ;;
+    doctor.config_parse_bad) echo "Saved config could not be parsed or validated: %s|已保存配置无法解析或校验失败：%s" ;;
+    doctor.config_parse_ok) echo "Saved config parsed and validated: %s|已保存配置解析和校验通过：%s" ;;
     doctor.done_ok) echo "Doctor checks completed without blocking issues.|诊断完成，未发现阻塞性问题。" ;;
     doctor.done_warn) echo "Doctor checks completed with %s blocking issue(s) and %s warning(s).|诊断完成，发现 %s 个阻塞问题和 %s 个警告。" ;;
     doctor.root_ok) echo "Running as root.|当前以 root 运行。" ;;

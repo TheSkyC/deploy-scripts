@@ -263,6 +263,36 @@ app_doctor_service_name() {
   return 1
 }
 
+app_doctor_config_derive_hook() {
+  local hook
+  for hook in \
+    _NEWAPI_DERIVE_PATHS \
+    _SUB2API_DERIVE_PATHS \
+    _VW_DERIVE_PATHS \
+    _CSAI_DERIVE_PATHS \
+    _BLOG_DERIVE_PATHS; do
+    if declare -f "$hook" >/dev/null 2>&1; then
+      printf '%s\n' "$hook"
+      return 0
+    fi
+  done
+  return 1
+}
+
+app_doctor_validate_saved_config() {
+  local conf_file="$1"
+  (
+    load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+    local derive_hook=""
+    if derive_hook="$(app_doctor_config_derive_hook 2>/dev/null)"; then
+      "$derive_hook"
+    fi
+    if declare -f _validate_config_values >/dev/null 2>&1; then
+      _validate_config_values
+    fi
+  )
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -284,6 +314,7 @@ do_doctor() {
 
   local conf_file
   conf_file="$(app_conf_file)"
+  local conf_safe=false
   if [[ -f "$conf_file" ]]; then
     local conf_owner="unknown" conf_mode="unknown"
     if command -v stat >/dev/null 2>&1; then
@@ -296,6 +327,14 @@ do_doctor() {
       doctor_fail "$(t doctor.config_mode_bad "$conf_mode" "$conf_file")"
     else
       doctor_ok "$(t doctor.config_ok "$conf_file")"
+      conf_safe=true
+    fi
+    if $conf_safe; then
+      if app_doctor_validate_saved_config "$conf_file"; then
+        doctor_ok "$(t doctor.config_parse_ok "$conf_file")"
+      else
+        doctor_fail "$(t doctor.config_parse_bad "$conf_file")"
+      fi
     fi
   else
     doctor_warn "$(t doctor.config_missing "$conf_file")"

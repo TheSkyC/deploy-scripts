@@ -99,6 +99,8 @@ __deploy_i18n_message() {
     doctor.config_mode_bad) echo "Config file permissions are too open (%s): %s|配置文件权限过于宽松（%s）：%s" ;;
     doctor.config_ok) echo "Config file looks safe: %s|配置文件安全检查通过：%s" ;;
     doctor.config_owner_bad) echo "Config file owner is not root (%s): %s|配置文件属主不是 root（当前：%s）：%s" ;;
+    doctor.config_parse_bad) echo "Saved config could not be parsed or validated: %s|已保存配置无法解析或校验失败：%s" ;;
+    doctor.config_parse_ok) echo "Saved config parsed and validated: %s|已保存配置解析和校验通过：%s" ;;
     doctor.done_ok) echo "Doctor checks completed without blocking issues.|诊断完成，未发现阻塞性问题。" ;;
     doctor.done_warn) echo "Doctor checks completed with %s blocking issue(s) and %s warning(s).|诊断完成，发现 %s 个阻塞问题和 %s 个警告。" ;;
     doctor.root_ok) echo "Running as root.|当前以 root 运行。" ;;
@@ -893,6 +895,36 @@ app_doctor_service_name() {
   return 1
 }
 
+app_doctor_config_derive_hook() {
+  local hook
+  for hook in \
+    _NEWAPI_DERIVE_PATHS \
+    _SUB2API_DERIVE_PATHS \
+    _VW_DERIVE_PATHS \
+    _CSAI_DERIVE_PATHS \
+    _BLOG_DERIVE_PATHS; do
+    if declare -f "$hook" >/dev/null 2>&1; then
+      printf '%s\n' "$hook"
+      return 0
+    fi
+  done
+  return 1
+}
+
+app_doctor_validate_saved_config() {
+  local conf_file="$1"
+  (
+    load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+    local derive_hook=""
+    if derive_hook="$(app_doctor_config_derive_hook 2>/dev/null)"; then
+      "$derive_hook"
+    fi
+    if declare -f _validate_config_values >/dev/null 2>&1; then
+      _validate_config_values
+    fi
+  )
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -914,6 +946,7 @@ do_doctor() {
 
   local conf_file
   conf_file="$(app_conf_file)"
+  local conf_safe=false
   if [[ -f "$conf_file" ]]; then
     local conf_owner="unknown" conf_mode="unknown"
     if command -v stat >/dev/null 2>&1; then
@@ -926,6 +959,14 @@ do_doctor() {
       doctor_fail "$(t doctor.config_mode_bad "$conf_mode" "$conf_file")"
     else
       doctor_ok "$(t doctor.config_ok "$conf_file")"
+      conf_safe=true
+    fi
+    if $conf_safe; then
+      if app_doctor_validate_saved_config "$conf_file"; then
+        doctor_ok "$(t doctor.config_parse_ok "$conf_file")"
+      else
+        doctor_fail "$(t doctor.config_parse_bad "$conf_file")"
+      fi
     fi
   else
     doctor_warn "$(t doctor.config_missing "$conf_file")"
