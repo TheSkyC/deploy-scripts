@@ -5097,6 +5097,33 @@ check_vaultwarden_install_cleanup_reports_systemctl_failures() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_update_stop_failure_aborts_before_replace() {
+  awk '
+      /app\.vaultwarden\.error\.stop_service_failed/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "Vaultwarden must provide an actionable update stop failure error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /local _pre_update_svc_state/ { in_update=1 }
+      in_update && /info "\$\(t app\.vaultwarden\.info\.stop_service\)"/ { in_stop=1; saw_if=0; saw_error=0; saw_suppressed=0; next }
+      in_stop && /systemctl stop vaultwarden 2>\/dev\/null \|\| true/ { saw_suppressed=1 }
+      in_stop && /if ! systemctl stop vaultwarden 2>\/dev\/null; then/ { saw_if=1 }
+      in_stop && /error "\$\(t app\.vaultwarden\.error\.stop_service_failed\)"/ { saw_error=1 }
+      in_stop && /case \$ARCH in/ {
+        if (!(saw_if && saw_error) || saw_suppressed) {
+          printf "%s Vaultwarden update must abort before extraction when stopping the service fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+        in_stop=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
@@ -6401,6 +6428,7 @@ main() {
   check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
   check_vaultwarden_install_cleanup_reports_systemctl_failures
+  check_vaultwarden_update_stop_failure_aborts_before_replace
   check_sub2api_update_rollbacks_report_restart_failures
   check_sub2api_install_cleanup_reports_systemctl_failures
   check_sub2api_update_stop_failure_aborts_before_replace

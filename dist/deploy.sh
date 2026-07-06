@@ -3503,6 +3503,9 @@ i18n_register_many \
   app.vaultwarden.info.stop_service \
   "Stopping Vaultwarden service..." \
   "停止 Vaultwarden 服务..." \
+  app.vaultwarden.error.stop_service_failed \
+  "Could not stop vaultwarden before update. Update aborted and the current installation was left unchanged. Inspect: systemctl status vaultwarden" \
+  "更新前无法停止 vaultwarden。更新已中止，当前安装未变更。请检查：systemctl status vaultwarden。" \
   app.vaultwarden.step.extract_update_binary \
   "Extract new version binary" \
   "提取新版本二进制" \
@@ -9067,7 +9070,9 @@ do_update() {
     warn "$(t app.vaultwarden.warn.pre_update_existing_error)"
   fi
   info "$(t app.vaultwarden.info.stop_service)"
-  systemctl stop vaultwarden 2>/dev/null || true
+  if ! systemctl stop vaultwarden 2>/dev/null; then
+    error "$(t app.vaultwarden.error.stop_service_failed)"
+  fi
   case $ARCH in
     x86_64)  PLATFORM="linux/amd64"  ;;
     aarch64) PLATFORM="linux/arm64"  ;;

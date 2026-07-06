@@ -549,6 +549,9 @@ i18n_register_many \
   app.vaultwarden.info.stop_service \
   "Stopping Vaultwarden service..." \
   "停止 Vaultwarden 服务..." \
+  app.vaultwarden.error.stop_service_failed \
+  "Could not stop vaultwarden before update. Update aborted and the current installation was left unchanged. Inspect: systemctl status vaultwarden" \
+  "更新前无法停止 vaultwarden。更新已中止，当前安装未变更。请检查：systemctl status vaultwarden。" \
   app.vaultwarden.step.extract_update_binary \
   "Extract new version binary" \
   "提取新版本二进制" \
