@@ -1385,6 +1385,12 @@ i18n_register_many \
   app.tickflow.error.repo_update \
   "Failed to update %s. Check local changes or network access and retry." \
   "无法更新 %s。请检查本地改动或网络访问后重试。" \
+  app.tickflow.error.install_parent_dir \
+  "Cannot prepare install parent directory: %s. Check filesystem permissions and retry." \
+  "无法准备安装父目录：%s。请检查文件系统权限后重试。" \
+  app.tickflow.error.runtime_dirs \
+  "Cannot prepare TickFlow runtime directories: %s and %s. Check filesystem permissions and retry." \
+  "无法准备 TickFlow 运行目录：%s 和 %s。请检查文件系统权限后重试。" \
   app.tickflow.error.docker_missing \
   "Docker is required but was not found." \
   "需要 Docker，但当前未找到。" \
@@ -1667,7 +1673,9 @@ _clone_or_update_repo() {
   parent="$(dirname "$TICKFLOW_INSTALL_DIR")"
   repo_dir="$TICKFLOW_INSTALL_DIR"
   require_safe_path "TICKFLOW_INSTALL_DIR" "$repo_dir"
-  mkdir -p "$parent"
+  if ! mkdir -p "$parent"; then
+    error "$(t app.tickflow.error.install_parent_dir "$parent")"
+  fi
   if [[ -d "$repo_dir/.git" ]]; then
     info "$(t app.tickflow.info.repo_exists "$TICKFLOW_BRANCH")"
     git -C "$repo_dir" fetch --prune origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
@@ -1684,8 +1692,9 @@ _clone_or_update_repo() {
 }
 
 _ensure_data_layout() {
-  mkdir -p "$TICKFLOW_DATA_DIR"
-  mkdir -p "$TICKFLOW_LOG_DIR"
+  if ! mkdir -p "$TICKFLOW_DATA_DIR" "$TICKFLOW_LOG_DIR"; then
+    error "$(t app.tickflow.error.runtime_dirs "$TICKFLOW_DATA_DIR" "$TICKFLOW_LOG_DIR")"
+  fi
   if [[ ! -f "$TICKFLOW_TIERS_FILE" ]]; then
     atomic_write_file "$TICKFLOW_TIERS_FILE" 644 <<'EOF' \
       || error "$(t app.tickflow.error.tiers_write "$TICKFLOW_TIERS_FILE")"

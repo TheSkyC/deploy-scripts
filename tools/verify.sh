@@ -1152,6 +1152,41 @@ check_tickflow_paths_are_guarded() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_directory_setup_failures_are_explicit() {
+  awk '
+      /app\.tickflow\.error\.install_parent_dir/ { saw_parent_key=1 }
+      /app\.tickflow\.error\.runtime_dirs/ { saw_runtime_key=1 }
+      END {
+        if (!(saw_parent_key && saw_runtime_key)) {
+          print "TickFlow directory setup failures must have localized recovery messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /_clone_or_update_repo\(\)/ { in_clone=1; saw_parent_if=0; saw_parent_error=0; next }
+      in_clone && /if ! mkdir -p "\$parent"; then/ { saw_parent_if=1 }
+      in_clone && /error "\$\(t app\.tickflow\.error\.install_parent_dir "\$parent"\)"/ { saw_parent_error=1 }
+      in_clone && /^}/ {
+        if (!(saw_parent_if && saw_parent_error)) {
+          printf "%s TickFlow source setup must report install parent directory creation failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_clone=0
+      }
+      /_ensure_data_layout\(\)/ { in_layout=1; saw_dirs_if=0; saw_dirs_error=0; next }
+      in_layout && /if ! mkdir -p "\$TICKFLOW_DATA_DIR" "\$TICKFLOW_LOG_DIR"; then/ { saw_dirs_if=1 }
+      in_layout && /error "\$\(t app\.tickflow\.error\.runtime_dirs "\$TICKFLOW_DATA_DIR" "\$TICKFLOW_LOG_DIR"\)"/ { saw_dirs_error=1 }
+      in_layout && /atomic_write_file "\$TICKFLOW_TIERS_FILE"/ {
+        if (!(saw_dirs_if && saw_dirs_error)) {
+          printf "%s TickFlow data layout setup must report runtime directory creation failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_layout=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_safe_rm_dir_is_idempotent() {
   "$BASH_BIN" -c '
     set -euo pipefail
@@ -6961,6 +6996,7 @@ main() {
   check_tickflow_preflight_defers_docker_runtime_checks
   check_tickflow_env_rewrites_preserve_existing_secrets
   check_tickflow_paths_are_guarded
+  check_tickflow_directory_setup_failures_are_explicit
   check_safe_rm_dir_is_idempotent
   check_atomic_helpers_are_atomic
   check_binary_helpers_are_atomic

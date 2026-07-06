@@ -30,6 +30,12 @@ i18n_register_many \
   app.tickflow.error.repo_update \
   "Failed to update %s. Check local changes or network access and retry." \
   "无法更新 %s。请检查本地改动或网络访问后重试。" \
+  app.tickflow.error.install_parent_dir \
+  "Cannot prepare install parent directory: %s. Check filesystem permissions and retry." \
+  "无法准备安装父目录：%s。请检查文件系统权限后重试。" \
+  app.tickflow.error.runtime_dirs \
+  "Cannot prepare TickFlow runtime directories: %s and %s. Check filesystem permissions and retry." \
+  "无法准备 TickFlow 运行目录：%s 和 %s。请检查文件系统权限后重试。" \
   app.tickflow.error.docker_missing \
   "Docker is required but was not found." \
   "需要 Docker，但当前未找到。" \

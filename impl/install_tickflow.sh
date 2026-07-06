@@ -103,7 +103,9 @@ _clone_or_update_repo() {
   parent="$(dirname "$TICKFLOW_INSTALL_DIR")"
   repo_dir="$TICKFLOW_INSTALL_DIR"
   require_safe_path "TICKFLOW_INSTALL_DIR" "$repo_dir"
-  mkdir -p "$parent"
+  if ! mkdir -p "$parent"; then
+    error "$(t app.tickflow.error.install_parent_dir "$parent")"
+  fi
   if [[ -d "$repo_dir/.git" ]]; then
     info "$(t app.tickflow.info.repo_exists "$TICKFLOW_BRANCH")"
     git -C "$repo_dir" fetch --prune origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
@@ -120,8 +122,9 @@ _clone_or_update_repo() {
 }
 
 _ensure_data_layout() {
-  mkdir -p "$TICKFLOW_DATA_DIR"
-  mkdir -p "$TICKFLOW_LOG_DIR"
+  if ! mkdir -p "$TICKFLOW_DATA_DIR" "$TICKFLOW_LOG_DIR"; then
+    error "$(t app.tickflow.error.runtime_dirs "$TICKFLOW_DATA_DIR" "$TICKFLOW_LOG_DIR")"
+  fi
   if [[ ! -f "$TICKFLOW_TIERS_FILE" ]]; then
     atomic_write_file "$TICKFLOW_TIERS_FILE" 644 <<'EOF' \
       || error "$(t app.tickflow.error.tiers_write "$TICKFLOW_TIERS_FILE")"
