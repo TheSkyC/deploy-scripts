@@ -6295,6 +6295,7 @@ _validate_config_values() {
   app_validate_db_identifier "PG_USER" "$PG_USER"
   app_validate_db_identifier "PG_DB" "$PG_DB"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "BIN_PATH" "$BIN_PATH"
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
