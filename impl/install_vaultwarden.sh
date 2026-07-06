@@ -65,6 +65,13 @@ _validate_config_values() {
   app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
   app_validate_system_name "VW_USER" "$VW_USER"
   app_validate_system_name "VW_GROUP" "$VW_GROUP"
+  app_validate_image_repo "VW_IMAGE_REPO" "$VW_IMAGE_REPO"
+  app_validate_image_tag "VW_IMAGE_TAG" "$VW_IMAGE_TAG"
+  app_validate_git_ref "EXTRACT_TOOL_COMMIT" "$EXTRACT_TOOL_COMMIT"
+  app_validate_sha256 "EXTRACT_TOOL_SHA256" "$EXTRACT_TOOL_SHA256"
+  if [[ -n "${WEB_VAULT_VER:-}" ]]; then
+    app_validate_release_version "WEB_VAULT_VER" "$WEB_VAULT_VER"
+  fi
   require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
   require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
   require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"

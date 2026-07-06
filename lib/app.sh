@@ -78,6 +78,60 @@ app_validate_goproxy() {
   done
 }
 
+app_validate_image_repo() {
+  local name="$1" value="$2" first rest part
+  local -a _image_repo_parts
+  [[ -n "$value" ]] || error "$(t error.image_repo_invalid "$name" "$value")"
+  case "$value" in
+    *[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*|*"|"*|*";"*|*"&"*|*'$'*|*"("*|*")"*|*"["*|*"]"*|*"{"*|*"}"*|*"!"*|*"?"*|*"*"*|*@*)
+      error "$(t error.image_repo_invalid "$name" "$value")"
+      ;;
+  esac
+  [[ "$value" != /* && "$value" != */ && "$value" != *//* && "$value" != *..* ]] \
+    || error "$(t error.image_repo_invalid "$name" "$value")"
+
+  first="${value%%/*}"
+  rest="$value"
+  if [[ "$first" == *.* || "$first" == *:* || "$first" == localhost ]]; then
+    [[ "$value" == */* ]] || error "$(t error.image_repo_invalid "$name" "$value")"
+    [[ "$first" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$ ]] \
+      || error "$(t error.image_repo_invalid "$name" "$value")"
+    if [[ "$first" == *:* ]]; then
+      local port="${first##*:}"
+      [[ "$port" =~ ^[0-9]+$ && "$port" -ge 1 && "$port" -le 65535 ]] \
+        || error "$(t error.image_repo_invalid "$name" "$value")"
+    fi
+    rest="${value#*/}"
+  fi
+
+  IFS='/' read -r -a _image_repo_parts <<< "$rest"
+  for part in "${_image_repo_parts[@]}"; do
+    [[ "$part" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]] \
+      || error "$(t error.image_repo_invalid "$name" "$value")"
+  done
+}
+
+app_validate_image_tag() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+    error "$(t error.image_tag_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_sha256() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[A-Fa-f0-9]{64}$ ]]; then
+    error "$(t error.sha256_invalid "$name" "$value")"
+  fi
+}
+
+app_validate_release_version() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[0-9]+[.][0-9]+([.][0-9]+)?([-.][A-Za-z0-9][A-Za-z0-9_.-]*)?$ ]]; then
+    error "$(t error.release_version_invalid "$name" "$value")"
+  fi
+}
+
 app_validate_system_name() {
   local name="$1" value="$2"
   if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,63}$ ]]; then

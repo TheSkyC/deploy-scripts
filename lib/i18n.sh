@@ -76,6 +76,10 @@ __deploy_i18n_message() {
     error.url_invalid) echo "%s is invalid: '%s'. Use an http(s) URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 http(s) URL。" ;;
     error.https_url_invalid) echo "%s is invalid: '%s'. Use an https URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 https URL。" ;;
     error.goproxy_invalid) echo "%s is invalid: '%s'. Use http(s) proxy URLs plus optional direct/off entries, separated by comma or pipe.|%s 无效：'%s'，请使用 http(s) 代理 URL，可包含 direct/off，并用逗号或竖线分隔。" ;;
+    error.image_repo_invalid) echo "%s is invalid: '%s'. Use a container image repository name without tag or digest.|%s 无效：'%s'，请使用不含标签或摘要的容器镜像仓库名称。" ;;
+    error.image_tag_invalid) echo "%s is invalid: '%s'. Use a container image tag without spaces, slash, or shell metacharacters.|%s 无效：'%s'，请使用不含空格、斜杠或 shell 特殊字符的容器镜像标签。" ;;
+    error.sha256_invalid) echo "%s is invalid: '%s'. Use exactly 64 hexadecimal characters.|%s 无效：'%s'，请使用正好 64 个十六进制字符。" ;;
+    error.release_version_invalid) echo "%s is invalid: '%s'. Use a release version like 2024.6.2 without spaces, slash, or shell metacharacters.|%s 无效：'%s'，请使用类似 2024.6.2 的发布版本号，不包含空格、斜杠或 shell 特殊字符。" ;;
     menu.backup_desc) echo "create a manual backup|创建手动备份" ;;
     menu.install_desc) echo "full install or redeploy|完整安装或重新部署" ;;
     menu.status_desc) echo "show service and runtime status|查看服务和运行状态" ;;

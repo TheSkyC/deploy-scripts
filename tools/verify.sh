@@ -1630,6 +1630,12 @@ check_config_value_validators() {
     app_validate_https_url THEME_REPO https://github.com/CaiJimmy/hugo-theme-stack.git
     app_validate_goproxy GOPROXY "https://goproxy.cn,direct"
     app_validate_goproxy GOPROXY "https://proxy.example.com|direct"
+    app_validate_image_repo VW_IMAGE_REPO vaultwarden/server
+    app_validate_image_repo VW_IMAGE_REPO ghcr.io/dani-garcia/vaultwarden
+    app_validate_image_repo VW_IMAGE_REPO registry.example.com:5000/team/vaultwarden
+    app_validate_image_tag VW_IMAGE_TAG 1.36.0-alpine
+    app_validate_sha256 EXTRACT_TOOL_SHA256 a58f4995f568d66d9908649d4df7fc8c36f72096ca5e01f4c2c4291285125685
+    app_validate_release_version WEB_VAULT_VER 2024.6.2
 
     validator_must_reject() {
       local label="$1"
@@ -1648,6 +1654,12 @@ check_config_value_validators() {
     validator_must_reject http-url app_validate_http_url CMS_SITE_URL "https://example.com/a path"
     validator_must_reject https-url app_validate_https_url THEME_REPO "git://github.com/owner/repo.git"
     validator_must_reject goproxy app_validate_goproxy GOPROXY "https://proxy.example.com,;rm"
+    validator_must_reject image-repo-tag app_validate_image_repo VW_IMAGE_REPO "vaultwarden/server:latest"
+    validator_must_reject image-repo-digest app_validate_image_repo VW_IMAGE_REPO "vaultwarden/server@sha256:abc"
+    validator_must_reject image-repo-metachar app_validate_image_repo VW_IMAGE_REPO "vaultwarden/server;rm"
+    validator_must_reject image-tag app_validate_image_tag VW_IMAGE_TAG "latest/amd64"
+    validator_must_reject sha256 app_validate_sha256 EXTRACT_TOOL_SHA256 abc
+    validator_must_reject release-version app_validate_release_version WEB_VAULT_VER "2024.6/evil"
   '
 
   local checks=(
@@ -1661,6 +1673,11 @@ check_config_value_validators() {
     'impl/install_cyberstrikeai.sh|app_validate_goproxy "GOPROXY" "$GOPROXY"'
     'impl/install_tickflow.sh|app_validate_git_ref "TICKFLOW_BRANCH" "$TICKFLOW_BRANCH"'
     'impl/install_vaultwarden.sh|app_validate_system_name "VW_USER" "$VW_USER"'
+    'impl/install_vaultwarden.sh|app_validate_image_repo "VW_IMAGE_REPO" "$VW_IMAGE_REPO"'
+    'impl/install_vaultwarden.sh|app_validate_image_tag "VW_IMAGE_TAG" "$VW_IMAGE_TAG"'
+    'impl/install_vaultwarden.sh|app_validate_git_ref "EXTRACT_TOOL_COMMIT" "$EXTRACT_TOOL_COMMIT"'
+    'impl/install_vaultwarden.sh|app_validate_sha256 "EXTRACT_TOOL_SHA256" "$EXTRACT_TOOL_SHA256"'
+    'impl/install_vaultwarden.sh|app_validate_release_version "WEB_VAULT_VER" "$WEB_VAULT_VER"'
     'impl/install_blog.sh|app_validate_https_url "THEME_REPO" "$THEME_REPO"'
     'impl/install_blog.sh|app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"'
   )
@@ -1701,10 +1718,15 @@ check_vaultwarden_config_values_are_validated() {
       in_validate && /app_validate_port/ { saw_valport=1 }
       in_validate && /app_validate_bool/ { saw_valbool=1 }
       in_validate && /is_valid_dns_name/ { saw_valdomain=1 }
+      in_validate && /app_validate_image_repo/ { saw_image_repo=1 }
+      in_validate && /app_validate_image_tag/ { saw_image_tag=1 }
+      in_validate && /app_validate_git_ref "EXTRACT_TOOL_COMMIT"/ { saw_extract_commit=1 }
+      in_validate && /app_validate_sha256 "EXTRACT_TOOL_SHA256"/ { saw_extract_sha=1 }
+      in_validate && /app_validate_release_version "WEB_VAULT_VER"/ { saw_web_vault_ver=1 }
       in_validate && /^}/ { in_validate=0 }
       END {
-        if (!(saw_preflight && saw_valport && saw_valbool && saw_valdomain)) {
-          printf "%s Vaultwarden must validate VW_PORT, ENABLE_HTTPS, SIGNUPS_ALLOWED, and VW_DOMAIN via _validate_config_values\n", FILENAME > "/dev/stderr"
+        if (!(saw_preflight && saw_valport && saw_valbool && saw_valdomain && saw_image_repo && saw_image_tag && saw_extract_commit && saw_extract_sha && saw_web_vault_ver)) {
+          printf "%s Vaultwarden must validate ports, booleans, domain, image settings, extract tool pin, and web vault version via _validate_config_values\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
