@@ -387,6 +387,26 @@ do_uninstall() {
   acquire_lock
   app_load_config
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  echo -e "${RED}${BOLD}"
+  echo "  $(t app.tickflow.uninstall.removes)"
+  echo "  $(t app.tickflow.uninstall.keep_install "$TICKFLOW_INSTALL_DIR")"
+  echo -e "${NC}"
+  local confirm
+  if deploy_assume_yes; then
+    confirm="YES"
+  else
+    prompt "$(t app.tickflow.prompt.continue)"
+    read -r confirm
+  fi
+  [[ "$confirm" != "YES" ]] && { info "$(t app.tickflow.info.cancelled)"; exit 0; }
+  local DELETE_INSTALL=false
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_INSTALL && DELETE_INSTALL=true
+  else
+    prompt "$(t app.tickflow.prompt.delete_install "$TICKFLOW_INSTALL_DIR")"
+    local delete_install; read -r delete_install
+    [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
+  fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     warn "$(t app.tickflow.warn.service_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
   fi
@@ -397,9 +417,12 @@ do_uninstall() {
   if ! systemctl daemon-reload; then
     warn "$(t app.tickflow.warn.systemd_reload_failed "$TICKFLOW_SERVICE_NAME")"
   fi
-  if [[ -e "$TICKFLOW_INSTALL_DIR" || -L "$TICKFLOW_INSTALL_DIR" ]]; then
+  if $DELETE_INSTALL && [[ -e "$TICKFLOW_INSTALL_DIR" || -L "$TICKFLOW_INSTALL_DIR" ]]; then
     safe_rm_dir "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" || error "$(t error.unsafe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR")"
+    success "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"
+  else
+    info "$(t app.tickflow.info.kept_install "$TICKFLOW_INSTALL_DIR")"
   fi
   rm -f "$CONF_FILE"
-  success "TickFlow removed"
+  success "$(t app.tickflow.success.removed)"
 }

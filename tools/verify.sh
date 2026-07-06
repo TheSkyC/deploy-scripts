@@ -401,6 +401,39 @@ check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_tickflow_uninstall_supports_noninteractive_mode() {
+  awk '
+      /app\.tickflow\.prompt\.continue/ { saw_continue_msg=1 }
+      /app\.tickflow\.prompt\.delete_install/ { saw_delete_msg=1 }
+      /app\.tickflow\.success\.removed/ { saw_success_msg=1 }
+      END {
+        if (!(saw_continue_msg && saw_delete_msg && saw_success_msg)) {
+          print "TickFlow uninstall prompts and success output must be localized." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_continue_prompt=0; saw_confirm_assume=0; saw_confirm_yes=0; saw_delete_env=0; saw_delete_prompt=0; saw_delete_default=0; saw_guarded_rm=0; saw_keep=0; saw_success=0; next }
+      in_uninstall && /if deploy_assume_yes; then/ && !saw_confirm_assume { saw_confirm_assume=1; next }
+      in_uninstall && saw_confirm_assume && /confirm="YES"/ { saw_confirm_yes=1 }
+      in_uninstall && /prompt "\$\(t app\.tickflow\.prompt\.continue\)"/ { saw_continue_prompt=1 }
+      in_uninstall && /deploy_env_truthy DEPLOY_DELETE_INSTALL && DELETE_INSTALL=true/ { saw_delete_env=1 }
+      in_uninstall && /prompt "\$\(t app\.tickflow\.prompt\.delete_install "\$TICKFLOW_INSTALL_DIR"\)"/ { saw_delete_prompt=1 }
+      in_uninstall && /local DELETE_INSTALL=false/ { saw_delete_default=1 }
+      in_uninstall && /if \$DELETE_INSTALL && \[\[ -e "\$TICKFLOW_INSTALL_DIR" \|\| -L "\$TICKFLOW_INSTALL_DIR" \]\]; then/ { saw_guarded_rm=1 }
+      in_uninstall && /info "\$\(t app\.tickflow\.info\.kept_install "\$TICKFLOW_INSTALL_DIR"\)"/ { saw_keep=1 }
+      in_uninstall && /success "\$\(t app\.tickflow\.success\.removed\)"/ { saw_success=1 }
+      in_uninstall && /^}/ {
+        if (!(saw_continue_prompt && saw_confirm_assume && saw_confirm_yes && saw_delete_env && saw_delete_prompt && saw_delete_default && saw_guarded_rm && saw_keep && saw_success)) {
+          printf "%s TickFlow uninstall must confirm removal and require DEPLOY_DELETE_INSTALL before deleting install data in non-interactive mode\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
   if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI backup lists must not split paths on spaces." >&2
@@ -6805,6 +6838,7 @@ main() {
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
+      check_tickflow_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
       check_blog_status_dispatch
       check_no_color_output
@@ -6845,6 +6879,7 @@ main() {
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
+  check_tickflow_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
   check_blog_status_dispatch
   check_no_color_output

@@ -81,6 +81,30 @@ i18n_register_many \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
+  app.tickflow.uninstall.removes \
+  "This will remove the TickFlow systemd service and deploy config." \
+  "这将删除 TickFlow systemd 服务和部署配置。" \
+  app.tickflow.uninstall.keep_install \
+  "Install directory is kept by default because it contains data and secrets: %s" \
+  "默认保留安装目录，因为其中包含数据和密钥：%s" \
+  app.tickflow.prompt.continue \
+  "Type YES to uninstall TickFlow:" \
+  "输入 YES 以卸载 TickFlow：" \
+  app.tickflow.prompt.delete_install \
+  "Delete install directory %s? This removes data and .env secrets. (y/N):" \
+  "是否删除安装目录 %s？这会删除数据和 .env 密钥。（y/N）：" \
+  app.tickflow.info.cancelled \
+  "Cancelled." \
+  "已取消。" \
+  app.tickflow.info.kept_install \
+  "Kept install directory: %s" \
+  "已保留安装目录：%s" \
+  app.tickflow.success.removed \
+  "TickFlow removed" \
+  "TickFlow 已移除" \
+  app.tickflow.success.deleted_install \
+  "Deleted install directory: %s" \
+  "已删除安装目录：%s" \
   app.tickflow.step.deps \
   "Install system dependencies" \
   "安装系统依赖" \

@@ -5430,6 +5430,30 @@ i18n_register_many \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
+  app.tickflow.uninstall.removes \
+  "This will remove the TickFlow systemd service and deploy config." \
+  "这将删除 TickFlow systemd 服务和部署配置。" \
+  app.tickflow.uninstall.keep_install \
+  "Install directory is kept by default because it contains data and secrets: %s" \
+  "默认保留安装目录，因为其中包含数据和密钥：%s" \
+  app.tickflow.prompt.continue \
+  "Type YES to uninstall TickFlow:" \
+  "输入 YES 以卸载 TickFlow：" \
+  app.tickflow.prompt.delete_install \
+  "Delete install directory %s? This removes data and .env secrets. (y/N):" \
+  "是否删除安装目录 %s？这会删除数据和 .env 密钥。（y/N）：" \
+  app.tickflow.info.cancelled \
+  "Cancelled." \
+  "已取消。" \
+  app.tickflow.info.kept_install \
+  "Kept install directory: %s" \
+  "已保留安装目录：%s" \
+  app.tickflow.success.removed \
+  "TickFlow removed" \
+  "TickFlow 已移除" \
+  app.tickflow.success.deleted_install \
+  "Deleted install directory: %s" \
+  "已删除安装目录：%s" \
   app.tickflow.step.deps \
   "Install system dependencies" \
   "安装系统依赖" \
@@ -12785,6 +12809,26 @@ do_uninstall() {
   acquire_lock
   app_load_config
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  echo -e "${RED}${BOLD}"
+  echo "  $(t app.tickflow.uninstall.removes)"
+  echo "  $(t app.tickflow.uninstall.keep_install "$TICKFLOW_INSTALL_DIR")"
+  echo -e "${NC}"
+  local confirm
+  if deploy_assume_yes; then
+    confirm="YES"
+  else
+    prompt "$(t app.tickflow.prompt.continue)"
+    read -r confirm
+  fi
+  [[ "$confirm" != "YES" ]] && { info "$(t app.tickflow.info.cancelled)"; exit 0; }
+  local DELETE_INSTALL=false
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_INSTALL && DELETE_INSTALL=true
+  else
+    prompt "$(t app.tickflow.prompt.delete_install "$TICKFLOW_INSTALL_DIR")"
+    local delete_install; read -r delete_install
+    [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
+  fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     warn "$(t app.tickflow.warn.service_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
   fi
@@ -12795,10 +12839,13 @@ do_uninstall() {
   if ! systemctl daemon-reload; then
     warn "$(t app.tickflow.warn.systemd_reload_failed "$TICKFLOW_SERVICE_NAME")"
   fi
-  if [[ -e "$TICKFLOW_INSTALL_DIR" || -L "$TICKFLOW_INSTALL_DIR" ]]; then
+  if $DELETE_INSTALL && [[ -e "$TICKFLOW_INSTALL_DIR" || -L "$TICKFLOW_INSTALL_DIR" ]]; then
     safe_rm_dir "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" || error "$(t error.unsafe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR")"
+    success "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"
+  else
+    info "$(t app.tickflow.info.kept_install "$TICKFLOW_INSTALL_DIR")"
   fi
   rm -f "$CONF_FILE"
-  success "TickFlow removed"
+  success "$(t app.tickflow.success.removed)"
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
