@@ -1117,18 +1117,16 @@ EOF
 
 check_tickflow_paths_are_guarded() {
   awk '
-      /_clone_or_update_repo\(\)/ { in_clone=1; saw_clone_guard=0; saw_clone_rm=0; next }
+      /_clone_or_update_repo\(\)/ { in_clone=1; saw_clone_guard=0; saw_non_repo_error=0; next }
       in_clone && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$repo_dir"/ { saw_clone_guard=1 }
       in_clone && /safe_rm_dir "\$repo_dir" "TICKFLOW_INSTALL_DIR"/ {
-        if (!saw_clone_guard) {
-          printf "%s TickFlow repo reset must validate TICKFLOW_INSTALL_DIR before deletion\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        saw_clone_rm=1
+        printf "%s TickFlow install must not automatically delete an existing non-git install directory\n", FILENAME > "/dev/stderr"
+        exit 1
       }
+      in_clone && /error "\$\(t app\.tickflow\.error\.install_dir_not_repo "\$repo_dir"\)"/ { saw_non_repo_error=1 }
       in_clone && /^}/ {
-        if (!(saw_clone_guard && saw_clone_rm)) {
-          printf "%s TickFlow repo setup must guard and safely reset the install directory\n", FILENAME > "/dev/stderr"
+        if (!(saw_clone_guard && saw_non_repo_error)) {
+          printf "%s TickFlow repo setup must guard the install directory and fail closed when it already exists outside git\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_clone=0
@@ -1150,6 +1148,15 @@ check_tickflow_paths_are_guarded() {
         in_uninstall=0
       }
     ' impl/install_tickflow.sh dist/install_tickflow.sh
+  awk '
+      /app\.tickflow\.error\.install_dir_not_repo/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "TickFlow must explain how to recover when the install directory already exists outside git." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
 }
 
 check_tickflow_directory_setup_failures_are_explicit() {

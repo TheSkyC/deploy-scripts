@@ -113,7 +113,7 @@ _clone_or_update_repo() {
     git -C "$repo_dir" pull --ff-only origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
   else
     if [[ -e "$repo_dir" || -L "$repo_dir" ]]; then
-      safe_rm_dir "$repo_dir" "TICKFLOW_INSTALL_DIR" || error "$(t app.tickflow.error.repo_clone "$TICKFLOW_REPO" "$repo_dir")"
+      error "$(t app.tickflow.error.install_dir_not_repo "$repo_dir")"
     fi
     git clone --depth 1 --branch "$TICKFLOW_BRANCH" "https://github.com/${TICKFLOW_REPO}.git" "$repo_dir" \
       || error "$(t app.tickflow.error.repo_clone "$TICKFLOW_REPO" "$repo_dir")"

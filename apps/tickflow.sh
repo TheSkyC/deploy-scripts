@@ -33,6 +33,9 @@ i18n_register_many \
   app.tickflow.error.install_parent_dir \
   "Cannot prepare install parent directory: %s. Check filesystem permissions and retry." \
   "无法准备安装父目录：%s。请检查文件系统权限后重试。" \
+  app.tickflow.error.install_dir_not_repo \
+  "Install directory exists but is not a git checkout: %s. It may contain data or secrets; back it up and move or remove it manually before retrying." \
+  "安装目录已存在但不是 git 检出目录：%s。它可能包含数据或密钥；请先备份并手动移动或删除后再重试。" \
   app.tickflow.error.runtime_dirs \
   "Cannot prepare TickFlow runtime directories: %s and %s. Check filesystem permissions and retry." \
   "无法准备 TickFlow 运行目录：%s 和 %s。请检查文件系统权限后重试。" \
