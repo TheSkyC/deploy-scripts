@@ -399,6 +399,9 @@ i18n_register_many \
   app.newapi.warn.update_start_failed \
   "New version (%s) failed to start; rolling back automatically to %s..." \
   "新版本（%s）启动失败，正在自动回滚到 %s..." \
+  app.newapi.error.rollback_stop_failed \
+  "New version failed to start, but %s could not be stopped. Rollback was aborted before restoring files; old binary backup is kept at %s. Inspect: systemctl status %s" \
+  "新版本启动失败，但无法停止 %s。回滚已在恢复文件前中止；旧二进制备份保留在 %s。请检查：systemctl status %s。" \
   app.newapi.success.rollback \
   "Rollback to old version (%s) succeeded; service restored." \
   "已成功回滚到旧版本（%s），服务已恢复。" \

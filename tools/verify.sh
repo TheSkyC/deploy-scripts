@@ -5211,6 +5211,31 @@ check_newapi_update_stop_failure_aborts_before_replace() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_update_rollback_stop_failure_aborts_restore() {
+  awk '
+      /app\.newapi\.error\.rollback_stop_failed/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "NewAPI must provide an actionable rollback stop failure error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /warn "\$\(t app\.newapi\.warn\.update_start_failed "\$LATEST" "\$CURRENT"\)"/ { in_rollback=1; saw_if=0; saw_error=0; saw_suppressed=0; next }
+      in_rollback && /systemctl stop "\$SERVICE_NAME" 2>\/dev\/null \|\| true/ { saw_suppressed=1 }
+      in_rollback && /if ! systemctl stop "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_if=1 }
+      in_rollback && /error "\$\(t app\.newapi\.error\.rollback_stop_failed "\$SERVICE_NAME" "\$BAK_PATH" "\$SERVICE_NAME"\)"/ { saw_error=1 }
+      in_rollback && /if ! _restore_binary_backup "\$BAK_PATH"; then/ {
+        if (!(saw_if && saw_error) || saw_suppressed) {
+          printf "%s NewAPI update rollback must abort before restoring files when stopping the failed new service fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_rollback=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_sub2api_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
@@ -6441,6 +6466,7 @@ main() {
   check_newapi_update_rollbacks_report_restart_failures
   check_newapi_install_cleanup_reports_systemctl_failures
   check_newapi_update_stop_failure_aborts_before_replace
+  check_newapi_update_rollback_stop_failure_aborts_restore
   check_newapi_install_summary_matches_health_state
   check_newapi_health_checks_are_nonfatal_outside_install
   check_vaultwarden_install_summary_matches_health_state

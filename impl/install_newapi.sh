@@ -753,7 +753,9 @@ do_update() {
     echo ""
   else
     warn "$(t app.newapi.warn.update_start_failed "$LATEST" "$CURRENT")"
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+      error "$(t app.newapi.error.rollback_stop_failed "$SERVICE_NAME" "$BAK_PATH" "$SERVICE_NAME")"
+    fi
     if ! _restore_binary_backup "$BAK_PATH"; then
       warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
       error "$(t app.newapi.error.update_failed "$CURRENT" "$SERVICE_NAME" "$BAK_PATH")"
