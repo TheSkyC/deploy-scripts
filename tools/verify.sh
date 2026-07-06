@@ -5163,6 +5163,34 @@ check_sub2api_update_rollbacks_report_restart_failures() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_install_cleanup_reports_systemctl_failures() {
+  awk '
+      /app\.sub2api\.warn\.cleanup_stop_failed/ { saw_stop_key=1 }
+      /app\.sub2api\.warn\.cleanup_disable_failed/ { saw_disable_key=1 }
+      /app\.sub2api\.warn\.cleanup_reload_failed/ { saw_reload_key=1 }
+      END {
+        if (!(saw_stop_key && saw_disable_key && saw_reload_key)) {
+          print "Sub2API must provide localized install rollback cleanup warnings." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /warn "\$\(t app\.sub2api\.warn\.service_failed_rollback\)"/ { in_cleanup=1; saw_stop=0; saw_disable=0; saw_reload=0; saw_suppressed=0; next }
+      in_cleanup && /\|\| true/ { saw_suppressed=1 }
+      in_cleanup && /warn "\$\(t app\.sub2api\.warn\.cleanup_stop_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_stop=1 }
+      in_cleanup && /warn "\$\(t app\.sub2api\.warn\.cleanup_disable_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_disable=1 }
+      in_cleanup && /warn "\$\(t app\.sub2api\.warn\.cleanup_reload_failed\)"/ { saw_reload=1 }
+      in_cleanup && /error "\$\(t app\.sub2api\.error\.install_failed_rollback "\$SERVICE_NAME"\)"/ {
+        if (!(saw_stop && saw_disable && saw_reload) || saw_suppressed) {
+          printf "%s Sub2API install rollback cleanup must warn on stop, disable, and daemon-reload failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_cleanup=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_sub2api_install_summary_matches_runtime_state() {
   awk '
       /app\.sub2api\.summary\.title_ready/ { saw_title_ready=1 }
@@ -6293,6 +6321,7 @@ main() {
   check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
   check_sub2api_update_rollbacks_report_restart_failures
+  check_sub2api_install_cleanup_reports_systemctl_failures
   check_sub2api_install_summary_matches_runtime_state
   check_sub2api_health_checks_are_nonfatal_outside_install
   check_cyberstrikeai_update_rollbacks_report_restart_failures

@@ -2525,6 +2525,15 @@ i18n_register_many \
   app.sub2api.warn.service_failed_rollback \
   "Service failed; rolling back installed files..." \
   "服务已 failed，正在回滚已安装文件..." \
+  app.sub2api.warn.cleanup_stop_failed \
+  "Could not stop %s during install rollback. It may already be stopped; otherwise inspect systemctl status %s." \
+  "安装回滚时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
+  app.sub2api.warn.cleanup_disable_failed \
+  "Could not disable %s during install rollback. Run manually after fixing systemd: systemctl disable %s" \
+  "安装回滚时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
+  app.sub2api.warn.cleanup_reload_failed \
+  "Could not reload systemd during install rollback. Run manually: systemctl daemon-reload" \
+  "安装回滚时无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
   app.sub2api.error.install_failed_rollback \
   "Installation failed because the service entered failed state. The binary and systemd unit were rolled back.\n  Debug: journalctl -u %s -n 30 --no-pager" \
   "安装失败：服务进入 failed 状态，已回滚二进制与 systemd unit。\n  调试：journalctl -u %s -n 30 --no-pager" \
@@ -7418,10 +7427,16 @@ do_install() {
   else
     if systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
       warn "$(t app.sub2api.warn.service_failed_rollback)"
-      systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
-      systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+      if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+        warn "$(t app.sub2api.warn.cleanup_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
+      if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
+        warn "$(t app.sub2api.warn.cleanup_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
       rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-      systemctl daemon-reload 2>/dev/null || true
+      if ! systemctl daemon-reload 2>/dev/null; then
+        warn "$(t app.sub2api.warn.cleanup_reload_failed)"
+      fi
       if [[ -n "${OLD_BIN_BAK:-}" && -f "$OLD_BIN_BAK" ]]; then
         _restore_binary_backup "$OLD_BIN_BAK" \
           || error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"

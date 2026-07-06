@@ -1186,10 +1186,16 @@ do_install() {
   else
     if systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
       warn "$(t app.sub2api.warn.service_failed_rollback)"
-      systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
-      systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+      if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+        warn "$(t app.sub2api.warn.cleanup_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
+      if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
+        warn "$(t app.sub2api.warn.cleanup_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
       rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-      systemctl daemon-reload 2>/dev/null || true
+      if ! systemctl daemon-reload 2>/dev/null; then
+        warn "$(t app.sub2api.warn.cleanup_reload_failed)"
+      fi
       if [[ -n "${OLD_BIN_BAK:-}" && -f "$OLD_BIN_BAK" ]]; then
         _restore_binary_backup "$OLD_BIN_BAK" \
           || error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
