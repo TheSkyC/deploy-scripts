@@ -247,6 +247,43 @@ check_vaultwarden_uninstall_supports_noninteractive_mode() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_install_supports_noninteractive_mode() {
+  awk '
+      /app\.vaultwarden\.error\.noninteractive_domain/ { saw_domain_msg=1 }
+      /app\.vaultwarden\.error\.noninteractive_email/ { saw_email_msg=1 }
+      END {
+        if (!(saw_domain_msg && saw_email_msg)) {
+          print "Vaultwarden non-interactive install guardrails must be localized." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/vaultwarden.sh
+  awk '
+      /prompt "\$\(t app\.vaultwarden\.prompt\.force_reinstall\)"/ { saw_reinstall_prompt=1 }
+      /prompt "\$\(t app\.vaultwarden\.prompt\.domain\)"/ { saw_domain_prompt=1 }
+      /prompt "\$\(t app\.vaultwarden\.prompt\.email\)"/ { saw_email_prompt=1 }
+      /prompt "\$\(t app\.vaultwarden\.prompt\.confirm_config\)"/ { saw_confirm_prompt=1 }
+      /if deploy_assume_yes; then/ && !saw_reinstall_assume { saw_reinstall_assume=1; next }
+      saw_reinstall_assume && /_c="y"/ { saw_reinstall_yes=1 }
+      /\[\[ "\$VW_DOMAIN" == "vault\.example\.com" \]\]/ { in_domain=1; next }
+      in_domain && /if deploy_assume_yes; then/ { saw_domain_assume=1 }
+      in_domain && /error "\$\(t app\.vaultwarden\.error\.noninteractive_domain\)"/ { saw_domain_error=1 }
+      in_domain && /VW_DOMAIN="\$_input"/ { in_domain=0 }
+      /\[\[ "\$ENABLE_HTTPS" == "true" \]\] && \[\[ -z "\$CERTBOT_EMAIL" \]\]/ { in_email=1; next }
+      in_email && /if deploy_assume_yes; then/ { saw_email_assume=1 }
+      in_email && /error "\$\(t app\.vaultwarden\.error\.noninteractive_email\)"/ { saw_email_error=1 }
+      in_email && /CERTBOT_EMAIL="\$_email"/ { in_email=0 }
+      /if deploy_assume_yes; then/ && saw_email_error && !saw_confirm_assume { saw_confirm_assume=1; next }
+      saw_confirm_assume && /_c="y"/ { saw_confirm_yes=1 }
+      END {
+        if (!(saw_reinstall_prompt && saw_domain_prompt && saw_email_prompt && saw_confirm_prompt && saw_reinstall_assume && saw_reinstall_yes && saw_domain_assume && saw_domain_error && saw_email_assume && saw_email_error && saw_confirm_assume && saw_confirm_yes)) {
+          printf "%s Vaultwarden install must support DEPLOY_ASSUME_YES while rejecting placeholder domain and missing HTTPS email\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_blog_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.blog\.uninstall\.continue_prompt\)"/ { saw_continue_prompt=1 }
@@ -6655,6 +6692,7 @@ main() {
       check_newapi_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_supports_noninteractive_mode
+      check_vaultwarden_install_supports_noninteractive_mode
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_blog_status_dispatch
@@ -6690,6 +6728,7 @@ main() {
   check_newapi_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_supports_noninteractive_mode
+  check_vaultwarden_install_supports_noninteractive_mode
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
   check_blog_status_dispatch

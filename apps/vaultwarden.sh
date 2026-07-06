@@ -114,6 +114,12 @@ i18n_register_many \
   app.vaultwarden.warn.email_invalid \
   "Email is invalid (%s). Try again." \
   "邮箱格式无效（%s），请重新输入。" \
+  app.vaultwarden.error.noninteractive_domain \
+  "VW_DOMAIN is still the placeholder value. Set VW_DOMAIN before running with DEPLOY_ASSUME_YES=1." \
+  "VW_DOMAIN 仍是占位值。使用 DEPLOY_ASSUME_YES=1 前请先设置 VW_DOMAIN。" \
+  app.vaultwarden.error.noninteractive_email \
+  "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
+  "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
   app.vaultwarden.error.port_invalid \
   "VW_PORT is invalid: '%s'. Set a port between 1 and 65535 at the top of the script." \
   "VW_PORT 无效：'%s'，请在脚本顶部设置 1-65535 之间的端口号。" \

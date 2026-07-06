@@ -3368,6 +3368,12 @@ i18n_register_many \
   app.vaultwarden.warn.email_invalid \
   "Email is invalid (%s). Try again." \
   "邮箱格式无效（%s），请重新输入。" \
+  app.vaultwarden.error.noninteractive_domain \
+  "VW_DOMAIN is still the placeholder value. Set VW_DOMAIN before running with DEPLOY_ASSUME_YES=1." \
+  "VW_DOMAIN 仍是占位值。使用 DEPLOY_ASSUME_YES=1 前请先设置 VW_DOMAIN。" \
+  app.vaultwarden.error.noninteractive_email \
+  "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
+  "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
   app.vaultwarden.error.port_invalid \
   "VW_PORT is invalid: '%s'. Set a port between 1 and 65535 at the top of the script." \
   "VW_PORT 无效：'%s'，请在脚本顶部设置 1-65535 之间的端口号。" \
@@ -8668,35 +8674,48 @@ do_install() {
   if [[ -x "$VW_BIN" ]]; then
     warn "$(t app.vaultwarden.warn.installed "$VW_BIN" "$(get_installed_version)")"
     warn "$(t app.vaultwarden.warn.reinstall)"
-    prompt "$(t app.vaultwarden.prompt.force_reinstall)"
-    read -r _c; [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
+    if deploy_assume_yes; then
+      _c="y"
+    else
+      prompt "$(t app.vaultwarden.prompt.force_reinstall)"
+      read -r _c
+    fi
+    [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
   fi
   step "$(t app.vaultwarden.step.wizard)"
   if [[ "$VW_DOMAIN" == "vault.example.com" ]]; then
-    while true; do
-      prompt "$(t app.vaultwarden.prompt.domain)"
-      local _input; read -r _input
-      [[ -z "$_input" ]] && { warn "$(t app.vaultwarden.warn.domain_empty)"; continue; }
-      if ! is_valid_dns_name "$_input"; then
-        warn "$(t app.vaultwarden.warn.domain_invalid "$_input")"
-        continue
-      fi
-      VW_DOMAIN="$_input"
-      break
-    done
+    if deploy_assume_yes; then
+      error "$(t app.vaultwarden.error.noninteractive_domain)"
+    else
+      while true; do
+        prompt "$(t app.vaultwarden.prompt.domain)"
+        local _input; read -r _input
+        [[ -z "$_input" ]] && { warn "$(t app.vaultwarden.warn.domain_empty)"; continue; }
+        if ! is_valid_dns_name "$_input"; then
+          warn "$(t app.vaultwarden.warn.domain_invalid "$_input")"
+          continue
+        fi
+        VW_DOMAIN="$_input"
+        break
+      done
+    fi
   fi
   if [[ "$ENABLE_HTTPS" == "true" ]] && [[ -z "$CERTBOT_EMAIL" ]]; then
-    while true; do
-      prompt "$(t app.vaultwarden.prompt.email)"
-      local _email; read -r _email
-      [[ -z "$_email" ]] && { warn "$(t app.vaultwarden.warn.email_empty)"; continue; }
-      if ! app_is_valid_email "$_email"; then
-        warn "$(t app.vaultwarden.warn.email_invalid "$_email")"
-        continue
-      fi
-      CERTBOT_EMAIL="$_email"
-      break
-    done
+    if deploy_assume_yes; then
+      error "$(t app.vaultwarden.error.noninteractive_email)"
+    else
+      while true; do
+        prompt "$(t app.vaultwarden.prompt.email)"
+        local _email; read -r _email
+        [[ -z "$_email" ]] && { warn "$(t app.vaultwarden.warn.email_empty)"; continue; }
+        if ! app_is_valid_email "$_email"; then
+          warn "$(t app.vaultwarden.warn.email_invalid "$_email")"
+          continue
+        fi
+        CERTBOT_EMAIL="$_email"
+        break
+      done
+    fi
   fi
   echo ""
   info "$(t app.vaultwarden.info.domain "$VW_DOMAIN")"
@@ -8707,8 +8726,13 @@ do_install() {
   info "$(t app.vaultwarden.info.run_user "$VW_USER")"
   info "HTTPS    : ${ENABLE_HTTPS}"
   echo ""
-  prompt "$(t app.vaultwarden.prompt.confirm_config)"
-  read -r _c; [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
+  if deploy_assume_yes; then
+    _c="y"
+  else
+    prompt "$(t app.vaultwarden.prompt.confirm_config)"
+    read -r _c
+  fi
+  [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
   step "$(t app.vaultwarden.step.deps)"
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
