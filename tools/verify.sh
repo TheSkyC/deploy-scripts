@@ -5245,6 +5245,32 @@ check_sub2api_install_cleanup_reports_systemctl_failures() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_update_stop_failure_aborts_before_replace() {
+  awk '
+      /app\.sub2api\.error\.stop_service_failed/ { saw_key=1 }
+      END {
+        if (!saw_key) {
+          print "Sub2API must provide an actionable update stop failure error." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /info "\$\(t app\.sub2api\.info\.stopping_service\)"/ { in_stop=1; saw_if=0; saw_cleanup=0; saw_error=0; saw_suppressed=0; next }
+      in_stop && /systemctl stop "\$SERVICE_NAME" 2>\/dev\/null \|\| true/ { saw_suppressed=1 }
+      in_stop && /if ! systemctl stop "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_if=1 }
+      in_stop && /rm -f "\$TMP_BIN"/ { saw_cleanup=1 }
+      in_stop && /error "\$\(t app\.sub2api\.error\.stop_service_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_error=1 }
+      in_stop && /if ! _install_binary_candidate "\$TMP_BIN"; then/ {
+        if (!(saw_if && saw_cleanup && saw_error) || saw_suppressed) {
+          printf "%s Sub2API update must abort and clean the extracted binary when stopping the service fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_stop=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_sub2api_install_summary_matches_runtime_state() {
   awk '
       /app\.sub2api\.summary\.title_ready/ { saw_title_ready=1 }
@@ -6377,6 +6403,7 @@ main() {
   check_vaultwarden_install_cleanup_reports_systemctl_failures
   check_sub2api_update_rollbacks_report_restart_failures
   check_sub2api_install_cleanup_reports_systemctl_failures
+  check_sub2api_update_stop_failure_aborts_before_replace
   check_sub2api_install_summary_matches_runtime_state
   check_sub2api_health_checks_are_nonfatal_outside_install
   check_cyberstrikeai_update_rollbacks_report_restart_failures

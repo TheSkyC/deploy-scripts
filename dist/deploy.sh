@@ -2591,6 +2591,9 @@ i18n_register_many \
   app.sub2api.info.stopping_service \
   "Stopping service..." \
   "停止服务..." \
+  app.sub2api.error.stop_service_failed \
+  "Could not stop %s before replacing the binary. Update aborted and the current binary was left unchanged. Inspect: systemctl status %s" \
+  "替换二进制前无法停止 %s。更新已中止，当前二进制未变更。请检查：systemctl status %s。" \
   app.sub2api.info.old_binary_backup \
   "Old binary backed up: %s" \
   "旧二进制已备份：%s" \
@@ -7523,7 +7526,10 @@ do_update() {
     || error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
   info "$(t app.sub2api.info.old_binary_backup "$BAK_PATH")"
   info "$(t app.sub2api.info.stopping_service)"
-  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+  if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+    rm -f "$TMP_BIN"
+    error "$(t app.sub2api.error.stop_service_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   if ! _install_binary_candidate "$TMP_BIN"; then
     if _restore_binary_backup "$BAK_PATH"; then
       if ! systemctl start "$SERVICE_NAME"; then
