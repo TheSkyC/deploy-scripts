@@ -3493,6 +3493,29 @@ check_sub2api_summary_does_not_print_pg_password() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_pg_password_is_escaped() {
+  if grep -R -nF "WITH PASSWORD '\${PG_PASS}'" impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API must not interpolate PG_PASS directly into SQL literals." >&2
+    return 1
+  fi
+  if grep -R -nF 'postgresql://${PG_USER}:${PG_PASS}@' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+    echo "Sub2API must URI-encode PG_PASS before building PG_DSN." >&2
+    return 1
+  fi
+  awk '
+      /_uri_encode\(\)/ { saw_encoder=1 }
+      /psql -v pg_pass="\$PG_PASS" -c/ { saw_psql_var++ }
+      /WITH PASSWORD :'\''pg_pass'\'';/ { saw_literal++ }
+      index($0, "PG_DSN=\"postgresql://${PG_USER}:$(_uri_encode \"$PG_PASS\")@localhost:5432/${PG_DB}?sslmode=disable\"") { saw_dsn=1 }
+      END {
+        if (!(saw_encoder && saw_psql_var >= 2 && saw_literal >= 2 && saw_dsn)) {
+          printf "%s Sub2API must escape PG_PASS for SQL and URI contexts\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_cyberstrikeai_build_temp_cleanup() {
   if grep -R -n '\${BIN_PATH}\.tmp\.\$\$' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI binary build must use mktemp instead of a pid-derived temporary binary path." >&2
@@ -6188,6 +6211,7 @@ main() {
   check_cyberstrikeai_source_and_build_prep_failures_are_explicit
   check_sub2api_pg_dump_errors_stay_out_of_backups
   check_sub2api_summary_does_not_print_pg_password
+  check_sub2api_pg_password_is_escaped
   check_cyberstrikeai_build_temp_cleanup
   check_cyberstrikeai_rollback_restore_is_validated
   check_cyberstrikeai_backups_are_atomic

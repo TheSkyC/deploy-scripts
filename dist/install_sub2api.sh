@@ -2490,6 +2490,17 @@ _ensure_nginx_running() {
     error "$(t app.sub2api.error.nginx_start)"
   fi
 }
+_uri_encode() {
+  local value="$1" output="" i char encoded
+  for ((i = 0; i < ${#value}; i++)); do
+    char="${value:i:1}"
+    case "$char" in
+      [A-Za-z0-9.~_-]) output+="$char" ;;
+      *) printf -v encoded '%%%02X' "'$char"; output+="$encoded" ;;
+    esac
+  done
+  printf '%s' "$output"
+}
 _setup_postgres() {
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
@@ -2511,11 +2522,11 @@ _setup_postgres() {
     "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" 2>/dev/null || echo "")
   if [[ "$user_exists" == "1" ]]; then
     info "$(t app.sub2api.info.pg_user_exists "$PG_USER")"
-    sudo -u postgres psql -c \
-      "ALTER USER ${PG_USER} WITH PASSWORD '${PG_PASS}';" > /dev/null
+    sudo -u postgres psql -v pg_pass="$PG_PASS" -c \
+      "ALTER USER ${PG_USER} WITH PASSWORD :'pg_pass';" > /dev/null
   else
-    sudo -u postgres psql -c \
-      "CREATE USER ${PG_USER} WITH PASSWORD '${PG_PASS}';" > /dev/null
+    sudo -u postgres psql -v pg_pass="$PG_PASS" -c \
+      "CREATE USER ${PG_USER} WITH PASSWORD :'pg_pass';" > /dev/null
     success "$(t app.sub2api.success.pg_user_created "$PG_USER")"
   fi
   local db_exists
@@ -2528,7 +2539,7 @@ _setup_postgres() {
       "CREATE DATABASE ${PG_DB} OWNER ${PG_USER};" > /dev/null
     success "$(t app.sub2api.success.pg_db_created "$PG_DB" "$PG_USER")"
   fi
-  PG_DSN="postgresql://${PG_USER}:${PG_PASS}@localhost:5432/${PG_DB}?sslmode=disable"
+  PG_DSN="postgresql://${PG_USER}:$(_uri_encode "$PG_PASS")@localhost:5432/${PG_DB}?sslmode=disable"
   success "$(t app.sub2api.success.pg_dsn)"
 }
 _install_nginx() {
