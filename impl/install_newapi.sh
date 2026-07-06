@@ -40,6 +40,7 @@ preflight_check() {
 }
 _validate_config_values() {
   app_validate_port "$PORT" "PORT"
+  app_validate_domain "DOMAIN" "$DOMAIN"
   app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"
   app_validate_system_name "SERVICE_USER" "$SERVICE_USER"
   app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"

@@ -1780,6 +1780,7 @@ check_config_value_validators() {
   "$BASH_BIN" -c '
     source lib/core.sh
 
+    app_validate_domain DOMAIN api.example.com
     app_validate_systemd_name SERVICE_NAME new-api
     app_validate_system_name SERVICE_USER newapi
     app_validate_github_repo GITHUB_REPO QuantumNous/new-api
@@ -1807,6 +1808,7 @@ check_config_value_validators() {
     }
 
     validator_must_reject systemd-name app_validate_systemd_name SERVICE_NAME "../new-api"
+    validator_must_reject domain app_validate_domain DOMAIN "api example.com"
     validator_must_reject system-name app_validate_system_name SERVICE_USER "new api"
     validator_must_reject github-repo app_validate_github_repo GITHUB_REPO "owner/repo;rm"
     validator_must_reject git-ref app_validate_git_ref GITHUB_BRANCH "feature/../main"
@@ -1826,6 +1828,7 @@ check_config_value_validators() {
 
   local checks=(
     'impl/install_newapi.sh|app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"'
+    'impl/install_newapi.sh|app_validate_domain "DOMAIN" "$DOMAIN"'
     'impl/install_newapi.sh|app_validate_system_name "SERVICE_USER" "$SERVICE_USER"'
     'impl/install_newapi.sh|app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"'
     'impl/install_sub2api.sh|app_validate_db_identifier "PG_USER" "$PG_USER"'
