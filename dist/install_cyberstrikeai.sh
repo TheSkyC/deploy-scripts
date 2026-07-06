@@ -1439,6 +1439,9 @@ i18n_register_many \
   app.cyberstrikeai.warn.update_start_failed \
   "Updated version failed to start. Rolling back binary and config." \
   "更新后的版本启动失败。正在回滚二进制与配置。" \
+  app.cyberstrikeai.error.rollback_stop_failed \
+  "Updated version failed to start, but %s could not be stopped. Rollback was aborted before restoring files. Binary backup: %s Config backup: %s Inspect: systemctl status %s" \
+  "更新后的版本启动失败，但无法停止 %s。回滚已在恢复文件前中止。二进制备份：%s 配置备份：%s 请检查：systemctl status %s。" \
   app.cyberstrikeai.error.update_rollback_ok \
   "Update failed and rollback succeeded. Inspect: journalctl -u %s -n 80 --no-pager" \
   "更新失败且已成功回滚。请检查：journalctl -u %s -n 80 --no-pager" \
@@ -2537,7 +2540,9 @@ do_update() {
       fi
     else
       warn "$(t app.cyberstrikeai.warn.update_start_failed)"
-      systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+      if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+        error "$(t app.cyberstrikeai.error.rollback_stop_failed "$SERVICE_NAME" "$bin_bak" "$config_bak" "$SERVICE_NAME")"
+      fi
       if restore_update_backup "$bin_bak" "$config_bak"; then
         if systemctl start "$SERVICE_NAME"; then
           if wait_for_service "$SERVICE_NAME" 35; then
