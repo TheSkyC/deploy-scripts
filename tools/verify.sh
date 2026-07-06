@@ -574,12 +574,15 @@ check_managed_paths_are_validated() {
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
+      in_func && /require_safe_path "BIN_PATH" "\$BIN_PATH"/ { saw_bin=1 }
       in_func && /require_safe_path "DATA_DIR" "\$DATA_DIR"/ { saw_data=1 }
       in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
+      in_func && /require_safe_path "LOG_FILE" "\$LOG_FILE"/ { saw_log_file=1 }
+      in_func && /require_safe_path "ENV_FILE" "\$ENV_FILE"/ { saw_env=1 }
       in_func && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup=1 }
       in_func && /^}/ {
-        if (!(saw_install && saw_data && saw_log && saw_backup)) {
-          printf "%s NewAPI must validate managed directory paths before use\n", FILENAME > "/dev/stderr"
+        if (!(saw_install && saw_bin && saw_data && saw_log && saw_log_file && saw_env && saw_backup)) {
+          printf "%s NewAPI must validate managed directory and derived file paths before use\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0

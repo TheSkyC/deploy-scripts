@@ -45,8 +45,11 @@ _validate_config_values() {
   app_validate_system_name "SERVICE_USER" "$SERVICE_USER"
   app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  require_safe_path "BIN_PATH" "$BIN_PATH"
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
+  require_safe_path "LOG_FILE" "$LOG_FILE"
+  require_safe_path "ENV_FILE" "$ENV_FILE"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 check_connectivity() {
