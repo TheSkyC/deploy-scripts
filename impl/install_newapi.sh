@@ -992,8 +992,15 @@ do_uninstall() {
   local DELETE_BACKUP=false
   [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
   info "$(t app.newapi.info.stop_disable "$SERVICE_NAME")"
-  systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
-  systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+  if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+      error "$(t app.newapi.error.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    fi
+    warn "$(t app.newapi.warn.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
+  if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
+    warn "$(t app.newapi.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  fi
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
   if ! systemctl daemon-reload; then
     error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"

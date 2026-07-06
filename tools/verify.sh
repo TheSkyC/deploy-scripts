@@ -5236,6 +5236,37 @@ check_newapi_update_rollback_stop_failure_aborts_restore() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_uninstall_stop_disable_failures_are_reported() {
+  awk '
+      /app\.newapi\.error\.uninstall_stop_failed/ { saw_stop_error=1 }
+      /app\.newapi\.warn\.uninstall_stop_failed/ { saw_stop_warn=1 }
+      /app\.newapi\.warn\.uninstall_disable_failed/ { saw_disable_warn=1 }
+      END {
+        if (!(saw_stop_error && saw_stop_warn && saw_disable_warn)) {
+          print "NewAPI must provide localized uninstall stop and disable failure messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh
+  awk '
+      /info "\$\(t app\.newapi\.info\.stop_disable "\$SERVICE_NAME"\)"/ { in_uninstall=1; saw_stop_if=0; saw_active_if=0; saw_stop_error=0; saw_stop_warn=0; saw_disable_if=0; saw_disable_warn=0; saw_suppressed=0; next }
+      in_uninstall && /systemctl (stop|disable).* \|\| true/ { saw_suppressed=1 }
+      in_uninstall && /if ! systemctl stop "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_stop_if=1 }
+      in_uninstall && /if systemctl is-active --quiet "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_active_if=1 }
+      in_uninstall && /error "\$\(t app\.newapi\.error\.uninstall_stop_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_stop_error=1 }
+      in_uninstall && /warn "\$\(t app\.newapi\.warn\.uninstall_stop_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_stop_warn=1 }
+      in_uninstall && /if ! systemctl disable "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_disable_if=1 }
+      in_uninstall && /warn "\$\(t app\.newapi\.warn\.uninstall_disable_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_disable_warn=1 }
+      in_uninstall && /rm -f "\/etc\/systemd\/system\/\$\{SERVICE_NAME\}\.service"/ {
+        if (!(saw_stop_if && saw_active_if && saw_stop_error && saw_stop_warn && saw_disable_if && saw_disable_warn) || saw_suppressed) {
+          printf "%s NewAPI uninstall must abort when an active service cannot be stopped and warn on disable failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_sub2api_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
       impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
@@ -6519,6 +6550,7 @@ main() {
   check_newapi_install_cleanup_reports_systemctl_failures
   check_newapi_update_stop_failure_aborts_before_replace
   check_newapi_update_rollback_stop_failure_aborts_restore
+  check_newapi_uninstall_stop_disable_failures_are_reported
   check_newapi_install_summary_matches_health_state
   check_newapi_health_checks_are_nonfatal_outside_install
   check_vaultwarden_install_summary_matches_health_state
