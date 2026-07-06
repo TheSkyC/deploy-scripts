@@ -204,6 +204,33 @@ check_newapi_uninstall_supports_noninteractive_mode() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_backup_lists_preserve_paths_with_spaces() {
+  if grep -R -n 'awk '\''{print \$2}'\''' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+    echo "NewAPI backup and binary retention lists must not split paths on spaces." >&2
+    return 1
+  fi
+  awk '
+      /new-api\.bak\.\*/ { in_binary=1 }
+      in_binary && /-printf '\''%T@ %p\\0'\''/ { saw_binary_print0=1 }
+      in_binary && /sort -z -rn \| tail -z -n \+4/ { saw_binary_sort=1 }
+      in_binary && /_old_baks\+=\("\$\{_old_bak_entry#\* \}"\)/ { saw_binary_strip=1 }
+      /info "\$\(t app\.newapi\.info\.backup_list "\$BACKUP_DIR"\)"/ { in_backup_list=1 }
+      in_backup_list && /-printf '\''%T@ %p\\0'\''/ { saw_backup_print0=1 }
+      in_backup_list && /sort -z -rn \| head -z -n 10/ { saw_backup_sort=1 }
+      in_backup_list && /_bak_list\+=\("\$\{_bak_entry#\* \}"\)/ { saw_backup_strip=1 }
+      /app\.newapi\.status\.backup_info/ { in_status=1 }
+      in_status && /-printf '\''%T@ %p\\0'\''/ { saw_status_print0=1 }
+      in_status && /sort -z -rn \| head -z -n 3/ { saw_status_sort=1 }
+      in_status && /f="\$\{_bak_entry#\* \}"/ { saw_status_strip=1 }
+      END {
+        if (!(saw_binary_print0 && saw_binary_sort && saw_binary_strip && saw_backup_print0 && saw_backup_sort && saw_backup_strip && saw_status_print0 && saw_status_sort && saw_status_strip)) {
+          printf "%s NewAPI backup and binary retention lists must use NUL-delimited sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_sub2api_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.sub2api\.prompt\.continue\)"/ { saw_continue_prompt=1 }
@@ -6690,6 +6717,7 @@ main() {
       check_status_json_dispatch
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
+      check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_install_supports_noninteractive_mode
@@ -6726,6 +6754,7 @@ main() {
   check_status_json_dispatch
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
+  check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_install_supports_noninteractive_mode

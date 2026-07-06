@@ -2792,9 +2792,12 @@ do_update() {
     INSTALLED_VERSION="$LATEST"
     app_save_config
     local -a _old_baks
-    mapfile -t _old_baks < <(
+    local _old_bak_entry
+    while IFS= read -r -d '' _old_bak_entry; do
+      _old_baks+=("${_old_bak_entry#* }")
+    done < <(
       find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f \
-        -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk 'NR>3{print $2}'
+        -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
     )
     if [[ ${#_old_baks[@]} -gt 0 ]]; then
       local _cleaned_old=0
@@ -2885,14 +2888,14 @@ do_backup() {
   [[ "$_keep_days" =~ ^[0-9]+$ ]] || _keep_days=0
   if [[ "$_keep_days" -gt 0 ]]; then
     local _cleaned=0
-    while IFS= read -r f; do
+    while IFS= read -r -d '' f; do
       if rm -f "$f"; then
         _cleaned=$(( _cleaned + 1 ))
       else
         warn "$(t app.newapi.warn.backup_cleanup_failed "$f")"
       fi
     done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-             -mtime "+${_keep_days}" 2>/dev/null)
+             -mtime "+${_keep_days}" -type f -print0 2>/dev/null)
     if [[ $_cleaned -gt 0 ]]; then
       info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$_keep_days")"
     fi
@@ -2900,9 +2903,12 @@ do_backup() {
   echo ""
   info "$(t app.newapi.info.backup_list "$BACKUP_DIR")"
   local -a _bak_list
-  mapfile -t _bak_list < <(
+  local _bak_entry
+  while IFS= read -r -d '' _bak_entry; do
+    _bak_list+=("${_bak_entry#* }")
+  done < <(
     find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-      -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -10 | awk '{print $2}'
+      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | head -z -n 10
   )
   if [[ ${#_bak_list[@]} -gt 0 ]]; then
     local _sz
@@ -2973,12 +2979,14 @@ do_status() {
     bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
     echo -e "  $(t app.newapi.status.backup_dir):  ${BACKUP_DIR} (${bak_total_size}, $(t app.newapi.status.backup_count "$bak_count"))"
     local _cnt=0
-    while IFS= read -r f; do
+    local _bak_entry
+    while IFS= read -r -d '' _bak_entry; do
+      f="${_bak_entry#* }"
       local _sz; _sz=$(du -sh "$f" 2>/dev/null | cut -f1 || echo "?")
       echo -e "  $((_cnt+1)). $(basename "$f") (${_sz})"
       _cnt=$(( _cnt + 1 ))
     done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-             -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -3 | awk '{print $2}')
+             -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | head -z -n 3)
     if [[ $_cnt -eq 0 ]]; then
       echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.warn.no_backups)"
     fi
