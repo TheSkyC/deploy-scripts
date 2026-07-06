@@ -73,6 +73,7 @@ __deploy_i18n_message() {
     error.github_repo_invalid) echo "%s is invalid: '%s'. Use owner/repository with GitHub-safe name characters.|%s 无效：'%s'，请使用 owner/repository 格式，并仅包含 GitHub 安全名称字符。" ;;
     error.git_ref_invalid) echo "%s is invalid: '%s'. Use a simple branch/tag ref without spaces, shell metacharacters, '..', or '@{'.|%s 无效：'%s'，请使用简单分支/标签引用，不包含空格、shell 特殊字符、'..' 或 '@{'。" ;;
     error.db_identifier_invalid) echo "%s is invalid: '%s'. Use a database identifier with letters, numbers, or underscore; start with a letter or underscore.|%s 无效：'%s'，请使用数据库标识符：字母、数字或下划线，并以字母或下划线开头。" ;;
+    error.email_invalid) echo "%s is invalid: '%s'. Use a plain email address without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的邮箱地址。" ;;
     error.url_invalid) echo "%s is invalid: '%s'. Use an http(s) URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 http(s) URL。" ;;
     error.https_url_invalid) echo "%s is invalid: '%s'. Use an https URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 https URL。" ;;
     error.goproxy_invalid) echo "%s is invalid: '%s'. Use http(s) proxy URLs plus optional direct/off entries, separated by comma or pipe.|%s 无效：'%s'，请使用 http(s) 代理 URL，可包含 direct/off，并用逗号或竖线分隔。" ;;

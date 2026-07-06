@@ -82,6 +82,7 @@ __deploy_i18n_message() {
     error.github_repo_invalid) echo "%s is invalid: '%s'. Use owner/repository with GitHub-safe name characters.|%s 无效：'%s'，请使用 owner/repository 格式，并仅包含 GitHub 安全名称字符。" ;;
     error.git_ref_invalid) echo "%s is invalid: '%s'. Use a simple branch/tag ref without spaces, shell metacharacters, '..', or '@{'.|%s 无效：'%s'，请使用简单分支/标签引用，不包含空格、shell 特殊字符、'..' 或 '@{'。" ;;
     error.db_identifier_invalid) echo "%s is invalid: '%s'. Use a database identifier with letters, numbers, or underscore; start with a letter or underscore.|%s 无效：'%s'，请使用数据库标识符：字母、数字或下划线，并以字母或下划线开头。" ;;
+    error.email_invalid) echo "%s is invalid: '%s'. Use a plain email address without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的邮箱地址。" ;;
     error.url_invalid) echo "%s is invalid: '%s'. Use an http(s) URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 http(s) URL。" ;;
     error.https_url_invalid) echo "%s is invalid: '%s'. Use an https URL without spaces or shell metacharacters.|%s 无效：'%s'，请使用不含空格或 shell 特殊字符的 https URL。" ;;
     error.goproxy_invalid) echo "%s is invalid: '%s'. Use http(s) proxy URLs plus optional direct/off entries, separated by comma or pipe.|%s 无效：'%s'，请使用 http(s) 代理 URL，可包含 direct/off，并用逗号或竖线分隔。" ;;
@@ -729,6 +730,30 @@ app_validate_sha256() {
   local name="$1" value="$2"
   if ! [[ "$value" =~ ^[A-Fa-f0-9]{64}$ ]]; then
     error "$(t error.sha256_invalid "$name" "$value")"
+  fi
+}
+
+app_is_valid_email() {
+  local value="${1:-}" local_part domain
+  [[ -n "$value" && ${#value} -le 254 ]] || return 1
+  case "$value" in
+    *[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*|*"|"*|*";"*|*"&"*|*'$'*|*"("*|*")"*|*"["*|*"]"*|*"{"*|*"}"*|*"!"*|*"?"*|*"*"*|*/*|*@*@*)
+      return 1
+      ;;
+  esac
+  [[ "$value" == *@* ]] || return 1
+  local_part="${value%@*}"
+  domain="${value#*@}"
+  [[ -n "$local_part" && ${#local_part} -le 64 ]] || return 1
+  [[ "$local_part" != .* && "$local_part" != *. && "$local_part" != *..* ]] || return 1
+  [[ "$local_part" =~ ^[A-Za-z0-9._%+-]+$ ]] || return 1
+  is_valid_dns_name "$domain"
+}
+
+app_validate_email() {
+  local name="$1" value="$2"
+  if ! app_is_valid_email "$value"; then
+    error "$(t error.email_invalid "$name" "$value")"
   fi
 }
 
@@ -1967,6 +1992,9 @@ _validate_config_values() {
   app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
   app_validate_system_name "VW_USER" "$VW_USER"
   app_validate_system_name "VW_GROUP" "$VW_GROUP"
+  if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
+    app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
+  fi
   app_validate_image_repo "VW_IMAGE_REPO" "$VW_IMAGE_REPO"
   app_validate_image_tag "VW_IMAGE_TAG" "$VW_IMAGE_TAG"
   app_validate_git_ref "EXTRACT_TOOL_COMMIT" "$EXTRACT_TOOL_COMMIT"
@@ -2249,7 +2277,7 @@ do_install() {
       prompt "$(t app.vaultwarden.prompt.email)"
       local _email; read -r _email
       [[ -z "$_email" ]] && { warn "$(t app.vaultwarden.warn.email_empty)"; continue; }
-      if [[ ! "$_email" =~ ^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$ ]]; then
+      if ! app_is_valid_email "$_email"; then
         warn "$(t app.vaultwarden.warn.email_invalid "$_email")"
         continue
       fi
@@ -2591,6 +2619,7 @@ NGINX
   fi
   success "$(t app.vaultwarden.success.nginx_ready)"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then
+    app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
     info "$(t app.vaultwarden.info.request_cert "$VW_DOMAIN" "$CERTBOT_EMAIL")"
     if certbot certonly --webroot \
       -w /var/www/certbot \

@@ -65,6 +65,9 @@ _validate_config_values() {
   app_validate_bool "SIGNUPS_ALLOWED" "$SIGNUPS_ALLOWED"
   app_validate_system_name "VW_USER" "$VW_USER"
   app_validate_system_name "VW_GROUP" "$VW_GROUP"
+  if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
+    app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
+  fi
   app_validate_image_repo "VW_IMAGE_REPO" "$VW_IMAGE_REPO"
   app_validate_image_tag "VW_IMAGE_TAG" "$VW_IMAGE_TAG"
   app_validate_git_ref "EXTRACT_TOOL_COMMIT" "$EXTRACT_TOOL_COMMIT"
@@ -347,7 +350,7 @@ do_install() {
       prompt "$(t app.vaultwarden.prompt.email)"
       local _email; read -r _email
       [[ -z "$_email" ]] && { warn "$(t app.vaultwarden.warn.email_empty)"; continue; }
-      if [[ ! "$_email" =~ ^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$ ]]; then
+      if ! app_is_valid_email "$_email"; then
         warn "$(t app.vaultwarden.warn.email_invalid "$_email")"
         continue
       fi
@@ -689,6 +692,7 @@ NGINX
   fi
   success "$(t app.vaultwarden.success.nginx_ready)"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then
+    app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
     info "$(t app.vaultwarden.info.request_cert "$VW_DOMAIN" "$CERTBOT_EMAIL")"
     if certbot certonly --webroot \
       -w /var/www/certbot \

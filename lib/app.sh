@@ -125,6 +125,30 @@ app_validate_sha256() {
   fi
 }
 
+app_is_valid_email() {
+  local value="${1:-}" local_part domain
+  [[ -n "$value" && ${#value} -le 254 ]] || return 1
+  case "$value" in
+    *[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*|*"|"*|*";"*|*"&"*|*'$'*|*"("*|*")"*|*"["*|*"]"*|*"{"*|*"}"*|*"!"*|*"?"*|*"*"*|*/*|*@*@*)
+      return 1
+      ;;
+  esac
+  [[ "$value" == *@* ]] || return 1
+  local_part="${value%@*}"
+  domain="${value#*@}"
+  [[ -n "$local_part" && ${#local_part} -le 64 ]] || return 1
+  [[ "$local_part" != .* && "$local_part" != *. && "$local_part" != *..* ]] || return 1
+  [[ "$local_part" =~ ^[A-Za-z0-9._%+-]+$ ]] || return 1
+  is_valid_dns_name "$domain"
+}
+
+app_validate_email() {
+  local name="$1" value="$2"
+  if ! app_is_valid_email "$value"; then
+    error "$(t error.email_invalid "$name" "$value")"
+  fi
+}
+
 app_validate_release_version() {
   local name="$1" value="$2"
   if ! [[ "$value" =~ ^[0-9]+[.][0-9]+([.][0-9]+)?([-.][A-Za-z0-9][A-Za-z0-9_.-]*)?$ ]]; then
