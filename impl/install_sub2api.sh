@@ -1313,7 +1313,9 @@ do_update() {
     echo ""
   else
     warn "$(t app.sub2api.warn.new_version_failed "$LATEST" "$CURRENT")"
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+      error "$(t app.sub2api.error.rollback_stop_failed "$SERVICE_NAME" "$BAK_PATH" "$SERVICE_NAME")"
+    fi
     if ! _restore_binary_backup "$BAK_PATH"; then
       warn "$(t app.sub2api.warn.rollback_start_failed "$SERVICE_NAME")"
       error "$(t app.sub2api.error.update_failed "$CURRENT" "$SERVICE_NAME")"
