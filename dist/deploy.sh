@@ -12004,12 +12004,14 @@ EOF
 
 _write_systemd_unit() {
   local unit_path="/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service"
-  local compose_cmd
+  local compose_cmd install_dir_literal compose_file_literal
   if docker compose version >/dev/null 2>&1; then
     compose_cmd='docker compose'
   else
     compose_cmd='docker-compose'
   fi
+  printf -v install_dir_literal '%q' "$TICKFLOW_INSTALL_DIR"
+  printf -v compose_file_literal '%q' "$TICKFLOW_COMPOSE_FILE"
   if ! systemd_write_unit "$unit_path" <<EOF
 [Unit]
 Description=TickFlow Stock Panel
@@ -12020,9 +12022,9 @@ Wants=network-online.target docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${TICKFLOW_INSTALL_DIR}
-ExecStart=/bin/bash -lc 'cd "${TICKFLOW_INSTALL_DIR}" && ${compose_cmd} -f "${TICKFLOW_COMPOSE_FILE}" up -d --build'
-ExecStop=/bin/bash -lc 'cd "${TICKFLOW_INSTALL_DIR}" && ${compose_cmd} -f "${TICKFLOW_COMPOSE_FILE}" down'
-ExecReload=/bin/bash -lc 'cd "${TICKFLOW_INSTALL_DIR}" && ${compose_cmd} -f "${TICKFLOW_COMPOSE_FILE}" up -d --build'
+ExecStart=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} up -d --build'
+ExecStop=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} down'
+ExecReload=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} up -d --build'
 TimeoutStartSec=0
 TimeoutStopSec=120
 

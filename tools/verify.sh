@@ -1142,6 +1142,27 @@ check_tickflow_config_files_are_atomic() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_systemd_shell_paths_are_quoted() {
+  if grep -R -nE 'Exec(Start|Stop|Reload)=/bin/bash -lc '\''cd "\$\{TICKFLOW_INSTALL_DIR\}"| -f "\$\{TICKFLOW_COMPOSE_FILE\}"' \
+      impl/install_tickflow.sh dist/install_tickflow.sh 2>/dev/null; then
+    echo "TickFlow systemd shell commands must not interpolate raw paths." >&2
+    return 1
+  fi
+  awk '
+      /_write_systemd_unit\(\)/ { in_func=1; saw_install=0; saw_compose=0; saw_exec=0; next }
+      in_func && /printf -v install_dir_literal '\''%q'\'' "\$TICKFLOW_INSTALL_DIR"/ { saw_install=1 }
+      in_func && /printf -v compose_file_literal '\''%q'\'' "\$TICKFLOW_COMPOSE_FILE"/ { saw_compose=1 }
+      in_func && /ExecStart=\/bin\/bash -lc '\''cd \$\{install_dir_literal\} && \$\{compose_cmd\} -f \$\{compose_file_literal\} up -d --build'\''/ { saw_exec=1 }
+      in_func && /^}/ {
+        if (!(saw_install && saw_compose && saw_exec)) {
+          printf "%s TickFlow systemd shell command paths must use printf %%q literals\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_blog_restore_action() {
   grep -Fq 'app.blog.restore.success' apps/blog.sh || {
     echo "Blog restore action must provide localized success text." >&2
@@ -6033,6 +6054,7 @@ main() {
   check_config_save_failures_are_explicit
   check_blog_config_persistence
   check_tickflow_config_files_are_atomic
+  check_tickflow_systemd_shell_paths_are_quoted
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads
