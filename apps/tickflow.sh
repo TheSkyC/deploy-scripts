@@ -162,6 +162,15 @@ i18n_register_many \
   app.tickflow.summary.backup_cmd \
   "back up data now" \
   "立即备份数据" \
+  app.tickflow.backup.error_dir \
+  "Cannot prepare backup directory: %s" \
+  "无法准备备份目录：%s" \
+  app.tickflow.backup.error_archive \
+  "Failed to create backup archive: %s" \
+  "创建备份归档失败：%s" \
+  app.tickflow.backup.success \
+  "Backup created: %s" \
+  "备份已创建：%s" \
   app.tickflow.summary.uninstall_cmd \
   "uninstall the service" \
   "卸载服务"

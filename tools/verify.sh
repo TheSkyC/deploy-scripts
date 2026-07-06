@@ -1202,6 +1202,38 @@ check_tickflow_systemctl_failures_are_reported() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_manual_backup_is_explicit() {
+  awk '
+      /app\.tickflow\.backup\.error_dir/ { saw_dir_key=1 }
+      /app\.tickflow\.backup\.error_archive/ { saw_archive_key=1 }
+      /app\.tickflow\.backup\.success/ { saw_success_key=1 }
+      END {
+        if (!(saw_dir_key && saw_archive_key && saw_success_key)) {
+          print "TickFlow manual backup must provide localized backup messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /do_backup\(\)/ { in_backup=1; saw_dir=0; saw_dir_error=0; saw_tmp=0; saw_tar=0; saw_cleanup=0; saw_chmod=0; saw_mv=0; saw_success=0; next }
+      in_backup && /if ! mkdir -p "\$backup_dir"; then/ { saw_dir=1 }
+      in_backup && /error "\$\(t app\.tickflow\.backup\.error_dir "\$backup_dir"\)"/ { saw_dir_error=1 }
+      in_backup && /local archive_tmp="\$\{archive\}\.tmp"/ { saw_tmp=1 }
+      in_backup && /if ! tar -czf "\$archive_tmp" -C "\$TICKFLOW_INSTALL_DIR" data tiers\.yaml \.env >&2; then/ { saw_tar=1 }
+      in_backup && /rm -f "\$archive_tmp"/ { saw_cleanup=1 }
+      in_backup && /chmod 600 "\$archive_tmp"/ { saw_chmod=1 }
+      in_backup && /mv "\$archive_tmp" "\$archive"/ { saw_mv=1 }
+      in_backup && /success "\$\(t app\.tickflow\.backup\.success "\$archive"\)"/ { saw_success=1 }
+      in_backup && /release_lock/ {
+        if (!(saw_dir && saw_dir_error && saw_tmp && saw_tar && saw_cleanup && saw_chmod && saw_mv && saw_success)) {
+          printf "%s TickFlow manual backup must handle directory, tar, permission, and move failures explicitly\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_backup=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_blog_restore_action() {
   grep -Fq 'app.blog.restore.success' apps/blog.sh || {
     echo "Blog restore action must provide localized success text." >&2
@@ -6095,6 +6127,7 @@ main() {
   check_tickflow_config_files_are_atomic
   check_tickflow_systemd_shell_paths_are_quoted
   check_tickflow_systemctl_failures_are_reported
+  check_tickflow_manual_backup_is_explicit
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads

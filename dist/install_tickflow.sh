@@ -1241,6 +1241,15 @@ i18n_register_many \
   app.tickflow.summary.backup_cmd \
   "back up data now" \
   "立即备份数据" \
+  app.tickflow.backup.error_dir \
+  "Cannot prepare backup directory: %s" \
+  "无法准备备份目录：%s" \
+  app.tickflow.backup.error_archive \
+  "Failed to create backup archive: %s" \
+  "创建备份归档失败：%s" \
+  app.tickflow.backup.success \
+  "Backup created: %s" \
+  "备份已创建：%s" \
   app.tickflow.summary.uninstall_cmd \
   "uninstall the service" \
   "卸载服务"
@@ -1609,10 +1618,20 @@ do_backup() {
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
   require_safe_path "TICKFLOW_BACKUP_DIR" "$backup_dir"
-  mkdir -p "$backup_dir"
+  if ! mkdir -p "$backup_dir"; then
+    error "$(t app.tickflow.backup.error_dir "$backup_dir")"
+  fi
   local archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
-  tar -czf "$archive" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env
-  success "Backup created: $archive"
+  local archive_tmp="${archive}.tmp"
+  if ! tar -czf "$archive_tmp" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env >&2; then
+    rm -f "$archive_tmp"
+    error "$(t app.tickflow.backup.error_archive "$archive")"
+  fi
+  if ! chmod 600 "$archive_tmp" || ! mv "$archive_tmp" "$archive"; then
+    rm -f "$archive_tmp"
+    error "$(t app.tickflow.backup.error_archive "$archive")"
+  fi
+  success "$(t app.tickflow.backup.success "$archive")"
   release_lock
 }
 
