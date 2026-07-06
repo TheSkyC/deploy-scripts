@@ -204,6 +204,29 @@ check_newapi_uninstall_supports_noninteractive_mode() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_sub2api_uninstall_supports_noninteractive_mode() {
+  awk '
+      /prompt "\$\(t app\.sub2api\.prompt\.continue\)"/ { saw_continue_prompt=1 }
+      /if deploy_assume_yes; then/ && !saw_continue { saw_continue=1; next }
+      saw_continue && /_c="YES"/ { saw_yes=1 }
+      /local DELETE_DATA=false/ { in_data=1; next }
+      in_data && /deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true/ { saw_data_env=1 }
+      in_data && /prompt "\$\(t app\.sub2api\.prompt\.delete_data "\$DATA_DIR"\)"/ { saw_data_prompt=1; in_data=0 }
+      /local DELETE_CONF=false/ { in_conf=1; next }
+      in_conf && /deploy_env_truthy DEPLOY_DELETE_CONFIG && DELETE_CONF=true/ { saw_conf_env=1 }
+      in_conf && /prompt "\$\(t app\.sub2api\.prompt\.delete_config "\$CONFIG_DIR"\)"/ { saw_conf_prompt=1; in_conf=0 }
+      /local DELETE_BACKUP=false/ { in_backup=1; next }
+      in_backup && /deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true/ { saw_backup_env=1 }
+      in_backup && /prompt "\$\(t app\.sub2api\.prompt\.delete_backup "\$BACKUP_DIR"\)"/ { saw_backup_prompt=1; in_backup=0 }
+      END {
+        if (!(saw_continue_prompt && saw_continue && saw_yes && saw_data_env && saw_data_prompt && saw_conf_env && saw_conf_prompt && saw_backup_env && saw_backup_prompt)) {
+          printf "%s Sub2API uninstall must support DEPLOY_ASSUME_YES while requiring explicit env flags for data, config, and backup deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_blog_status_dispatch() {
   expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
   expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
@@ -6570,6 +6593,7 @@ main() {
       check_status_json_dispatch
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
+      check_sub2api_uninstall_supports_noninteractive_mode
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
@@ -6601,6 +6625,7 @@ main() {
   check_status_json_dispatch
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
+  check_sub2api_uninstall_supports_noninteractive_mode
   check_blog_status_dispatch
   check_no_color_output
   check_no_argument_menu

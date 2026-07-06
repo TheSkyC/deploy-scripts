@@ -1599,21 +1599,38 @@ do_uninstall() {
   echo "  $(t app.sub2api.uninstall.keep_database)"
   echo "  $(t app.sub2api.uninstall.keep_dirs "$DATA_DIR" "$CONFIG_DIR")"
   echo -e "${NC}"
-  prompt "$(t app.sub2api.prompt.continue)"
-  local _c; read -r _c
+  local _c
+  if deploy_assume_yes; then
+    _c="YES"
+  else
+    prompt "$(t app.sub2api.prompt.continue)"
+    read -r _c
+  fi
   [[ "$_c" != "YES" ]] && { info "$(t app.sub2api.info.cancelled)"; exit 0; }
-  prompt "$(t app.sub2api.prompt.delete_data "$DATA_DIR")"
-  local _del_data; read -r _del_data
   local DELETE_DATA=false
-  [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-  prompt "$(t app.sub2api.prompt.delete_config "$CONFIG_DIR")"
-  local _del_conf; read -r _del_conf
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true
+  else
+    prompt "$(t app.sub2api.prompt.delete_data "$DATA_DIR")"
+    local _del_data; read -r _del_data
+    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+  fi
   local DELETE_CONF=false
-  [[ "${_del_conf,,}" == "y" ]] && DELETE_CONF=true
-  prompt "$(t app.sub2api.prompt.delete_backup "$BACKUP_DIR")"
-  local _del_bak; read -r _del_bak
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_CONFIG && DELETE_CONF=true
+  else
+    prompt "$(t app.sub2api.prompt.delete_config "$CONFIG_DIR")"
+    local _del_conf; read -r _del_conf
+    [[ "${_del_conf,,}" == "y" ]] && DELETE_CONF=true
+  fi
   local DELETE_BACKUP=false
-  [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true
+  else
+    prompt "$(t app.sub2api.prompt.delete_backup "$BACKUP_DIR")"
+    local _del_bak; read -r _del_bak
+    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+  fi
   info "$(t app.sub2api.info.stop_disable "$SERVICE_NAME")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
