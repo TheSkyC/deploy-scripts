@@ -576,6 +576,48 @@ i18n_register_many \
   app.blog.backup.clean_failed \
   "Failed to remove expired backup: %s" \
   "删除过期备份失败：%s" \
+  app.blog.step_restore \
+  "Restore Blog from backup" \
+  "从备份恢复 Blog" \
+  app.blog.restore.using \
+  "Restoring backup: %s" \
+  "正在恢复备份：%s" \
+  app.blog.restore.no_backups \
+  "No Blog backups found in %s." \
+  "在 %s 中未找到 Blog 备份。" \
+  app.blog.restore.invalid_archive \
+  "Invalid Blog backup archive: %s" \
+  "Blog 备份归档无效：%s" \
+  app.blog.restore.error_extract \
+  "Failed to extract Blog backup archive: %s" \
+  "解压 Blog 备份归档失败：%s" \
+  app.blog.restore.error_target \
+  "Failed to restore %s from backup." \
+  "从备份恢复 %s 失败。" \
+  app.blog.restore.warn_missing \
+  "Backup does not contain %s; skipping it." \
+  "备份不包含 %s，已跳过。" \
+  app.blog.restore.restored_dir \
+  "Restored directory: %s" \
+  "已恢复目录：%s" \
+  app.blog.restore.restored_file \
+  "Restored file: %s" \
+  "已恢复文件：%s" \
+  app.blog.restore.nginx_reloaded \
+  "Nginx configuration reloaded after restore." \
+  "恢复后已重新加载 Nginx 配置。" \
+  app.blog.restore.nginx_reload_failed \
+  "Restore completed, but Nginx reload failed. Check manually: nginx -t && systemctl reload nginx" \
+  "恢复完成，但 Nginx reload 失败。请手动检查：nginx -t && systemctl reload nginx" \
+  app.blog.restore.nginx_missing \
+  "Restore completed, but nginx was not found; start or reload it manually after installing nginx." \
+  "恢复完成，但未找到 nginx；安装 nginx 后请手动启动或重新加载。" \
+  app.blog.restore.error_nginx_config \
+  "Restored Nginx configuration is invalid. Inspect nginx -t output before relying on the site." \
+  "恢复后的 Nginx 配置无效。请检查 nginx -t 输出后再继续使用站点。" \
+  app.blog.restore.success \
+  "Blog restore complete." \
+  "Blog 恢复完成。" \
   app.blog.uninstall.warning \
   "This removes Blog files, Nginx site config, and the publish helper. Nginx itself is kept." \
   "这会删除 Blog 文件、Nginx 站点配置和发布辅助脚本，但保留 Nginx 本身。" \
@@ -620,6 +662,9 @@ if ! declare -f do_update >/dev/null 2>&1; then
 fi
 if ! declare -f do_backup >/dev/null 2>&1; then
   do_backup() { error "$(t error.unsupported_action "$APP_NAME" backup)"; }
+fi
+if ! declare -f do_restore >/dev/null 2>&1; then
+  do_restore() { error "$(t error.unsupported_action "$APP_NAME" restore)"; }
 fi
 if ! declare -f do_status >/dev/null 2>&1; then
   do_status() { error "$(t error.unsupported_action "$APP_NAME" status)"; }

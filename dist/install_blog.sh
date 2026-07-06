@@ -1655,6 +1655,48 @@ i18n_register_many \
   app.blog.backup.clean_failed \
   "Failed to remove expired backup: %s" \
   "删除过期备份失败：%s" \
+  app.blog.step_restore \
+  "Restore Blog from backup" \
+  "从备份恢复 Blog" \
+  app.blog.restore.using \
+  "Restoring backup: %s" \
+  "正在恢复备份：%s" \
+  app.blog.restore.no_backups \
+  "No Blog backups found in %s." \
+  "在 %s 中未找到 Blog 备份。" \
+  app.blog.restore.invalid_archive \
+  "Invalid Blog backup archive: %s" \
+  "Blog 备份归档无效：%s" \
+  app.blog.restore.error_extract \
+  "Failed to extract Blog backup archive: %s" \
+  "解压 Blog 备份归档失败：%s" \
+  app.blog.restore.error_target \
+  "Failed to restore %s from backup." \
+  "从备份恢复 %s 失败。" \
+  app.blog.restore.warn_missing \
+  "Backup does not contain %s; skipping it." \
+  "备份不包含 %s，已跳过。" \
+  app.blog.restore.restored_dir \
+  "Restored directory: %s" \
+  "已恢复目录：%s" \
+  app.blog.restore.restored_file \
+  "Restored file: %s" \
+  "已恢复文件：%s" \
+  app.blog.restore.nginx_reloaded \
+  "Nginx configuration reloaded after restore." \
+  "恢复后已重新加载 Nginx 配置。" \
+  app.blog.restore.nginx_reload_failed \
+  "Restore completed, but Nginx reload failed. Check manually: nginx -t && systemctl reload nginx" \
+  "恢复完成，但 Nginx reload 失败。请手动检查：nginx -t && systemctl reload nginx" \
+  app.blog.restore.nginx_missing \
+  "Restore completed, but nginx was not found; start or reload it manually after installing nginx." \
+  "恢复完成，但未找到 nginx；安装 nginx 后请手动启动或重新加载。" \
+  app.blog.restore.error_nginx_config \
+  "Restored Nginx configuration is invalid. Inspect nginx -t output before relying on the site." \
+  "恢复后的 Nginx 配置无效。请检查 nginx -t 输出后再继续使用站点。" \
+  app.blog.restore.success \
+  "Blog restore complete." \
+  "Blog 恢复完成。" \
   app.blog.uninstall.warning \
   "This removes Blog files, Nginx site config, and the publish helper. Nginx itself is kept." \
   "这会删除 Blog 文件、Nginx 站点配置和发布辅助脚本，但保留 Nginx 本身。" \
@@ -1699,6 +1741,9 @@ if ! declare -f do_update >/dev/null 2>&1; then
 fi
 if ! declare -f do_backup >/dev/null 2>&1; then
   do_backup() { error "$(t error.unsupported_action "$APP_NAME" backup)"; }
+fi
+if ! declare -f do_restore >/dev/null 2>&1; then
+  do_restore() { error "$(t error.unsupported_action "$APP_NAME" restore)"; }
 fi
 if ! declare -f do_status >/dev/null 2>&1; then
   do_status() { error "$(t error.unsupported_action "$APP_NAME" status)"; }
@@ -2691,6 +2736,152 @@ do_backup() {
       fi
     done < <(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name 'blog_*.tar.gz' -type f -mtime "+${_keep_days}" -print0 2>/dev/null)
   fi
+}
+
+_blog_latest_backup_archive() {
+  local backup_dir="$1" candidate candidate_mtime latest="" latest_mtime=0
+  while IFS= read -r -d '' candidate; do
+    candidate_mtime=$(stat -c %Y "$candidate" 2>/dev/null || echo 0)
+    if [[ "$candidate_mtime" =~ ^[0-9]+$ && "$candidate_mtime" -gt "$latest_mtime" ]]; then
+      latest="$candidate"
+      latest_mtime="$candidate_mtime"
+    fi
+  done < <(find "$backup_dir" -maxdepth 1 -name 'blog_*.tar.gz' -type f -print0 2>/dev/null)
+  printf '%s' "$latest"
+}
+
+_blog_archive_paths_are_safe() {
+  local archive="$1" member
+  tar -tzf "$archive" | while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        return 1
+        ;;
+    esac
+  done
+}
+
+_blog_restore_dir_from_backup() {
+  local source_dir="$1" target_name="$2" target_path="$3"
+  local target_parent target_base restore_tmp restore_bak
+  require_safe_path "$target_name" "$target_path"
+  target_parent="$(dirname "$target_path")"
+  target_base="$(basename "$target_path")"
+  if ! mkdir -p "$target_parent"; then
+    error "$(t app.blog.restore.error_target "$target_path")"
+  fi
+  if ! restore_tmp=$(mktemp -d "${target_parent}/.${target_base}.restore.XXXXXX"); then
+    error "$(t app.blog.restore.error_target "$target_path")"
+  fi
+  restore_bak="${target_path}.restore.$(date +%Y%m%d%H%M%S)"
+  if ! cp -a "${source_dir}/." "$restore_tmp/"; then
+    rm -rf "$restore_tmp"
+    error "$(t app.blog.restore.error_target "$target_path")"
+  fi
+  if [[ -e "$target_path" || -L "$target_path" ]]; then
+    if ! mv "$target_path" "$restore_bak"; then
+      rm -rf "$restore_tmp"
+      error "$(t app.blog.restore.error_target "$target_path")"
+    fi
+  fi
+  if mv "$restore_tmp" "$target_path"; then
+    rm -rf "$restore_bak"
+    success "$(t app.blog.restore.restored_dir "$target_path")"
+  else
+    rm -rf "$restore_tmp"
+    if [[ -e "$restore_bak" || -L "$restore_bak" ]]; then
+      mv "$restore_bak" "$target_path" 2>/dev/null || true
+    fi
+    error "$(t app.blog.restore.error_target "$target_path")"
+  fi
+}
+
+_blog_restore_file_from_backup() {
+  local source_file="$1" target_name="$2" target_path="$3" mode="$4"
+  require_safe_path "$target_name" "$target_path"
+  if ! atomic_copy_file "$source_file" "$target_path" "$mode" root:root; then
+    error "$(t app.blog.restore.error_target "$target_path")"
+  fi
+  success "$(t app.blog.restore.restored_file "$target_path")"
+}
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  _blog_load_config_if_root
+  acquire_lock
+  step "$(t app.blog.step_restore)"
+  require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+  local backup_dir="${BLOG_BACKUP_DIR%/}" archive extract_dir restored=false
+  [[ -d "$backup_dir" ]] || error "$(t app.blog.restore.no_backups "$backup_dir")"
+  archive="${BLOG_RESTORE_ARCHIVE:-}"
+  if [[ -z "$archive" ]]; then
+    archive="$(_blog_latest_backup_archive "$backup_dir")"
+  fi
+  [[ -n "$archive" ]] || error "$(t app.blog.restore.no_backups "$backup_dir")"
+  [[ "$archive" == "$backup_dir"/blog_*.tar.gz && -f "$archive" ]] \
+    || error "$(t app.blog.restore.invalid_archive "$archive")"
+  if ! _blog_archive_paths_are_safe "$archive"; then
+    error "$(t app.blog.restore.invalid_archive "$archive")"
+  fi
+  info "$(t app.blog.restore.using "$archive")"
+  if ! extract_dir=$(mktemp -d "${backup_dir}/.blog-restore.XXXXXX"); then
+    error "$(t app.blog.restore.error_extract "$archive")"
+  fi
+  if ! tar -xzf "$archive" -C "$extract_dir" >&2; then
+    rm -rf "$extract_dir"
+    error "$(t app.blog.restore.error_extract "$archive")"
+  fi
+
+  if [[ -d "${extract_dir}/site" ]]; then
+    _blog_restore_dir_from_backup "${extract_dir}/site" "SITE_DIR" "$SITE_DIR"
+    restored=true
+  else
+    warn "$(t app.blog.restore.warn_missing site)"
+  fi
+  if [[ -d "${extract_dir}/public" ]]; then
+    _blog_restore_dir_from_backup "${extract_dir}/public" "PUBLIC_DIR" "$PUBLIC_DIR"
+    restored=true
+  else
+    warn "$(t app.blog.restore.warn_missing public)"
+  fi
+  if [[ -d "${extract_dir}/nginx-root" ]]; then
+    _blog_restore_dir_from_backup "${extract_dir}/nginx-root" "NGINX_ROOT" "$NGINX_ROOT"
+    restored=true
+  else
+    warn "$(t app.blog.restore.warn_missing nginx-root)"
+  fi
+  if [[ -f "${extract_dir}/nginx-site.conf" ]]; then
+    _blog_restore_file_from_backup "${extract_dir}/nginx-site.conf" "NGINX_SITE" /etc/nginx/sites-available/blog 644
+    _write_nginx_site_link /etc/nginx/sites-available/blog /etc/nginx/sites-enabled/blog \
+      || error "$(t app.blog.error.nginx_write "/etc/nginx/sites-available/blog")"
+    restored=true
+  else
+    warn "$(t app.blog.restore.warn_missing nginx-site.conf)"
+  fi
+  if [[ -f "${extract_dir}/blog-publish" ]]; then
+    _blog_restore_file_from_backup "${extract_dir}/blog-publish" "BLOG_PUBLISH" /usr/local/bin/blog-publish 750
+    restored=true
+  else
+    warn "$(t app.blog.restore.warn_missing blog-publish)"
+  fi
+  rm -rf "$extract_dir"
+  [[ "$restored" == "true" ]] || error "$(t app.blog.restore.invalid_archive "$archive")"
+
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t; then
+      if systemctl reload nginx; then
+        success "$(t app.blog.restore.nginx_reloaded)"
+      else
+        warn "$(t app.blog.restore.nginx_reload_failed)"
+      fi
+    else
+      error "$(t app.blog.restore.error_nginx_config)"
+    fi
+  else
+    warn "$(t app.blog.restore.nginx_missing)"
+  fi
+  success "$(t app.blog.restore.success)"
 }
 
 _blog_remove_file() {

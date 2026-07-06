@@ -114,6 +114,10 @@ check_blog_status_dispatch() {
   expect_failure_output zh install_blog.sh "请使用 root 权限运行" backup
   expect_failure_output en dist/install_blog.sh "Please run as root" backup
   expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" backup
+  expect_failure_output en install_blog.sh "Please run as root" restore
+  expect_failure_output zh install_blog.sh "请使用 root 权限运行" restore
+  expect_failure_output en dist/install_blog.sh "Please run as root" restore
+  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" restore
   expect_failure_output en install_blog.sh "Please run as root" uninstall
   expect_failure_output zh install_blog.sh "请使用 root 权限运行" uninstall
   expect_failure_output en dist/install_blog.sh "Please run as root" uninstall
@@ -1104,6 +1108,37 @@ check_blog_config_persistence() {
       END {
         if (!(saw_keys && saw_domain && saw_paths && saw_cms && saw_derive && saw_root_guard && saw_app_load && saw_install_validate && saw_install_save && saw_status && saw_update && saw_backup && saw_uninstall && loaded_status && loaded_update && loaded_backup && loaded_uninstall)) {
           printf "%s Blog must persist install config and load it for status/update/backup/uninstall\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
+check_blog_restore_action() {
+  grep -Fq 'app.blog.restore.success' apps/blog.sh || {
+    echo "Blog restore action must provide localized success text." >&2
+    return 1
+  }
+  awk '
+      /do_restore\(\)/ { in_restore=1; saw_restore=1; next }
+      in_restore && /require_root "restore"/ { saw_root=1 }
+      in_restore && /_blog_load_config_if_root/ { saw_config=1 }
+      in_restore && /acquire_lock/ { saw_lock=1 }
+      in_restore && /require_safe_path "BLOG_BACKUP_DIR"/ { saw_backup_path=1 }
+      in_restore && /_blog_latest_backup_archive/ { saw_latest=1 }
+      in_restore && /_blog_archive_paths_are_safe/ { saw_safe_archive=1 }
+      in_restore && /tar -xzf "\$archive" -C "\$extract_dir" >&2/ { saw_tar_stderr=1 }
+      in_restore && /_blog_restore_dir_from_backup "\$\{extract_dir\}\/site" "SITE_DIR" "\$SITE_DIR"/ { saw_site=1 }
+      in_restore && /_blog_restore_dir_from_backup "\$\{extract_dir\}\/public" "PUBLIC_DIR" "\$PUBLIC_DIR"/ { saw_public=1 }
+      in_restore && /_blog_restore_dir_from_backup "\$\{extract_dir\}\/nginx-root" "NGINX_ROOT" "\$NGINX_ROOT"/ { saw_nginx_root=1 }
+      in_restore && /_blog_restore_file_from_backup "\$\{extract_dir\}\/nginx-site\.conf" "NGINX_SITE" \/etc\/nginx\/sites-available\/blog 644/ { saw_nginx_conf=1 }
+      in_restore && /_blog_restore_file_from_backup "\$\{extract_dir\}\/blog-publish" "BLOG_PUBLISH" \/usr\/local\/bin\/blog-publish 750/ { saw_publish=1 }
+      in_restore && /nginx -t/ { saw_nginx_test=1 }
+      in_restore && /systemctl reload nginx/ { saw_reload=1 }
+      in_restore && /^}/ { in_restore=0 }
+      END {
+        if (!(saw_restore && saw_root && saw_config && saw_lock && saw_backup_path && saw_latest && saw_safe_archive && saw_tar_stderr && saw_site && saw_public && saw_nginx_root && saw_nginx_conf && saw_publish && saw_nginx_test && saw_reload)) {
+          printf "%s Blog restore action must safely restore backup archives and validate nginx before reload\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -6063,6 +6098,7 @@ main() {
   check_blog_enable_failures_are_reported
   check_blog_nginx_start_path_is_explicit
   check_blog_install_summary_matches_local_health
+  check_blog_restore_action
   check_newapi_enable_failures_are_reported
   check_newapi_manual_backup_wal_result_is_explicit
   check_cyberstrikeai_enable_failures_are_reported
