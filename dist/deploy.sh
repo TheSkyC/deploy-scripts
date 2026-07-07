@@ -2207,6 +2207,9 @@ i18n_register_many \
   app.newapi.warn.uninstall_disable_failed \
   "Could not disable %s during uninstall. Remove the enablement manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 后手动移除开机自启：systemctl disable %s。" \
+  app.newapi.error.remove_dir \
+  "Directory removal failed: %s" \
+  "目录删除失败：%s。" \
   app.newapi.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \
@@ -2234,6 +2237,9 @@ i18n_register_many \
   app.newapi.success.cleaned_install \
   "Install directory cleaned: %s" \
   "安装目录已清理：%s。" \
+  app.newapi.warn.cleanup_install_failed \
+  "Install directory cleanup skipped because removal failed: %s" \
+  "安装目录清理失败，已跳过：%s。" \
   app.newapi.info.kept_data \
   "Data directory kept: %s" \
   "数据目录已保留：%s。" \
@@ -5688,6 +5694,13 @@ _NEWAPI_DERIVE_PATHS() {
   LOG_FILE="${LOG_DIR}/new-api.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
+_newapi_remove_dir_or_error() {
+  local path="$1" name="$2" success_message="$3"
+  if ! safe_rm_dir "$path" "$name"; then
+    error "$(t app.newapi.error.remove_dir "$path")"
+  fi
+  success "$success_message"
+}
 app_conf_register_legacy "/etc/new-api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
@@ -6710,24 +6723,24 @@ do_uninstall() {
   rm -f "$CONF_FILE"
   success "$(t app.newapi.success.removed_config)"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
-    safe_rm_dir "$LOG_DIR" "LOG_DIR"
-    success "$(t app.newapi.success.deleted_log "$LOG_DIR")"
+    _newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"
   else
     warn "$(t app.newapi.warn.log_path "${LOG_DIR:-unset}")"
   fi
   if $DELETE_DATA; then
-    safe_rm_dir "$DATA_DIR" "DATA_DIR"
-    success "$(t app.newapi.success.deleted_data "$DATA_DIR")"
+    _newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"
     if [[ -d "$INSTALL_DIR" ]] && [[ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-      safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
-      success "$(t app.newapi.success.cleaned_install "$INSTALL_DIR")"
+      if ! safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"; then
+        warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"
+      else
+        success "$(t app.newapi.success.cleaned_install "$INSTALL_DIR")"
+      fi
     fi
   else
     info "$(t app.newapi.info.kept_data "$DATA_DIR")"
   fi
   if $DELETE_BACKUP; then
-    safe_rm_dir "$BACKUP_DIR" "BACKUP_DIR"
-    success "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"
+    _newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"
   else
     info "$(t app.newapi.info.kept_backup "$BACKUP_DIR")"
   fi

@@ -645,6 +645,9 @@ i18n_register_many \
   app.newapi.warn.uninstall_disable_failed \
   "Could not disable %s during uninstall. Remove the enablement manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 后手动移除开机自启：systemctl disable %s。" \
+  app.newapi.error.remove_dir \
+  "Directory removal failed: %s" \
+  "目录删除失败：%s。" \
   app.newapi.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \
@@ -672,6 +675,9 @@ i18n_register_many \
   app.newapi.success.cleaned_install \
   "Install directory cleaned: %s" \
   "安装目录已清理：%s。" \
+  app.newapi.warn.cleanup_install_failed \
+  "Install directory cleanup skipped because removal failed: %s" \
+  "安装目录清理失败，已跳过：%s。" \
   app.newapi.info.kept_data \
   "Data directory kept: %s" \
   "数据目录已保留：%s。" \

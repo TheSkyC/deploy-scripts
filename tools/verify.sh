@@ -199,6 +199,31 @@ check_newapi_uninstall_supports_noninteractive_mode() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_uninstall_checks_directory_removal_errors() {
+  grep -Fq '_newapi_remove_dir_or_error() {' impl/install_newapi.sh \
+    && grep -Fq 'error "$(t app.newapi.error.remove_dir "$path")"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"' impl/install_newapi.sh \
+    && grep -Fq 'warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"' impl/install_newapi.sh \
+    && grep -Fq 'app.newapi.error.remove_dir' apps/newapi.sh \
+    && grep -Fq 'app.newapi.warn.cleanup_install_failed' apps/newapi.sh \
+    || {
+      echo "NewAPI uninstall must surface directory removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_newapi_remove_dir_or_error() {' dist/install_newapi.sh \
+    && grep -Fq 'error "$(t app.newapi.error.remove_dir "$path")"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"' dist/install_newapi.sh \
+    && grep -Fq 'warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"' dist/install_newapi.sh \
+    || {
+      echo "Release NewAPI script must preserve uninstall directory removal failure handling." >&2
+      return 1
+    }
+}
+
 check_newapi_backup_lists_preserve_paths_with_spaces() {
   if grep -R -n 'awk '\''{print \$2}'\''' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
     echo "NewAPI backup and binary retention lists must not split paths on spaces." >&2
@@ -7085,6 +7110,7 @@ main() {
       check_status_json_dispatch
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
+      check_newapi_uninstall_checks_directory_removal_errors
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_backup_lists_preserve_paths_with_spaces
@@ -7127,6 +7153,7 @@ main() {
   check_status_json_dispatch
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
+  check_newapi_uninstall_checks_directory_removal_errors
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
   check_sub2api_backup_lists_preserve_paths_with_spaces
