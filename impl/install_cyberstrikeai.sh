@@ -37,6 +37,13 @@ _CSAI_DERIVE_PATHS() {
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
 }
+_csai_remove_dir_or_error() {
+  local path="$1" name="$2" success_message="$3"
+  if ! safe_rm_dir "$path" "$name"; then
+    error "$(t app.cyberstrikeai.error.remove_dir "$path")"
+  fi
+  success "$success_message"
+}
 _bool_true() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
@@ -1133,14 +1140,12 @@ do_uninstall() {
   rm -f "$LOGROTATE_FILE" "$CRON_FILE" "$BACKUP_SCRIPT" "$CONF_FILE"
   success "$(t app.cyberstrikeai.success.removed_configs)"
   if [[ "${del_install,,}" == "y" ]]; then
-    safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
-    success "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"
+    _csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"
   else
     info "$(t app.cyberstrikeai.info.kept_install "$INSTALL_DIR")"
   fi
   if [[ "${del_backup,,}" == "y" ]]; then
-    safe_rm_dir "$BACKUP_DIR" "BACKUP_DIR"
-    success "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"
+    _csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"
   else
     info "$(t app.cyberstrikeai.info.kept_backup "$BACKUP_DIR")"
   fi

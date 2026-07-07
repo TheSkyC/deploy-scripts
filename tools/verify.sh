@@ -475,6 +475,26 @@ check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
+  grep -Fq '_csai_remove_dir_or_error() {' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_dir "$path")"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'app.cyberstrikeai.error.remove_dir' apps/cyberstrikeai.sh \
+    || {
+      echo "CyberStrikeAI uninstall must surface directory removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_csai_remove_dir_or_error() {' dist/install_cyberstrikeai.sh \
+    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_dir "$path")"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"' dist/install_cyberstrikeai.sh \
+    || {
+      echo "Release CyberStrikeAI script must preserve uninstall directory removal failure handling." >&2
+      return 1
+    }
+}
+
 check_tickflow_uninstall_supports_noninteractive_mode() {
   awk '
       /app\.tickflow\.prompt\.continue/ { saw_continue_msg=1 }
@@ -7148,6 +7168,7 @@ main() {
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
+      check_cyberstrikeai_uninstall_checks_directory_removal_errors
       check_tickflow_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
       check_blog_status_dispatch
@@ -7192,6 +7213,7 @@ main() {
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
+  check_cyberstrikeai_uninstall_checks_directory_removal_errors
   check_tickflow_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
   check_blog_status_dispatch

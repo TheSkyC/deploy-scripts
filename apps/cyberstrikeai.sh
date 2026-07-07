@@ -489,6 +489,9 @@ i18n_register_many \
   app.cyberstrikeai.warn.uninstall_disable_failed \
   "Could not disable %s during uninstall. Remove the enablement manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 后手动移除开机自启：systemctl disable %s。" \
+  app.cyberstrikeai.error.remove_dir \
+  "Directory removal failed: %s" \
+  "目录删除失败：%s" \
   app.cyberstrikeai.success.removed_systemd \
   "Removed systemd service" \
   "systemd 服务已移除" \
