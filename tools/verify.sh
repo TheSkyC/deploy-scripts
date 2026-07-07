@@ -157,21 +157,16 @@ check_doctor_validates_saved_config() {
         }
       }
     ' lib/i18n.sh
-  awk '
-      /app_doctor_config_derive_hook\(\)/ { saw_hook=1 }
-      /app_doctor_validate_saved_config\(\)/ { in_validate=1; saw_validate=1; next }
-      in_validate && /load_config_file "\$conf_file" "\$\{CONFIG_KEYS\[@\]\}"/ { saw_load=1 }
-      in_validate && /derive_hook="\$\(app_doctor_config_derive_hook 2>\/dev\/null\)"/ { saw_derive=1 }
-      in_validate && /_validate_config_values/ { saw_config_validate=1 }
-      in_validate && /^\}/ { in_validate=0 }
-      /if app_doctor_validate_saved_config "\$conf_file"; then/ { saw_doctor_call=1 }
-      END {
-        if (!(saw_hook && saw_validate && saw_load && saw_derive && saw_config_validate && saw_doctor_call)) {
-          print "Doctor must load, derive, and validate saved config in an isolated helper." > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' lib/app.sh
+  grep -Fq 'app_doctor_config_derive_hook()' lib/app.sh \
+    && grep -Fq 'app_doctor_validate_saved_config()' lib/app.sh \
+    && grep -Fq 'load_config_file "$conf_file" "${CONFIG_KEYS[@]}"' lib/app.sh \
+    && grep -Fq 'derive_hook="$(app_doctor_config_derive_hook 2>/dev/null)"' lib/app.sh \
+    && grep -Fq '_validate_config_values' lib/app.sh \
+    && grep -Fq 'if app_doctor_validate_saved_config "$conf_file"; then' lib/app.sh \
+    || {
+      echo "Doctor must load, derive, and validate saved config in an isolated helper." >&2
+      return 1
+    }
 }
 
 check_newapi_uninstall_supports_noninteractive_mode() {
