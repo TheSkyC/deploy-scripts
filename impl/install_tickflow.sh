@@ -484,6 +484,9 @@ do_uninstall() {
     [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
   fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
+    if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+      error "$(t app.tickflow.error.service_stop_failed_active "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
+    fi
     warn "$(t app.tickflow.warn.service_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
   fi
   if ! systemctl disable "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then

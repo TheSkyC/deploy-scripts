@@ -1660,6 +1660,37 @@ check_tickflow_systemctl_failures_are_reported() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_uninstall_stop_disable_failures_are_reported() {
+  awk '
+      /app\.tickflow\.error\.service_stop_failed_active/ { saw_stop_error=1 }
+      /app\.tickflow\.warn\.service_stop_failed/ { saw_stop_warn=1 }
+      /app\.tickflow\.warn\.service_disable_failed/ { saw_disable_warn=1 }
+      END {
+        if (!(saw_stop_error && saw_stop_warn && saw_disable_warn)) {
+          print "TickFlow must provide localized uninstall stop and disable failure messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /do_uninstall\(\)/ { in_func=1 }
+      in_func && /if ! systemctl stop "\$TICKFLOW_SERVICE_NAME" >\/dev\/null 2>&1; then/ { in_uninstall=1; saw_stop_if=1; saw_active_if=0; saw_stop_error=0; saw_stop_warn=0; saw_disable_if=0; saw_disable_warn=0; next }
+      in_uninstall && /if systemctl is-active --quiet "\$TICKFLOW_SERVICE_NAME" 2>\/dev\/null; then/ { saw_active_if=1 }
+      in_uninstall && /error "\$\(t app\.tickflow\.error\.service_stop_failed_active "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_stop_error=1 }
+      in_uninstall && /warn "\$\(t app\.tickflow\.warn\.service_stop_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_stop_warn=1 }
+      in_uninstall && /if ! systemctl disable "\$TICKFLOW_SERVICE_NAME" >\/dev\/null 2>&1; then/ { saw_disable_if=1 }
+      in_uninstall && /warn "\$\(t app\.tickflow\.warn\.service_disable_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_disable_warn=1 }
+      in_uninstall && /rm -f "\/etc\/systemd\/system\/\$\{TICKFLOW_SERVICE_NAME\}\.service"/ {
+        if (!(saw_stop_if && saw_active_if && saw_stop_error && saw_stop_warn && saw_disable_if && saw_disable_warn)) {
+          printf "%s TickFlow uninstall must abort when an active service cannot be stopped and warn on disable failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+      in_func && /^}/ { in_func=0 }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_tickflow_service_start_failures_show_diagnostics() {
   awk '
       /app\.tickflow\.warn\.service_diagnostics/ { saw_key=1 }
@@ -7137,6 +7168,7 @@ main() {
   check_tickflow_config_files_are_atomic
   check_tickflow_systemd_shell_paths_are_quoted
   check_tickflow_systemctl_failures_are_reported
+  check_tickflow_uninstall_stop_disable_failures_are_reported
   check_tickflow_service_start_failures_show_diagnostics
   check_tickflow_status_is_structured
   check_tickflow_manual_backup_is_explicit

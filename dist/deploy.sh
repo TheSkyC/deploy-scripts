@@ -5439,9 +5439,12 @@ i18n_register_many \
   app.tickflow.warn.service_diagnostics \
   "Recent service diagnostics:" \
   "最近的服务诊断：" \
+  app.tickflow.error.service_stop_failed_active \
+  "Could not stop %s during uninstall, and it still appears active. Uninstall aborted before removing files. Inspect: systemctl status %s" \
+  "卸载时无法停止 %s，且该服务仍处于 active 状态。已在删除文件前中止卸载。请检查：systemctl status %s。" \
   app.tickflow.warn.service_stop_failed \
-  "Could not stop %s during uninstall. It may already be stopped; otherwise inspect systemctl status %s." \
-  "卸载时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
+  "Could not stop %s during uninstall, but it is not active; continuing cleanup. Inspect systemd if this is unexpected: systemctl status %s." \
+  "卸载时无法停止 %s，但该服务当前不是 active，继续清理。如不符合预期，请检查：systemctl status %s。" \
   app.tickflow.warn.service_disable_failed \
   "Could not disable %s during uninstall. Remove it manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
@@ -13013,6 +13016,9 @@ do_uninstall() {
     [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
   fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
+    if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+      error "$(t app.tickflow.error.service_stop_failed_active "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
+    fi
     warn "$(t app.tickflow.warn.service_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
   fi
   if ! systemctl disable "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
