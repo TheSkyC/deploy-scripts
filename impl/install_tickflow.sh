@@ -246,6 +246,15 @@ _print_service_diagnostics() {
     | head -20 | sed 's/^/  /' >&2 || true
 }
 
+_print_status_path() {
+  local label="$1" path="$2"
+  if [[ -e "$path" ]]; then
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.path_ok "$label" "$path")"
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.path_missing "$label" "$path")"
+  fi
+}
+
 _health_check() {
   local code elapsed=0
   until code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000) \
@@ -403,8 +412,48 @@ do_status() {
   preflight_check "status"
   app_load_config
   [[ $EUID -ne 0 ]] && warn "$(t app.tickflow.warn.non_root_status "$0")"
-  echo -e "\n${BOLD}[${TICKFLOW_SERVICE_NAME}]${NC}"
-  systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager || true
+  echo -e "\n${BOLD}[$(t app.tickflow.status.systemd)]${NC}"
+  if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.service_active "$TICKFLOW_SERVICE_NAME")"
+  else
+    echo -e "  ${RED}[✗]${NC} $(t app.tickflow.status.service_inactive "$TICKFLOW_SERVICE_NAME")"
+  fi
+  if systemctl is-enabled --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.service_enabled "$TICKFLOW_SERVICE_NAME")"
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.service_disabled "$TICKFLOW_SERVICE_NAME")"
+  fi
+  systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager -l 2>/dev/null \
+    | head -12 | sed 's/^/  /' || true
+  echo -e "\n${BOLD}[$(t app.tickflow.status.paths)]${NC}"
+  _print_status_path "$(t app.tickflow.status.install_dir)" "$TICKFLOW_INSTALL_DIR"
+  _print_status_path "$(t app.tickflow.status.data_dir)" "$TICKFLOW_DATA_DIR"
+  _print_status_path "$(t app.tickflow.status.env_file)" "$TICKFLOW_ENV_FILE"
+  _print_status_path "$(t app.tickflow.status.compose_file)" "$TICKFLOW_COMPOSE_FILE"
+  _print_status_path "$(t app.tickflow.status.tiers_file)" "$TICKFLOW_TIERS_FILE"
+  _print_status_path "$(t app.tickflow.status.log_dir)" "$TICKFLOW_LOG_DIR"
+  echo -e "\n${BOLD}[$(t app.tickflow.status.backups)]${NC}"
+  local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  if [[ -d "$backup_dir" ]]; then
+    local backup_count backup_size
+    backup_count=$(find "$backup_dir" -maxdepth 1 -name "tickflow-data-*.tar.gz" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')
+    backup_size=$(du -sh "$backup_dir" 2>/dev/null | awk '{print $1}' || t status.unknown)
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.backup_count "$backup_count" "$backup_size")"
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.backup_missing "$backup_dir")"
+  fi
+  echo -e "\n${BOLD}[$(t app.tickflow.status.http_health)]${NC}"
+  if command -v curl >/dev/null 2>&1; then
+    local http_code
+    http_code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000)
+    if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
+      echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.local_response "$http_code")"
+    else
+      echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.local_response_warn "$http_code")"
+    fi
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.curl_missing)"
+  fi
   echo ""
 }
 

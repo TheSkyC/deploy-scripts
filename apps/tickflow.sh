@@ -96,6 +96,69 @@ i18n_register_many \
   app.tickflow.warn.non_root_status \
   "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
   "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
+  app.tickflow.status.systemd \
+  "systemd" \
+  "systemd" \
+  app.tickflow.status.service_active \
+  "%s is active." \
+  "%s 正在运行。" \
+  app.tickflow.status.service_inactive \
+  "%s is not active." \
+  "%s 未运行。" \
+  app.tickflow.status.service_enabled \
+  "%s is enabled on boot." \
+  "%s 已设置开机自启。" \
+  app.tickflow.status.service_disabled \
+  "%s is not enabled on boot." \
+  "%s 未设置开机自启。" \
+  app.tickflow.status.paths \
+  "Paths" \
+  "路径" \
+  app.tickflow.status.install_dir \
+  "Install dir" \
+  "安装目录" \
+  app.tickflow.status.data_dir \
+  "Data dir" \
+  "数据目录" \
+  app.tickflow.status.env_file \
+  "Env file" \
+  "环境文件" \
+  app.tickflow.status.compose_file \
+  "Compose file" \
+  "Compose 文件" \
+  app.tickflow.status.tiers_file \
+  "Tiers file" \
+  "Tiers 文件" \
+  app.tickflow.status.log_dir \
+  "Log dir" \
+  "日志目录" \
+  app.tickflow.status.path_ok \
+  "%s exists: %s" \
+  "%s 存在：%s" \
+  app.tickflow.status.path_missing \
+  "%s missing: %s" \
+  "%s 缺失：%s" \
+  app.tickflow.status.backups \
+  "Backups" \
+  "备份" \
+  app.tickflow.status.backup_count \
+  "Backup files: %s (%s)" \
+  "备份文件：%s（%s）" \
+  app.tickflow.status.backup_missing \
+  "Backup directory missing: %s" \
+  "备份目录缺失：%s" \
+  app.tickflow.status.http_health \
+  "HTTP health" \
+  "HTTP 健康" \
+  app.tickflow.status.local_response \
+  "Local response OK: %s" \
+  "本地响应正常：%s" \
+  app.tickflow.status.local_response_warn \
+  "Local response is %s; the service may still be starting or unreachable." \
+  "本地响应为 %s；服务可能仍在启动或不可达。" \
+  app.tickflow.status.curl_missing \
+  "curl is unavailable; skipping local HTTP probe." \
+  "curl 不可用，跳过本地 HTTP 探测。" \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \

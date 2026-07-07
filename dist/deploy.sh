@@ -5454,6 +5454,69 @@ i18n_register_many \
   app.tickflow.warn.non_root_status \
   "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
   "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
+  app.tickflow.status.systemd \
+  "systemd" \
+  "systemd" \
+  app.tickflow.status.service_active \
+  "%s is active." \
+  "%s 正在运行。" \
+  app.tickflow.status.service_inactive \
+  "%s is not active." \
+  "%s 未运行。" \
+  app.tickflow.status.service_enabled \
+  "%s is enabled on boot." \
+  "%s 已设置开机自启。" \
+  app.tickflow.status.service_disabled \
+  "%s is not enabled on boot." \
+  "%s 未设置开机自启。" \
+  app.tickflow.status.paths \
+  "Paths" \
+  "路径" \
+  app.tickflow.status.install_dir \
+  "Install dir" \
+  "安装目录" \
+  app.tickflow.status.data_dir \
+  "Data dir" \
+  "数据目录" \
+  app.tickflow.status.env_file \
+  "Env file" \
+  "环境文件" \
+  app.tickflow.status.compose_file \
+  "Compose file" \
+  "Compose 文件" \
+  app.tickflow.status.tiers_file \
+  "Tiers file" \
+  "Tiers 文件" \
+  app.tickflow.status.log_dir \
+  "Log dir" \
+  "日志目录" \
+  app.tickflow.status.path_ok \
+  "%s exists: %s" \
+  "%s 存在：%s" \
+  app.tickflow.status.path_missing \
+  "%s missing: %s" \
+  "%s 缺失：%s" \
+  app.tickflow.status.backups \
+  "Backups" \
+  "备份" \
+  app.tickflow.status.backup_count \
+  "Backup files: %s (%s)" \
+  "备份文件：%s（%s）" \
+  app.tickflow.status.backup_missing \
+  "Backup directory missing: %s" \
+  "备份目录缺失：%s" \
+  app.tickflow.status.http_health \
+  "HTTP health" \
+  "HTTP 健康" \
+  app.tickflow.status.local_response \
+  "Local response OK: %s" \
+  "本地响应正常：%s" \
+  app.tickflow.status.local_response_warn \
+  "Local response is %s; the service may still be starting or unreachable." \
+  "本地响应为 %s；服务可能仍在启动或不可达。" \
+  app.tickflow.status.curl_missing \
+  "curl is unavailable; skipping local HTTP probe." \
+  "curl 不可用，跳过本地 HTTP 探测。" \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
@@ -12712,6 +12775,15 @@ _print_service_diagnostics() {
     | head -20 | sed 's/^/  /' >&2 || true
 }
 
+_print_status_path() {
+  local label="$1" path="$2"
+  if [[ -e "$path" ]]; then
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.path_ok "$label" "$path")"
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.path_missing "$label" "$path")"
+  fi
+}
+
 _health_check() {
   local code elapsed=0
   until code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000) \
@@ -12869,8 +12941,48 @@ do_status() {
   preflight_check "status"
   app_load_config
   [[ $EUID -ne 0 ]] && warn "$(t app.tickflow.warn.non_root_status "$0")"
-  echo -e "\n${BOLD}[${TICKFLOW_SERVICE_NAME}]${NC}"
-  systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager || true
+  echo -e "\n${BOLD}[$(t app.tickflow.status.systemd)]${NC}"
+  if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.service_active "$TICKFLOW_SERVICE_NAME")"
+  else
+    echo -e "  ${RED}[✗]${NC} $(t app.tickflow.status.service_inactive "$TICKFLOW_SERVICE_NAME")"
+  fi
+  if systemctl is-enabled --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.service_enabled "$TICKFLOW_SERVICE_NAME")"
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.service_disabled "$TICKFLOW_SERVICE_NAME")"
+  fi
+  systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager -l 2>/dev/null \
+    | head -12 | sed 's/^/  /' || true
+  echo -e "\n${BOLD}[$(t app.tickflow.status.paths)]${NC}"
+  _print_status_path "$(t app.tickflow.status.install_dir)" "$TICKFLOW_INSTALL_DIR"
+  _print_status_path "$(t app.tickflow.status.data_dir)" "$TICKFLOW_DATA_DIR"
+  _print_status_path "$(t app.tickflow.status.env_file)" "$TICKFLOW_ENV_FILE"
+  _print_status_path "$(t app.tickflow.status.compose_file)" "$TICKFLOW_COMPOSE_FILE"
+  _print_status_path "$(t app.tickflow.status.tiers_file)" "$TICKFLOW_TIERS_FILE"
+  _print_status_path "$(t app.tickflow.status.log_dir)" "$TICKFLOW_LOG_DIR"
+  echo -e "\n${BOLD}[$(t app.tickflow.status.backups)]${NC}"
+  local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  if [[ -d "$backup_dir" ]]; then
+    local backup_count backup_size
+    backup_count=$(find "$backup_dir" -maxdepth 1 -name "tickflow-data-*.tar.gz" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')
+    backup_size=$(du -sh "$backup_dir" 2>/dev/null | awk '{print $1}' || t status.unknown)
+    echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.backup_count "$backup_count" "$backup_size")"
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.backup_missing "$backup_dir")"
+  fi
+  echo -e "\n${BOLD}[$(t app.tickflow.status.http_health)]${NC}"
+  if command -v curl >/dev/null 2>&1; then
+    local http_code
+    http_code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000)
+    if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
+      echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.local_response "$http_code")"
+    else
+      echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.local_response_warn "$http_code")"
+    fi
+  else
+    echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.curl_missing)"
+  fi
   echo ""
 }
 

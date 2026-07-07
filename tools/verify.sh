@@ -1705,6 +1705,54 @@ check_tickflow_service_start_failures_show_diagnostics() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_status_is_structured() {
+  awk '
+      /app\.tickflow\.status\.systemd/ { saw_systemd=1 }
+      /app\.tickflow\.status\.paths/ { saw_paths=1 }
+      /app\.tickflow\.status\.backups/ { saw_backups=1 }
+      /app\.tickflow\.status\.http_health/ { saw_health=1 }
+      /app\.tickflow\.status\.path_ok/ { saw_path_ok=1 }
+      /app\.tickflow\.status\.backup_count/ { saw_backup_count=1 }
+      /app\.tickflow\.status\.local_response_warn/ { saw_health_warn=1 }
+      END {
+        if (!(saw_systemd && saw_paths && saw_backups && saw_health && saw_path_ok && saw_backup_count && saw_health_warn)) {
+          print "TickFlow status must provide localized structured sections and status messages." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/tickflow.sh
+  awk '
+      /_print_status_path\(\)/ { in_helper=1; saw_exists=0; saw_missing=0; next }
+      in_helper && /t app\.tickflow\.status\.path_ok/ { saw_exists=1 }
+      in_helper && /t app\.tickflow\.status\.path_missing/ { saw_missing=1 }
+      in_helper && /^}/ {
+        if (!(saw_exists && saw_missing)) {
+          printf "%s TickFlow status path helper must report both existing and missing paths\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_helper=0
+      }
+      /do_status\(\)/ { in_status=1; saw_active=0; saw_enabled=0; saw_limited_status=0; saw_paths=0; saw_backup=0; saw_health=0; saw_curl_guard=0; next }
+      in_status && /systemctl is-active --quiet "\$TICKFLOW_SERVICE_NAME"/ { saw_active=1 }
+      in_status && /systemctl is-enabled --quiet "\$TICKFLOW_SERVICE_NAME"/ { saw_enabled=1 }
+      in_status && /systemctl status "\$TICKFLOW_SERVICE_NAME" --no-pager -l 2>\/dev\/null/ { saw_status_cmd=1 }
+      in_status && /\| head -12 \| sed '\''s\/\^\/  \/'\'' \|\| true/ { saw_limited_status=1 }
+      in_status && /_print_status_path "\$\(t app\.tickflow\.status\.install_dir\)" "\$TICKFLOW_INSTALL_DIR"/ { saw_install_path=1 }
+      in_status && /_print_status_path "\$\(t app\.tickflow\.status\.env_file\)" "\$TICKFLOW_ENV_FILE"/ { saw_env_path=1 }
+      in_status && /local backup_dir="\$\{TICKFLOW_INSTALL_DIR\}-backups"/ { saw_backup=1 }
+      in_status && /find "\$backup_dir" -maxdepth 1 -name "tickflow-data-\*\.tar\.gz" -type f/ { saw_backup_count=1 }
+      in_status && /command -v curl >\/dev\/null 2>&1/ { saw_curl_guard=1 }
+      in_status && /http:\/\/127\.0\.0\.1:\$\{TICKFLOW_PORT\}\// { saw_health=1 }
+      in_status && /^}/ {
+        if (!(saw_active && saw_enabled && saw_status_cmd && saw_limited_status && saw_install_path && saw_env_path && saw_backup && saw_backup_count && saw_curl_guard && saw_health)) {
+          printf "%s TickFlow status must show bounded systemd details, key paths, backup count, and local HTTP health nonfatally\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
 check_tickflow_manual_backup_is_explicit() {
   awk '
       /app\.tickflow\.backup\.error_dir/ { saw_dir_key=1 }
@@ -7090,6 +7138,7 @@ main() {
   check_tickflow_systemd_shell_paths_are_quoted
   check_tickflow_systemctl_failures_are_reported
   check_tickflow_service_start_failures_show_diagnostics
+  check_tickflow_status_is_structured
   check_tickflow_manual_backup_is_explicit
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
