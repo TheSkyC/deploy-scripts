@@ -2267,6 +2267,9 @@ i18n_register_many \
   app.sub2api.warn.uninstall_disable_failed \
   "Could not disable %s during uninstall. Remove the enablement manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 后手动移除开机自启：systemctl disable %s。" \
+  app.sub2api.error.remove_dir \
+  "Directory removal failed: %s" \
+  "目录删除失败：%s。" \
   app.sub2api.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \
@@ -2300,6 +2303,9 @@ i18n_register_many \
   app.sub2api.success.cleaned_install \
   "Install directory cleaned: %s" \
   "安装目录已清理：%s。" \
+  app.sub2api.warn.cleanup_install_failed \
+  "Install directory cleanup skipped because removal failed: %s" \
+  "安装目录清理失败，已跳过：%s。" \
   app.sub2api.info.kept_data \
   "Local data directory kept: %s" \
   "本地数据目录已保留：%s。" \
@@ -2365,6 +2371,13 @@ CONFIG_KEYS=(
 )
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
+}
+_sub2api_remove_dir_or_error() {
+  local path="$1" name="$2" success_message="$3"
+  if ! safe_rm_dir "$path" "$name"; then
+    error "$(t app.sub2api.error.remove_dir "$path")"
+  fi
+  success "$success_message"
 }
 app_conf_register_legacy "/etc/sub2api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
@@ -4030,30 +4043,29 @@ do_uninstall() {
   rm -f "$CONF_FILE"
   success "$(t app.sub2api.success.removed_config)"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
-    safe_rm_dir "$LOG_DIR" "LOG_DIR"
-    success "$(t app.sub2api.success.deleted_log "$LOG_DIR")"
+    _sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"
   else
     warn "$(t app.sub2api.warn.log_path "${LOG_DIR:-$(t app.sub2api.status.unset)}")"
   fi
   if $DELETE_DATA; then
-    safe_rm_dir "$DATA_DIR" "DATA_DIR"
-    success "$(t app.sub2api.success.deleted_data "$DATA_DIR")"
+    _sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"
     if [[ -d "$INSTALL_DIR" ]] && [[ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-      safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
-      success "$(t app.sub2api.success.cleaned_install "$INSTALL_DIR")"
+      if ! safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"; then
+        warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"
+      else
+        success "$(t app.sub2api.success.cleaned_install "$INSTALL_DIR")"
+      fi
     fi
   else
     info "$(t app.sub2api.info.kept_data "$DATA_DIR")"
   fi
   if $DELETE_CONF; then
-    safe_rm_dir "$CONFIG_DIR" "CONFIG_DIR"
-    success "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"
+    _sub2api_remove_dir_or_error "$CONFIG_DIR" "CONFIG_DIR" "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"
   else
     info "$(t app.sub2api.info.kept_config "$CONFIG_DIR")"
   fi
   if $DELETE_BACKUP; then
-    safe_rm_dir "$BACKUP_DIR" "BACKUP_DIR"
-    success "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"
+    _sub2api_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"
   else
     info "$(t app.sub2api.info.kept_backup "$BACKUP_DIR")"
   fi

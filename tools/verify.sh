@@ -274,6 +274,33 @@ check_sub2api_uninstall_supports_noninteractive_mode() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_uninstall_checks_directory_removal_errors() {
+  grep -Fq '_sub2api_remove_dir_or_error() {' impl/install_sub2api.sh \
+    && grep -Fq 'error "$(t app.sub2api.error.remove_dir "$path")"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"' impl/install_sub2api.sh \
+    && grep -Fq 'warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$CONFIG_DIR" "CONFIG_DIR" "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"' impl/install_sub2api.sh \
+    && grep -Fq 'app.sub2api.error.remove_dir' apps/sub2api.sh \
+    && grep -Fq 'app.sub2api.warn.cleanup_install_failed' apps/sub2api.sh \
+    || {
+      echo "Sub2API uninstall must surface directory removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_sub2api_remove_dir_or_error() {' dist/install_sub2api.sh \
+    && grep -Fq 'error "$(t app.sub2api.error.remove_dir "$path")"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"' dist/install_sub2api.sh \
+    && grep -Fq 'warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$CONFIG_DIR" "CONFIG_DIR" "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"' dist/install_sub2api.sh \
+    || {
+      echo "Release Sub2API script must preserve uninstall directory removal failure handling." >&2
+      return 1
+    }
+}
+
 check_sub2api_backup_lists_preserve_paths_with_spaces() {
   awk '
       /sub2api\.bak\.\*/ { in_binary=1 }
@@ -7113,6 +7140,7 @@ main() {
       check_newapi_uninstall_checks_directory_removal_errors
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
+      check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_install_supports_noninteractive_mode
@@ -7156,6 +7184,7 @@ main() {
   check_newapi_uninstall_checks_directory_removal_errors
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
+  check_sub2api_uninstall_checks_directory_removal_errors
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_install_supports_noninteractive_mode
