@@ -5529,24 +5529,36 @@ i18n_register_many \
   app.tickflow.uninstall.keep_install \
   "Install directory is kept by default because it contains data and secrets: %s" \
   "默认保留安装目录，因为其中包含数据和密钥：%s" \
+  app.tickflow.uninstall.keep_backup \
+  "Backup directory is kept by default: %s" \
+  "默认保留备份目录：%s" \
   app.tickflow.prompt.continue \
   "Type YES to uninstall TickFlow:" \
   "输入 YES 以卸载 TickFlow：" \
   app.tickflow.prompt.delete_install \
   "Delete install directory %s? This removes data and .env secrets. (y/N):" \
   "是否删除安装目录 %s？这会删除数据和 .env 密钥。（y/N）：" \
+  app.tickflow.prompt.delete_backup \
+  "Delete backup directory %s too? (y/N):" \
+  "是否同时删除备份目录 %s？（y/N）：" \
   app.tickflow.info.cancelled \
   "Cancelled." \
   "已取消。" \
   app.tickflow.info.kept_install \
   "Kept install directory: %s" \
   "已保留安装目录：%s" \
+  app.tickflow.info.kept_backup \
+  "Kept backup directory: %s" \
+  "已保留备份目录：%s" \
   app.tickflow.success.removed \
   "TickFlow removed" \
   "TickFlow 已移除" \
   app.tickflow.success.deleted_install \
   "Deleted install directory: %s" \
   "已删除安装目录：%s" \
+  app.tickflow.success.deleted_backup \
+  "Deleted backup directory: %s" \
+  "已删除备份目录：%s" \
   app.tickflow.step.deps \
   "Install system dependencies" \
   "安装系统依赖" \
@@ -12995,9 +13007,12 @@ do_uninstall() {
   acquire_lock
   app_load_config
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  require_safe_path "TICKFLOW_BACKUP_DIR" "$backup_dir"
   echo -e "${RED}${BOLD}"
   echo "  $(t app.tickflow.uninstall.removes)"
   echo "  $(t app.tickflow.uninstall.keep_install "$TICKFLOW_INSTALL_DIR")"
+  echo "  $(t app.tickflow.uninstall.keep_backup "$backup_dir")"
   echo -e "${NC}"
   local confirm
   if deploy_assume_yes; then
@@ -13014,6 +13029,14 @@ do_uninstall() {
     prompt "$(t app.tickflow.prompt.delete_install "$TICKFLOW_INSTALL_DIR")"
     local delete_install; read -r delete_install
     [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
+  fi
+  local DELETE_BACKUP=false
+  if deploy_assume_yes; then
+    deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true
+  else
+    prompt "$(t app.tickflow.prompt.delete_backup "$backup_dir")"
+    local delete_backup; read -r delete_backup
+    [[ "${delete_backup,,}" == "y" ]] && DELETE_BACKUP=true
   fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
@@ -13033,6 +13056,12 @@ do_uninstall() {
     success "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"
   else
     info "$(t app.tickflow.info.kept_install "$TICKFLOW_INSTALL_DIR")"
+  fi
+  if $DELETE_BACKUP && [[ -e "$backup_dir" || -L "$backup_dir" ]]; then
+    safe_rm_dir "$backup_dir" "TICKFLOW_BACKUP_DIR" || error "$(t error.unsafe_path "TICKFLOW_BACKUP_DIR" "$backup_dir")"
+    success "$(t app.tickflow.success.deleted_backup "$backup_dir")"
+  else
+    info "$(t app.tickflow.info.kept_backup "$backup_dir")"
   fi
   rm -f "$CONF_FILE"
   success "$(t app.tickflow.success.removed)"
