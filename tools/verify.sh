@@ -686,6 +686,36 @@ check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_cyberstrikeai_uninstall_checks_file_removal_errors() {
+  grep -Fq '_csai_remove_file_or_error() {' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_file "$path")"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$LOGROTATE_FILE" "LOGROTATE_FILE"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$CRON_FILE" "CRON_FILE"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"' impl/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'app.cyberstrikeai.error.remove_file' apps/cyberstrikeai.sh \
+    || {
+      echo "CyberStrikeAI uninstall must surface file removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_csai_remove_file_or_error() {' dist/install_cyberstrikeai.sh \
+    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_file "$path")"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$LOGROTATE_FILE" "LOGROTATE_FILE"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$CRON_FILE" "CRON_FILE"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"' dist/install_cyberstrikeai.sh \
+    && grep -Fq '_csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_cyberstrikeai.sh \
+    || {
+      echo "Release CyberStrikeAI script must preserve uninstall file removal failure handling." >&2
+      return 1
+    }
+}
+
 check_tickflow_uninstall_supports_noninteractive_mode() {
   awk '
       /app\.tickflow\.prompt\.continue/ { saw_continue_msg=1 }
@@ -7500,6 +7530,7 @@ main() {
       check_blog_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_checks_directory_removal_errors
+      check_cyberstrikeai_uninstall_checks_file_removal_errors
       check_tickflow_uninstall_supports_noninteractive_mode
       check_tickflow_uninstall_checks_directory_removal_errors
       check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
@@ -7556,6 +7587,7 @@ main() {
   check_blog_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_checks_directory_removal_errors
+  check_cyberstrikeai_uninstall_checks_file_removal_errors
   check_tickflow_uninstall_supports_noninteractive_mode
   check_tickflow_uninstall_checks_directory_removal_errors
   check_cyberstrikeai_backup_lists_preserve_paths_with_spaces

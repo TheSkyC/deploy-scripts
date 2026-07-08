@@ -44,6 +44,13 @@ _csai_remove_dir_or_error() {
   fi
   success "$success_message"
 }
+_csai_remove_file_or_error() {
+  local path="$1" name="$2"
+  require_safe_path "$name" "$path"
+  if ! rm -f "$path"; then
+    error "$(t app.cyberstrikeai.error.remove_file "$path")"
+  fi
+}
 _bool_true() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
@@ -1123,12 +1130,13 @@ do_uninstall() {
   if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
     warn "$(t app.cyberstrikeai.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
-  rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  _csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"
   if ! systemctl daemon-reload; then
     error "$(t app.cyberstrikeai.error.systemd_reload "$SERVICE_NAME")"
   fi
   success "$(t app.cyberstrikeai.success.removed_systemd)"
-  rm -f "$NGINX_LINK" "$NGINX_CONF"
+  _csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"
+  _csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
       if ! systemctl reload nginx >/dev/null 2>&1; then
@@ -1141,7 +1149,10 @@ do_uninstall() {
     fi
   fi
   success "$(t app.cyberstrikeai.success.removed_nginx)"
-  rm -f "$LOGROTATE_FILE" "$CRON_FILE" "$BACKUP_SCRIPT" "$CONF_FILE"
+  _csai_remove_file_or_error "$LOGROTATE_FILE" "LOGROTATE_FILE"
+  _csai_remove_file_or_error "$CRON_FILE" "CRON_FILE"
+  _csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"
+  _csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.cyberstrikeai.success.removed_configs)"
   if [[ "${del_install,,}" == "y" ]]; then
     _csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"

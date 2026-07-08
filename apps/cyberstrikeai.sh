@@ -492,6 +492,9 @@ i18n_register_many \
   app.cyberstrikeai.error.remove_dir \
   "Directory removal failed: %s" \
   "目录删除失败：%s" \
+  app.cyberstrikeai.error.remove_file \
+  "File removal failed: %s" \
+  "文件删除失败：%s" \
   app.cyberstrikeai.success.removed_systemd \
   "Removed systemd service" \
   "systemd 服务已移除" \
