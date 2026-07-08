@@ -6197,6 +6197,28 @@ check_sub2api_install_cleanup_reports_systemctl_failures() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_sub2api_install_rollback_validates_binary_path_before_removal() {
+  awk '
+      /warn "\$\(t app\.sub2api\.warn\.service_failed_rollback\)"/ { in_cleanup=1; saw_restore=0; saw_guard=0; saw_rm=0; next }
+      in_cleanup && /_restore_binary_backup "\$OLD_BIN_BAK"/ { saw_restore=1 }
+      in_cleanup && !saw_restore && /_sub2api_require_safe_bin_path/ { saw_guard=1 }
+      in_cleanup && !saw_restore && /rm -f "\$BIN_PATH"/ {
+        if (!saw_guard) {
+          printf "%s Sub2API install rollback must validate BIN_PATH before removing the failed binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_rm=1
+      }
+      in_cleanup && /error "\$\(t app\.sub2api\.error\.install_failed_rollback "\$SERVICE_NAME"\)"/ {
+        if (!(saw_restore || (saw_guard && saw_rm))) {
+          printf "%s Sub2API install rollback must either restore the backup or guard BIN_PATH before deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_cleanup=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_sub2api_update_stop_failure_aborts_before_replace() {
   awk '
       /app\.sub2api\.error\.stop_service_failed/ { saw_key=1 }
@@ -7334,6 +7356,7 @@ main() {
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_uninstall_validates_binary_path_before_removal
+      check_sub2api_install_rollback_validates_binary_path_before_removal
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
@@ -7385,6 +7408,7 @@ main() {
   check_sub2api_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_checks_directory_removal_errors
   check_sub2api_uninstall_validates_binary_path_before_removal
+  check_sub2api_install_rollback_validates_binary_path_before_removal
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_checks_directory_removal_errors

@@ -1210,6 +1210,7 @@ do_install() {
         _restore_binary_backup "$OLD_BIN_BAK" \
           || error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
       else
+        _sub2api_require_safe_bin_path
         rm -f "$BIN_PATH"
       fi
       error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
