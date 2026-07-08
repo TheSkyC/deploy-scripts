@@ -4824,22 +4824,28 @@ check_download_temp_creation_failures_are_explicit() {
       /step "\$\(t app\.newapi\.step\.download "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
       in_install && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_install_tmp=1 }
       in_install && /error "\$\(t app\.newapi\.error\.download "\$GITHUB_REPO"\)"/ { saw_install_error=1 }
-      in_install && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ {
-        if (!(saw_install_tmp && saw_install_error)) {
-          printf "%s NewAPI install must report temporary download file creation failures\n", FILENAME > "/dev/stderr"
+      in_install && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ { saw_install_cleanup_if=0; saw_install_cleanup_warn=0; in_install_download_fail=1; next }
+      in_install_download_fail && /if ! rm -f "\$TMP_BIN"; then/ { saw_install_cleanup_if=1 }
+      in_install_download_fail && /warn "\$\(t app\.newapi\.warn\.tmp_binary_cleanup_failed "\$TMP_BIN"\)"/ { saw_install_cleanup_warn=1 }
+      in_install_download_fail && /error "\$\(t app\.newapi\.error\.download "\$GITHUB_REPO"\)"/ {
+        if (!(saw_install_tmp && saw_install_error && saw_install_cleanup_if && saw_install_cleanup_warn)) {
+          printf "%s NewAPI install must report temporary download file creation and cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_install=0
+        in_install_download_fail=0
       }
       /step "\$\(t app\.newapi\.step\.download_update "\$CURRENT" "\$LATEST"\)"/ { in_update=1; saw_update_tmp=0; saw_update_error=0; next }
       in_update && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_update_tmp=1 }
       in_update && /error "\$\(t app\.newapi\.error\.update_download\)"/ { saw_update_error=1 }
-      in_update && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ {
-        if (!(saw_update_tmp && saw_update_error)) {
-          printf "%s NewAPI update must report temporary download file creation failures\n", FILENAME > "/dev/stderr"
+      in_update && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ { saw_update_cleanup_if=0; saw_update_cleanup_warn=0; in_update_download_fail=1; next }
+      in_update_download_fail && /if ! rm -f "\$TMP_BIN"; then/ { saw_update_cleanup_if=1 }
+      in_update_download_fail && /warn "\$\(t app\.newapi\.warn\.tmp_binary_cleanup_failed "\$TMP_BIN"\)"/ { saw_update_cleanup_warn=1 }
+      in_update_download_fail && /error "\$\(t app\.newapi\.error\.update_download\)"/ {
+        if (!(saw_update_tmp && saw_update_error && saw_update_cleanup_if && saw_update_cleanup_warn)) {
+          printf "%s NewAPI update must report temporary download file creation and cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_update=0
+        in_update_download_fail=0
       }
     ' impl/install_newapi.sh dist/install_newapi.sh
   awk '
@@ -6332,11 +6338,12 @@ check_newapi_update_stop_failure_aborts_before_replace() {
       /info "\$\(t app\.newapi\.info\.stop_service\)"/ { in_stop=1; saw_if=0; saw_cleanup=0; saw_error=0; saw_suppressed=0; next }
       in_stop && /systemctl stop "\$SERVICE_NAME" 2>\/dev\/null \|\| true/ { saw_suppressed=1 }
       in_stop && /if ! systemctl stop "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_if=1 }
-      in_stop && /rm -f "\$TMP_BIN"/ { saw_cleanup=1 }
+      in_stop && /if ! rm -f "\$TMP_BIN"; then/ { saw_cleanup=1 }
+      in_stop && /warn "\$\(t app\.newapi\.warn\.tmp_binary_cleanup_failed "\$TMP_BIN"\)"/ { saw_cleanup_warn=1 }
       in_stop && /error "\$\(t app\.newapi\.error\.stop_service_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_error=1 }
       in_stop && /if ! _install_binary_candidate "\$TMP_BIN"; then/ {
-        if (!(saw_if && saw_cleanup && saw_error) || saw_suppressed) {
-          printf "%s NewAPI update must abort and clean the downloaded binary when stopping the service fails\n", FILENAME > "/dev/stderr"
+        if (!(saw_if && saw_cleanup && saw_cleanup_warn && saw_error) || saw_suppressed) {
+          printf "%s NewAPI update must abort and surface downloaded binary cleanup failures when stopping the service fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_stop=0

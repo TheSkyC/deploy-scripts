@@ -587,7 +587,9 @@ do_install() {
     error "$(t app.newapi.error.download "$GITHUB_REPO")"
   fi
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.newapi.error.download "$GITHUB_REPO")"
   fi
   verify_binary "$TMP_BIN"
@@ -714,7 +716,9 @@ do_update() {
     error "$(t app.newapi.error.update_download)"
   fi
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.newapi.error.update_download)"
   fi
   verify_binary "$TMP_BIN"
@@ -726,7 +730,9 @@ do_update() {
   info "$(t app.newapi.info.old_binary "$BAK_PATH")"
   info "$(t app.newapi.info.stop_service)"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.newapi.error.stop_service_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
   if ! _install_binary_candidate "$TMP_BIN"; then

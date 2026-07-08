@@ -249,6 +249,9 @@ i18n_register_many \
   app.newapi.error.download \
   "Download failed. Check the network or confirm the release exists: https://github.com/%s/releases" \
   "下载失败，请检查网络或前往 https://github.com/%s/releases 确认版本存在。" \
+  app.newapi.warn.tmp_binary_cleanup_failed \
+  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
+  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
   app.newapi.warn.old_binary_backup \
   "Backed up old binary -> %s" \
   "已备份旧二进制 → %s。" \

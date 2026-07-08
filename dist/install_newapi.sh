@@ -1604,6 +1604,9 @@ i18n_register_many \
   app.newapi.error.download \
   "Download failed. Check the network or confirm the release exists: https://github.com/%s/releases" \
   "下载失败，请检查网络或前往 https://github.com/%s/releases 确认版本存在。" \
+  app.newapi.warn.tmp_binary_cleanup_failed \
+  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
+  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
   app.newapi.warn.old_binary_backup \
   "Backed up old binary -> %s" \
   "已备份旧二进制 → %s。" \
@@ -2661,7 +2664,9 @@ do_install() {
     error "$(t app.newapi.error.download "$GITHUB_REPO")"
   fi
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.newapi.error.download "$GITHUB_REPO")"
   fi
   verify_binary "$TMP_BIN"
@@ -2788,7 +2793,9 @@ do_update() {
     error "$(t app.newapi.error.update_download)"
   fi
   if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.newapi.error.update_download)"
   fi
   verify_binary "$TMP_BIN"
@@ -2800,7 +2807,9 @@ do_update() {
   info "$(t app.newapi.info.old_binary "$BAK_PATH")"
   info "$(t app.newapi.info.stop_service)"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.newapi.error.stop_service_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
   if ! _install_binary_candidate "$TMP_BIN"; then
