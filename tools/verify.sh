@@ -518,18 +518,19 @@ check_vaultwarden_uninstall_validates_binary_path_before_removal() {
       return 1
     }
   awk '
-      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_rm=0; next }
+      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_remove=0; saw_raw_rm=0; next }
       in_uninstall && /_require_safe_vw_bin_path/ && !saw_guard { saw_guard=1; next }
-      in_uninstall && /rm -f "\$\{VW_BIN\}"/ {
+      in_uninstall && /_vw_remove_file_or_error "\$VW_BIN" "VW_BIN"/ {
         if (!saw_guard) {
           printf "%s Vaultwarden uninstall must validate VW_BIN before removing the binary\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        saw_rm=1
+        saw_remove=1
       }
+      in_uninstall && /rm -f "\$VW_BIN"|rm -f "\$\{VW_BIN\}"/ { saw_raw_rm=1 }
       in_uninstall && /success "\$\(t app\.vaultwarden\.success\.removed_binary\)"/ {
-        if (!(saw_guard && saw_rm)) {
-          printf "%s Vaultwarden uninstall must guard binary removal with a VW_BIN safety check\n", FILENAME > "/dev/stderr"
+        if (!(saw_guard && saw_remove) || saw_raw_rm) {
+          printf "%s Vaultwarden uninstall must guard binary removal and surface VW_BIN cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_uninstall=0
@@ -6057,18 +6058,19 @@ check_vaultwarden_install_cleanup_reports_systemctl_failures() {
 
 check_vaultwarden_install_rollback_validates_binary_path_before_removal() {
   awk '
-      /warn "\$\(t app\.vaultwarden\.warn\.service_cleanup\)"/ { in_cleanup=1; saw_guard=0; saw_rm=0; next }
+      /warn "\$\(t app\.vaultwarden\.warn\.service_cleanup\)"/ { in_cleanup=1; saw_guard=0; saw_remove=0; saw_raw_rm=0; next }
       in_cleanup && /_require_safe_vw_bin_path/ { saw_guard=1 }
-      in_cleanup && /rm -f "\$VW_BIN"/ {
+      in_cleanup && /_vw_remove_file_or_error "\$VW_BIN" "VW_BIN"/ {
         if (!saw_guard) {
           printf "%s Vaultwarden install rollback must validate VW_BIN before removing the failed binary\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        saw_rm=1
+        saw_remove=1
       }
+      in_cleanup && /rm -f "\$VW_BIN"|rm -f "\$\{VW_BIN\}"/ { saw_raw_rm=1 }
       in_cleanup && /error "\$\(t app\.vaultwarden\.error\.install_failed_start\)"/ {
-        if (!(saw_guard && saw_rm)) {
-          printf "%s Vaultwarden install rollback must guard VW_BIN before deletion\n", FILENAME > "/dev/stderr"
+        if (!(saw_guard && saw_remove) || saw_raw_rm) {
+          printf "%s Vaultwarden install rollback must guard VW_BIN and surface cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_cleanup=0

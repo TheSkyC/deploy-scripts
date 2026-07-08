@@ -9270,7 +9270,7 @@ UNIT
       warn "$(t app.vaultwarden.warn.cleanup_reload_failed)"
     fi
     _require_safe_vw_bin_path
-    rm -f "$VW_BIN"
+    _vw_remove_file_or_error "$VW_BIN" "VW_BIN"
     error "$(t app.vaultwarden.error.install_failed_start)"
   fi
   step "$(t app.vaultwarden.step.nginx_http)"
@@ -10217,7 +10217,7 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_systemd)"
   _require_safe_vw_bin_path
-  rm -f "${VW_BIN}"
+  _vw_remove_file_or_error "$VW_BIN" "VW_BIN"
   local _cleanup_path
   while IFS= read -r -d '' _cleanup_path; do
     if ! rm -f "$_cleanup_path"; then
