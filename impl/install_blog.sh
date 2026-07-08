@@ -316,7 +316,9 @@ if ! dpkg -i "$HUGO_DEB"; then
   rm -f "$HUGO_DEB"
   error "$(t app.blog.error.hugo_install)"
 fi
-rm -f "$HUGO_DEB"
+if ! rm -f "$HUGO_DEB"; then
+  error "$(t app.blog.error.hugo_cleanup "$HUGO_DEB")"
+fi
 success "$(t app.blog.hugo_installed "$(hugo version | head -1)")"
 step "$(t app.blog.step_init_site)"
 if ! mkdir -p "$(dirname "$SITE_DIR")"; then

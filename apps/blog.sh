@@ -212,6 +212,9 @@ i18n_register app.blog.error.hugo_download \
 i18n_register app.blog.error.hugo_install \
   "Hugo package installation failed. Run apt-get install -f and then dpkg -i <downloaded-hugo.deb> after fixing dependency issues." \
   "Hugo 软件包安装失败。请先执行 apt-get install -f 修复依赖问题，再重新运行 dpkg -i <下载的-hugo.deb>。"
+i18n_register app.blog.error.hugo_cleanup \
+  "Hugo package was installed, but cleanup failed for %s. Remove it manually before retrying." \
+  "Hugo 软件包已安装，但清理临时文件 %s 失败。请手动删除后再重试。"
 i18n_register app.blog.hugo_installed \
   "Hugo installed: %s" \
   "Hugo %s 安装完成"

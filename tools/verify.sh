@@ -3216,11 +3216,12 @@ check_blog_dependency_failures_are_reported() {
 check_blog_hugo_install_failures_are_actionable() {
   awk '
       /app\.blog\.error\.hugo_install/ { saw_key=1 }
+      /app\.blog\.error\.hugo_cleanup/ { saw_cleanup_key=1 }
       /apt-get install -f/ { saw_fix_deps=1 }
       /dpkg -i <downloaded-hugo\.deb>/ { saw_retry=1 }
       END {
-        if (!(saw_key && saw_fix_deps && saw_retry)) {
-          print "Blog Hugo package install failures must explain how to repair dependencies and retry the dpkg install." > "/dev/stderr"
+        if (!(saw_key && saw_cleanup_key && saw_fix_deps && saw_retry)) {
+          print "Blog Hugo package install and cleanup failures must explain recovery steps." > "/dev/stderr"
           exit 1
         }
       }
@@ -3239,6 +3240,14 @@ check_blog_hugo_install_failures_are_actionable() {
           exit 1
         }
         in_block=0
+      }
+      /if ! rm -f "\$HUGO_DEB"; then/ { saw_success_cleanup_if=1 }
+      /error "\$\(t app\.blog\.error\.hugo_cleanup "\$HUGO_DEB"\)"/ { saw_success_cleanup_error=1 }
+      /success "\$\(t app\.blog\.hugo_installed "\$\(hugo version \| head -1\)"\)"/ {
+        if (!(saw_success_cleanup_if && saw_success_cleanup_error)) {
+          printf "%s Blog Hugo install must surface temporary package cleanup failures before reporting success\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
       }
       END {
         if (!(saw_tmp_if && saw_tmp_error && saw_empty_if && saw_empty_cleanup)) {
