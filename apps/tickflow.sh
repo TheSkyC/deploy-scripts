@@ -192,6 +192,9 @@ i18n_register_many \
   app.tickflow.info.kept_backup \
   "Kept backup directory: %s" \
   "已保留备份目录：%s" \
+  app.tickflow.error.remove_dir \
+  "Directory removal failed: %s" \
+  "目录删除失败：%s" \
   app.tickflow.success.removed \
   "TickFlow removed" \
   "TickFlow 已移除" \

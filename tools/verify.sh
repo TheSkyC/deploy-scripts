@@ -555,6 +555,26 @@ check_tickflow_uninstall_supports_noninteractive_mode() {
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
 
+check_tickflow_uninstall_checks_directory_removal_errors() {
+  grep -Fq 'tickflow_remove_dir_or_error() {' impl/install_tickflow.sh \
+    && grep -Fq 'error "$(t app.tickflow.error.remove_dir "$path")"' impl/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"' impl/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"' impl/install_tickflow.sh \
+    && grep -Fq 'app.tickflow.error.remove_dir' apps/tickflow.sh \
+    || {
+      echo "TickFlow uninstall must report directory removal failures instead of mislabeling them as unsafe paths." >&2
+      return 1
+    }
+  grep -Fq 'tickflow_remove_dir_or_error() {' dist/install_tickflow.sh \
+    && grep -Fq 'error "$(t app.tickflow.error.remove_dir "$path")"' dist/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"' dist/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"' dist/install_tickflow.sh \
+    || {
+      echo "Release TickFlow script must preserve uninstall directory removal failure handling." >&2
+      return 1
+    }
+}
+
 check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
   if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI backup lists must not split paths on spaces." >&2
@@ -1225,18 +1245,11 @@ check_tickflow_paths_are_guarded() {
         }
         in_clone=0
       }
-      /do_uninstall\(\)/ { in_uninstall=1; saw_uninstall_guard=0; saw_uninstall_rm=0; next }
-      in_uninstall && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$TICKFLOW_INSTALL_DIR"/ { saw_uninstall_guard=1 }
-      in_uninstall && /safe_rm_dir "\$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR"/ {
-        if (!saw_uninstall_guard) {
-          printf "%s TickFlow uninstall must validate TICKFLOW_INSTALL_DIR before deletion\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        saw_uninstall_rm=1
-      }
+      /do_uninstall\(\)/ { in_uninstall=1; saw_uninstall_rm=0; next }
+      in_uninstall && /tickflow_remove_dir_or_error "\$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR"/ { saw_uninstall_rm=1 }
       in_uninstall && /^}/ {
-        if (!(saw_uninstall_guard && saw_uninstall_rm)) {
-          printf "%s TickFlow uninstall must use safe_rm_dir for TICKFLOW_INSTALL_DIR\n", FILENAME > "/dev/stderr"
+        if (!saw_uninstall_rm) {
+          printf "%s TickFlow uninstall must route install-directory deletion through the guarded remove helper\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_uninstall=0
@@ -7193,6 +7206,7 @@ main() {
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_checks_directory_removal_errors
       check_tickflow_uninstall_supports_noninteractive_mode
+      check_tickflow_uninstall_checks_directory_removal_errors
       check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
       check_blog_status_dispatch
       check_no_color_output
@@ -7239,6 +7253,7 @@ main() {
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_checks_directory_removal_errors
   check_tickflow_uninstall_supports_noninteractive_mode
+  check_tickflow_uninstall_checks_directory_removal_errors
   check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
   check_blog_status_dispatch
   check_no_color_output

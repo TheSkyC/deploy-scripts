@@ -303,6 +303,14 @@ _print_summary() {
   echo -e "  ${CYAN}systemctl restart ${TICKFLOW_SERVICE_NAME}${NC}     $(t app.tickflow.summary.restart_cmd)"
 }
 
+tickflow_remove_dir_or_error() {
+  local path="$1" name="$2" success_message="$3"
+  if ! safe_rm_dir "$path" "$name"; then
+    error "$(t app.tickflow.error.remove_dir "$path")"
+  fi
+  success "$success_message"
+}
+
 do_install() {
   show_banner
   preflight_check "install"
@@ -508,14 +516,12 @@ do_uninstall() {
     warn "$(t app.tickflow.warn.systemd_reload_failed "$TICKFLOW_SERVICE_NAME")"
   fi
   if $DELETE_INSTALL && [[ -e "$TICKFLOW_INSTALL_DIR" || -L "$TICKFLOW_INSTALL_DIR" ]]; then
-    safe_rm_dir "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" || error "$(t error.unsafe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR")"
-    success "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"
+    tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"
   else
     info "$(t app.tickflow.info.kept_install "$TICKFLOW_INSTALL_DIR")"
   fi
   if $DELETE_BACKUP && [[ -e "$backup_dir" || -L "$backup_dir" ]]; then
-    safe_rm_dir "$backup_dir" "TICKFLOW_BACKUP_DIR" || error "$(t error.unsafe_path "TICKFLOW_BACKUP_DIR" "$backup_dir")"
-    success "$(t app.tickflow.success.deleted_backup "$backup_dir")"
+    tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"
   else
     info "$(t app.tickflow.info.kept_backup "$backup_dir")"
   fi
