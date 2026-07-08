@@ -2722,7 +2722,7 @@ server {
 NGINX
 _write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog \
   || error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
-rm -f /etc/nginx/sites-enabled/default
+_blog_remove_file /etc/nginx/sites-enabled/default
 nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"
 step "$(t app.blog.step_firewall)"

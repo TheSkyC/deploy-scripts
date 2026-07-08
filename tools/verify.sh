@@ -858,6 +858,21 @@ check_blog_status_dispatch() {
   expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" update
 }
 
+check_blog_install_surfaces_default_nginx_site_removal_failures() {
+  awk '
+      /_write_nginx_site_link "\$NGINX_CONF" \/etc\/nginx\/sites-enabled\/blog/ { in_nginx=1; saw_remove=0; saw_raw_rm=0; next }
+      in_nginx && /_blog_remove_file \/etc\/nginx\/sites-enabled\/default/ { saw_remove=1 }
+      in_nginx && /rm -f \/etc\/nginx\/sites-enabled\/default/ { saw_raw_rm=1 }
+      in_nginx && /nginx -t \|\| error "\$\(t app\.blog\.error\.nginx_config\)"/ {
+        if (!saw_remove || saw_raw_rm) {
+          printf "%s Blog install must surface default Nginx site removal failures before testing Nginx config\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_nginx=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
+}
+
 check_no_color_output() {
   local output
 
@@ -7627,6 +7642,7 @@ main() {
       check_vaultwarden_install_summary_is_localized
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
+      check_blog_install_surfaces_default_nginx_site_removal_failures
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_checks_directory_removal_errors
       check_cyberstrikeai_uninstall_checks_file_removal_errors
@@ -7689,6 +7705,7 @@ main() {
   check_vaultwarden_install_summary_is_localized
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
+  check_blog_install_surfaces_default_nginx_site_removal_failures
   check_cyberstrikeai_uninstall_supports_noninteractive_mode
   check_cyberstrikeai_uninstall_checks_directory_removal_errors
   check_cyberstrikeai_uninstall_checks_file_removal_errors
