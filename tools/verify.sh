@@ -328,6 +328,33 @@ check_sub2api_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_sub2api_uninstall_validates_binary_path_before_removal() {
+  grep -Fq '_sub2api_require_safe_bin_path() {' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_require_safe_bin_path' dist/install_sub2api.sh \
+    || {
+      echo "Sub2API must centralize BIN_PATH safety validation in a reusable helper." >&2
+      return 1
+    }
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_rm=0; next }
+      in_uninstall && /_sub2api_require_safe_bin_path/ && !saw_guard { saw_guard=1; next }
+      in_uninstall && /rm -f "\$BIN_PATH"/ {
+        if (!saw_guard) {
+          printf "%s Sub2API uninstall must validate BIN_PATH before removing the binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_rm=1
+      }
+      in_uninstall && /success "\$\(t app\.sub2api\.success\.removed_binary\)"/ {
+        if (!(saw_guard && saw_rm)) {
+          printf "%s Sub2API uninstall must guard binary removal with a BIN_PATH safety check\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_sub2api.sh dist/install_sub2api.sh
+}
+
 check_sub2api_backup_lists_preserve_paths_with_spaces() {
   awk '
       /sub2api\.bak\.\*/ { in_binary=1 }
@@ -1145,7 +1172,7 @@ check_managed_paths_are_validated() {
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
-      in_func && /require_safe_path "BIN_PATH" "\$BIN_PATH"/ { saw_bin=1 }
+      in_func && /_sub2api_require_safe_bin_path/ { saw_bin=1 }
       in_func && /require_safe_path "DATA_DIR" "\$DATA_DIR"/ { saw_data=1 }
       in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
       in_func && /require_safe_path "CONFIG_DIR" "\$CONFIG_DIR"/ { saw_config=1 }
@@ -7283,6 +7310,7 @@ main() {
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
+      check_sub2api_uninstall_validates_binary_path_before_removal
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
@@ -7332,6 +7360,7 @@ main() {
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_checks_directory_removal_errors
+  check_sub2api_uninstall_validates_binary_path_before_removal
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_checks_directory_removal_errors

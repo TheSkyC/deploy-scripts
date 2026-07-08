@@ -2378,6 +2378,9 @@ CONFIG_KEYS=(
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
 }
+_sub2api_require_safe_bin_path() {
+  require_safe_path "BIN_PATH" "$BIN_PATH"
+}
 _sub2api_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then
@@ -2438,7 +2441,7 @@ _validate_config_values() {
   app_validate_db_identifier "PG_USER" "$PG_USER"
   app_validate_db_identifier "PG_DB" "$PG_DB"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "BIN_PATH" "$BIN_PATH"
+  _sub2api_require_safe_bin_path
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
@@ -4011,6 +4014,7 @@ do_uninstall() {
     error "$(t app.sub2api.error.systemd_reload "$SERVICE_NAME")"
   fi
   success "$(t app.sub2api.success.removed_systemd)"
+  _sub2api_require_safe_bin_path
   rm -f "$BIN_PATH"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local _cleanup_path
