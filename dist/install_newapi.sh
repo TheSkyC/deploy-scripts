@@ -2728,7 +2728,7 @@ do_install() {
     if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
       warn "$(t app.newapi.warn.cleanup_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
     fi
-    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    _newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"
     if ! systemctl daemon-reload 2>/dev/null; then
       warn "$(t app.newapi.warn.cleanup_reload_failed)"
     fi

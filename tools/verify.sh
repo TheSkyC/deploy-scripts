@@ -6213,6 +6213,21 @@ check_newapi_install_rollback_validates_binary_path_before_removal() {
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
 
+check_newapi_install_rollback_surfaces_service_file_removal_failures() {
+  awk '
+      /warn "\$\(t app\.newapi\.warn\.start_rollback\)"/ { in_cleanup=1; saw_remove=0; saw_raw_rm=0; next }
+      in_cleanup && /_newapi_remove_file_or_error "\/etc\/systemd\/system\/\$\{SERVICE_NAME\}\.service" "NEWAPI_SERVICE_FILE"/ { saw_remove=1 }
+      in_cleanup && /rm -f "\/etc\/systemd\/system\/\$\{SERVICE_NAME\}\.service"/ { saw_raw_rm=1 }
+      in_cleanup && /if ! systemctl daemon-reload 2>\/dev\/null; then/ {
+        if (!saw_remove || saw_raw_rm) {
+          printf "%s NewAPI install rollback must surface service unit removal failures before daemon-reload\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_cleanup && /error "\$\(t app\.newapi\.error\.install_start_failed "\$SERVICE_NAME"\)"/ { in_cleanup=0 }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_newapi_update_stop_failure_aborts_before_replace() {
   awk '
       /app\.newapi\.error\.stop_service_failed/ { saw_key=1 }
@@ -7532,6 +7547,7 @@ main() {
       check_newapi_uninstall_checks_file_removal_errors
       check_newapi_uninstall_validates_binary_path_before_removal
       check_newapi_install_rollback_validates_binary_path_before_removal
+      check_newapi_install_rollback_surfaces_service_file_removal_failures
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
@@ -7590,6 +7606,7 @@ main() {
   check_newapi_uninstall_checks_file_removal_errors
   check_newapi_uninstall_validates_binary_path_before_removal
   check_newapi_install_rollback_validates_binary_path_before_removal
+  check_newapi_install_rollback_surfaces_service_file_removal_failures
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_checks_directory_removal_errors
