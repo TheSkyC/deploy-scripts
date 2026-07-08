@@ -2737,7 +2737,7 @@ do_install() {
         || error "$(t app.newapi.error.install_start_failed "$SERVICE_NAME")"
     else
       _newapi_require_safe_bin_path
-      rm -f "$BIN_PATH"
+      _newapi_remove_file_or_error "$BIN_PATH" "BIN_PATH"
     fi
     error "$(t app.newapi.error.install_start_failed "$SERVICE_NAME")"
   fi
@@ -3120,7 +3120,7 @@ do_uninstall() {
   fi
   success "$(t app.newapi.success.removed_systemd)"
   _newapi_require_safe_bin_path
-  rm -f "$BIN_PATH"
+  _newapi_remove_file_or_error "$BIN_PATH" "BIN_PATH"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local _cleanup_path
   while IFS= read -r -d '' _cleanup_path; do
