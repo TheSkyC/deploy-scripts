@@ -1218,7 +1218,7 @@ do_install() {
           || error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
       else
         _sub2api_require_safe_bin_path
-        rm -f "$BIN_PATH"
+        _sub2api_remove_file_or_error "$BIN_PATH" "BIN_PATH"
       fi
       error "$(t app.sub2api.error.install_failed_rollback "$SERVICE_NAME")"
     else
@@ -1670,7 +1670,7 @@ do_uninstall() {
   fi
   success "$(t app.sub2api.success.removed_systemd)"
   _sub2api_require_safe_bin_path
-  rm -f "$BIN_PATH"
+  _sub2api_remove_file_or_error "$BIN_PATH" "BIN_PATH"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local _cleanup_path
   while IFS= read -r -d '' _cleanup_path; do

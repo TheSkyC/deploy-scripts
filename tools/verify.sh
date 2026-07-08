@@ -391,18 +391,19 @@ check_sub2api_uninstall_validates_binary_path_before_removal() {
       return 1
     }
   awk '
-      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_rm=0; next }
+      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_remove=0; saw_raw_rm=0; next }
       in_uninstall && /_sub2api_require_safe_bin_path/ && !saw_guard { saw_guard=1; next }
-      in_uninstall && /rm -f "\$BIN_PATH"/ {
+      in_uninstall && /_sub2api_remove_file_or_error "\$BIN_PATH" "BIN_PATH"/ {
         if (!saw_guard) {
           printf "%s Sub2API uninstall must validate BIN_PATH before removing the binary\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        saw_rm=1
+        saw_remove=1
       }
+      in_uninstall && /rm -f "\$BIN_PATH"/ { saw_raw_rm=1 }
       in_uninstall && /success "\$\(t app\.sub2api\.success\.removed_binary\)"/ {
-        if (!(saw_guard && saw_rm)) {
-          printf "%s Sub2API uninstall must guard binary removal with a BIN_PATH safety check\n", FILENAME > "/dev/stderr"
+        if (!(saw_guard && saw_remove) || saw_raw_rm) {
+          printf "%s Sub2API uninstall must guard binary removal and surface BIN_PATH cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_uninstall=0
@@ -6394,19 +6395,20 @@ check_sub2api_install_cleanup_reports_systemctl_failures() {
 
 check_sub2api_install_rollback_validates_binary_path_before_removal() {
   awk '
-      /warn "\$\(t app\.sub2api\.warn\.service_failed_rollback\)"/ { in_cleanup=1; saw_restore=0; saw_guard=0; saw_rm=0; next }
+      /warn "\$\(t app\.sub2api\.warn\.service_failed_rollback\)"/ { in_cleanup=1; saw_restore=0; saw_guard=0; saw_remove=0; saw_raw_rm=0; next }
       in_cleanup && /_restore_binary_backup "\$OLD_BIN_BAK"/ { saw_restore=1 }
       in_cleanup && !saw_restore && /_sub2api_require_safe_bin_path/ { saw_guard=1 }
-      in_cleanup && !saw_restore && /rm -f "\$BIN_PATH"/ {
+      in_cleanup && !saw_restore && /_sub2api_remove_file_or_error "\$BIN_PATH" "BIN_PATH"/ {
         if (!saw_guard) {
           printf "%s Sub2API install rollback must validate BIN_PATH before removing the failed binary\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        saw_rm=1
+        saw_remove=1
       }
+      in_cleanup && !saw_restore && /rm -f "\$BIN_PATH"/ { saw_raw_rm=1 }
       in_cleanup && /error "\$\(t app\.sub2api\.error\.install_failed_rollback "\$SERVICE_NAME"\)"/ {
-        if (!(saw_restore || (saw_guard && saw_rm))) {
-          printf "%s Sub2API install rollback must either restore the backup or guard BIN_PATH before deletion\n", FILENAME > "/dev/stderr"
+        if (!(saw_restore || (saw_guard && saw_remove)) || saw_raw_rm) {
+          printf "%s Sub2API install rollback must either restore the backup or guard BIN_PATH and surface cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_cleanup=0
