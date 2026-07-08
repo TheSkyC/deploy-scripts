@@ -8508,8 +8508,8 @@ do_uninstall() {
     fi
   done < <(find "$INSTALL_DIR" -maxdepth 1 -name "sub2api-extract.*" -type d -print0 2>/dev/null)
   success "$(t app.sub2api.success.removed_binary)"
-  rm -f /etc/nginx/sites-enabled/sub2api
-  rm -f /etc/nginx/sites-available/sub2api
+  _sub2api_remove_file_or_error "/etc/nginx/sites-enabled/sub2api" "SUB2API_NGINX_LINK"
+  _sub2api_remove_file_or_error "/etc/nginx/sites-available/sub2api" "SUB2API_NGINX_CONF"
   if command -v nginx &>/dev/null; then
     if nginx -t >/dev/null 2>&1; then
       if systemctl reload nginx >/dev/null 2>&1; then
