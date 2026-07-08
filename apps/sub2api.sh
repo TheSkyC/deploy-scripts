@@ -915,6 +915,9 @@ i18n_register_many \
   app.sub2api.error.remove_dir \
   "Directory removal failed: %s" \
   "目录删除失败：%s。" \
+  app.sub2api.error.remove_file \
+  "File removal failed: %s" \
+  "文件删除失败：%s。" \
   app.sub2api.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \

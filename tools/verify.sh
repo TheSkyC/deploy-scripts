@@ -354,6 +354,30 @@ check_sub2api_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_sub2api_uninstall_checks_file_removal_errors() {
+  grep -Fq '_sub2api_remove_file_or_error() {' impl/install_sub2api.sh \
+    && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"' impl/install_sub2api.sh \
+    && grep -Fq 'app.sub2api.error.remove_file' apps/sub2api.sh \
+    || {
+      echo "Sub2API uninstall must surface file removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_sub2api_remove_file_or_error() {' dist/install_sub2api.sh \
+    && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_sub2api.sh \
+    || {
+      echo "Release Sub2API script must preserve uninstall file removal failure handling." >&2
+      return 1
+    }
+}
+
 check_sub2api_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_sub2api_require_safe_bin_path() {' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_require_safe_bin_path' dist/install_sub2api.sh \
@@ -7423,6 +7447,7 @@ main() {
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
+      check_sub2api_uninstall_checks_file_removal_errors
       check_sub2api_uninstall_validates_binary_path_before_removal
       check_sub2api_install_rollback_validates_binary_path_before_removal
       check_sub2api_backup_lists_preserve_paths_with_spaces
@@ -7477,6 +7502,7 @@ main() {
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_checks_directory_removal_errors
+  check_sub2api_uninstall_checks_file_removal_errors
   check_sub2api_uninstall_validates_binary_path_before_removal
   check_sub2api_install_rollback_validates_binary_path_before_removal
   check_sub2api_backup_lists_preserve_paths_with_spaces

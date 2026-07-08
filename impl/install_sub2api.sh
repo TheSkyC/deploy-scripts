@@ -35,6 +35,13 @@ _sub2api_remove_dir_or_error() {
   fi
   success "$success_message"
 }
+_sub2api_remove_file_or_error() {
+  local path="$1" name="$2"
+  require_safe_path "$name" "$path"
+  if ! rm -f "$path"; then
+    error "$(t app.sub2api.error.remove_file "$path")"
+  fi
+}
 app_conf_register_legacy "/etc/sub2api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
@@ -1696,11 +1703,11 @@ do_uninstall() {
   else
     success "$(t app.sub2api.success.removed_nginx)"
   fi
-  rm -f /etc/cron.d/sub2api-backup \
-        /usr/local/bin/sub2api-backup \
-        /etc/logrotate.d/sub2api
+  _sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"
+  _sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"
+  _sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"
   success "$(t app.sub2api.success.removed_scheduled)"
-  rm -f "$CONF_FILE"
+  _sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.sub2api.success.removed_config)"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
     _sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"
