@@ -1131,9 +1131,13 @@ do_uninstall() {
   rm -f "$NGINX_LINK" "$NGINX_CONF"
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
-      systemctl reload nginx >/dev/null 2>&1 || nginx -t >&2 || true
+      if ! systemctl reload nginx >/dev/null 2>&1; then
+        nginx -t >&2 || true
+        warn "$(t app.cyberstrikeai.warn.uninstall_nginx_reload_failed)"
+      fi
     else
       nginx -t >&2 || true
+      warn "$(t app.cyberstrikeai.warn.uninstall_nginx_reload_failed)"
     fi
   fi
   success "$(t app.cyberstrikeai.success.removed_nginx)"

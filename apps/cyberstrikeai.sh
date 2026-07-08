@@ -495,6 +495,9 @@ i18n_register_many \
   app.cyberstrikeai.success.removed_systemd \
   "Removed systemd service" \
   "systemd 服务已移除" \
+  app.cyberstrikeai.warn.uninstall_nginx_reload_failed \
+  "Nginx config files were removed, but nginx validation or reload failed. Inspect: nginx -t" \
+  "Nginx 配置文件已删除，但 nginx 校验或重载失败。请检查：nginx -t" \
   app.cyberstrikeai.success.removed_nginx \
   "Removed Nginx config" \
   "Nginx 配置已移除" \

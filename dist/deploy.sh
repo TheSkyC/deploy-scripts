@@ -4667,6 +4667,9 @@ i18n_register_many \
   app.cyberstrikeai.success.removed_systemd \
   "Removed systemd service" \
   "systemd 服务已移除" \
+  app.cyberstrikeai.warn.uninstall_nginx_reload_failed \
+  "Nginx config files were removed, but nginx validation or reload failed. Inspect: nginx -t" \
+  "Nginx 配置文件已删除，但 nginx 校验或重载失败。请检查：nginx -t" \
   app.cyberstrikeai.success.removed_nginx \
   "Removed Nginx config" \
   "Nginx 配置已移除" \
@@ -11354,9 +11357,13 @@ do_uninstall() {
   rm -f "$NGINX_LINK" "$NGINX_CONF"
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
-      systemctl reload nginx >/dev/null 2>&1 || nginx -t >&2 || true
+      if ! systemctl reload nginx >/dev/null 2>&1; then
+        nginx -t >&2 || true
+        warn "$(t app.cyberstrikeai.warn.uninstall_nginx_reload_failed)"
+      fi
     else
       nginx -t >&2 || true
+      warn "$(t app.cyberstrikeai.warn.uninstall_nginx_reload_failed)"
     fi
   fi
   success "$(t app.cyberstrikeai.success.removed_nginx)"
