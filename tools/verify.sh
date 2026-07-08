@@ -6688,15 +6688,21 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         in_block=0
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+  grep -Fq 'app.vaultwarden.warn.uninstall_nginx_reload_failed' apps/vaultwarden.sh || {
+    echo "Vaultwarden must localize nginx reload warnings during uninstall." >&2
+    return 1
+  }
   awk '
-      /rm -f \/etc\/nginx\/sites-enabled\/vaultwarden \/etc\/nginx\/sites-available\/vaultwarden/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; next }
+      /rm -f \/etc\/nginx\/sites-enabled\/vaultwarden \/etc\/nginx\/sites-available\/vaultwarden/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; saw_warn=0; next }
       in_block && /if nginx -t >\/dev\/null 2>&1; then/ { saw_test=1 }
-      in_block && /systemctl reload nginx >\/dev\/null 2>&1 \|\| nginx -t >&2 \|\| true/ { saw_reload=1; saw_diag=1 }
+      in_block && /if ! systemctl reload nginx >\/dev\/null 2>&1; then/ { saw_reload=1 }
       in_block && /^    else$/ { saw_else=1 }
       in_block && saw_else && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /warn "\$\(t app\.vaultwarden\.warn\.uninstall_nginx_reload_failed\)"/ { saw_warn=1 }
+      in_block && /nginx -t >&2 \|\| true/ { saw_diag=1 }
       in_block && /success "\$\(t app\.vaultwarden\.success\.removed_nginx\)"/ {
-        if (!(saw_test && saw_reload && saw_diag)) {
-          printf "%s Vaultwarden uninstall nginx cleanup must emit diagnostics when validation or reload fails\n", FILENAME > "/dev/stderr"
+        if (!(saw_test && saw_reload && saw_diag && saw_warn)) {
+          printf "%s Vaultwarden uninstall nginx cleanup must emit diagnostics and an explicit warning when validation or reload fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_block=0

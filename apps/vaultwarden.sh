@@ -852,6 +852,9 @@ i18n_register_many \
   app.vaultwarden.success.removed_binary \
   "Binary removed." \
   "二进制已删除。" \
+  app.vaultwarden.warn.uninstall_nginx_reload_failed \
+  "Nginx config files were removed, but nginx validation or reload failed. Inspect: nginx -t" \
+  "Nginx 配置文件已删除，但 nginx 校验或重载失败。请检查：nginx -t。" \
   app.vaultwarden.success.removed_nginx \
   "Nginx config removed." \
   "Nginx 配置已清除。" \

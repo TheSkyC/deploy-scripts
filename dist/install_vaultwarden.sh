@@ -2207,6 +2207,9 @@ i18n_register_many \
   app.vaultwarden.success.removed_binary \
   "Binary removed." \
   "二进制已删除。" \
+  app.vaultwarden.warn.uninstall_nginx_reload_failed \
+  "Nginx config files were removed, but nginx validation or reload failed. Inspect: nginx -t" \
+  "Nginx 配置文件已删除，但 nginx 校验或重载失败。请检查：nginx -t。" \
   app.vaultwarden.success.removed_nginx \
   "Nginx config removed." \
   "Nginx 配置已清除。" \
@@ -3897,9 +3900,13 @@ do_uninstall() {
   rm -f /etc/nginx/sites-enabled/vaultwarden /etc/nginx/sites-available/vaultwarden
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
-      systemctl reload nginx >/dev/null 2>&1 || nginx -t >&2 || true
+      if ! systemctl reload nginx >/dev/null 2>&1; then
+        nginx -t >&2 || true
+        warn "$(t app.vaultwarden.warn.uninstall_nginx_reload_failed)"
+      fi
     else
       nginx -t >&2 || true
+      warn "$(t app.vaultwarden.warn.uninstall_nginx_reload_failed)"
     fi
   fi
   success "$(t app.vaultwarden.success.removed_nginx)"
