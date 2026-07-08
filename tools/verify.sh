@@ -1744,9 +1744,8 @@ check_tickflow_systemctl_failures_are_reported() {
       /app\.tickflow\.warn\.service_enable_failed/ { saw_enable_key=1 }
       /app\.tickflow\.warn\.service_stop_failed/ { saw_stop_key=1 }
       /app\.tickflow\.warn\.service_disable_failed/ { saw_disable_key=1 }
-      /app\.tickflow\.warn\.systemd_reload_failed/ { saw_reload_key=1 }
       END {
-        if (!(saw_docker_key && saw_enable_key && saw_stop_key && saw_disable_key && saw_reload_key)) {
+        if (!(saw_docker_key && saw_enable_key && saw_stop_key && saw_disable_key)) {
           print "TickFlow must provide localized warnings for nonfatal systemctl failures." > "/dev/stderr"
           exit 1
         }
@@ -1761,13 +1760,26 @@ check_tickflow_systemctl_failures_are_reported() {
       saw_stop && /warn "\$\(t app\.tickflow\.warn\.service_stop_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_stop_warn=1; saw_stop=0 }
       /systemctl disable "\$TICKFLOW_SERVICE_NAME"/ { saw_disable=1 }
       saw_disable && /warn "\$\(t app\.tickflow\.warn\.service_disable_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_disable_warn=1; saw_disable=0 }
-      /systemctl daemon-reload/ { saw_reload=1 }
-      saw_reload && /warn "\$\(t app\.tickflow\.warn\.systemd_reload_failed "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_reload_warn=1; saw_reload=0 }
       END {
-        if (!(saw_docker_warn && saw_enable_warn && saw_stop_warn && saw_disable_warn && saw_reload_warn)) {
+        if (!(saw_docker_warn && saw_enable_warn && saw_stop_warn && saw_disable_warn)) {
           printf "%s TickFlow must warn on nonfatal systemctl failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
+      }
+    ' impl/install_tickflow.sh dist/install_tickflow.sh
+}
+
+check_tickflow_uninstall_daemon_reload_failure_is_fatal() {
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_reload_if=0; saw_reload_error=0; next }
+      in_uninstall && /if ! systemctl daemon-reload; then/ { saw_reload_if=1; next }
+      in_uninstall && saw_reload_if && /error "\$\(t app\.tickflow\.error\.service_reload "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_reload_error=1 }
+      in_uninstall && /^}/ {
+        if (!(saw_reload_if && saw_reload_error)) {
+          printf "%s TickFlow uninstall must abort when systemd daemon-reload fails after removing the service unit\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
       }
     ' impl/install_tickflow.sh dist/install_tickflow.sh
 }
@@ -7290,6 +7302,7 @@ main() {
   check_tickflow_config_files_are_atomic
   check_tickflow_systemd_shell_paths_are_quoted
   check_tickflow_systemctl_failures_are_reported
+  check_tickflow_uninstall_daemon_reload_failure_is_fatal
   check_tickflow_uninstall_stop_disable_failures_are_reported
   check_tickflow_service_start_failures_show_diagnostics
   check_tickflow_status_is_structured

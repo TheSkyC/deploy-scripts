@@ -13100,7 +13100,7 @@ do_uninstall() {
   fi
   rm -f "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service"
   if ! systemctl daemon-reload; then
-    warn "$(t app.tickflow.warn.systemd_reload_failed "$TICKFLOW_SERVICE_NAME")"
+    error "$(t app.tickflow.error.service_reload "$TICKFLOW_SERVICE_NAME")"
   fi
   if $DELETE_INSTALL && [[ -e "$TICKFLOW_INSTALL_DIR" || -L "$TICKFLOW_INSTALL_DIR" ]]; then
     tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"
