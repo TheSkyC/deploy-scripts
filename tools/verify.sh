@@ -362,6 +362,33 @@ check_vaultwarden_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_vaultwarden_uninstall_validates_binary_path_before_removal() {
+  grep -Fq '_require_safe_vw_bin_path() {' impl/install_vaultwarden.sh \
+    && grep -Fq '_require_safe_vw_bin_path' dist/install_vaultwarden.sh \
+    || {
+      echo "Vaultwarden must centralize VW_BIN safety validation in a reusable helper." >&2
+      return 1
+    }
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_rm=0; next }
+      in_uninstall && /_require_safe_vw_bin_path/ && !saw_guard { saw_guard=1; next }
+      in_uninstall && /rm -f "\$\{VW_BIN\}"/ {
+        if (!saw_guard) {
+          printf "%s Vaultwarden uninstall must validate VW_BIN before removing the binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_rm=1
+      }
+      in_uninstall && /success "\$\(t app\.vaultwarden\.success\.removed_binary\)"/ {
+        if (!(saw_guard && saw_rm)) {
+          printf "%s Vaultwarden uninstall must guard binary removal with a VW_BIN safety check\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_install_supports_noninteractive_mode() {
   awk '
       /app\.vaultwarden\.error\.noninteractive_domain/ { saw_domain_msg=1 }
@@ -1053,7 +1080,7 @@ check_safe_path_guard() {
   awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_install_dir_guard=0; saw_vw_bin_guard=0; next }
       in_uninstall && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_dir_guard=1 }
-      in_uninstall && /error "\$\(t error\.unsafe_path "VW_BIN" "\$\{VW_BIN:-empty\}"\)"/ { saw_vw_bin_guard=1 }
+      in_uninstall && /_require_safe_vw_bin_path/ { saw_vw_bin_guard=1 }
       in_uninstall && /find "\$INSTALL_DIR" -maxdepth 1 -name "(new-api|sub2api)\./ {
         if (!saw_install_dir_guard) {
           printf "%s uninstall cleanup must validate INSTALL_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
@@ -1110,7 +1137,7 @@ check_managed_paths_are_validated() {
       in_func && /require_safe_path "VW_WEB_DIR" "\$VW_WEB_DIR"/ { saw_web=1 }
       in_func && /require_safe_path "LOG_DIR" "\$\(dirname "\$VW_LOG_FILE"\)"/ { saw_log=1 }
       in_func && /require_safe_path "VW_BACKUP_DIR" "\$VW_BACKUP_DIR"/ { saw_backup=1 }
-      in_func && /error "\$\(t error\.unsafe_path "VW_BIN" "\$\{VW_BIN:-empty\}"\)"/ { saw_bin=1 }
+      in_func && /_require_safe_vw_bin_path/ { saw_bin=1 }
       in_func && /^}/ {
         if (!(saw_data && saw_web && saw_log && saw_backup && saw_bin)) {
           printf "%s Vaultwarden must validate managed paths and VW_BIN before use\n", FILENAME > "/dev/stderr"
@@ -7231,6 +7258,7 @@ main() {
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
+      check_vaultwarden_uninstall_validates_binary_path_before_removal
       check_vaultwarden_install_supports_noninteractive_mode
       check_vaultwarden_install_summary_is_localized
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
@@ -7278,6 +7306,7 @@ main() {
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_checks_directory_removal_errors
+  check_vaultwarden_uninstall_validates_binary_path_before_removal
   check_vaultwarden_install_supports_noninteractive_mode
   check_vaultwarden_install_summary_is_localized
   check_vaultwarden_backup_lists_preserve_paths_with_spaces

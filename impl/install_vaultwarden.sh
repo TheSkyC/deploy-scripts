@@ -39,6 +39,10 @@ _vw_remove_dir_or_error() {
   fi
   success "$success_message"
 }
+_require_safe_vw_bin_path() {
+  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
+    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
+}
 app_conf_register_legacy "/etc/vaultwarden_deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
@@ -86,8 +90,7 @@ _validate_config_values() {
   require_safe_path "VW_WEB_DIR" "$VW_WEB_DIR"
   require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
-  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
-    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
+  _require_safe_vw_bin_path
 }
 get_installed_version() {
   local version
@@ -1624,9 +1627,8 @@ do_uninstall() {
     error "$(t app.vaultwarden.error.systemd_reload)"
   fi
   success "$(t app.vaultwarden.success.removed_systemd)"
+  _require_safe_vw_bin_path
   rm -f "${VW_BIN}"
-  [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
-    || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
   local _cleanup_path
   while IFS= read -r -d '' _cleanup_path; do
     if ! rm -f "$_cleanup_path"; then
