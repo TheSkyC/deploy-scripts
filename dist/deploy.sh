@@ -2210,6 +2210,9 @@ i18n_register_many \
   app.newapi.error.remove_dir \
   "Directory removal failed: %s" \
   "目录删除失败：%s。" \
+  app.newapi.error.remove_file \
+  "File removal failed: %s" \
+  "文件删除失败：%s。" \
   app.newapi.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \
@@ -5731,6 +5734,13 @@ _newapi_remove_dir_or_error() {
   fi
   success "$success_message"
 }
+_newapi_remove_file_or_error() {
+  local path="$1" name="$2"
+  require_safe_path "$name" "$path"
+  if ! rm -f "$path"; then
+    error "$(t app.newapi.error.remove_file "$path")"
+  fi
+}
 _newapi_require_safe_bin_path() {
   require_safe_path "BIN_PATH" "$BIN_PATH"
 }
@@ -6749,13 +6759,13 @@ do_uninstall() {
     fi
   done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "new-api.bak.*" -o -name "new-api.tmp.*" \) -type f -print0 2>/dev/null)
   success "$(t app.newapi.success.removed_binary)"
-  rm -f /etc/cron.d/new-api-backup \
-        /usr/local/bin/new-api-backup \
-        /etc/logrotate.d/new-api
+  _newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"
+  _newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"
+  _newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"
   success "$(t app.newapi.success.removed_scheduled)"
-  rm -f "$ENV_FILE"
+  _newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"
   success "$(t app.newapi.success.removed_env_file)"
-  rm -f "$CONF_FILE"
+  _newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.newapi.success.removed_config)"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
     _newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"

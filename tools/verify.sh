@@ -224,6 +224,32 @@ check_newapi_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_newapi_uninstall_checks_file_removal_errors() {
+  grep -Fq '_newapi_remove_file_or_error() {' impl/install_newapi.sh \
+    && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"' impl/install_newapi.sh \
+    && grep -Fq 'app.newapi.error.remove_file' apps/newapi.sh \
+    || {
+      echo "NewAPI uninstall must surface file removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_newapi_remove_file_or_error() {' dist/install_newapi.sh \
+    && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_newapi.sh \
+    || {
+      echo "Release NewAPI script must preserve uninstall file removal failure handling." >&2
+      return 1
+    }
+}
+
 check_newapi_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_newapi_require_safe_bin_path() {' impl/install_newapi.sh \
     && grep -Fq '_newapi_require_safe_bin_path' dist/install_newapi.sh \
@@ -4771,7 +4797,7 @@ check_newapi_secret_uses_private_env_file() {
       /EnvironmentFile=\$\{ENV_FILE\}/ { saw_envfile=1 }
       /error "\$\(t app\.newapi\.error\.env_file "\$ENV_FILE"\)"/ { saw_error=1 }
       /success "\$\(t app\.newapi\.success\.env_file "\$ENV_FILE"\)"/ { saw_success=1 }
-      /rm -f "\$ENV_FILE"/ { saw_remove=1 }
+      /_newapi_remove_file_or_error "\$ENV_FILE" "ENV_FILE"/ { saw_remove=1 }
       END {
         if (!(saw_envfile && saw_error && saw_success && saw_remove)) {
           printf "%s NewAPI must wire the private environment file through install and uninstall\n", FILENAME > "/dev/stderr"
@@ -7391,6 +7417,7 @@ main() {
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
       check_newapi_uninstall_checks_directory_removal_errors
+      check_newapi_uninstall_checks_file_removal_errors
       check_newapi_uninstall_validates_binary_path_before_removal
       check_newapi_install_rollback_validates_binary_path_before_removal
       check_newapi_backup_lists_preserve_paths_with_spaces
@@ -7444,6 +7471,7 @@ main() {
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
   check_newapi_uninstall_checks_directory_removal_errors
+  check_newapi_uninstall_checks_file_removal_errors
   check_newapi_uninstall_validates_binary_path_before_removal
   check_newapi_install_rollback_validates_binary_path_before_removal
   check_newapi_backup_lists_preserve_paths_with_spaces
