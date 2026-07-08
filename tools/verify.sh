@@ -227,6 +227,7 @@ check_newapi_uninstall_checks_directory_removal_errors() {
 check_newapi_uninstall_checks_file_removal_errors() {
   grep -Fq '_newapi_remove_file_or_error() {' impl/install_newapi.sh \
     && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' impl/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' impl/install_newapi.sh \
@@ -239,6 +240,7 @@ check_newapi_uninstall_checks_file_removal_errors() {
     }
   grep -Fq '_newapi_remove_file_or_error() {' dist/install_newapi.sh \
     && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' dist/install_newapi.sh \
+    && grep -Fq '_newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"' dist/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' dist/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' dist/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' dist/install_newapi.sh \

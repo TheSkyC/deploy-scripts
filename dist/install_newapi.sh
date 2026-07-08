@@ -3114,7 +3114,7 @@ do_uninstall() {
   if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
     warn "$(t app.newapi.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
-  rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  _newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"
   if ! systemctl daemon-reload; then
     error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
   fi
