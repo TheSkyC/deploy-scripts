@@ -359,6 +359,7 @@ check_sub2api_uninstall_checks_directory_removal_errors() {
 check_sub2api_uninstall_checks_file_removal_errors() {
   grep -Fq '_sub2api_remove_file_or_error() {' impl/install_sub2api.sh \
     && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' impl/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' impl/install_sub2api.sh \
@@ -370,6 +371,7 @@ check_sub2api_uninstall_checks_file_removal_errors() {
     }
   grep -Fq '_sub2api_remove_file_or_error() {' dist/install_sub2api.sh \
     && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' dist/install_sub2api.sh \
+    && grep -Fq '_sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"' dist/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' dist/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' dist/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' dist/install_sub2api.sh \

@@ -1664,7 +1664,7 @@ do_uninstall() {
   if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
     warn "$(t app.sub2api.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
-  rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  _sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"
   if ! systemctl daemon-reload; then
     error "$(t app.sub2api.error.systemd_reload "$SERVICE_NAME")"
   fi
