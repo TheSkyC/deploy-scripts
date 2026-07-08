@@ -466,6 +466,44 @@ check_vaultwarden_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_vaultwarden_uninstall_checks_file_removal_errors() {
+  grep -Fq '_vw_remove_file_or_error() {' impl/install_vaultwarden.sh \
+    && grep -Fq 'error "$(t app.vaultwarden.error.remove_file "$path")"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_FILTER"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden-admin.conf" "VAULTWARDEN_FAIL2BAN_ADMIN_FILTER"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/jail.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_JAIL"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"' impl/install_vaultwarden.sh \
+    && grep -Fq 'app.vaultwarden.error.remove_file' apps/vaultwarden.sh \
+    || {
+      echo "Vaultwarden uninstall must surface file removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_vw_remove_file_or_error() {' dist/install_vaultwarden.sh \
+    && grep -Fq 'error "$(t app.vaultwarden.error.remove_file "$path")"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_FILTER"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden-admin.conf" "VAULTWARDEN_FAIL2BAN_ADMIN_FILTER"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/jail.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_JAIL"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_vaultwarden.sh \
+    || {
+      echo "Release Vaultwarden script must preserve uninstall file removal failure handling." >&2
+      return 1
+    }
+}
+
 check_vaultwarden_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_require_safe_vw_bin_path() {' impl/install_vaultwarden.sh \
     && grep -Fq '_require_safe_vw_bin_path' dist/install_vaultwarden.sh \
@@ -7453,6 +7491,7 @@ main() {
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
+      check_vaultwarden_uninstall_checks_file_removal_errors
       check_vaultwarden_uninstall_validates_binary_path_before_removal
       check_vaultwarden_install_rollback_validates_binary_path_before_removal
       check_vaultwarden_install_supports_noninteractive_mode
@@ -7508,6 +7547,7 @@ main() {
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_checks_directory_removal_errors
+  check_vaultwarden_uninstall_checks_file_removal_errors
   check_vaultwarden_uninstall_validates_binary_path_before_removal
   check_vaultwarden_install_rollback_validates_binary_path_before_removal
   check_vaultwarden_install_supports_noninteractive_mode

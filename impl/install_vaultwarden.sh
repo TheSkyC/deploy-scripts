@@ -39,6 +39,13 @@ _vw_remove_dir_or_error() {
   fi
   success "$success_message"
 }
+_vw_remove_file_or_error() {
+  local path="$1" name="$2"
+  require_safe_path "$name" "$path"
+  if ! rm -f "$path"; then
+    error "$(t app.vaultwarden.error.remove_file "$path")"
+  fi
+}
 _require_safe_vw_bin_path() {
   [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
     || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
@@ -1623,7 +1630,7 @@ do_uninstall() {
   if ! systemctl disable vaultwarden 2>/dev/null; then
     warn "$(t app.vaultwarden.warn.uninstall_disable_failed)"
   fi
-  rm -f /etc/systemd/system/vaultwarden.service
+  _vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"
   if ! systemctl daemon-reload; then
     error "$(t app.vaultwarden.error.systemd_reload)"
   fi
@@ -1637,7 +1644,8 @@ do_uninstall() {
     fi
   done < <(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -print0 2>/dev/null)
   success "$(t app.vaultwarden.success.removed_binary)"
-  rm -f /etc/nginx/sites-enabled/vaultwarden /etc/nginx/sites-available/vaultwarden
+  _vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"
+  _vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
       if ! systemctl reload nginx >/dev/null 2>&1; then
@@ -1650,18 +1658,19 @@ do_uninstall() {
     fi
   fi
   success "$(t app.vaultwarden.success.removed_nginx)"
-  rm -f /etc/fail2ban/filter.d/vaultwarden.conf \
-        /etc/fail2ban/filter.d/vaultwarden-admin.conf \
-        /etc/fail2ban/jail.d/vaultwarden.conf
+  _vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_FILTER"
+  _vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden-admin.conf" "VAULTWARDEN_FAIL2BAN_ADMIN_FILTER"
+  _vw_remove_file_or_error "/etc/fail2ban/jail.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_JAIL"
   if ! systemctl restart fail2ban 2>/dev/null; then
     warn "$(t app.vaultwarden.warn.fail2ban_restart)"
   fi
   success "$(t app.vaultwarden.success.removed_fail2ban)"
-  rm -f /etc/cron.d/vaultwarden-backup \
-        /usr/local/bin/vaultwarden-backup \
-        /etc/logrotate.d/vaultwarden
+  _vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"
+  _vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"
+  _vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"
   success "$(t app.vaultwarden.success.removed_scheduled)"
-  rm -f "$VW_ENV_FILE" "$CONF_FILE"
+  _vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"
+  _vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.vaultwarden.success.removed_config)"
   local _log_dir
   _log_dir=$(dirname "$VW_LOG_FILE")
