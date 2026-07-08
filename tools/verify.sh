@@ -224,6 +224,33 @@ check_newapi_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_newapi_uninstall_validates_binary_path_before_removal() {
+  grep -Fq '_newapi_require_safe_bin_path() {' impl/install_newapi.sh \
+    && grep -Fq '_newapi_require_safe_bin_path' dist/install_newapi.sh \
+    || {
+      echo "NewAPI must centralize BIN_PATH safety validation in a reusable helper." >&2
+      return 1
+    }
+  awk '
+      /do_uninstall\(\)/ { in_uninstall=1; saw_guard=0; saw_rm=0; next }
+      in_uninstall && /_newapi_require_safe_bin_path/ && !saw_guard { saw_guard=1; next }
+      in_uninstall && /rm -f "\$BIN_PATH"/ {
+        if (!saw_guard) {
+          printf "%s NewAPI uninstall must validate BIN_PATH before removing the binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_rm=1
+      }
+      in_uninstall && /success "\$\(t app\.newapi\.success\.removed_binary\)"/ {
+        if (!(saw_guard && saw_rm)) {
+          printf "%s NewAPI uninstall must guard binary removal with a BIN_PATH safety check\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_uninstall=0
+      }
+    ' impl/install_newapi.sh dist/install_newapi.sh
+}
+
 check_newapi_backup_lists_preserve_paths_with_spaces() {
   if grep -R -n 'awk '\''{print \$2}'\''' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
     echo "NewAPI backup and binary retention lists must not split paths on spaces." >&2
@@ -1101,7 +1128,7 @@ check_managed_paths_are_validated() {
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
-      in_func && /require_safe_path "BIN_PATH" "\$BIN_PATH"/ { saw_bin=1 }
+      in_func && /_newapi_require_safe_bin_path/ { saw_bin=1 }
       in_func && /require_safe_path "DATA_DIR" "\$DATA_DIR"/ { saw_data=1 }
       in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
       in_func && /require_safe_path "LOG_FILE" "\$LOG_FILE"/ { saw_log_file=1 }
@@ -7252,6 +7279,7 @@ main() {
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
       check_newapi_uninstall_checks_directory_removal_errors
+      check_newapi_uninstall_validates_binary_path_before_removal
       check_newapi_backup_lists_preserve_paths_with_spaces
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
@@ -7300,6 +7328,7 @@ main() {
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
   check_newapi_uninstall_checks_directory_removal_errors
+  check_newapi_uninstall_validates_binary_path_before_removal
   check_newapi_backup_lists_preserve_paths_with_spaces
   check_sub2api_uninstall_supports_noninteractive_mode
   check_sub2api_uninstall_checks_directory_removal_errors

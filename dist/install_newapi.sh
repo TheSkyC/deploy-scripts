@@ -2101,6 +2101,9 @@ _newapi_remove_dir_or_error() {
   fi
   success "$success_message"
 }
+_newapi_require_safe_bin_path() {
+  require_safe_path "BIN_PATH" "$BIN_PATH"
+}
 app_conf_register_legacy "/etc/new-api-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
@@ -2123,7 +2126,7 @@ _validate_config_values() {
   app_validate_system_name "SERVICE_USER" "$SERVICE_USER"
   app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "BIN_PATH" "$BIN_PATH"
+  _newapi_require_safe_bin_path
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "LOG_FILE" "$LOG_FILE"
@@ -3105,6 +3108,7 @@ do_uninstall() {
     error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
   fi
   success "$(t app.newapi.success.removed_systemd)"
+  _newapi_require_safe_bin_path
   rm -f "$BIN_PATH"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local _cleanup_path
