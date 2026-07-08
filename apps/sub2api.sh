@@ -489,6 +489,9 @@ i18n_register_many \
   app.sub2api.error.download_failed \
   "Download failed. Check the network or confirm the release exists: https://github.com/%s/releases" \
   "下载失败，请检查网络或前往 https://github.com/%s/releases 确认版本存在。" \
+  app.sub2api.warn.tmp_archive_cleanup_failed \
+  "Failed to remove temporary archive %s. Remove it manually after this command finishes." \
+  "删除临时归档 %s 失败。请在本次命令结束后手动清理。" \
   app.sub2api.warn.old_binary_backup \
   "Old binary backed up -> %s" \
   "已备份旧二进制 → %s" \

@@ -2771,6 +2771,9 @@ i18n_register_many \
   app.sub2api.error.download_failed \
   "Download failed. Check the network or confirm the release exists: https://github.com/%s/releases" \
   "下载失败，请检查网络或前往 https://github.com/%s/releases 确认版本存在。" \
+  app.sub2api.warn.tmp_archive_cleanup_failed \
+  "Failed to remove temporary archive %s. Remove it manually after this command finishes." \
+  "删除临时归档 %s 失败。请在本次命令结束后手动清理。" \
   app.sub2api.warn.old_binary_backup \
   "Old binary backed up -> %s" \
   "已备份旧二进制 → %s" \
@@ -7986,7 +7989,9 @@ do_install() {
     error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
   fi
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_ARCHIVE"
+    if ! rm -f "$TMP_ARCHIVE"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$TMP_ARCHIVE")"
+    fi
     error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
   fi
   verify_checksum "$TMP_ARCHIVE" "$LATEST"
@@ -8113,7 +8118,9 @@ do_update() {
     error "$(t app.sub2api.error.update_download)"
   fi
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_ARCHIVE"
+    if ! rm -f "$TMP_ARCHIVE"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$TMP_ARCHIVE")"
+    fi
     error "$(t app.sub2api.error.update_download)"
   fi
   verify_checksum "$TMP_ARCHIVE" "$LATEST"

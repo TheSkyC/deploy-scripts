@@ -1144,7 +1144,9 @@ do_install() {
     error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
   fi
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_ARCHIVE"
+    if ! rm -f "$TMP_ARCHIVE"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$TMP_ARCHIVE")"
+    fi
     error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
   fi
   verify_checksum "$TMP_ARCHIVE" "$LATEST"
@@ -1271,7 +1273,9 @@ do_update() {
     error "$(t app.sub2api.error.update_download)"
   fi
   if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
-    rm -f "$TMP_ARCHIVE"
+    if ! rm -f "$TMP_ARCHIVE"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$TMP_ARCHIVE")"
+    fi
     error "$(t app.sub2api.error.update_download)"
   fi
   verify_checksum "$TMP_ARCHIVE" "$LATEST"

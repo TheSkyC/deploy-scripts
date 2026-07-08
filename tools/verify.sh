@@ -4849,25 +4849,40 @@ check_download_temp_creation_failures_are_explicit() {
       }
     ' impl/install_newapi.sh dist/install_newapi.sh
   awk '
+      /app\.sub2api\.warn\.tmp_archive_cleanup_failed/ { saw_warn_key=1 }
+      END {
+        if (!saw_warn_key) {
+          print "Sub2API must provide a localized temporary archive cleanup warning." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
       /step "\$\(t app\.sub2api\.step\.download_binary "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
       in_install && /if ! TMP_ARCHIVE=\$\(mktemp "\$\{INSTALL_DIR\}\/sub2api-release\.XXXXXX\.tar\.gz"\); then/ { saw_install_tmp=1 }
       in_install && /error "\$\(t app\.sub2api\.error\.download_failed "\$GITHUB_REPO"\)"/ { saw_install_error=1 }
-      in_install && /if ! curl -fL --progress-bar -o "\$TMP_ARCHIVE" "\$DOWNLOAD_URL"; then/ {
-        if (!(saw_install_tmp && saw_install_error)) {
-          printf "%s Sub2API install must report temporary download archive creation failures\n", FILENAME > "/dev/stderr"
+      in_install && /if ! curl -fL --progress-bar -o "\$TMP_ARCHIVE" "\$DOWNLOAD_URL"; then/ { saw_install_cleanup_if=0; saw_install_cleanup_warn=0; in_install_download_fail=1; next }
+      in_install_download_fail && /if ! rm -f "\$TMP_ARCHIVE"; then/ { saw_install_cleanup_if=1 }
+      in_install_download_fail && /warn "\$\(t app\.sub2api\.warn\.tmp_archive_cleanup_failed "\$TMP_ARCHIVE"\)"/ { saw_install_cleanup_warn=1 }
+      in_install_download_fail && /error "\$\(t app\.sub2api\.error\.download_failed "\$GITHUB_REPO"\)"/ {
+        if (!(saw_install_tmp && saw_install_error && saw_install_cleanup_if && saw_install_cleanup_warn)) {
+          printf "%s Sub2API install must report temporary download archive creation and cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_install=0
+        in_install_download_fail=0
       }
       /step "\$\(t app\.sub2api\.step\.download_update "\$CURRENT" "\$LATEST"\)"/ { in_update=1; saw_update_tmp=0; saw_update_error=0; next }
       in_update && /if ! TMP_ARCHIVE=\$\(mktemp "\$\{INSTALL_DIR\}\/sub2api-release\.XXXXXX\.tar\.gz"\); then/ { saw_update_tmp=1 }
       in_update && /error "\$\(t app\.sub2api\.error\.update_download\)"/ { saw_update_error=1 }
-      in_update && /if ! curl -fL --progress-bar -o "\$TMP_ARCHIVE" "\$DOWNLOAD_URL"; then/ {
-        if (!(saw_update_tmp && saw_update_error)) {
-          printf "%s Sub2API update must report temporary download archive creation failures\n", FILENAME > "/dev/stderr"
+      in_update && /if ! curl -fL --progress-bar -o "\$TMP_ARCHIVE" "\$DOWNLOAD_URL"; then/ { saw_update_cleanup_if=0; saw_update_cleanup_warn=0; in_update_download_fail=1; next }
+      in_update_download_fail && /if ! rm -f "\$TMP_ARCHIVE"; then/ { saw_update_cleanup_if=1 }
+      in_update_download_fail && /warn "\$\(t app\.sub2api\.warn\.tmp_archive_cleanup_failed "\$TMP_ARCHIVE"\)"/ { saw_update_cleanup_warn=1 }
+      in_update_download_fail && /error "\$\(t app\.sub2api\.error\.update_download\)"/ {
+        if (!(saw_update_tmp && saw_update_error && saw_update_cleanup_if && saw_update_cleanup_warn)) {
+          printf "%s Sub2API update must report temporary download archive creation and cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_update=0
+        in_update_download_fail=0
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
