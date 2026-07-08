@@ -6660,15 +6660,23 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
     echo "Uninstall-time nginx cleanup must preserve nginx test/reload diagnostics." >&2
     return 1
   fi
+  grep -Fq 'app.sub2api.warn.uninstall_nginx_reload_failed' apps/sub2api.sh \
+    && grep -Fq 'app.sub2api.warn.uninstall_nginx_test_failed' apps/sub2api.sh \
+    || {
+      echo "Sub2API must localize nginx uninstall warnings." >&2
+      return 1
+    }
   awk '
-      /rm -f \/etc\/nginx\/sites-enabled\/sub2api/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; saw_fallback=0; next }
+      /rm -f \/etc\/nginx\/sites-enabled\/sub2api/ { in_block=1; saw_test=0; saw_reload=0; saw_diag=0; saw_reload_warn=0; saw_test_warn=0; saw_fallback=0; next }
       in_block && /if nginx -t >\/dev\/null 2>&1; then/ { saw_test=1 }
       in_block && /if systemctl reload nginx >\/dev\/null 2>&1; then/ { saw_reload=1 }
       in_block && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /warn "\$\(t app\.sub2api\.warn\.uninstall_nginx_reload_failed\)"/ { saw_reload_warn=1 }
+      in_block && /warn "\$\(t app\.sub2api\.warn\.uninstall_nginx_test_failed\)"/ { saw_test_warn=1 }
       in_block && /success "\$\(t app\.sub2api\.success\.removed_nginx\)"/ { saw_fallback=1 }
       in_block && /rm -f \/etc\/cron\.d\/sub2api-backup/ {
-        if (!(saw_test && saw_reload && saw_diag && saw_fallback)) {
-          printf "%s Sub2API uninstall nginx cleanup must validate reloads and emit diagnostics on failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_test && saw_reload && saw_diag && saw_reload_warn && saw_test_warn && saw_fallback)) {
+          printf "%s Sub2API uninstall nginx cleanup must validate reloads, emit diagnostics, and warn on validation or reload failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_block=0

@@ -3197,6 +3197,12 @@ i18n_register_many \
   app.sub2api.success.removed_binary \
   "Binary and related files removed." \
   "二进制及相关文件已删除。" \
+  app.sub2api.warn.uninstall_nginx_reload_failed \
+  "Nginx config files were removed and validation passed, but reload failed. Inspect the error output and rerun manually: systemctl reload nginx" \
+  "Nginx 配置文件已删除且校验已通过，但 reload 失败。请检查错误输出后手动重试：systemctl reload nginx。" \
+  app.sub2api.warn.uninstall_nginx_test_failed \
+  "Nginx config files were removed, but nginx -t failed. Check the config file and rerun manually: nginx -t && systemctl reload nginx" \
+  "Nginx 配置文件已删除，但 nginx -t 失败。请检查配置文件后手动执行：nginx -t && systemctl reload nginx。" \
   app.sub2api.success.removed_nginx_reload \
   "Nginx reverse proxy config removed and service reloaded." \
   "Nginx 反代配置已清除，服务已重载。" \
@@ -8468,10 +8474,12 @@ do_uninstall() {
         success "$(t app.sub2api.success.removed_nginx_reload)"
       else
         nginx -t >&2 || true
+        warn "$(t app.sub2api.warn.uninstall_nginx_reload_failed)"
         success "$(t app.sub2api.success.removed_nginx)"
       fi
     else
       nginx -t >&2 || true
+      warn "$(t app.sub2api.warn.uninstall_nginx_test_failed)"
       success "$(t app.sub2api.success.removed_nginx)"
     fi
   else

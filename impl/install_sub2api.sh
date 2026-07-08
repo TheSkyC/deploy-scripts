@@ -1680,10 +1680,12 @@ do_uninstall() {
         success "$(t app.sub2api.success.removed_nginx_reload)"
       else
         nginx -t >&2 || true
+        warn "$(t app.sub2api.warn.uninstall_nginx_reload_failed)"
         success "$(t app.sub2api.success.removed_nginx)"
       fi
     else
       nginx -t >&2 || true
+      warn "$(t app.sub2api.warn.uninstall_nginx_test_failed)"
       success "$(t app.sub2api.success.removed_nginx)"
     fi
   else
