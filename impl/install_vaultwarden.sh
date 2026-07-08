@@ -298,7 +298,9 @@ install_vaultwarden_binary() {
   fi
   if ! install -m 755 -o root -g root "$source_bin" "$bin_tmp" \
       || ! mv "$bin_tmp" "$VW_BIN"; then
-    rm -f "$bin_tmp"
+    if ! rm -f "$bin_tmp"; then
+      warn "$(t app.vaultwarden.warn.tmp_binary_cleanup_failed "$bin_tmp")"
+    fi
     return 1
   fi
 }

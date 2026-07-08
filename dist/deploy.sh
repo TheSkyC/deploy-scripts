@@ -3488,6 +3488,9 @@ i18n_register_many \
   app.vaultwarden.success.binary_installed \
   "Binary installed: %s" \
   "二进制已安装：%s。" \
+  app.vaultwarden.warn.tmp_binary_cleanup_failed \
+  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
+  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
   app.vaultwarden.info.version \
   "Vaultwarden version: %s" \
   "Vaultwarden 版本：%s" \
@@ -8906,7 +8909,9 @@ install_vaultwarden_binary() {
   fi
   if ! install -m 755 -o root -g root "$source_bin" "$bin_tmp" \
       || ! mv "$bin_tmp" "$VW_BIN"; then
-    rm -f "$bin_tmp"
+    if ! rm -f "$bin_tmp"; then
+      warn "$(t app.vaultwarden.warn.tmp_binary_cleanup_failed "$bin_tmp")"
+    fi
     return 1
   fi
 }
