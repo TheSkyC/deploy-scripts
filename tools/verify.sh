@@ -774,6 +774,26 @@ check_tickflow_uninstall_checks_directory_removal_errors() {
     }
 }
 
+check_tickflow_uninstall_checks_file_removal_errors() {
+  grep -Fq 'tickflow_remove_file_or_error() {' impl/install_tickflow.sh \
+    && grep -Fq 'error "$(t app.tickflow.error.remove_file "$path")"' impl/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"' impl/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"' impl/install_tickflow.sh \
+    && grep -Fq 'app.tickflow.error.remove_file' apps/tickflow.sh \
+    || {
+      echo "TickFlow uninstall must surface file removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq 'tickflow_remove_file_or_error() {' dist/install_tickflow.sh \
+    && grep -Fq 'error "$(t app.tickflow.error.remove_file "$path")"' dist/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"' dist/install_tickflow.sh \
+    && grep -Fq 'tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_tickflow.sh \
+    || {
+      echo "Release TickFlow script must preserve uninstall file removal failure handling." >&2
+      return 1
+    }
+}
+
 check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
   if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI backup lists must not split paths on spaces." >&2
@@ -7533,6 +7553,7 @@ main() {
       check_cyberstrikeai_uninstall_checks_file_removal_errors
       check_tickflow_uninstall_supports_noninteractive_mode
       check_tickflow_uninstall_checks_directory_removal_errors
+      check_tickflow_uninstall_checks_file_removal_errors
       check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
       check_blog_status_dispatch
       check_no_color_output
@@ -7590,6 +7611,7 @@ main() {
   check_cyberstrikeai_uninstall_checks_file_removal_errors
   check_tickflow_uninstall_supports_noninteractive_mode
   check_tickflow_uninstall_checks_directory_removal_errors
+  check_tickflow_uninstall_checks_file_removal_errors
   check_cyberstrikeai_backup_lists_preserve_paths_with_spaces
   check_blog_status_dispatch
   check_no_color_output

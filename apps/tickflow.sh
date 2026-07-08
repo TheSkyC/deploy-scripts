@@ -195,6 +195,9 @@ i18n_register_many \
   app.tickflow.error.remove_dir \
   "Directory removal failed: %s" \
   "目录删除失败：%s" \
+  app.tickflow.error.remove_file \
+  "File removal failed: %s" \
+  "文件删除失败：%s" \
   app.tickflow.success.removed \
   "TickFlow removed" \
   "TickFlow 已移除" \

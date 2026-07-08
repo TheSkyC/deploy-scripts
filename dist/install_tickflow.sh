@@ -1550,6 +1550,9 @@ i18n_register_many \
   app.tickflow.error.remove_dir \
   "Directory removal failed: %s" \
   "目录删除失败：%s" \
+  app.tickflow.error.remove_file \
+  "File removal failed: %s" \
+  "文件删除失败：%s" \
   app.tickflow.success.removed \
   "TickFlow removed" \
   "TickFlow 已移除" \
@@ -1977,6 +1980,14 @@ tickflow_remove_dir_or_error() {
   success "$success_message"
 }
 
+tickflow_remove_file_or_error() {
+  local path="$1" name="$2"
+  require_safe_path "$name" "$path"
+  if ! rm -f "$path"; then
+    error "$(t app.tickflow.error.remove_file "$path")"
+  fi
+}
+
 do_install() {
   show_banner
   preflight_check "install"
@@ -2177,7 +2188,7 @@ do_uninstall() {
   if ! systemctl disable "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     warn "$(t app.tickflow.warn.service_disable_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
   fi
-  rm -f "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service"
+  tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"
   if ! systemctl daemon-reload; then
     error "$(t app.tickflow.error.service_reload "$TICKFLOW_SERVICE_NAME")"
   fi
@@ -2191,6 +2202,6 @@ do_uninstall() {
   else
     info "$(t app.tickflow.info.kept_backup "$backup_dir")"
   fi
-  rm -f "$CONF_FILE"
+  tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.tickflow.success.removed)"
 }
