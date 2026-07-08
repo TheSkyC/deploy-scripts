@@ -6868,6 +6868,26 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         in_block=0
       }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+  grep -Fq 'app.blog.uninstall.nginx_test_failed' apps/blog.sh || {
+    echo "Blog must localize nginx uninstall validation warnings." >&2
+    return 1
+  }
+  awk '
+      /if command -v nginx >\/dev\/null 2>&1 && command -v systemctl >\/dev\/null 2>&1; then/ { in_block=1; saw_test_if=0; saw_reload_if=0; saw_diag=0; saw_reload_warn=0; saw_test_warn=0; saw_success=0; next }
+      in_block && /if nginx -t >\/dev\/null 2>&1; then/ { saw_test_if=1 }
+      in_block && /if systemctl reload nginx >\/dev\/null 2>&1; then/ { saw_reload_if=1 }
+      in_block && /nginx -t >&2 \|\| true/ { saw_diag=1 }
+      in_block && /warn "\$\(t app\.blog\.uninstall\.nginx_reload_failed\)"/ { saw_reload_warn=1 }
+      in_block && /warn "\$\(t app\.blog\.uninstall\.nginx_test_failed\)"/ { saw_test_warn=1 }
+      in_block && /success "\$\(t app\.blog\.uninstall\.nginx_reloaded\)"/ { saw_success=1 }
+      in_block && /success "\$\(t app\.blog\.uninstall\.success\)"/ {
+        if (!(saw_test_if && saw_reload_if && saw_diag && saw_reload_warn && saw_test_warn && saw_success)) {
+          printf "%s Blog uninstall nginx cleanup must distinguish nginx validation failures from reload failures\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_block=0
+      }
+    ' impl/install_blog.sh dist/install_blog.sh
 }
 
 check_fail2ban_configs_are_atomic() {

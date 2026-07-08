@@ -1998,8 +1998,11 @@ i18n_register_many \
   "Nginx configuration reloaded." \
   "Nginx 配置已重新加载。" \
   app.blog.uninstall.nginx_reload_failed \
-  "Nginx config was removed, but reload failed. Check manually: nginx -t && systemctl reload nginx" \
-  "Nginx 配置已删除，但 reload 失败。请手动检查：nginx -t && systemctl reload nginx" \
+  "Nginx config was removed and validation passed, but reload failed. Check manually: systemctl reload nginx" \
+  "Nginx 配置已删除且校验已通过，但 reload 失败。请手动检查：systemctl reload nginx。" \
+  app.blog.uninstall.nginx_test_failed \
+  "Nginx config was removed, but nginx -t failed. Check manually: nginx -t && systemctl reload nginx" \
+  "Nginx 配置已删除，但 nginx -t 失败。请手动检查：nginx -t && systemctl reload nginx。" \
   app.blog.uninstall.success \
   "Hugo Blog files were removed." \
   "Hugo Blog 文件已删除。" \
@@ -3224,11 +3227,16 @@ do_uninstall() {
   fi
 
   if command -v nginx >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
-    if nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
-      success "$(t app.blog.uninstall.nginx_reloaded)"
+    if nginx -t >/dev/null 2>&1; then
+      if systemctl reload nginx >/dev/null 2>&1; then
+        success "$(t app.blog.uninstall.nginx_reloaded)"
+      else
+        nginx -t >&2 || true
+        warn "$(t app.blog.uninstall.nginx_reload_failed)"
+      fi
     else
       nginx -t >&2 || true
-      warn "$(t app.blog.uninstall.nginx_reload_failed)"
+      warn "$(t app.blog.uninstall.nginx_test_failed)"
     fi
   fi
 

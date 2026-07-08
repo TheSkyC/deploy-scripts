@@ -1191,11 +1191,16 @@ do_uninstall() {
   fi
 
   if command -v nginx >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
-    if nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
-      success "$(t app.blog.uninstall.nginx_reloaded)"
+    if nginx -t >/dev/null 2>&1; then
+      if systemctl reload nginx >/dev/null 2>&1; then
+        success "$(t app.blog.uninstall.nginx_reloaded)"
+      else
+        nginx -t >&2 || true
+        warn "$(t app.blog.uninstall.nginx_reload_failed)"
+      fi
     else
       nginx -t >&2 || true
-      warn "$(t app.blog.uninstall.nginx_reload_failed)"
+      warn "$(t app.blog.uninstall.nginx_test_failed)"
     fi
   fi
 
