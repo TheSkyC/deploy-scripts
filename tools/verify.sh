@@ -340,6 +340,28 @@ check_vaultwarden_uninstall_supports_noninteractive_mode() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_uninstall_checks_directory_removal_errors() {
+  grep -Fq '_vw_remove_dir_or_error() {' impl/install_vaultwarden.sh \
+    && grep -Fq 'error "$(t app.vaultwarden.error.remove_dir "$path")"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"' impl/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"' impl/install_vaultwarden.sh \
+    && grep -Fq 'app.vaultwarden.error.remove_dir' apps/vaultwarden.sh \
+    || {
+      echo "Vaultwarden uninstall must surface directory removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+  grep -Fq '_vw_remove_dir_or_error() {' dist/install_vaultwarden.sh \
+    && grep -Fq 'error "$(t app.vaultwarden.error.remove_dir "$path")"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"' dist/install_vaultwarden.sh \
+    && grep -Fq '_vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"' dist/install_vaultwarden.sh \
+    || {
+      echo "Release Vaultwarden script must preserve uninstall directory removal failure handling." >&2
+      return 1
+    }
+}
+
 check_vaultwarden_install_supports_noninteractive_mode() {
   awk '
       /app\.vaultwarden\.error\.noninteractive_domain/ { saw_domain_msg=1 }
@@ -7163,6 +7185,7 @@ main() {
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_backup_lists_preserve_paths_with_spaces
       check_vaultwarden_uninstall_supports_noninteractive_mode
+      check_vaultwarden_uninstall_checks_directory_removal_errors
       check_vaultwarden_install_supports_noninteractive_mode
       check_vaultwarden_install_summary_is_localized
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
@@ -7208,6 +7231,7 @@ main() {
   check_sub2api_uninstall_checks_directory_removal_errors
   check_sub2api_backup_lists_preserve_paths_with_spaces
   check_vaultwarden_uninstall_supports_noninteractive_mode
+  check_vaultwarden_uninstall_checks_directory_removal_errors
   check_vaultwarden_install_supports_noninteractive_mode
   check_vaultwarden_install_summary_is_localized
   check_vaultwarden_backup_lists_preserve_paths_with_spaces

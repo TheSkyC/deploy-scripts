@@ -4109,6 +4109,9 @@ i18n_register_many \
   app.vaultwarden.warn.uninstall_disable_failed \
   "Could not disable vaultwarden during uninstall. Remove the enablement manually after fixing systemd: systemctl disable vaultwarden" \
   "卸载时无法禁用 vaultwarden。请在修复 systemd 后手动移除开机自启：systemctl disable vaultwarden。" \
+  app.vaultwarden.error.remove_dir \
+  "Directory removal failed: %s" \
+  "目录删除失败：%s。" \
   app.vaultwarden.success.removed_systemd \
   "systemd service removed." \
   "systemd 服务已移除。" \
@@ -8551,6 +8554,13 @@ _VW_DERIVE_PATHS() {
   VW_BIN="${VW_BIN_DIR}/vaultwarden"
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
+_vw_remove_dir_or_error() {
+  local path="$1" name="$2" success_message="$3"
+  if ! safe_rm_dir "$path" "$name"; then
+    error "$(t app.vaultwarden.error.remove_dir "$path")"
+  fi
+  success "$success_message"
+}
 app_conf_register_legacy "/etc/vaultwarden_deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
@@ -10171,20 +10181,17 @@ do_uninstall() {
   local _log_dir
   _log_dir=$(dirname "$VW_LOG_FILE")
   if [[ -n "$_log_dir" && "$_log_dir" != "." && "$_log_dir" != "/" && -d "$_log_dir" ]]; then
-    safe_rm_dir "$_log_dir" "LOG_DIR"
-    success "$(t app.vaultwarden.success.deleted_log "$_log_dir")"
+    _vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"
   else
     warn "$(t app.vaultwarden.warn.log_path "$_log_dir")"
   fi
   if $DELETE_DATA; then
-    safe_rm_dir "$VW_DATA_DIR" "VW_DATA_DIR"
-    success "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"
+    _vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"
   else
     info "$(t app.vaultwarden.info.kept_data "$VW_DATA_DIR")"
   fi
   if $DELETE_BACKUP; then
-    safe_rm_dir "$VW_BACKUP_DIR" "VW_BACKUP_DIR"
-    success "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"
+    _vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"
   else
     info "$(t app.vaultwarden.info.kept_backup "$VW_BACKUP_DIR")"
   fi
