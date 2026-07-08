@@ -9230,6 +9230,7 @@ UNIT
     if ! systemctl daemon-reload 2>/dev/null; then
       warn "$(t app.vaultwarden.warn.cleanup_reload_failed)"
     fi
+    _require_safe_vw_bin_path
     rm -f "$VW_BIN"
     error "$(t app.vaultwarden.error.install_failed_start)"
   fi

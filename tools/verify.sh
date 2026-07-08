@@ -5911,6 +5911,27 @@ check_vaultwarden_install_cleanup_reports_systemctl_failures() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_install_rollback_validates_binary_path_before_removal() {
+  awk '
+      /warn "\$\(t app\.vaultwarden\.warn\.service_cleanup\)"/ { in_cleanup=1; saw_guard=0; saw_rm=0; next }
+      in_cleanup && /_require_safe_vw_bin_path/ { saw_guard=1 }
+      in_cleanup && /rm -f "\$VW_BIN"/ {
+        if (!saw_guard) {
+          printf "%s Vaultwarden install rollback must validate VW_BIN before removing the failed binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_rm=1
+      }
+      in_cleanup && /error "\$\(t app\.vaultwarden\.error\.install_failed_start\)"/ {
+        if (!(saw_guard && saw_rm)) {
+          printf "%s Vaultwarden install rollback must guard VW_BIN before deletion\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_cleanup=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_update_stop_failure_aborts_before_replace() {
   awk '
       /app\.vaultwarden\.error\.stop_service_failed/ { saw_key=1 }
@@ -7361,6 +7382,7 @@ main() {
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
       check_vaultwarden_uninstall_validates_binary_path_before_removal
+      check_vaultwarden_install_rollback_validates_binary_path_before_removal
       check_vaultwarden_install_supports_noninteractive_mode
       check_vaultwarden_install_summary_is_localized
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
@@ -7413,6 +7435,7 @@ main() {
   check_vaultwarden_uninstall_supports_noninteractive_mode
   check_vaultwarden_uninstall_checks_directory_removal_errors
   check_vaultwarden_uninstall_validates_binary_path_before_removal
+  check_vaultwarden_install_rollback_validates_binary_path_before_removal
   check_vaultwarden_install_supports_noninteractive_mode
   check_vaultwarden_install_summary_is_localized
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
