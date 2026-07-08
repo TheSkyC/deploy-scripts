@@ -1564,6 +1564,9 @@ i18n_register app.blog.download_url \
 i18n_register app.blog.error.hugo_download \
   "Hugo download failed. Check the network or download it manually." \
   "Hugo 下载失败，请检查网络或手动下载。"
+i18n_register app.blog.warn.hugo_cleanup_failed \
+  "Failed to remove temporary Hugo package %s. Remove it manually after the install attempt finishes." \
+  "删除 Hugo 临时包 %s 失败。请在本次安装结束后手动清理。"
 i18n_register app.blog.error.hugo_install \
   "Hugo package installation failed. Run apt-get install -f and then dpkg -i <downloaded-hugo.deb> after fixing dependency issues." \
   "Hugo 软件包安装失败。请先执行 apt-get install -f 修复依赖问题，再重新运行 dpkg -i <下载的-hugo.deb>。"
@@ -2344,15 +2347,21 @@ if ! HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
   error "$(t app.blog.error.hugo_download)"
 fi
 if ! wget -q --show-progress -O "$HUGO_DEB" "$DEB_URL"; then
-  rm -f "$HUGO_DEB"
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
   error "$(t app.blog.error.hugo_download)"
 fi
 if [[ ! -s "$HUGO_DEB" ]]; then
-  rm -f "$HUGO_DEB"
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
   error "$(t app.blog.error.hugo_download)"
 fi
 if ! dpkg -i "$HUGO_DEB"; then
-  rm -f "$HUGO_DEB"
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
   error "$(t app.blog.error.hugo_install)"
 fi
 if ! rm -f "$HUGO_DEB"; then

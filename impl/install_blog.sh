@@ -305,15 +305,21 @@ if ! HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
   error "$(t app.blog.error.hugo_download)"
 fi
 if ! wget -q --show-progress -O "$HUGO_DEB" "$DEB_URL"; then
-  rm -f "$HUGO_DEB"
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
   error "$(t app.blog.error.hugo_download)"
 fi
 if [[ ! -s "$HUGO_DEB" ]]; then
-  rm -f "$HUGO_DEB"
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
   error "$(t app.blog.error.hugo_download)"
 fi
 if ! dpkg -i "$HUGO_DEB"; then
-  rm -f "$HUGO_DEB"
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
   error "$(t app.blog.error.hugo_install)"
 fi
 if ! rm -f "$HUGO_DEB"; then

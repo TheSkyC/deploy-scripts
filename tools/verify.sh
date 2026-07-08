@@ -3216,11 +3216,12 @@ check_blog_dependency_failures_are_reported() {
 check_blog_hugo_install_failures_are_actionable() {
   awk '
       /app\.blog\.error\.hugo_install/ { saw_key=1 }
+      /app\.blog\.warn\.hugo_cleanup_failed/ { saw_warn_key=1 }
       /app\.blog\.error\.hugo_cleanup/ { saw_cleanup_key=1 }
       /apt-get install -f/ { saw_fix_deps=1 }
       /dpkg -i <downloaded-hugo\.deb>/ { saw_retry=1 }
       END {
-        if (!(saw_key && saw_cleanup_key && saw_fix_deps && saw_retry)) {
+        if (!(saw_key && saw_warn_key && saw_cleanup_key && saw_fix_deps && saw_retry)) {
           print "Blog Hugo package install and cleanup failures must explain recovery steps." > "/dev/stderr"
           exit 1
         }
@@ -3229,29 +3230,50 @@ check_blog_hugo_install_failures_are_actionable() {
   awk '
       /if ! HUGO_DEB="\$\(mktemp \/tmp\/hugo\.XXXXXX\.deb\)"; then/ { saw_tmp_if=1 }
       /error "\$\(t app\.blog\.error\.hugo_download\)"/ { saw_tmp_error=1 }
-      /if \[\[ ! -s "\$HUGO_DEB" \]\]; then/ { saw_empty_if=1 }
-      saw_empty_if && /rm -f "\$HUGO_DEB"/ { saw_empty_cleanup=1 }
-      /if ! dpkg -i "\$HUGO_DEB"; then/ { in_block=1; saw_error=0; next }
-      in_block && /error "\$\(t app\.blog\.error\.hugo_install\)"/ { saw_error=1 }
-      in_block && /rm -f "\$HUGO_DEB"/ { saw_cleanup=1 }
-      in_block && /^fi$/ {
-        if (!(saw_error && saw_cleanup)) {
-          printf "%s Blog Hugo package install failure must clean up and report an actionable error\n", FILENAME > "/dev/stderr"
+      /if ! wget -q --show-progress -O "\$HUGO_DEB" "\$DEB_URL"; then/ { in_download_fail=1; saw_download_cleanup_if=0; saw_download_warn=0; next }
+      in_download_fail && /if ! rm -f "\$HUGO_DEB"; then/ { saw_download_cleanup_if=1 }
+      in_download_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$HUGO_DEB"\)"/ { saw_download_warn=1 }
+      in_download_fail && /error "\$\(t app\.blog\.error\.hugo_download\)"/ {
+        if (!(saw_download_cleanup_if && saw_download_warn)) {
+          printf "%s Blog Hugo download failure must warn when temporary package cleanup fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
+        in_download_fail=0
+      }
+      /if \[\[ ! -s "\$HUGO_DEB" \]\]; then/ { in_empty_fail=1; saw_empty_if=1; saw_empty_cleanup_if=0; saw_empty_cleanup_warn=0; next }
+      in_empty_fail && /if ! rm -f "\$HUGO_DEB"; then/ { saw_empty_cleanup_if=1 }
+      in_empty_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$HUGO_DEB"\)"/ { saw_empty_cleanup_warn=1 }
+      in_empty_fail && /error "\$\(t app\.blog\.error\.hugo_download\)"/ {
+        if (!(saw_empty_cleanup_if && saw_empty_cleanup_warn)) {
+          printf "%s Blog Hugo empty download failure must warn when temporary package cleanup fails\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_empty_fail=0
+      }
+      /if ! dpkg -i "\$HUGO_DEB"; then/ { in_block=1; saw_error=0; saw_cleanup_if=0; saw_cleanup_warn=0; next }
+      in_block && /if ! rm -f "\$HUGO_DEB"; then/ { saw_cleanup_if=1 }
+      in_block && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$HUGO_DEB"\)"/ { saw_cleanup_warn=1 }
+      in_block && /error "\$\(t app\.blog\.error\.hugo_install\)"/ { saw_error=1 }
+      in_block && /^fi$/ {
+        if (!(saw_error && saw_cleanup_if && saw_cleanup_warn)) {
+          printf "%s Blog Hugo package install failure must warn when temporary package cleanup fails and report an actionable error\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        expect_success_cleanup=1
         in_block=0
       }
-      /if ! rm -f "\$HUGO_DEB"; then/ { saw_success_cleanup_if=1 }
-      /error "\$\(t app\.blog\.error\.hugo_cleanup "\$HUGO_DEB"\)"/ { saw_success_cleanup_error=1 }
+      expect_success_cleanup && /if ! rm -f "\$HUGO_DEB"; then/ { saw_success_cleanup_if=1; in_success_cleanup=1; expect_success_cleanup=0; next }
+      in_success_cleanup && /error "\$\(t app\.blog\.error\.hugo_cleanup "\$HUGO_DEB"\)"/ { saw_success_cleanup_error=1 }
       /success "\$\(t app\.blog\.hugo_installed "\$\(hugo version \| head -1\)"\)"/ {
         if (!(saw_success_cleanup_if && saw_success_cleanup_error)) {
           printf "%s Blog Hugo install must surface temporary package cleanup failures before reporting success\n", FILENAME > "/dev/stderr"
           exit 1
         }
+        in_success_cleanup=0
       }
       END {
-        if (!(saw_tmp_if && saw_tmp_error && saw_empty_if && saw_empty_cleanup)) {
-          print "Blog Hugo package download must report temporary file creation and empty download failures." > "/dev/stderr"
+        if (!(saw_tmp_if && saw_tmp_error && saw_empty_if && saw_empty_cleanup_if && saw_empty_cleanup_warn)) {
+          print "Blog Hugo package download must report temporary file creation and cleanup failures for empty downloads." > "/dev/stderr"
           exit 1
         }
       }
