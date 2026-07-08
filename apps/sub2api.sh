@@ -603,6 +603,9 @@ i18n_register_many \
   app.sub2api.error.update_download \
   "Download failed; update aborted and the current version is unchanged." \
   "下载失败，更新中止（当前版本未受影响）。" \
+  app.sub2api.warn.tmp_binary_cleanup_failed \
+  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
+  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
   app.sub2api.step.replace_restart \
   "Replace binary and restart service" \
   "替换二进制并重启服务" \

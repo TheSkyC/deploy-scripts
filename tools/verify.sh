@@ -6509,9 +6509,10 @@ check_sub2api_install_rollback_surfaces_service_file_removal_failures() {
 check_sub2api_update_stop_failure_aborts_before_replace() {
   awk '
       /app\.sub2api\.error\.stop_service_failed/ { saw_key=1 }
+      /app\.sub2api\.warn\.tmp_binary_cleanup_failed/ { saw_warn_key=1 }
       END {
-        if (!saw_key) {
-          print "Sub2API must provide an actionable update stop failure error." > "/dev/stderr"
+        if (!(saw_key && saw_warn_key)) {
+          print "Sub2API must provide actionable update stop failure and cleanup warning messages." > "/dev/stderr"
           exit 1
         }
       }
@@ -6520,11 +6521,12 @@ check_sub2api_update_stop_failure_aborts_before_replace() {
       /info "\$\(t app\.sub2api\.info\.stopping_service\)"/ { in_stop=1; saw_if=0; saw_cleanup=0; saw_error=0; saw_suppressed=0; next }
       in_stop && /systemctl stop "\$SERVICE_NAME" 2>\/dev\/null \|\| true/ { saw_suppressed=1 }
       in_stop && /if ! systemctl stop "\$SERVICE_NAME" 2>\/dev\/null; then/ { saw_if=1 }
-      in_stop && /rm -f "\$TMP_BIN"/ { saw_cleanup=1 }
+      in_stop && /if ! rm -f "\$TMP_BIN"; then/ { saw_cleanup=1 }
+      in_stop && /warn "\$\(t app\.sub2api\.warn\.tmp_binary_cleanup_failed "\$TMP_BIN"\)"/ { saw_cleanup_warn=1 }
       in_stop && /error "\$\(t app\.sub2api\.error\.stop_service_failed "\$SERVICE_NAME" "\$SERVICE_NAME"\)"/ { saw_error=1 }
       in_stop && /if ! _install_binary_candidate "\$TMP_BIN"; then/ {
-        if (!(saw_if && saw_cleanup && saw_error) || saw_suppressed) {
-          printf "%s Sub2API update must abort and clean the extracted binary when stopping the service fails\n", FILENAME > "/dev/stderr"
+        if (!(saw_if && saw_cleanup && saw_cleanup_warn && saw_error) || saw_suppressed) {
+          printf "%s Sub2API update must abort and surface extracted binary cleanup failures when stopping the service fails\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_stop=0

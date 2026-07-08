@@ -1286,7 +1286,9 @@ do_update() {
   info "$(t app.sub2api.info.old_binary_backup "$BAK_PATH")"
   info "$(t app.sub2api.info.stopping_service)"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-    rm -f "$TMP_BIN"
+    if ! rm -f "$TMP_BIN"; then
+      warn "$(t app.sub2api.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
+    fi
     error "$(t app.sub2api.error.stop_service_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
   if ! _install_binary_candidate "$TMP_BIN"; then
