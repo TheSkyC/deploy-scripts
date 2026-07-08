@@ -4811,14 +4811,25 @@ check_download_validation_failures_cleanup() {
       in_extract && /^}/ { in_extract=0 }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
   awk '
-      /verify_go_archive_checksum\(\)/ { in_func=1; saw_archive_rm=0; saw_compare=0; next }
-      in_func && /rm -f "\$archive"/ { saw_archive_rm=1 }
+      /app\.cyberstrikeai\.warn\.go_archive_cleanup_failed/ { saw_warn_key=1 }
+      END {
+        if (!saw_warn_key) {
+          print "CyberStrikeAI must provide a localized Go archive cleanup warning." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/cyberstrikeai.sh
+  awk '
+      /verify_go_archive_checksum\(\)/ { in_func=1; saw_archive_rm=0; saw_archive_warn=0; saw_compare=0; next }
+      in_func && /if ! rm -f "\$archive"; then/ { saw_archive_rm=1 }
+      in_func && /warn "\$\(t app\.cyberstrikeai\.warn\.go_archive_cleanup_failed "\$archive"\)"/ { saw_archive_warn=1 }
       in_func && /error "\$\(t app\.cyberstrikeai\.error\.(go_checksum_missing|go_sha_tool_missing|go_sha_failed)/ {
-        if (!saw_archive_rm) {
-          printf "%s does not remove the downloaded Go archive before checksum verification failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_archive_rm && saw_archive_warn)) {
+          printf "%s does not surface downloaded Go archive cleanup failures before checksum verification errors\n", FILENAME > "/dev/stderr"
           exit 1
         }
         saw_archive_rm=0
+        saw_archive_warn=0
       }
       in_func && /if \[\[ "\$actual_sha" != "\$expected_sha" \]\]; then/ { saw_compare=1 }
       in_func && /info "\$\(t app\.cyberstrikeai\.info\.go_sha_ok "\$\{actual_sha:0:16\}"\)"/ {

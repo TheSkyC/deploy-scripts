@@ -1433,6 +1433,9 @@ i18n_register_many \
   app.cyberstrikeai.error.go_sha_failed \
   "Go archive checksum verification failed. Expected %s, got %s." \
   "Go 归档文件校验失败。期望 %s，实际 %s。" \
+  app.cyberstrikeai.warn.go_archive_cleanup_failed \
+  "Failed to remove temporary Go archive %s. Remove it manually after this command finishes." \
+  "删除临时 Go 归档 %s 失败。请在本次命令结束后手动清理。" \
   app.cyberstrikeai.info.go_sha_ok \
   "Go archive checksum verified: %s..." \
   "Go 归档文件校验通过：%s..." \
@@ -2029,25 +2032,35 @@ go_release_sha256() {
 verify_go_archive_checksum() {
   local archive="$1" expected_sha="$2" tarball="$3" actual_sha=""
   if ! [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.cyberstrikeai.warn.go_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.cyberstrikeai.error.go_checksum_missing "$tarball")"
   fi
   if command -v sha256sum >/dev/null 2>&1; then
     if ! actual_sha=$(sha256sum "$archive" | awk '{print $1}'); then
-      rm -f "$archive"
+      if ! rm -f "$archive"; then
+        warn "$(t app.cyberstrikeai.warn.go_archive_cleanup_failed "$archive")"
+      fi
       error "$(t app.cyberstrikeai.error.go_sha_failed "$expected_sha" "${actual_sha:-unavailable}")"
     fi
   elif command -v shasum >/dev/null 2>&1; then
     if ! actual_sha=$(shasum -a 256 "$archive" | awk '{print $1}'); then
-      rm -f "$archive"
+      if ! rm -f "$archive"; then
+        warn "$(t app.cyberstrikeai.warn.go_archive_cleanup_failed "$archive")"
+      fi
       error "$(t app.cyberstrikeai.error.go_sha_failed "$expected_sha" "${actual_sha:-unavailable}")"
     fi
   else
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.cyberstrikeai.warn.go_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.cyberstrikeai.error.go_sha_tool_missing)"
   fi
   if [[ "$actual_sha" != "$expected_sha" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.cyberstrikeai.warn.go_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.cyberstrikeai.error.go_sha_failed "$expected_sha" "$actual_sha")"
   fi
   info "$(t app.cyberstrikeai.info.go_sha_ok "${actual_sha:0:16}")"

@@ -78,6 +78,9 @@ i18n_register_many \
   app.cyberstrikeai.error.go_sha_failed \
   "Go archive checksum verification failed. Expected %s, got %s." \
   "Go 归档文件校验失败。期望 %s，实际 %s。" \
+  app.cyberstrikeai.warn.go_archive_cleanup_failed \
+  "Failed to remove temporary Go archive %s. Remove it manually after this command finishes." \
+  "删除临时 Go 归档 %s 失败。请在本次命令结束后手动清理。" \
   app.cyberstrikeai.info.go_sha_ok \
   "Go archive checksum verified: %s..." \
   "Go 归档文件校验通过：%s..." \
