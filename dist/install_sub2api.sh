@@ -3565,7 +3565,7 @@ do_install() {
       if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
         warn "$(t app.sub2api.warn.cleanup_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
       fi
-      rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+      _sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"
       if ! systemctl daemon-reload 2>/dev/null; then
         warn "$(t app.sub2api.warn.cleanup_reload_failed)"
       fi
