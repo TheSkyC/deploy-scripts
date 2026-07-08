@@ -4430,17 +4430,31 @@ check_sub2api_extract_move_failure_cleanup() {
     return 1
   fi
   awk '
-      /extract_and_verify\(\)/ { in_func=1; saw_extract_tmp=0; saw_extract_archive_rm=0; saw_extract_error=0; saw_bin_tmp=0; saw_bin_archive_rm=0; saw_bin_extract_rm=0; saw_bin_error=0; next }
+      /app\.sub2api\.warn\.tmp_archive_cleanup_failed/ { saw_archive_warn_key=1 }
+      /app\.sub2api\.warn\.tmp_binary_cleanup_failed/ { saw_bin_warn_key=1 }
+      END {
+        if (!(saw_archive_warn_key && saw_bin_warn_key)) {
+          print "Sub2API extraction must provide localized archive and binary cleanup warnings." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/sub2api.sh
+  awk '
+      /extract_and_verify\(\)/ { in_func=1; saw_extract_tmp=0; saw_extract_archive_rm=0; saw_extract_archive_warn=0; saw_extract_error=0; saw_bin_tmp=0; saw_bin_archive_rm=0; saw_bin_archive_warn=0; saw_bin_tmp_rm=0; saw_bin_tmp_warn=0; saw_bin_extract_rm=0; saw_bin_error=0; next }
       in_func && index($0, "if ! tmp_extract=$(mktemp -d \"${dest_dir}/sub2api-extract.XXXXXX\"); then") { saw_extract_tmp=1; next }
-      in_func && saw_bin_tmp && index($0, "rm -f \"$archive\"") { saw_bin_archive_rm=1; next }
+      in_func && saw_bin_tmp && index($0, "if ! rm -f \"$archive\"; then") { saw_bin_archive_rm=1; next }
+      in_func && saw_bin_tmp && index($0, "warn \"$(t app.sub2api.warn.tmp_archive_cleanup_failed \"$archive\")\"") { saw_bin_archive_warn=1; next }
+      in_func && saw_bin_tmp && index($0, "if ! rm -f \"$tmp_bin\"; then") { saw_bin_tmp_rm=1; next }
+      in_func && saw_bin_tmp && index($0, "warn \"$(t app.sub2api.warn.tmp_binary_cleanup_failed \"$tmp_bin\")\"") { saw_bin_tmp_warn=1; next }
       in_func && saw_bin_tmp && index($0, "rm -rf \"$tmp_extract\"") { saw_bin_extract_rm=1; next }
       in_func && saw_bin_tmp && index($0, "error \"$(t app.sub2api.error.archive_missing_binary)\"") { saw_bin_error=1; next }
-      in_func && saw_extract_tmp && index($0, "rm -f \"$archive\"") { saw_extract_archive_rm=1; next }
+      in_func && saw_extract_tmp && index($0, "if ! rm -f \"$archive\"; then") { saw_extract_archive_rm=1; next }
+      in_func && saw_extract_tmp && index($0, "warn \"$(t app.sub2api.warn.tmp_archive_cleanup_failed \"$archive\")\"") { saw_extract_archive_warn=1; next }
       in_func && saw_extract_tmp && index($0, "error \"$(t app.sub2api.error.tar_extract)\"") { saw_extract_error=1; next }
       in_func && index($0, "if ! tmp_bin=$(mktemp \"${dest_dir}/sub2api.tmp.XXXXXX\"); then") { saw_bin_tmp=1; next }
       in_func && index($0, "echo \"$tmp_bin\"") {
-        if (!(saw_extract_tmp && saw_extract_archive_rm && saw_extract_error && saw_bin_tmp && saw_bin_archive_rm && saw_bin_extract_rm && saw_bin_error)) {
-          printf "%s sub2api extraction must report and clean up temporary file creation failures\n", FILENAME > "/dev/stderr"
+        if (!(saw_extract_tmp && saw_extract_archive_rm && saw_extract_archive_warn && saw_extract_error && saw_bin_tmp && saw_bin_archive_rm && saw_bin_archive_warn && saw_bin_tmp_rm && saw_bin_tmp_warn && saw_bin_extract_rm && saw_bin_error)) {
+          printf "%s sub2api extraction must report and surface archive/binary cleanup failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
