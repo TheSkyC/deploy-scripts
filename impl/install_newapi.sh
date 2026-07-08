@@ -655,6 +655,7 @@ do_install() {
       _restore_binary_backup "$OLD_BIN_BAK" \
         || error "$(t app.newapi.error.install_start_failed "$SERVICE_NAME")"
     else
+      _newapi_require_safe_bin_path
       rm -f "$BIN_PATH"
     fi
     error "$(t app.newapi.error.install_start_failed "$SERVICE_NAME")"
