@@ -684,7 +684,7 @@ UNIT
     if ! systemctl disable vaultwarden 2>/dev/null; then
       warn "$(t app.vaultwarden.warn.cleanup_disable_failed "vaultwarden" "vaultwarden")"
     fi
-    rm -f /etc/systemd/system/vaultwarden.service
+    _vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"
     if ! systemctl daemon-reload 2>/dev/null; then
       warn "$(t app.vaultwarden.warn.cleanup_reload_failed)"
     fi
