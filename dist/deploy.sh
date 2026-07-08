@@ -9308,7 +9308,7 @@ NGINX
     || error "$(t app.vaultwarden.error.nginx_write "$NGINX_CONF")"
   if [[ -L /etc/nginx/sites-enabled/default ]]; then
     warn "$(t app.vaultwarden.warn.default_site_removed)"
-    rm -f /etc/nginx/sites-enabled/default
+    _vw_remove_file_or_error "/etc/nginx/sites-enabled/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"
   fi
   nginx -t || error "$(t app.vaultwarden.error.nginx_http_test)"
   success "$(t app.vaultwarden.success.nginx_http)"

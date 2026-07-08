@@ -3103,6 +3103,22 @@ check_vaultwarden_apt_update_failures_are_reported() {
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+check_vaultwarden_install_surfaces_default_nginx_site_removal_failures() {
+  awk '
+      /step "\$\(t app\.vaultwarden\.step\.nginx_http\)"/ { in_nginx=1; saw_warn=0; saw_remove=0; saw_raw_rm=0; next }
+      in_nginx && /warn "\$\(t app\.vaultwarden\.warn\.default_site_removed\)"/ { saw_warn=1 }
+      in_nginx && /_vw_remove_file_or_error "\/etc\/nginx\/sites-enabled\/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"/ { saw_remove=1 }
+      in_nginx && /rm -f \/etc\/nginx\/sites-enabled\/default/ { saw_raw_rm=1 }
+      in_nginx && /nginx -t \|\| error "\$\(t app\.vaultwarden\.error\.nginx_http_test\)"/ {
+        if (saw_warn && (!saw_remove || saw_raw_rm)) {
+          printf "%s Vaultwarden install must surface default Nginx site removal failures before testing Nginx config\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_nginx=0
+      }
+    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+}
+
 check_vaultwarden_workdir_cleanup_traps_are_nonfatal() {
   if grep -R -nE '\[\[ -d "\$\{WORK_DIR:-\}" \]\] && rm -rf "\$WORK_DIR"' \
       impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
@@ -7607,6 +7623,7 @@ main() {
       check_vaultwarden_install_rollback_validates_binary_path_before_removal
       check_vaultwarden_install_rollback_surfaces_service_file_removal_failures
       check_vaultwarden_install_supports_noninteractive_mode
+      check_vaultwarden_install_surfaces_default_nginx_site_removal_failures
       check_vaultwarden_install_summary_is_localized
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
@@ -7668,6 +7685,7 @@ main() {
   check_vaultwarden_install_rollback_validates_binary_path_before_removal
   check_vaultwarden_install_rollback_surfaces_service_file_removal_failures
   check_vaultwarden_install_supports_noninteractive_mode
+  check_vaultwarden_install_surfaces_default_nginx_site_removal_failures
   check_vaultwarden_install_summary_is_localized
   check_vaultwarden_backup_lists_preserve_paths_with_spaces
   check_blog_uninstall_supports_noninteractive_mode
