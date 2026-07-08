@@ -174,6 +174,9 @@ i18n_register_many \
   app.cyberstrikeai.error.binary_build \
   "Binary build failed" \
   "二进制构建失败" \
+  app.cyberstrikeai.warn.tmp_binary_cleanup_failed \
+  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
+  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
   app.cyberstrikeai.success.binary_built \
   "Built binary: %s" \
   "二进制已构建：%s" \

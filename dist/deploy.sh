@@ -4373,6 +4373,9 @@ i18n_register_many \
   app.cyberstrikeai.error.binary_build \
   "Binary build failed" \
   "二进制构建失败" \
+  app.cyberstrikeai.warn.tmp_binary_cleanup_failed \
+  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
+  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
   app.cyberstrikeai.success.binary_built \
   "Built binary: %s" \
   "二进制已构建：%s" \
@@ -10749,19 +10752,27 @@ build_binary() {
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   if [[ ! -s "$tmp_bin" ]]; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_empty)"
   fi
   if ! chmod 0755 "$tmp_bin"; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   if ! mv "$tmp_bin" "$BIN_PATH"; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   success "$(t app.cyberstrikeai.success.binary_built "$BIN_PATH")"

@@ -429,19 +429,27 @@ build_binary() {
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   if [[ ! -s "$tmp_bin" ]]; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_empty)"
   fi
   if ! chmod 0755 "$tmp_bin"; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   if ! mv "$tmp_bin" "$BIN_PATH"; then
-    rm -f "$tmp_bin"
+    if ! rm -f "$tmp_bin"; then
+      warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
+    fi
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
   success "$(t app.cyberstrikeai.success.binary_built "$BIN_PATH")"

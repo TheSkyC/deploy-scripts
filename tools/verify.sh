@@ -4542,22 +4542,64 @@ check_cyberstrikeai_build_temp_cleanup() {
     return 1
   fi
   awk '
-      /if ! tmp_bin=\$\(mktemp "\$\{BIN_PATH\}\.tmp\.XXXXXX"\); then/ { saw_tmp=1 }
-      /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ { saw_tmp_error=1 }
-      /if ! go build .*"\$tmp_bin"/ { in_block=1; saw_build_cleanup=0; next }
-      in_block && /rm -f "\$tmp_bin"/ { saw_build_cleanup=1 }
-      in_block && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ {
-        if (!saw_build_cleanup) {
-          print "CyberStrikeAI build failure does not clean up the temporary binary." > "/dev/stderr"
+      /app\.cyberstrikeai\.warn\.tmp_binary_cleanup_failed/ { saw_warn_key=1 }
+      END {
+        if (!saw_warn_key) {
+          print "CyberStrikeAI must provide a localized temporary binary cleanup warning." > "/dev/stderr"
           exit 1
         }
-        in_block=0
       }
-      END {
+    ' apps/cyberstrikeai.sh
+  awk '
+      /build_binary\(\)/ { in_func=1; saw_tmp=0; saw_tmp_error=0; next }
+      in_func && /if ! tmp_bin=\$\(mktemp "\$\{BIN_PATH\}\.tmp\.XXXXXX"\); then/ { saw_tmp=1 }
+      in_func && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ { saw_tmp_error=1 }
+      in_func && /if ! go build .*"\$tmp_bin"/ { in_build=1; saw_build_cleanup=0; saw_build_warn=0; next }
+      in_build && /if ! rm -f "\$tmp_bin"; then/ { saw_build_cleanup=1 }
+      in_build && /warn "\$\(t app\.cyberstrikeai\.warn\.tmp_binary_cleanup_failed "\$tmp_bin"\)"/ { saw_build_warn=1 }
+      in_build && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ {
+        if (!(saw_build_cleanup && saw_build_warn)) {
+          print "CyberStrikeAI build failure does not surface temporary binary cleanup failures." > "/dev/stderr"
+          exit 1
+        }
+        in_build=0
+      }
+      in_func && /if \[\[ ! -s "\$tmp_bin" \]\]; then/ { in_empty=1; saw_empty_cleanup=0; saw_empty_warn=0; next }
+      in_empty && /if ! rm -f "\$tmp_bin"; then/ { saw_empty_cleanup=1 }
+      in_empty && /warn "\$\(t app\.cyberstrikeai\.warn\.tmp_binary_cleanup_failed "\$tmp_bin"\)"/ { saw_empty_warn=1 }
+      in_empty && /error "\$\(t app\.cyberstrikeai\.error\.binary_empty\)"/ {
+        if (!(saw_empty_cleanup && saw_empty_warn)) {
+          print "CyberStrikeAI empty binary failure does not surface temporary binary cleanup failures." > "/dev/stderr"
+          exit 1
+        }
+        in_empty=0
+      }
+      in_func && /if ! chmod 0755 "\$tmp_bin"; then/ { in_chmod=1; saw_chmod_cleanup=0; saw_chmod_warn=0; next }
+      in_chmod && /if ! rm -f "\$tmp_bin"; then/ { saw_chmod_cleanup=1 }
+      in_chmod && /warn "\$\(t app\.cyberstrikeai\.warn\.tmp_binary_cleanup_failed "\$tmp_bin"\)"/ { saw_chmod_warn=1 }
+      in_chmod && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ {
+        if (!(saw_chmod_cleanup && saw_chmod_warn)) {
+          print "CyberStrikeAI chmod failure does not surface temporary binary cleanup failures." > "/dev/stderr"
+          exit 1
+        }
+        in_chmod=0
+      }
+      in_func && /if ! mv "\$tmp_bin" "\$BIN_PATH"; then/ { in_move=1; saw_move_cleanup=0; saw_move_warn=0; next }
+      in_move && /if ! rm -f "\$tmp_bin"; then/ { saw_move_cleanup=1 }
+      in_move && /warn "\$\(t app\.cyberstrikeai\.warn\.tmp_binary_cleanup_failed "\$tmp_bin"\)"/ { saw_move_warn=1 }
+      in_move && /error "\$\(t app\.cyberstrikeai\.error\.binary_build\)"/ {
+        if (!(saw_move_cleanup && saw_move_warn)) {
+          print "CyberStrikeAI move failure does not surface temporary binary cleanup failures." > "/dev/stderr"
+          exit 1
+        }
+        in_move=0
+      }
+      in_func && /^}/ {
         if (!(saw_tmp && saw_tmp_error)) {
           print "CyberStrikeAI build must report temporary binary creation failures." > "/dev/stderr"
           exit 1
         }
+        in_func=0
       }
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
