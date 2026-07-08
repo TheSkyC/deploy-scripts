@@ -1430,6 +1430,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_archive_format \
   "Downloaded Web Vault archive is not gzip data (magic: %s); check whether the request was redirected or intercepted." \
   "下载的 Web Vault 归档不是 gzip 数据（magic: %s），请检查请求是否被重定向或拦截。" \
+  app.vaultwarden.warn.web_vault_archive_cleanup_failed \
+  "Failed to remove temporary Web Vault archive %s. Remove it manually after this command finishes." \
+  "删除临时 Web Vault 归档 %s 失败。请在本次命令结束后手动清理。" \
   app.vaultwarden.error.binary_install \
   "Failed to install Vaultwarden binary: %s" \
   "安装 Vaultwarden 二进制失败：%s。" \
@@ -2399,7 +2402,9 @@ _verify_web_vault_archive() {
   local archive="$1"
   local mode="${2:-fatal}"
   if [[ ! -s "$archive" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+    fi
     if [[ "$mode" == "fatal" ]]; then
       error "$(t app.vaultwarden.error.web_vault_archive_empty)"
     fi
@@ -2409,7 +2414,9 @@ _verify_web_vault_archive() {
   local size
   size=$(wc -c < "$archive")
   if [[ "$size" -lt 65536 ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+    fi
     if [[ "$mode" == "fatal" ]]; then
       error "$(t app.vaultwarden.error.web_vault_archive_small "$size")"
     fi
@@ -2419,7 +2426,9 @@ _verify_web_vault_archive() {
   local magic
   magic=$(od -A n -t x1 -N 2 "$archive" 2>/dev/null | tr -d ' \n' || true)
   if [[ "$magic" != "1f8b" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+    fi
     if [[ "$mode" == "fatal" ]]; then
       error "$(t app.vaultwarden.error.web_vault_archive_format "${magic:-read failed}")"
     fi

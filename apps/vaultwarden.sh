@@ -75,6 +75,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_archive_format \
   "Downloaded Web Vault archive is not gzip data (magic: %s); check whether the request was redirected or intercepted." \
   "下载的 Web Vault 归档不是 gzip 数据（magic: %s），请检查请求是否被重定向或拦截。" \
+  app.vaultwarden.warn.web_vault_archive_cleanup_failed \
+  "Failed to remove temporary Web Vault archive %s. Remove it manually after this command finishes." \
+  "删除临时 Web Vault 归档 %s 失败。请在本次命令结束后手动清理。" \
   app.vaultwarden.error.binary_install \
   "Failed to install Vaultwarden binary: %s" \
   "安装 Vaultwarden 二进制失败：%s。" \

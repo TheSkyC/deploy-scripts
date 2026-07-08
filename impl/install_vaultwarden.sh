@@ -130,7 +130,9 @@ _verify_web_vault_archive() {
   local archive="$1"
   local mode="${2:-fatal}"
   if [[ ! -s "$archive" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+    fi
     if [[ "$mode" == "fatal" ]]; then
       error "$(t app.vaultwarden.error.web_vault_archive_empty)"
     fi
@@ -140,7 +142,9 @@ _verify_web_vault_archive() {
   local size
   size=$(wc -c < "$archive")
   if [[ "$size" -lt 65536 ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+    fi
     if [[ "$mode" == "fatal" ]]; then
       error "$(t app.vaultwarden.error.web_vault_archive_small "$size")"
     fi
@@ -150,7 +154,9 @@ _verify_web_vault_archive() {
   local magic
   magic=$(od -A n -t x1 -N 2 "$archive" 2>/dev/null | tr -d ' \n' || true)
   if [[ "$magic" != "1f8b" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+    fi
     if [[ "$mode" == "fatal" ]]; then
       error "$(t app.vaultwarden.error.web_vault_archive_format "${magic:-read failed}")"
     fi

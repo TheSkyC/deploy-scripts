@@ -7477,9 +7477,10 @@ check_vaultwarden_webvault_archives_are_validated() {
       /app\.vaultwarden\.error\.web_vault_archive_empty/ { saw_empty=1 }
       /app\.vaultwarden\.error\.web_vault_archive_small/ { saw_small=1 }
       /app\.vaultwarden\.error\.web_vault_archive_format/ { saw_format=1 }
+      /app\.vaultwarden\.warn\.web_vault_archive_cleanup_failed/ { saw_warn=1 }
       END {
-        if (!(saw_empty && saw_small && saw_format)) {
-          print "Vaultwarden Web Vault archive validation messages must cover empty, tiny, and non-gzip downloads." > "/dev/stderr"
+        if (!(saw_empty && saw_small && saw_format && saw_warn)) {
+          print "Vaultwarden Web Vault archive validation messages must cover empty, tiny, non-gzip, and cleanup failure cases." > "/dev/stderr"
           exit 1
         }
       }
@@ -7493,10 +7494,12 @@ check_vaultwarden_webvault_archives_are_validated() {
           saw_small=0
           saw_magic=0
           saw_nonfatal=0
+          saw_cleanup_if=0
+          saw_cleanup_warn=0
           next
         }
         in_helper && /^}/ {
-          if (!(saw_empty && saw_small && saw_magic && saw_nonfatal)) {
+          if (!(saw_empty && saw_small && saw_magic && saw_nonfatal && saw_cleanup_if && saw_cleanup_warn)) {
             printf "%s must validate downloaded Web Vault archives before extraction\n", FILENAME > "/dev/stderr"
             exit 1
           }
@@ -7506,6 +7509,8 @@ check_vaultwarden_webvault_archives_are_validated() {
         in_helper && /\[\[ "\$size" -lt 65536 \]\]/ { saw_small=1 }
         in_helper && /"\$magic" != "1f8b"/ { saw_magic=1 }
         in_helper && /local mode="\$\{2:-fatal\}"/ { saw_nonfatal=1 }
+        in_helper && /if ! rm -f "\$archive"; then/ { saw_cleanup_if=1 }
+        in_helper && /warn "\$\(t app\.vaultwarden\.warn\.web_vault_archive_cleanup_failed "\$archive"\)"/ { saw_cleanup_warn=1 }
         /wget -q --show-progress -O "\$\{WORK_DIR\}\/web-vault\.tar\.gz" "\$WV_URL"/ { saw_download=1; next }
         saw_download && /^[[:space:]]*_verify_web_vault_archive "\$\{WORK_DIR\}\/web-vault\.tar\.gz"$/ { saw_install_verify=1; saw_download=0 }
         saw_download && /^[[:space:]]*if _verify_web_vault_archive "\$\{WORK_DIR\}\/web-vault\.tar\.gz" nonfatal; then/ { saw_update_verify=1; saw_download=0 }
