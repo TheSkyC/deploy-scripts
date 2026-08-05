@@ -12,6 +12,7 @@ sudo bash deploy.sh vaultwarden status
 sudo bash deploy.sh newapi status-json
 sudo bash deploy.sh sub2api doctor
 sudo bash deploy.sh list
+sudo CPA_DOMAIN=cpa.example.com CPAMP_DOMAIN=cpamp.example.com CERTBOT_EMAIL=admin@example.com bash deploy.sh cpa-stack install
 sudo bash install_newapi.sh install
 sudo bash install_sub2api.sh update
 sudo bash install_vaultwarden.sh status
@@ -34,8 +35,24 @@ Use generated single-file release scripts when you want to copy only one file to
 sudo bash dist/install_newapi.sh install
 ```
 
-For New API, Sub2API, Vaultwarden, Blog, CyberStrikeAI, and TickFlow automation, `DEPLOY_ASSUME_YES=1` confirms uninstall without prompts while keeping data, config, install directories, and backups by default. Add `DEPLOY_DELETE_DATA=1`, `DEPLOY_DELETE_CONFIG=1`, `DEPLOY_DELETE_INSTALL=1`, or `DEPLOY_DELETE_BACKUP=1` only when those removals are intended. Vaultwarden install automation also requires setting `VW_DOMAIN` first, and setting `CERTBOT_EMAIL` when `ENABLE_HTTPS=true`.
+For New API, Sub2API, Vaultwarden, Blog, CyberStrikeAI, TickFlow, and CPA Stack automation, `DEPLOY_ASSUME_YES=1` confirms uninstall without prompts while keeping data, config, install directories, and backups by default. Add `DEPLOY_DELETE_DATA=1`, `DEPLOY_DELETE_CONFIG=1`, `DEPLOY_DELETE_INSTALL=1`, or `DEPLOY_DELETE_BACKUP=1` only when those removals are intended. Vaultwarden install automation also requires setting `VW_DOMAIN` first, and setting `CERTBOT_EMAIL` when `ENABLE_HTTPS=true`.
 
+## CPA Stack
+
+`cpa-stack` installs CLIProxyAPI (CPA) and CPA Manager Plus (CPAMP) as two systemd services behind Nginx. The public API is served at `https://$CPA_DOMAIN/v1/...`; the management panel is served at `https://$CPAMP_DOMAIN/management.html`. Only Nginx ports `80` and `443` are intended to be public. CPA and CPAMP bind to `127.0.0.1:8317` and `127.0.0.1:18317` respectively.
+
+Set two distinct DNS names and a Let's Encrypt email before installation:
+
+```bash
+sudo CPA_DOMAIN=cpa.example.com \
+  CPAMP_DOMAIN=cpamp.example.com \
+  CERTBOT_EMAIL=admin@example.com \
+  bash deploy.sh cpa-stack install
+```
+
+The script downloads verified native release archives, enables CPA usage publishing for CPAMP monitoring, stores CPAMP secrets in a root-only systemd environment file, creates a consistent backup, and supports `status`, `doctor`, `update`, `backup`, and safe uninstall. OAuth login is intentionally a manual post-install operation because provider flows can require localhost callbacks or device-code authorization.
+
+Use `CPA_STACK_COMPONENT=cpa` or `CPA_STACK_COMPONENT=cpamp` with `update` to update one component; the default is `all`.
 ## Localization
 
 English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework messages and localized application messages for the bundled scripts.
