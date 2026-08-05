@@ -72,6 +72,9 @@ _validate_config_values() {
   app_validate_domain "CPA_DOMAIN" "$CPA_DOMAIN"
   app_validate_domain "CPAMP_DOMAIN" "$CPAMP_DOMAIN"
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
+  if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
+    app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
+  fi
   [[ "$BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] || error "BACKUP_KEEP_DAYS must be a non-negative integer."
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   if [[ -n "$CPA_DOMAIN" && "$CPA_DOMAIN" == "$CPAMP_DOMAIN" ]]; then
@@ -98,7 +101,21 @@ cpa_stack_require_domains() {
   done
   _validate_config_values
   if cpa_stack_truthy "$ENABLE_HTTPS" && [[ -z "$CERTBOT_EMAIL" ]]; then
-    error "$(t app.cpa_stack.error.email_required)"
+    if deploy_assume_yes; then
+      error "$(t app.cpa_stack.error.noninteractive_email)"
+    else
+      while true; do
+        prompt "$(t app.cpa_stack.prompt.email)"
+        local _email; read -r _email
+        [[ -z "$_email" ]] && { warn "$(t app.cpa_stack.warn.email_empty)"; continue; }
+        if ! app_is_valid_email "$_email"; then
+          warn "$(t app.cpa_stack.warn.email_invalid "$_email")"
+          continue
+        fi
+        CERTBOT_EMAIL="$_email"
+        break
+      done
+    fi
   fi
 }
 
