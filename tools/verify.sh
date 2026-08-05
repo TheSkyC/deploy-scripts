@@ -1087,8 +1087,32 @@ check_app_localized_descriptions() {
   expect_app_description vaultwarden zh "包含 Web Vault、Nginx、TLS 和备份的 Vaultwarden 部署脚本。"
   expect_app_description tickflow en "Docker Compose deployment for the TickFlow stock analysis panel."
   expect_app_description tickflow zh "TickFlow 股票分析面板的 Docker Compose 部署脚本。"
+  expect_app_description cpa_stack en "Native CLIProxyAPI (CPA) and CPA Manager Plus deployment with systemd, Nginx, HTTPS, backups, and diagnostics."
+  expect_app_description cpa_stack zh "使用 systemd、Nginx、HTTPS、备份和诊断部署原生 CLIProxyAPI（CPA）与 CPA Manager Plus。"
 }
 
+check_cpa_stack_layout() {
+  local file
+  for file in impl/install_cpa_stack.sh dist/install_cpa-stack.sh; do
+    grep -Fq 'host: "127.0.0.1"' "$file" \
+      && grep -Fq 'usage-statistics-enabled: true' "$file" \
+      && grep -Fq 'Environment=HTTP_ADDR=127.0.0.1:18317' "$file" \
+      && grep -Fq 'CPA_UPSTREAM_URL="${prior_upstream:-http://127.0.0.1:8317}"' "$file" \
+      && grep -Fq 'cpa_stack_download_verified_archive' "$file" \
+      && grep -Fq 'checksums.txt' "$file" \
+      && grep -Fq 'data.key' "$file" \
+      && grep -Fq 'CPAMP_ENV_FILE' "$file" \
+      && grep -Fq 'location /.well-known/acme-challenge/' "$file" \
+      && grep -Fq 'proxy_pass http://127.0.0.1:8317;' "$file" \
+      && grep -Fq 'proxy_pass http://127.0.0.1:18317;' "$file" \
+      && grep -Fq 'certbot certonly --webroot' "$file" \
+      && grep -Fq 'CPA_STACK_COMPONENT' "$file" \
+      || {
+        echo "CPA Stack must retain local-only backends, verified releases, HTTPS reverse proxy, and component update controls: ${file}" >&2
+        return 1
+      }
+  done
+}
 check_no_hardcoded_chinese_impl() {
   if LC_ALL=C.UTF-8 grep -R -nP '[\p{Han}]' impl; then
     echo "Implementation scripts must use i18n keys instead of hardcoded Chinese text." >&2
@@ -8035,6 +8059,7 @@ main() {
   check_vaultwarden_install_webvault_replacement_is_recoverable
   check_vaultwarden_webvault_update_warnings_are_actionable
   check_vaultwarden_webvault_archives_are_validated
+  check_cpa_stack_layout
   check_blog_static_deploy_swaps_tree
   check_blog_static_deploy_failures_are_actionable
   check_blog_site_files_are_atomic
