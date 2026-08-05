@@ -4794,20 +4794,23 @@ check_download_validation_failures_cleanup() {
       in_func && /^}/ { in_func=0 }
     ' impl/install_newapi.sh dist/install_newapi.sh
   awk '
-      /verify_checksum\(\)/ { in_checksum=1; saw_checksum_archive_rm=0; next }
-      in_checksum && /rm -f "\$archive"/ { saw_checksum_archive_rm=1 }
+      /verify_checksum\(\)/ { in_checksum=1; saw_checksum_archive_rm=0; saw_checksum_archive_warn=0; next }
+      in_checksum && /if ! rm -f "\$archive"; then/ { saw_checksum_archive_rm=1 }
+      in_checksum && /warn "\$\(t app\.sub2api\.warn\.tmp_archive_cleanup_failed "\$archive"\)"/ { saw_checksum_archive_warn=1 }
       in_checksum && /error "\$\(t app\.sub2api\.error\.(checksum_temp|checksum_download|checksum_missing|sha_tool_missing)/ {
-        if (!saw_checksum_archive_rm) {
-          printf "%s does not remove the downloaded archive before checksum verification availability failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_checksum_archive_rm && saw_checksum_archive_warn)) {
+          printf "%s does not surface downloaded archive cleanup failures before checksum verification availability failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
         saw_checksum_archive_rm=0
+        saw_checksum_archive_warn=0
       }
-      in_checksum && /if \[\[ "\$actual_hash" != "\$expected_hash" \]\]/ { in_sha_failure=1; saw_rm=0; next }
-      in_sha_failure && /rm -f "\$archive"/ { saw_rm=1 }
+      in_checksum && /if \[\[ "\$actual_hash" != "\$expected_hash" \]\]/ { in_sha_failure=1; saw_rm=0; saw_warn=0; next }
+      in_sha_failure && /if ! rm -f "\$archive"; then/ { saw_rm=1 }
+      in_sha_failure && /warn "\$\(t app\.sub2api\.warn\.tmp_archive_cleanup_failed "\$archive"\)"/ { saw_warn=1 }
       in_sha_failure && /error "\$\(t app\.sub2api\.error\.sha_failed/ {
-        if (!saw_rm) {
-          printf "%s does not remove the downloaded archive before checksum failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_rm && saw_warn)) {
+          printf "%s does not surface downloaded archive cleanup failures before checksum failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_sha_failure=0

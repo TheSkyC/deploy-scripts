@@ -136,19 +136,25 @@ verify_checksum() {
   local checksum_url; checksum_url=$(get_checksum_url "$tag")
   local tmp_sum
   if ! tmp_sum=$(mktemp); then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.sub2api.error.checksum_temp)"
   fi
   if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
     rm -f "$tmp_sum"
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.sub2api.error.checksum_download)"
   fi
   local expected_hash
   expected_hash=$(grep " ${expected_name}$" "$tmp_sum" 2>/dev/null | awk '{print $1}' || true)
   rm -f "$tmp_sum"
   if [[ -z "$expected_hash" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.sub2api.error.checksum_missing "$expected_name")"
   fi
   local actual_hash
@@ -157,11 +163,15 @@ verify_checksum() {
   elif command -v shasum &>/dev/null; then
     actual_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
   else
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.sub2api.error.sha_tool_missing)"
   fi
   if [[ "$actual_hash" != "$expected_hash" ]]; then
-    rm -f "$archive"
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
     error "$(t app.sub2api.error.sha_failed "$expected_hash" "$actual_hash")"
   fi
   success "$(t app.sub2api.success.sha_ok "${actual_hash:0:16}")"
