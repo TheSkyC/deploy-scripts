@@ -1382,6 +1382,9 @@ i18n_register_many \
   app.cpa_stack.error.email_required \
   "CERTBOT_EMAIL is required when ENABLE_HTTPS=true." \
   "ENABLE_HTTPS=true 时必须设置 CERTBOT_EMAIL。" \
+  app.cpa_stack.error.noninteractive_email \
+  "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
+  "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
   app.cpa_stack.error.component \
   "CPA_STACK_COMPONENT must be one of: all, cpa, cpamp. Got: %s." \
   "CPA_STACK_COMPONENT 只能是 all、cpa 或 cpamp，当前为：%s。" \
@@ -1439,6 +1442,12 @@ i18n_register_many \
   app.cpa_stack.warn.config_missing \
   "Configuration file is missing: %s." \
   "配置文件缺失：%s。" \
+  app.cpa_stack.warn.email_empty \
+  "Email cannot be empty. Try again." \
+  "邮箱不能为空，请重新输入。" \
+  app.cpa_stack.warn.email_invalid \
+  "Email is invalid (%s). Try again." \
+  "邮箱格式无效（%s），请重新输入。" \
   app.cpa_stack.step.dependencies \
   "Installing system dependencies" \
   "安装系统依赖" \
@@ -1493,6 +1502,9 @@ i18n_register_many \
   app.cpa_stack.prompt.cpamp_domain \
   "CPAMP management domain:" \
   "CPAMP 管理域名：" \
+  app.cpa_stack.prompt.email \
+  "Enter the Let's Encrypt notification email:" \
+  "请输入 Let's Encrypt 通知邮箱：" \
   app.cpa_stack.prompt.continue \
   "Type YES to remove CPA Stack services and Nginx configuration:" \
   "输入 YES 以移除 CPA Stack 服务和 Nginx 配置：" \
@@ -1581,6 +1593,9 @@ _validate_config_values() {
   app_validate_domain "CPA_DOMAIN" "$CPA_DOMAIN"
   app_validate_domain "CPAMP_DOMAIN" "$CPAMP_DOMAIN"
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
+  if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
+    app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
+  fi
   [[ "$BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] || error "BACKUP_KEEP_DAYS must be a non-negative integer."
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   if [[ -n "$CPA_DOMAIN" && "$CPA_DOMAIN" == "$CPAMP_DOMAIN" ]]; then
@@ -1607,7 +1622,21 @@ cpa_stack_require_domains() {
   done
   _validate_config_values
   if cpa_stack_truthy "$ENABLE_HTTPS" && [[ -z "$CERTBOT_EMAIL" ]]; then
-    error "$(t app.cpa_stack.error.email_required)"
+    if deploy_assume_yes; then
+      error "$(t app.cpa_stack.error.noninteractive_email)"
+    else
+      while true; do
+        prompt "$(t app.cpa_stack.prompt.email)"
+        local _email; read -r _email
+        [[ -z "$_email" ]] && { warn "$(t app.cpa_stack.warn.email_empty)"; continue; }
+        if ! app_is_valid_email "$_email"; then
+          warn "$(t app.cpa_stack.warn.email_invalid "$_email")"
+          continue
+        fi
+        CERTBOT_EMAIL="$_email"
+        break
+      done
+    fi
   fi
 }
 
