@@ -3,8 +3,8 @@
 sanitize_conf_val() {
   local newline=$'\n'
   local carriage_return=$'\r'
-  local value="${1%%${newline}*}"
-  value="${value%%${carriage_return}*}"
+  local value="${1%%"${newline}"*}"
+  value="${value%%"${carriage_return}"*}"
   value="${value//\"/}"
   echo "$value"
 }
