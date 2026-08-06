@@ -27,6 +27,9 @@ Run the full suite before submitting:
 bash tools/verify.sh all
 ```
 
+`all` runs independent checks concurrently (defaulting to the CPU count); set
+`PARALLEL_JOBS=1` to run serially when debugging a single check.
+
 Useful targets: `syntax`, `shellcheck`, `release`, `dispatch`, `guards`, `help`.
 `all` rebuilds `dist/` deterministically, so a change to `lib/`, `apps/`, or an
 `impl/` script requires committing the regenerated release scripts too. New

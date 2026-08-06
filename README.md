@@ -183,7 +183,9 @@ bash tools/verify.sh guards
 
 The parallel CI jobs run `syntax`, `shellcheck`, `release`, `dispatch`, and
 `guards`; the union of those targets covers every check that `all` runs.
-`bash tools/verify.sh` (no target) still runs the full suite.
+`bash tools/verify.sh` (no target) still runs the full suite. The `all`
+target runs independent checks concurrently (up to `PARALLEL_JOBS`, which
+defaults to the CPU count); set `PARALLEL_JOBS=1` for a serial run.
 
 Check definitions live in `tools/checks/*.sh` modules (per-app, dispatch,
 release, and framework guardrails); `tools/verify.sh` sources them and only

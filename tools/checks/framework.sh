@@ -7,8 +7,8 @@ check_target_groups_cover_all_checks() {
     /^check_[A-Za-z0-9_]+\(\)/ { d=$0; sub(/\(.*/, "", d); defs[d]=1; next }
     /^main\(\) \{/ { in_main=1; next }
     in_main && /^main "\$@"/ { in_main=0; next }
-    in_main && /^  check_[A-Za-z0-9_]+$/ { all_calls[$1]=1; next }
-    in_main && /^      check_[A-Za-z0-9_]+$/ { arm_calls[$1]=1; next }
+    in_main && /^    check_[A-Za-z0-9_]+[[:space:]]*\\$/ { all_calls[$1]=1; next }
+    in_main && /^      check_[A-Za-z0-9_]+[[:space:]]*$/ { arm_calls[$1]=1; next }
     END {
       for (d in defs) {
         if (!(d in all_calls) && !(d in arm_calls)) {
