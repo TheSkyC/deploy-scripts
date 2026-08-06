@@ -12,7 +12,24 @@ defaults:
     shell: bash
 
 jobs:
+  # Static and per-surface verification targets run in parallel so failures
+  # surface faster. The union of these targets covers every check_* function
+  # that `all` runs (enforced by check_target_groups_cover_all_checks).
   verify:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [syntax, release, dispatch, guards]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run ${{ matrix.target }} verification
+        run: bash tools/verify.sh ${{ matrix.target }}
+
+  shellcheck:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,5 +38,5 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
-      - name: Run repository verification
-        run: bash tools/verify.sh
+      - name: Run shellcheck verification
+        run: bash tools/verify.sh shellcheck
