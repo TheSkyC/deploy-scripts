@@ -2717,9 +2717,7 @@ check_port_conflict_is_warn_only() {
     source "$1/lib/logging.sh"
     source "$1/lib/i18n.sh"
     source "$1/lib/network.sh"
-    echo "before"
     app_check_port_conflict 59998 "TEST_PORT"
-    echo "after"
   ' _ "$ROOT_DIR"
 }
 
