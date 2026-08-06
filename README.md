@@ -135,7 +135,7 @@ per-app copy, then keep the full verification suite green.
 2. Create `impl/install_myapp.sh` with `do_install` and any supported lifecycle functions.
 3. Create `bin/install_myapp.sh` and a top-level `install_myapp.sh` wrapper following the existing pattern.
 4. Add the app to `tools/build-release.sh`.
-5. Add verification coverage to `tools/verify.sh` when the app has special dispatch or localization behavior.
+5. Add verification coverage to `tools/verify.sh` when the app has special dispatch or localization behavior. Register each new check in a target arm (`dispatch` or `guards`) as well as `all`; `check_target_groups_cover_all_checks` fails if a check is missing from either.
 6. Run verification:
 
 ```bash
@@ -156,7 +156,7 @@ Build one release script:
 bash tools/build-release.sh newapi
 ```
 
-`tools/verify.sh` rebuilds `dist/` with deterministic metadata before checking syntax and dispatch behavior.
+`tools/verify.sh` rebuilds `dist/` with deterministic metadata before checking syntax and dispatch behavior; commit regenerated `dist/` files together with their source.
 
 ## Validation
 
@@ -170,10 +170,15 @@ For faster local iteration, run a focused verification target:
 
 ```bash
 bash tools/verify.sh syntax
+bash tools/verify.sh shellcheck
 bash tools/verify.sh release
 bash tools/verify.sh dispatch
-bash tools/verify.sh shellcheck
+bash tools/verify.sh guards
 ```
+
+The parallel CI jobs run `syntax`, `shellcheck`, `release`, `dispatch`, and
+`guards`; the union of those targets covers every check that `all` runs.
+`bash tools/verify.sh` (no target) still runs the full suite.
 
 The verification script checks:
 
