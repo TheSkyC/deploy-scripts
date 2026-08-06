@@ -2774,6 +2774,19 @@ check_connectivity_helper_behavior() {
 }
 
 
+# A flag-driven `$flag && cmd || error` chain runs the error branch whenever
+# the flag is false (&& short-circuits), even though the left side never ran.
+# Require explicit `if $flag; then ...` conditionals for error handling.
+check_no_flag_chained_error_handlers() {
+  local file
+  while IFS= read -r file; do
+    if grep -nE '^[[:space:]]*\$\{?[A-Za-z_][A-Za-z0-9_]*\}?[[:space:]]*&&.*\|\|[[:space:]]*(error|return|exit)\b' "$file" >&2; then
+      echo "flag-chained error handling must use an explicit if conditional (see matches above)" >&2
+      return 1
+    fi
+  done < <(find impl apps lib bin dist -name '*.sh' -type f | sort)
+}
+
 # Verifies that every check_* function is invoked by `all` and that every
 # `all` check is also covered by a non-`all` target (syntax/shellcheck/release/
 # dispatch/guards). Keeps parallel CI jobs from silently dropping checks.

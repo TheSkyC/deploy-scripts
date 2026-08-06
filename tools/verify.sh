@@ -346,6 +346,7 @@ main() {
       check_nginx_test_failures_report_diagnostics
       check_no_chinese_comments
       check_no_fixed_tmp_downloads
+      check_no_flag_chained_error_handlers
       check_no_hardcoded_chinese_impl
       check_no_unsupported_systemctl_options
       check_old_backup_cleanup_reports_failures
@@ -554,6 +555,7 @@ main() {
   check_sub2api_codename_resolution
   check_no_unsupported_systemctl_options
   check_no_fixed_tmp_downloads
+  check_no_flag_chained_error_handlers
   check_keyring_writes_are_atomic
   check_apt_sources_are_atomic
   check_iptables_rules_are_atomic
