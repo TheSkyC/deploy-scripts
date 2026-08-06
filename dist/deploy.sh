@@ -14268,15 +14268,21 @@ do_backup() {
   done
   if ! tar -C / -czf "$tmp" "${backup_paths[@]}" 2>/dev/null; then
     rm -f "$tmp"
-    $cpamp_was_active && systemctl start "$CPAMP_SERVICE_NAME" || true
+    if $cpamp_was_active; then
+      systemctl start "$CPAMP_SERVICE_NAME" || true
+    fi
     error "$(t app.cpa_stack.error.backup "$archive")"
   fi
   if ! mv "$tmp" "$archive"; then
     rm -f "$tmp"
-    $cpamp_was_active && systemctl start "$CPAMP_SERVICE_NAME" || true
+    if $cpamp_was_active; then
+      systemctl start "$CPAMP_SERVICE_NAME" || true
+    fi
     error "$(t app.cpa_stack.error.backup "$archive")"
   fi
-  $cpamp_was_active && systemctl start "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
+  if $cpamp_was_active; then
+    systemctl start "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
+  fi
   cpa_stack_prune_backups
   success "$(t app.cpa_stack.success.backup "$archive")"
 }
