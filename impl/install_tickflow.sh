@@ -28,6 +28,11 @@ app_conf_register_legacy "/etc/tickflow-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 
+_tickflow_doctor_service_name() {
+  printf '%s\n' "$TICKFLOW_SERVICE_NAME"
+}
+APP_DOCTOR_SERVICE_FN=_tickflow_doctor_service_name
+
 preflight_check() {
   [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
   command -v apt-get >/dev/null 2>&1 || error "$(t app.tickflow.error.apt_only)"

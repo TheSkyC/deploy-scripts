@@ -23,6 +23,7 @@ _NEWAPI_DERIVE_PATHS() {
   LOG_FILE="${LOG_DIR}/new-api.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
+APP_CONFIG_DERIVE_HOOK=_NEWAPI_DERIVE_PATHS
 _newapi_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then

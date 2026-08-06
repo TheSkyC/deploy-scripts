@@ -37,6 +37,7 @@ _CSAI_DERIVE_PATHS() {
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
 }
+APP_CONFIG_DERIVE_HOOK=_CSAI_DERIVE_PATHS
 _csai_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then

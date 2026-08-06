@@ -908,37 +908,28 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
+  local fn
+  if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
+    "$APP_DOCTOR_SERVICE_FN" && return 0
+    return 1
+  fi
   if [[ -n "${SERVICE_NAME:-}" ]]; then
     printf '%s\n' "$SERVICE_NAME"
     return 0
   fi
-  if [[ -n "${TICKFLOW_SERVICE_NAME:-}" ]]; then
-    printf '%s\n' "$TICKFLOW_SERVICE_NAME"
-    return 0
-  fi
-  if [[ "${APP_ID:-}" == "vaultwarden" ]]; then
-    printf '%s\n' "vaultwarden"
-    return 0
-  fi
   return 1
 }
 
+# The config-derive hook is app-declared: an app that derives paths from
+# saved configuration sets APP_CONFIG_DERIVE_HOOK to its hook function name.
 app_doctor_config_derive_hook() {
-  local hook
-  for hook in \
-    _NEWAPI_DERIVE_PATHS \
-    _SUB2API_DERIVE_PATHS \
-    _VW_DERIVE_PATHS \
-    _CSAI_DERIVE_PATHS \
-    _BLOG_DERIVE_PATHS; do
-    if declare -f "$hook" >/dev/null 2>&1; then
-      printf '%s\n' "$hook"
-      return 0
-    fi
-  done
+  local hook="${APP_CONFIG_DERIVE_HOOK:-}"
+  if [[ -n "$hook" ]] && declare -f "$hook" >/dev/null 2>&1; then
+    printf '%s\n' "$hook"
+    return 0
+  fi
   return 1
 }
-
 app_doctor_validate_saved_config() {
   local conf_file="$1"
   (

@@ -29,6 +29,7 @@ _BLOG_DERIVE_PATHS() {
     CMS_SITE_URL="https://${BLOG_DOMAIN}"
   fi
 }
+APP_CONFIG_DERIVE_HOOK=_BLOG_DERIVE_PATHS
 
 _validate_config_values() {
   app_validate_domain "BLOG_DOMAIN" "$BLOG_DOMAIN"

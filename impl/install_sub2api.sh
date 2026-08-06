@@ -25,6 +25,7 @@ CONFIG_KEYS=(
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
 }
+APP_CONFIG_DERIVE_HOOK=_SUB2API_DERIVE_PATHS
 _sub2api_require_safe_bin_path() {
   require_safe_path "BIN_PATH" "$BIN_PATH"
 }

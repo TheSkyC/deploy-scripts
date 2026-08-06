@@ -32,6 +32,11 @@ _VW_DERIVE_PATHS() {
   VW_BIN="${VW_BIN_DIR}/vaultwarden"
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
+APP_CONFIG_DERIVE_HOOK=_VW_DERIVE_PATHS
+_vw_doctor_service_name() {
+  printf 'vaultwarden\n'
+}
+APP_DOCTOR_SERVICE_FN=_vw_doctor_service_name
 _vw_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then

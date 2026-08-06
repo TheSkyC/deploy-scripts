@@ -909,37 +909,28 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
+  local fn
+  if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
+    "$APP_DOCTOR_SERVICE_FN" && return 0
+    return 1
+  fi
   if [[ -n "${SERVICE_NAME:-}" ]]; then
     printf '%s\n' "$SERVICE_NAME"
     return 0
   fi
-  if [[ -n "${TICKFLOW_SERVICE_NAME:-}" ]]; then
-    printf '%s\n' "$TICKFLOW_SERVICE_NAME"
-    return 0
-  fi
-  if [[ "${APP_ID:-}" == "vaultwarden" ]]; then
-    printf '%s\n' "vaultwarden"
-    return 0
-  fi
   return 1
 }
 
+# The config-derive hook is app-declared: an app that derives paths from
+# saved configuration sets APP_CONFIG_DERIVE_HOOK to its hook function name.
 app_doctor_config_derive_hook() {
-  local hook
-  for hook in \
-    _NEWAPI_DERIVE_PATHS \
-    _SUB2API_DERIVE_PATHS \
-    _VW_DERIVE_PATHS \
-    _CSAI_DERIVE_PATHS \
-    _BLOG_DERIVE_PATHS; do
-    if declare -f "$hook" >/dev/null 2>&1; then
-      printf '%s\n' "$hook"
-      return 0
-    fi
-  done
+  local hook="${APP_CONFIG_DERIVE_HOOK:-}"
+  if [[ -n "$hook" ]] && declare -f "$hook" >/dev/null 2>&1; then
+    printf '%s\n' "$hook"
+    return 0
+  fi
   return 1
 }
-
 app_doctor_validate_saved_config() {
   local conf_file="$1"
   (
@@ -5970,6 +5961,7 @@ _NEWAPI_DERIVE_PATHS() {
   LOG_FILE="${LOG_DIR}/new-api.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
+APP_CONFIG_DERIVE_HOOK=_NEWAPI_DERIVE_PATHS
 _newapi_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then
@@ -7086,6 +7078,7 @@ CONFIG_KEYS=(
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
 }
+APP_CONFIG_DERIVE_HOOK=_SUB2API_DERIVE_PATHS
 _sub2api_require_safe_bin_path() {
   require_safe_path "BIN_PATH" "$BIN_PATH"
 }
@@ -8882,6 +8875,11 @@ _VW_DERIVE_PATHS() {
   VW_BIN="${VW_BIN_DIR}/vaultwarden"
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
+APP_CONFIG_DERIVE_HOOK=_VW_DERIVE_PATHS
+_vw_doctor_service_name() {
+  printf 'vaultwarden\n'
+}
+APP_DOCTOR_SERVICE_FN=_vw_doctor_service_name
 _vw_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then
@@ -10602,6 +10600,7 @@ _CSAI_DERIVE_PATHS() {
   VENV_DIR="${INSTALL_DIR}/venv"
   LOG_DIR="${INSTALL_DIR}/logs"
 }
+APP_CONFIG_DERIVE_HOOK=_CSAI_DERIVE_PATHS
 _csai_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then
@@ -11792,6 +11791,7 @@ _BLOG_DERIVE_PATHS() {
     CMS_SITE_URL="https://${BLOG_DOMAIN}"
   fi
 }
+APP_CONFIG_DERIVE_HOOK=_BLOG_DERIVE_PATHS
 
 _validate_config_values() {
   app_validate_domain "BLOG_DOMAIN" "$BLOG_DOMAIN"
@@ -13009,6 +13009,11 @@ CONFIG_KEYS=(
 app_conf_register_legacy "/etc/tickflow-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
+
+_tickflow_doctor_service_name() {
+  printf '%s\n' "$TICKFLOW_SERVICE_NAME"
+}
+APP_DOCTOR_SERVICE_FN=_tickflow_doctor_service_name
 
 preflight_check() {
   [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"
