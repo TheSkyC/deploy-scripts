@@ -12085,20 +12085,6 @@ _write_blog_file() {
   fi
 }
 
-wait_for_service() {
-  local service="$1"
-  local timeout="${2:-10}"
-  local elapsed=0
-  while (( elapsed < timeout )); do
-    if systemctl is-active --quiet "$service"; then
-      return 0
-    fi
-    sleep 1
-    elapsed=$(( elapsed + 1 ))
-  done
-  systemctl is-active --quiet "$service"
-}
-
 _blog_build_site() {
   step "$(t app.blog.step_build)"
   if ! mkdir -p "$PUBLIC_DIR"; then

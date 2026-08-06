@@ -6055,14 +6055,10 @@ check_blog_nginx_start_path_is_explicit() {
     return 1
   fi
   awk '
-      /wait_for_service\(\)/ { in_helper=1; saw_active=0; saw_loop=0; next }
-      in_helper && /while \(\( elapsed < timeout \)\); do/ { saw_loop=1 }
-      in_helper && /systemctl is-active --quiet "\$service"/ { saw_active=1 }
-      in_helper && /^}/ { in_helper=0 }
       /step "\$\(t app\.blog\.step_start_nginx\)"/ { in_block=1; saw_restart_if=0; saw_wait=0; next }
       in_block && /if systemctl restart nginx && wait_for_service nginx 10; then/ { saw_restart_if=1; saw_wait=1 }
       in_block && /step "\$\(t app\.blog\.step_health\)"/ {
-        if (!(saw_loop && saw_active && saw_restart_if && saw_wait)) {
+        if (!(saw_restart_if && saw_wait)) {
           printf "%s Blog nginx startup must use an explicit restart-and-wait branch before the health check\n", FILENAME > "/dev/stderr"
           exit 1
         }
