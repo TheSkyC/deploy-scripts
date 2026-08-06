@@ -1125,6 +1125,22 @@ do_status_json() {
   fi
   printf '}\n'
 }
+# Writes an Nginx site config from stdin through an atomic helper.
+app_write_nginx_config_file() {
+  local nginx_conf="$1" error_key="$2"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t "$error_key" "$nginx_conf")"
+  fi
+}
+
+# Creates an Nginx sites-enabled symlink atomically.
+app_write_nginx_site_link() {
+  local target="$1" link_path="$2" error_key="$3"
+  if ! atomic_symlink "$target" "$link_path"; then
+    error "$(t "$error_key" "$target")"
+  fi
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -1679,8 +1695,8 @@ i18n_register_many \
   "Cannot start Nginx service. Inspect: journalctl -u nginx -n 30" \
   "无法启动 Nginx 服务，请检查：journalctl -u nginx -n 30" \
   app.sub2api.error.nginx_config_write \
-  "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
-  "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s。" \
   app.sub2api.warn.nginx_include \
   "Cannot update /etc/nginx/nginx.conf automatically. Add this inside http {} manually: include /etc/nginx/sites-enabled/*;" \
   "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;" \
@@ -3007,18 +3023,6 @@ _install_nginx() {
   _ensure_nginx_running
   success "$(t app.sub2api.success.nginx_installed)"
 }
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
-}
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
-}
 _write_nginx_config() {
   local server_name_line
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
@@ -3030,7 +3034,7 @@ _write_nginx_config() {
     error "$(t app.sub2api.error.nginx_config_write)"
   fi
   local nginx_conf="/etc/nginx/sites-available/sub2api"
-  _write_nginx_config_file "$nginx_conf" << NGINX
+  app_write_nginx_config_file "$nginx_conf" "app.sub2api.error.nginx_config_write" << NGINX
 server {
     listen 80;
 ${server_name_line}
@@ -3062,8 +3066,7 @@ ${server_name_line}
     }
 }
 NGINX
-  _write_nginx_site_link "$nginx_conf" /etc/nginx/sites-enabled/sub2api \
-    || error "$(t app.sub2api.error.nginx_config_write)"
+  app_write_nginx_site_link "$nginx_conf" /etc/nginx/sites-enabled/sub2api "app.sub2api.error.nginx_config_write"
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
       local nginx_main_conf="/etc/nginx/nginx.conf"

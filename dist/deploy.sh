@@ -1126,6 +1126,22 @@ do_status_json() {
   fi
   printf '}\n'
 }
+# Writes an Nginx site config from stdin through an atomic helper.
+app_write_nginx_config_file() {
+  local nginx_conf="$1" error_key="$2"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t "$error_key" "$nginx_conf")"
+  fi
+}
+
+# Creates an Nginx sites-enabled symlink atomically.
+app_write_nginx_site_link() {
+  local target="$1" link_path="$2" error_key="$3"
+  if ! atomic_symlink "$target" "$link_path"; then
+    error "$(t "$error_key" "$target")"
+  fi
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -2595,8 +2611,8 @@ i18n_register_many \
   "Cannot start Nginx service. Inspect: journalctl -u nginx -n 30" \
   "无法启动 Nginx 服务，请检查：journalctl -u nginx -n 30" \
   app.sub2api.error.nginx_config_write \
-  "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
-  "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s。" \
   app.sub2api.warn.nginx_include \
   "Cannot update /etc/nginx/nginx.conf automatically. Add this inside http {} manually: include /etc/nginx/sites-enabled/*;" \
   "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;" \
@@ -7664,18 +7680,6 @@ _install_nginx() {
   _ensure_nginx_running
   success "$(t app.sub2api.success.nginx_installed)"
 }
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
-}
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.sub2api.error.nginx_config_write)"
-  fi
-}
 _write_nginx_config() {
   local server_name_line
   if [[ -n "${SUB2API_DOMAIN:-}" ]]; then
@@ -7687,7 +7691,7 @@ _write_nginx_config() {
     error "$(t app.sub2api.error.nginx_config_write)"
   fi
   local nginx_conf="/etc/nginx/sites-available/sub2api"
-  _write_nginx_config_file "$nginx_conf" << NGINX
+  app_write_nginx_config_file "$nginx_conf" "app.sub2api.error.nginx_config_write" << NGINX
 server {
     listen 80;
 ${server_name_line}
@@ -7719,8 +7723,7 @@ ${server_name_line}
     }
 }
 NGINX
-  _write_nginx_site_link "$nginx_conf" /etc/nginx/sites-enabled/sub2api \
-    || error "$(t app.sub2api.error.nginx_config_write)"
+  app_write_nginx_site_link "$nginx_conf" /etc/nginx/sites-enabled/sub2api "app.sub2api.error.nginx_config_write"
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
       local nginx_main_conf="/etc/nginx/nginx.conf"
@@ -9215,18 +9218,6 @@ backup_vaultwarden_binary() {
     return 1
   fi
 }
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
-  fi
-}
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.vaultwarden.error.nginx_write "$target")"
-  fi
-}
 _write_fail2ban_config_file() {
   local fail2ban_conf="$1"
   local fail2ban_tmp
@@ -9600,7 +9591,7 @@ UNIT
   if ! mkdir -p /var/www/certbot /etc/nginx/sites-available /etc/nginx/sites-enabled; then
     error "$(t app.vaultwarden.error.nginx_dirs "$NGINX_CONF")"
   fi
-  _write_nginx_config_file "$NGINX_CONF" << NGINX
+  app_write_nginx_config_file "$NGINX_CONF" "app.vaultwarden.error.nginx_write" << NGINX
 # Vaultwarden reverse proxy configuration for the HTTP bootstrap phase.
 server {
     listen 80;
@@ -9626,8 +9617,7 @@ server {
     }
 }
 NGINX
-  _write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden \
-    || error "$(t app.vaultwarden.error.nginx_write "$NGINX_CONF")"
+  app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden "app.vaultwarden.error.nginx_write"
   if [[ -L /etc/nginx/sites-enabled/default ]]; then
     warn "$(t app.vaultwarden.warn.default_site_removed)"
     _vw_remove_file_or_error "/etc/nginx/sites-enabled/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"
@@ -9792,7 +9782,7 @@ NGINX2
     error_log  /var/log/nginx/vaultwarden_error.log;
 }
 NGINX2BODY
-      } | _write_nginx_config_file "$NGINX_CONF"
+      } | app_write_nginx_config_file "$NGINX_CONF" "app.vaultwarden.error.nginx_write"
       if nginx -t; then
         if systemctl reload nginx; then
           success "$(t app.vaultwarden.success.nginx_https)"
@@ -11168,18 +11158,6 @@ SERVICE
   fi
   success "$(t app.cyberstrikeai.success.systemd "$SERVICE_NAME")"
 }
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.cyberstrikeai.error.nginx "$target")"
-  fi
-}
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.cyberstrikeai.error.nginx "$nginx_conf")"
-  fi
-}
 write_nginx_config() {
   _bool_true "$ENABLE_NGINX" || return 0
   step "$(t app.cyberstrikeai.step.nginx)"
@@ -11190,7 +11168,7 @@ write_nginx_config() {
   if ! mkdir -p "$(dirname "$NGINX_CONF")" "$(dirname "$NGINX_LINK")"; then
     error "$(t app.cyberstrikeai.error.nginx_dirs "$NGINX_CONF")"
   fi
-  _write_nginx_config_file "$NGINX_CONF" <<NGINX
+  app_write_nginx_config_file "$NGINX_CONF" "app.cyberstrikeai.error.nginx" <<NGINX
 server {
     listen ${PUBLIC_PORT};
     listen [::]:${PUBLIC_PORT};
@@ -11235,8 +11213,7 @@ server {
     error_log  /var/log/nginx/cyberstrike-ai_error.log;
 }
 NGINX
-  _write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" \
-    || error "$(t app.cyberstrikeai.error.nginx "$NGINX_CONF")"
+  app_write_nginx_site_link "$NGINX_CONF" "$NGINX_LINK" "app.cyberstrikeai.error.nginx"
   if ! nginx -t; then
     error "$(t app.cyberstrikeai.error.nginx_test)"
   fi
@@ -11973,19 +11950,6 @@ backup_blog_file() {
   atomic_copy_file "$source_path" "$backup_path"
 }
 
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.blog.error.nginx_write "$target")"
-  fi
-}
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.blog.error.nginx_write "$nginx_conf")"
-  fi
-}
-
 _write_blog_file() {
   local target_path="$1"
   if ! atomic_write_file "$target_path" 644; then
@@ -12433,7 +12397,7 @@ _blog_build_site
 _blog_deploy_public
 _write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
-_write_nginx_config_file "$NGINX_CONF" << NGINX
+app_write_nginx_config_file "$NGINX_CONF" "app.blog.error.nginx_write" << NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -12491,8 +12455,7 @@ server {
     error_log  /var/log/nginx/blog_error.log;
 }
 NGINX
-_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog \
-  || error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog "app.blog.error.nginx_write"
 _blog_remove_file /etc/nginx/sites-enabled/default
 nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"
@@ -12903,8 +12866,7 @@ do_restore() {
   fi
   if [[ -f "${extract_dir}/nginx-site.conf" ]]; then
     _blog_restore_file_from_backup "${extract_dir}/nginx-site.conf" "NGINX_SITE" /etc/nginx/sites-available/blog 644
-    _write_nginx_site_link /etc/nginx/sites-available/blog /etc/nginx/sites-enabled/blog \
-      || error "$(t app.blog.error.nginx_write "/etc/nginx/sites-available/blog")"
+    app_write_nginx_site_link /etc/nginx/sites-available/blog /etc/nginx/sites-enabled/blog "app.blog.error.nginx_write"
     restored=true
   else
     warn "$(t app.blog.restore.warn_missing nginx-site.conf)"

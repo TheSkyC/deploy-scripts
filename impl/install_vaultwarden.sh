@@ -326,18 +326,6 @@ backup_vaultwarden_binary() {
     return 1
   fi
 }
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.vaultwarden.error.nginx_write "$nginx_conf")"
-  fi
-}
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.vaultwarden.error.nginx_write "$target")"
-  fi
-}
 _write_fail2ban_config_file() {
   local fail2ban_conf="$1"
   local fail2ban_tmp
@@ -711,7 +699,7 @@ UNIT
   if ! mkdir -p /var/www/certbot /etc/nginx/sites-available /etc/nginx/sites-enabled; then
     error "$(t app.vaultwarden.error.nginx_dirs "$NGINX_CONF")"
   fi
-  _write_nginx_config_file "$NGINX_CONF" << NGINX
+  app_write_nginx_config_file "$NGINX_CONF" "app.vaultwarden.error.nginx_write" << NGINX
 # Vaultwarden reverse proxy configuration for the HTTP bootstrap phase.
 server {
     listen 80;
@@ -737,8 +725,7 @@ server {
     }
 }
 NGINX
-  _write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden \
-    || error "$(t app.vaultwarden.error.nginx_write "$NGINX_CONF")"
+  app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden "app.vaultwarden.error.nginx_write"
   if [[ -L /etc/nginx/sites-enabled/default ]]; then
     warn "$(t app.vaultwarden.warn.default_site_removed)"
     _vw_remove_file_or_error "/etc/nginx/sites-enabled/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"
@@ -903,7 +890,7 @@ NGINX2
     error_log  /var/log/nginx/vaultwarden_error.log;
 }
 NGINX2BODY
-      } | _write_nginx_config_file "$NGINX_CONF"
+      } | app_write_nginx_config_file "$NGINX_CONF" "app.vaultwarden.error.nginx_write"
       if nginx -t; then
         if systemctl reload nginx; then
           success "$(t app.vaultwarden.success.nginx_https)"

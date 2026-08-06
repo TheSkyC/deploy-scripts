@@ -455,6 +455,22 @@ do_status_json() {
   fi
   printf '}\n'
 }
+# Writes an Nginx site config from stdin through an atomic helper.
+app_write_nginx_config_file() {
+  local nginx_conf="$1" error_key="$2"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t "$error_key" "$nginx_conf")"
+  fi
+}
+
+# Creates an Nginx sites-enabled symlink atomically.
+app_write_nginx_site_link() {
+  local target="$1" link_path="$2" error_key="$3"
+  if ! atomic_symlink "$target" "$link_path"; then
+    error "$(t "$error_key" "$target")"
+  fi
+}
+
 do_doctor() {
   local failures=0 warnings=0
 

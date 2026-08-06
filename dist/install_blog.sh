@@ -1125,6 +1125,22 @@ do_status_json() {
   fi
   printf '}\n'
 }
+# Writes an Nginx site config from stdin through an atomic helper.
+app_write_nginx_config_file() {
+  local nginx_conf="$1" error_key="$2"
+  if ! atomic_write_file "$nginx_conf" 644 root:root; then
+    error "$(t "$error_key" "$nginx_conf")"
+  fi
+}
+
+# Creates an Nginx sites-enabled symlink atomically.
+app_write_nginx_site_link() {
+  local target="$1" link_path="$2" error_key="$3"
+  if ! atomic_symlink "$target" "$link_path"; then
+    error "$(t "$error_key" "$target")"
+  fi
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -2313,19 +2329,6 @@ backup_blog_file() {
   atomic_copy_file "$source_path" "$backup_path"
 }
 
-_write_nginx_site_link() {
-  local target="$1" link_path="$2"
-  if ! atomic_symlink "$target" "$link_path"; then
-    error "$(t app.blog.error.nginx_write "$target")"
-  fi
-}
-_write_nginx_config_file() {
-  local nginx_conf="$1"
-  if ! atomic_write_file "$nginx_conf" 644 root:root; then
-    error "$(t app.blog.error.nginx_write "$nginx_conf")"
-  fi
-}
-
 _write_blog_file() {
   local target_path="$1"
   if ! atomic_write_file "$target_path" 644; then
@@ -2773,7 +2776,7 @@ _blog_build_site
 _blog_deploy_public
 _write_publish_script
 NGINX_CONF="/etc/nginx/sites-available/blog"
-_write_nginx_config_file "$NGINX_CONF" << NGINX
+app_write_nginx_config_file "$NGINX_CONF" "app.blog.error.nginx_write" << NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -2831,8 +2834,7 @@ server {
     error_log  /var/log/nginx/blog_error.log;
 }
 NGINX
-_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog \
-  || error "$(t app.blog.error.nginx_write "$NGINX_CONF")"
+app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog "app.blog.error.nginx_write"
 _blog_remove_file /etc/nginx/sites-enabled/default
 nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"
@@ -3243,8 +3245,7 @@ do_restore() {
   fi
   if [[ -f "${extract_dir}/nginx-site.conf" ]]; then
     _blog_restore_file_from_backup "${extract_dir}/nginx-site.conf" "NGINX_SITE" /etc/nginx/sites-available/blog 644
-    _write_nginx_site_link /etc/nginx/sites-available/blog /etc/nginx/sites-enabled/blog \
-      || error "$(t app.blog.error.nginx_write "/etc/nginx/sites-available/blog")"
+    app_write_nginx_site_link /etc/nginx/sites-available/blog /etc/nginx/sites-enabled/blog "app.blog.error.nginx_write"
     restored=true
   else
     warn "$(t app.blog.restore.warn_missing nginx-site.conf)"

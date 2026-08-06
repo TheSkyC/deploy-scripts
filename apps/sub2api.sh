@@ -214,8 +214,8 @@ i18n_register_many \
   "Cannot start Nginx service. Inspect: journalctl -u nginx -n 30" \
   "无法启动 Nginx 服务，请检查：journalctl -u nginx -n 30" \
   app.sub2api.error.nginx_config_write \
-  "Nginx config write failed: /etc/nginx/sites-available/sub2api" \
-  "Nginx 配置写入失败：/etc/nginx/sites-available/sub2api。" \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s。" \
   app.sub2api.warn.nginx_include \
   "Cannot update /etc/nginx/nginx.conf automatically. Add this inside http {} manually: include /etc/nginx/sites-enabled/*;" \
   "无法自动修改 /etc/nginx/nginx.conf，请手动在 http {} 块中添加：include /etc/nginx/sites-enabled/*;" \

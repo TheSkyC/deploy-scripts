@@ -888,7 +888,7 @@ check_blog_status_dispatch() {
 
 check_blog_install_surfaces_default_nginx_site_removal_failures() {
   awk '
-      /_write_nginx_site_link "\$NGINX_CONF" \/etc\/nginx\/sites-enabled\/blog/ { in_nginx=1; saw_remove=0; saw_raw_rm=0; next }
+      /app_write_nginx_site_link "\$NGINX_CONF" \/etc\/nginx\/sites-enabled\/blog/ { in_nginx=1; saw_remove=0; saw_raw_rm=0; next }
       in_nginx && /_blog_remove_file \/etc\/nginx\/sites-enabled\/default/ { saw_remove=1 }
       in_nginx && /rm -f \/etc\/nginx\/sites-enabled\/default/ { saw_raw_rm=1 }
       in_nginx && /nginx -t \|\| error "\$\(t app\.blog\.error\.nginx_config\)"/ {
@@ -3809,7 +3809,7 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
       /step "\$\(t app\.vaultwarden\.step\.nginx_http\)"/ { in_nginx=1; saw_nginx_dirs_if=0; saw_nginx_dirs_error=0; next }
       in_nginx && /if ! mkdir -p \/var\/www\/certbot \/etc\/nginx\/sites-available \/etc\/nginx\/sites-enabled; then/ { saw_nginx_dirs_if=1 }
       in_nginx && /error "\$\(t app\.vaultwarden\.error\.nginx_dirs "\$NGINX_CONF"\)"/ { saw_nginx_dirs_error=1 }
-      in_nginx && /_write_nginx_config_file "\$NGINX_CONF"/ {
+      in_nginx && /app_write_nginx_config_file "\$NGINX_CONF"/ {
         if (!(saw_nginx_dirs_if && saw_nginx_dirs_error)) {
           printf "%s Vaultwarden Nginx bootstrap must fail explicitly when support directories cannot be created\n", FILENAME > "/dev/stderr"
           exit 1
@@ -5694,40 +5694,55 @@ check_nginx_configs_are_atomic() {
     return 1
   fi
   awk '
-      /if ! mkdir -p \/etc\/nginx\/sites-available \/etc\/nginx\/sites-enabled; then/ { saw_nginx_dirs=1 }
-      /_write_nginx_config_file\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
-      in_func && /atomic_write_file "\$(nginx_conf|NGINX_CONF)" 644 root:root/ { saw_atomic=1 }
-      in_func && /error "\$\(t app\.(sub2api|cyberstrikeai|vaultwarden|blog)\.error\.(nginx_config_write|nginx|nginx_write|nginx_conf)/ { saw_error=1 }
-      in_func && /^}/ {
-        if (!(saw_atomic && saw_error)) {
-          printf "%s Nginx config helper must use atomic_write_file and report failures\n", FILENAME > "/dev/stderr"
+      /^_write_nginx_(config_file|site_link)\(\)/ {
+        printf "%s per-app Nginx helpers must be removed in favor of lib/app.sh shared helpers\n", FILENAME > "/dev/stderr"
+        exit 1
+      }
+      /app_write_nginx_config_file\(\)/ { in_cfg=1; saw_cfg_atomic=0; saw_cfg_error=0; next }
+      in_cfg && /atomic_write_file "\$nginx_conf" 644 root:root/ { saw_cfg_atomic=1 }
+      in_cfg && /error "\$\(t "\$error_key" "\$nginx_conf"\)"/ { saw_cfg_error=1 }
+      in_cfg && /^}/ {
+        if (!(saw_cfg_atomic && saw_cfg_error)) {
+          printf "%s shared Nginx config helper must use atomic_write_file and report failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_func=0
+        in_cfg=0
       }
-      /_write_nginx_config_file "\$NGINX_CONF"/ { saw_helper=1 }
-      /_write_nginx_config_file "\$nginx_conf"/ { saw_helper=1 }
-      END {
-        if (!(saw_nginx_dirs && saw_helper)) {
-          print "Nginx site config writes must prepare directories and use _write_nginx_config_file." > "/dev/stderr"
+      /app_write_nginx_site_link\(\)/ { in_link=1; saw_link_atomic=0; saw_link_error=0; next }
+      in_link && /atomic_symlink "\$target" "\$link_path"/ { saw_link_atomic=1 }
+      in_link && /error "\$\(t "\$error_key" "\$target"\)"/ { saw_link_error=1 }
+      in_link && /^}/ {
+        if (!(saw_link_atomic && saw_link_error)) {
+          printf "%s shared Nginx site link helper must use atomic_symlink and report failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
+        in_link=0
       }
-    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
-      dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh
+    ' lib/app.sh \
+      dist/install_blog.sh dist/install_cyberstrikeai.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
   awk '
-      /_write_nginx_site_link\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
-      in_func && /atomic_symlink "\$target" "\$link_path"/ { saw_atomic=1 }
-      in_func && /error "\$\(t app\.(blog|sub2api|cyberstrikeai|vaultwarden)\.error\.(nginx_write|nginx_config_write|nginx)/ { saw_error=1 }
-      in_func && /^}/ {
-        if (!(saw_atomic && saw_error)) {
-          printf "%s Nginx site link helper must use atomic_symlink and report failures\n", FILENAME > "/dev/stderr"
+      FNR == 1 {
+        if (NR > 1 && !(prev_cfg && prev_link)) {
+          printf "%s Nginx site config writes must use the shared app_write_nginx_config_file / app_write_nginx_site_link helpers\n", prev_file > "/dev/stderr"
           exit 1
         }
-        in_func=0
+        prev_cfg=0; prev_link=0; prev_file=FILENAME
       }
-    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
-      dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh
+      /^_write_nginx_(config_file|site_link)\(\)/ {
+        printf "%s per-app Nginx helpers must be removed in favor of lib/app.sh shared helpers\n", FILENAME > "/dev/stderr"
+        exit 1
+      }
+      /if ! mkdir -p \/etc\/nginx\/sites-available \/etc\/nginx\/sites-enabled; then/ { saw_nginx_dirs=1 }
+      /app_write_nginx_config_file "\$NGINX_CONF"/ { prev_cfg=1 }
+      /app_write_nginx_config_file "\$nginx_conf"/ { prev_cfg=1 }
+      /app_write_nginx_site_link/ { prev_link=1 }
+      END {
+        if (!(prev_cfg && prev_link) || !saw_nginx_dirs) {
+          printf "%s Nginx site config writes must prepare directories and use the shared app_write_nginx_config_file / app_write_nginx_site_link helpers\n", prev_file > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh
 }
 
 check_nginx_main_config_edits_are_atomic() {
@@ -7190,7 +7205,7 @@ check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
     return 1
   fi
   awk '
-      /_write_nginx_site_link "\$NGINX_CONF" "\$NGINX_LINK"/ { in_block=1; saw_test=0; saw_reload=0; saw_restart=0; next }
+      /app_write_nginx_site_link "\$NGINX_CONF" "\$NGINX_LINK"/ { in_block=1; saw_test=0; saw_reload=0; saw_restart=0; next }
       in_block && /if ! nginx -t; then/ { saw_test=1 }
       in_block && /error "\$\(t app\.cyberstrikeai\.error\.nginx_test\)"/ { saw_test_error=1 }
       in_block && /if systemctl is-active --quiet nginx; then/ { saw_active_check=1 }
@@ -7348,7 +7363,7 @@ check_vaultwarden_result_chains_are_explicit() {
     return 1
   fi
   awk '
-      /} \| _write_nginx_config_file "\$NGINX_CONF"/ { in_https=1; saw_test=0; saw_reload=0; saw_success=0; saw_warn=0; next }
+      /} \| app_write_nginx_config_file "\$NGINX_CONF"/ { in_https=1; saw_test=0; saw_reload=0; saw_success=0; saw_warn=0; next }
       in_https && /if nginx -t; then/ { saw_test=1 }
       in_https && /if systemctl reload nginx; then/ { saw_reload=1 }
       in_https && /success "\$\(t app\.vaultwarden\.success\.nginx_https\)"/ { saw_success=1 }
