@@ -120,6 +120,10 @@ copying the same body into each `impl/install_<app>.sh`:
   per-app endpoints and error keys.
 - `app_write_nginx_config_file` / `app_write_nginx_site_link` — atomic Nginx
   site config writes and symlinks, with the per-app error key as an argument.
+- `app_write_logrotate` — atomic per-app logrotate policy for the service log
+  directory (target file, log dir, and error/success keys as arguments).
+- `app_configure_firewall` — opens the service port through ufw/iptables (and
+  opt-in firewalld), with a per-app key prefix and ufw comment label as arguments.
 - `github_latest_release_tag` — GitHub release lookup shared by release-based apps.
 
 Keep app-specific localized keys, prompts, and summary copy in

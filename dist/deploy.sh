@@ -1076,6 +1076,7 @@ do_status_json() {
   if [[ -f "$conf_file" ]]; then
     config_exists=true
     config_safe=true
+    # GNU stat (coreutils) is assumed: -c '%U'/'%a' is not portable to BSD stat.
     if command -v stat >/dev/null 2>&1; then
       conf_owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
       conf_mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo unknown)"
@@ -1290,6 +1291,7 @@ do_doctor() {
   local conf_safe=false
   if [[ -f "$conf_file" ]]; then
     local conf_owner="unknown" conf_mode="unknown"
+    # GNU stat (coreutils) is assumed: -c '%U'/'%a' is not portable to BSD stat.
     if command -v stat >/dev/null 2>&1; then
       conf_owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
       conf_mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo unknown)"
