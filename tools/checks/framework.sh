@@ -2787,6 +2787,28 @@ check_no_flag_chained_error_handlers() {
   done < <(find impl apps lib bin dist -name '*.sh' -type f | sort)
 }
 
+# Behavioral test for the config sanitization helpers: embedded CR/LF are
+# stripped (config injection), double quotes are removed, and plain values
+# pass through unchanged.
+check_config_sanitization_behavior() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/config.sh"
+    cr=$(printf "\r")
+    lf=$(printf "\n")
+    value="abc${cr}${lf}def\"quoted\""
+    sanitized="$(sanitize_conf_val "$value")"
+    [[ "$sanitized" == "abc" ]] || { echo "embedded CR/LF or quotes not stripped: [$sanitized]" >&2; exit 1; }
+    [[ "$(sanitize_conf_val "8080")" == "8080" ]] || { echo "plain value altered" >&2; exit 1; }
+    [[ "$(sanitize_conf_val "hello world")" == "hello world" ]] || { echo "value with spaces altered" >&2; exit 1; }
+    [[ "$(sanitize_conf_val "a\"b\"c")" == "abc" ]] || { echo "double quotes not removed" >&2; exit 1; }
+    [[ "$(trim_conf_token "  foo  ")" == "foo" ]] || { echo "trim_conf_token failed" >&2; exit 1; }
+    tabbed=$(printf "\tbar\n")
+    [[ "$(trim_conf_token "$tabbed")" == "bar" ]] || { echo "trim_conf_token tab/newline failed" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
 # Verifies that every check_* function is invoked by `all` and that every
 # `all` check is also covered by a non-`all` target (syntax/shellcheck/release/
 # dispatch/guards). Keeps parallel CI jobs from silently dropping checks.

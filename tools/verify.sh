@@ -280,6 +280,7 @@ main() {
       check_bundled_impl_temp_names_are_random
       check_certbot_diagnostics_use_stderr
       check_config_crlf_handling
+      check_config_sanitization_behavior
       check_config_save_failures_are_explicit
       check_config_value_validators
       check_config_write_failure_cleanup
@@ -540,6 +541,7 @@ main() {
   check_service_status_label
   check_config_writes_are_centralized
   check_config_crlf_handling
+  check_config_sanitization_behavior
   check_config_write_failure_cleanup
   check_unsafe_config_loads_fail_closed
   check_config_save_failures_are_explicit
