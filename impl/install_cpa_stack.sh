@@ -493,6 +493,23 @@ EOF
   systemctl restart nginx || error "$(t app.cpa_stack.error.nginx "$NGINX_SITE")"
 }
 
+cpa_stack_nginx_http2_directives() {
+  local version
+  version="$(nginx -v 2>&1 | sed -nE 's/.*nginx\/([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
+  if [[ -n "$version" ]] && awk -v v="$version" 'BEGIN { split(v, a, "."); exit !(a[1]*10000 + a[2]*100 + a[3] >= 12501) }'; then
+    cat <<'EOF'
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+EOF
+  else
+    cat <<'EOF'
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+EOF
+  fi
+}
+
 cpa_stack_write_nginx_https() {
   local cert_dir="/etc/letsencrypt/live/${CPA_DOMAIN}"
   [[ -f "${cert_dir}/fullchain.pem" && -f "${cert_dir}/privkey.pem" ]] || return 1
@@ -512,8 +529,7 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+$(cpa_stack_nginx_http2_directives)
     server_name ${CPA_DOMAIN};
 
     ssl_certificate ${cert_dir}/fullchain.pem;
@@ -540,8 +556,7 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+$(cpa_stack_nginx_http2_directives)
     server_name ${CPAMP_DOMAIN};
 
     ssl_certificate ${cert_dir}/fullchain.pem;

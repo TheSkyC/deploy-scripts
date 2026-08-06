@@ -1109,6 +1109,9 @@ check_cpa_stack_layout() {
       && grep -Fq 'CPA_STACK_COMPONENT' "$file" \
       && grep -Fq 'do_cert()' "$file" \
       && grep -Fq 'app.cpa_stack.success.https' "$file" \
+      && grep -Fq 'cpa_stack_nginx_http2_directives' "$file" \
+      && grep -Fq 'http2 on;' "$file" \
+      && grep -Fq 'listen 443 ssl http2;' "$file" \
       || {
         echo "CPA Stack must retain local-only backends, verified releases, HTTPS reverse proxy, and component update controls: ${file}" >&2
         return 1
