@@ -2411,6 +2411,10 @@ _write_publish_script() {
   local publish_script="/usr/local/bin/blog-publish"
   local publish_tmp
   publish_tmp=$(mktemp "${publish_script}.XXXXXX") || error "$(t app.blog.error.publish_script)"
+  # The generated publish script is standalone by design: it embeds its own
+  # copies of is_safe_path() and safe_rm_dir() from lib/fs.sh. Keep those
+  # helpers in sync when lib/fs.sh changes (safe_rm_dir intentionally calls
+  # is_safe_path directly because the generated script has no i18n layer).
   if ! cat > "$publish_tmp" << BKSH
 #!/bin/bash
 set -euo pipefail
@@ -2425,13 +2429,21 @@ DEPLOY_TMP="\$(mktemp -d "\${NGINX_ROOT_PARENT}/.\${NGINX_ROOT_NAME}.new.XXXXXX"
 DEPLOY_BAK="\${NGINX_ROOT}.bak.\$(date +%Y%m%d%H%M%S)"
 is_safe_path() {
   local path="\${1:-}"
-  [[ -n "\$path" && "\$path" = /* ]] || return 1
+  [[ -n "\$path" ]] || return 1
+  [[ "\$path" = /* ]] || return 1
   while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
   case "\$path" in
     /|.|..|*'/../'*|*'/..'|*'/./'*|*'/.')
       return 1
       ;;
-    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var|/var/lib|/var/log|/usr/local|/usr/local/bin)
+    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var|/usr/local)
+      return 1
+      ;;
+  esac
+  local remainder="\${path#/}"
+  [[ "\$remainder" == */* ]] || return 1
+  case "\$path" in
+    /var/lib|/var/log|/var/www|/var/cache|/var/run|/var/spool|/usr/local/bin|/usr/local/lib|/usr/share|/mnt|/media|/srv|/data|/backup|/www|/export|/pool)
       return 1
       ;;
   esac
