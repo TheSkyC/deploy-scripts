@@ -642,6 +642,9 @@ github_latest_release_tag() {
 
 is_valid_dns_name() {
   local name="${1:-}"
+  # Character classes are collation-dependent: under UTF-8 locales
+  # [A-Za-z0-9-] also matches accented characters. Pin C so DNS names stay ASCII.
+  local LC_ALL=C
   [[ -n "$name" && ${#name} -le 253 ]] || return 1
   [[ "$name" != *..* ]] || return 1
   [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1
@@ -699,6 +702,10 @@ app_check_port_conflict() {
 
 # ----- lib/app.sh -----
 
+# Strict-ASCII validators must stay ASCII-only on every server locale:
+# character classes such as [A-Za-z] are collation-dependent and, under UTF-8
+# locales, also match accented Latin characters (for example é). Each
+# validator pins LC_ALL=C so validation is byte-exact regardless of locale.
 # Validate a port number is in range 1-65535.
 app_validate_port() {
   local value="$1"
@@ -816,6 +823,7 @@ app_validate_image_repo() {
 
 app_validate_image_tag() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
     error "$(t error.image_tag_invalid "$name" "$value")"
   fi
@@ -823,6 +831,7 @@ app_validate_image_tag() {
 
 app_validate_sha256() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Fa-f0-9]{64}$ ]]; then
     error "$(t error.sha256_invalid "$name" "$value")"
   fi
@@ -830,6 +839,7 @@ app_validate_sha256() {
 
 app_is_valid_email() {
   local value="${1:-}" local_part domain
+  local LC_ALL=C
   [[ -n "$value" && ${#value} -le 254 ]] || return 1
   case "$value" in
     *[[:space:]]*|*\"*|*"'"*|*"\\"*|*"<"*|*">"*|*"\`"*|*"|"*|*";"*|*"&"*|*'$'*|*"("*|*")"*|*"["*|*"]"*|*"{"*|*"}"*|*"!"*|*"?"*|*"*"*|*/*|*@*@*)
@@ -854,6 +864,7 @@ app_validate_email() {
 
 app_validate_release_version() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[0-9]+[.][0-9]+([.][0-9]+)?([-.][A-Za-z0-9][A-Za-z0-9_.-]*)?$ ]]; then
     error "$(t error.release_version_invalid "$name" "$value")"
   fi
@@ -861,6 +872,7 @@ app_validate_release_version() {
 
 app_validate_system_name() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,63}$ ]]; then
     error "$(t error.system_name_invalid "$name" "$value")"
   fi
@@ -868,6 +880,7 @@ app_validate_system_name() {
 
 app_validate_systemd_name() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Za-z0-9_.@-]+$ ]] \
       || [[ "$value" == .* || "$value" == *. || "$value" == *..* || "$value" == *"/"* ]]; then
     error "$(t error.systemd_name_invalid "$name" "$value")"
@@ -876,6 +889,7 @@ app_validate_systemd_name() {
 
 app_validate_github_repo() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
       || [[ "$value" == *..* || "$value" == .* || "$value" == */.* || "$value" == *. || "$value" == *.*/ ]]; then
     error "$(t error.github_repo_invalid "$name" "$value")"
@@ -884,6 +898,7 @@ app_validate_github_repo() {
 
 app_validate_git_ref() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Za-z0-9._/-]+$ ]] \
       || [[ "$value" == -* || "$value" == */ || "$value" == *. || "$value" == *..* || "$value" == *@\{* || "$value" == *//* ]]; then
     error "$(t error.git_ref_invalid "$name" "$value")"
@@ -892,6 +907,7 @@ app_validate_git_ref() {
 
 app_validate_db_identifier() {
   local name="$1" value="$2"
+  local LC_ALL=C
   if ! [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then
     error "$(t error.db_identifier_invalid "$name" "$value")"
   fi

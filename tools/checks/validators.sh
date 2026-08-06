@@ -268,15 +268,17 @@ check_github_release_tag_behavior() {
 
 check_shared_validators_accept_and_reject() {
   # Every shared validator in lib/app.sh must accept valid values and reject
-  # invalid ones. LC_ALL=C keeps the character-range regexes locale-stable so
-  # the results are identical on developer machines and in CI.
+  # invalid ones. Validators pin LC_ALL=C internally, so results must be
+  # identical under C and under UTF-8 collation locales; run the behavior
+  # matrix under each locale whose collation actually differs from C so the
+  # pins cannot regress silently.
   "$BASH_BIN" -c '
     set -euo pipefail
-    export LC_ALL=C
     source "$1/lib/logging.sh"
     source "$1/lib/i18n.sh"
     source "$1/lib/network.sh"
     source "$1/lib/app.sh"
+    assert_all() {
     # Port
     app_validate_port 8080 "PORT" || { echo "valid port rejected" >&2; exit 1; }
     ( app_validate_port 70000 "PORT" ) 2>/dev/null && { echo "out-of-range port accepted" >&2; exit 1; }
@@ -366,7 +368,27 @@ check_shared_validators_accept_and_reject() {
     app_validate_db_identifier "DB" "_private" || { echo "underscore db identifier rejected" >&2; exit 1; }
     ( app_validate_db_identifier "DB" "1abc" ) 2>/dev/null && { echo "digit-leading db identifier accepted" >&2; exit 1; }
     ( app_validate_db_identifier "DB" "a-b" ) 2>/dev/null && { echo "dash db identifier accepted" >&2; exit 1; }
-    exit 0
+    # Strict-ASCII rejections: character-range regexes must not match accented
+    # Latin characters on any locale (validators pin LC_ALL=C internally).
+    ( app_validate_domain "DOMAIN" "éxample.com" ) 2>/dev/null && { echo "accented domain accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://éxample.com" ) 2>/dev/null && { echo "accented url host accepted" >&2; exit 1; }
+    ( app_validate_image_tag "TAG" "v1.2-é" ) 2>/dev/null && { echo "accented image tag accepted" >&2; exit 1; }
+    ( app_validate_email "EMAIL" "é@example.com" ) 2>/dev/null && { echo "accented email local part accepted" >&2; exit 1; }
+    ( app_validate_release_version "VER" "1.2-é" ) 2>/dev/null && { echo "accented release version accepted" >&2; exit 1; }
+    ( app_validate_system_name "USER" "néwapi" ) 2>/dev/null && { echo "accented system name accepted" >&2; exit 1; }
+    ( app_validate_systemd_name "UNIT" "néw-api" ) 2>/dev/null && { echo "accented systemd name accepted" >&2; exit 1; }
+    ( app_validate_github_repo "REPO" "owner/répo" ) 2>/dev/null && { echo "accented github repo accepted" >&2; exit 1; }
+    ( app_validate_git_ref "REF" "feature/é" ) 2>/dev/null && { echo "accented git ref accepted" >&2; exit 1; }
+    ( app_validate_db_identifier "DB" "néw_db" ) 2>/dev/null && { echo "accented db identifier accepted" >&2; exit 1; }
+    return 0
+  }
+  for locale in C en_US.UTF-8 zh_CN.UTF-8; do
+    export LC_ALL="$locale"
+    if [[ "$locale" == "C" ]] || [[ "é" =~ ^[A-Za-z]+$ ]]; then
+      assert_all
+    fi
+  done
+  exit 0
   ' _ "$ROOT_DIR"
 }
 

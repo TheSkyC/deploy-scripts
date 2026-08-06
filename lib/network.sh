@@ -60,6 +60,9 @@ github_latest_release_tag() {
 
 is_valid_dns_name() {
   local name="${1:-}"
+  # Character classes are collation-dependent: under UTF-8 locales
+  # [A-Za-z0-9-] also matches accented characters. Pin C so DNS names stay ASCII.
+  local LC_ALL=C
   [[ -n "$name" && ${#name} -le 253 ]] || return 1
   [[ "$name" != *..* ]] || return 1
   [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]] || return 1

@@ -426,6 +426,7 @@ main() {
       check_sub2api_nginx_reload_results_are_checked
       check_sub2api_pg_dump_errors_stay_out_of_backups
       check_sub2api_pg_password_is_escaped
+      check_sub2api_uri_encode_ascii
       check_sub2api_postgres_rpm_setup_failures_are_explicit
       check_sub2api_redis_service_handling_is_explicit
       check_sub2api_rpm_dependency_failures_are_reported
@@ -665,6 +666,7 @@ main() {
     check_sub2api_pg_dump_errors_stay_out_of_backups \
     check_sub2api_summary_does_not_print_pg_password \
     check_sub2api_pg_password_is_escaped \
+    check_sub2api_uri_encode_ascii \
     check_cyberstrikeai_build_temp_cleanup \
     check_cyberstrikeai_rollback_restore_is_validated \
     check_cyberstrikeai_backups_are_atomic \

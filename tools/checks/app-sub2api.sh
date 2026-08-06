@@ -925,3 +925,26 @@ check_sub2api_health_checks_are_nonfatal_outside_install() {
       }
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
+
+check_sub2api_uri_encode_ascii() {
+  # _uri_encode must percent-encode non-ASCII as UTF-8 bytes and leave the
+  # PostgreSQL DSN unreserved characters alone, on every locale. Case-pattern
+  # classes and printf %02X are collation-dependent, so _uri_encode pins
+  # LC_ALL=C internally; run the behavior under C and under each UTF-8
+  # collation locale available on the host.
+  local locale
+  for locale in C en_US.UTF-8 zh_CN.UTF-8; do
+    if [[ "$locale" == "C" ]] || LC_ALL="$locale" "$BASH_BIN" -c '[[ "é" =~ ^[A-Za-z]+$ ]]'; then
+      LC_ALL="$locale" "$BASH_BIN" -c '
+        set -euo pipefail
+        source "$1/lib/core.sh"
+        source "$1/apps/sub2api.sh"
+        [[ "$(_uri_encode "päss wörld")" == "p%C3%A4ss%20w%C3%B6rld" ]] \
+          || { echo "uri_encode mis-encoded non-ASCII under LC_ALL=${LC_ALL:-unset}: [$(_uri_encode "päss wörld")]" >&2; exit 1; }
+        [[ "$(_uri_encode "abc-._~")" == "abc-._~" ]] \
+          || { echo "uri_encode altered ASCII-safe characters" >&2; exit 1; }
+        exit 0
+      ' _ "$ROOT_DIR"
+    fi
+  done
+}

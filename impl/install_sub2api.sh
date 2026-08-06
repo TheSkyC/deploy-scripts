@@ -478,6 +478,11 @@ _ensure_nginx_running() {
 }
 _uri_encode() {
   local value="$1" output="" i char encoded
+  # Case-pattern classes and printf %02X are collation-dependent: under UTF-8
+  # locales the ASCII arm can miss accented characters and "'$char" yields the
+  # code point instead of UTF-8 bytes. Pin C so non-ASCII is percent-encoded
+  # as its UTF-8 bytes in the PostgreSQL DSN.
+  local LC_ALL=C
   for ((i = 0; i < ${#value}; i++)); do
     char="${value:i:1}"
     case "$char" in
