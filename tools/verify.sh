@@ -1813,6 +1813,27 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_config_writes_are_centralized() {
+  if grep -R -nE '(>|>>)[[:space:]]*"?\$\{?CONF_FILE\}?"?|tee[[:space:]]+"?\$\{?CONF_FILE\}?"?' impl dist 2>/dev/null; then
+    echo "Deployment config (CONF_FILE) must be written only through app_save_config." >&2
+    return 1
+  fi
+  if grep -R -nE '(>|>>)[[:space:]]*/etc/[A-Za-z0-9_-]+-deploy\.conf' impl dist 2>/dev/null; then
+    echo "Deployment config paths must come from app_conf_file, not be hardcoded." >&2
+    return 1
+  fi
+  awk '
+      /^app_save_config$/ { saw_save=1 }
+      END {
+        if (!saw_save) {
+          print "Every app must persist deployment config through app_save_config." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_blog.sh impl/install_cpa_stack.sh impl/install_cyberstrikeai.sh \
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_tickflow.sh impl/install_vaultwarden.sh
+}
+
 check_config_crlf_handling() {
   local tmp_dir conf
   tmp_dir="$(mktemp -d)"
@@ -7946,6 +7967,7 @@ main() {
   check_binary_helpers_are_atomic
   check_systemd_helper_is_atomic
   check_service_status_label
+  check_config_writes_are_centralized
   check_config_crlf_handling
   check_config_write_failure_cleanup
   check_unsafe_config_loads_fail_closed
