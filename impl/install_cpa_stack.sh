@@ -299,8 +299,10 @@ $CPAMP_ENV_DIR|root:root
 $CPA_STACK_BACKUP_DIR|root:root
 $ACME_WEBROOT|www-data:www-data
 EOF
-  chmod 0750 "$CPA_CONFIG_DIR" "$CPA_DATA_DIR" "$CPA_AUTH_DIR" "$CPAMP_DATA_DIR" || true
+  chmod 0770 "$CPA_CONFIG_DIR" || true
+  chmod 0750 "$CPA_DATA_DIR" "$CPA_AUTH_DIR" "$CPAMP_DATA_DIR" || true
   chmod 0700 "$CPAMP_ENV_DIR" "$CPA_STACK_BACKUP_DIR" || true
+  [[ -f "$CPA_CONFIG_FILE" ]] && chmod 0660 "$CPA_CONFIG_FILE" 2>/dev/null || true
 }
 
 cpa_stack_random_key() {
@@ -321,7 +323,7 @@ cpa_stack_write_cpa_config() {
   fi
   [[ -n "$CPA_MANAGEMENT_KEY" ]] || CPA_MANAGEMENT_KEY="$(cpa_stack_random_key 'cpa_')"
   [[ -n "$CPA_API_KEY" ]] || CPA_API_KEY="$(cpa_stack_random_key 'sk-')"
-  if ! cat <<EOF | atomic_write_file "$CPA_CONFIG_FILE" 0640 "root:${CPA_SERVICE_USER}"
+  if ! cat <<EOF | atomic_write_file "$CPA_CONFIG_FILE" 0660 "root:${CPA_SERVICE_USER}"
 host: "127.0.0.1"
 port: 8317
 
