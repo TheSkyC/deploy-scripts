@@ -1260,6 +1260,13 @@ restore_framework_functions() {
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
         fi
         ;;
+      cert|https)
+        if declare -f do_cert >/dev/null 2>&1; then
+          do_cert
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
+        fi
+        ;;
       status|5) do_status ;;
       status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
@@ -1336,6 +1343,13 @@ dispatch_action() {
           do_restore
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
+        fi
+        ;;
+      cert|https)
+        if declare -f do_cert >/dev/null 2>&1; then
+          do_cert
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
         fi
         ;;
       status|5) do_status ;;

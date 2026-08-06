@@ -1260,6 +1260,13 @@ restore_framework_functions() {
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
         fi
         ;;
+      cert|https)
+        if declare -f do_cert >/dev/null 2>&1; then
+          do_cert
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
+        fi
+        ;;
       status|5) do_status ;;
       status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
@@ -1338,6 +1345,13 @@ dispatch_action() {
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
         fi
         ;;
+      cert|https)
+        if declare -f do_cert >/dev/null 2>&1; then
+          do_cert
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
+        fi
+        ;;
       status|5) do_status ;;
       status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
@@ -1385,6 +1399,9 @@ i18n_register_many \
   app.cpa_stack.error.noninteractive_email \
   "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
   "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
+  app.cpa_stack.error.https_disabled \
+  "ENABLE_HTTPS=false; cannot issue a certificate." \
+  "ENABLE_HTTPS=false，无法签发证书。" \
   app.cpa_stack.error.component \
   "CPA_STACK_COMPONENT must be one of: all, cpa, cpamp. Got: %s." \
   "CPA_STACK_COMPONENT 只能是 all、cpa 或 cpamp，当前为：%s。" \
@@ -1434,8 +1451,8 @@ i18n_register_many \
   "Preserving existing CPA configuration: %s. Confirm it binds to 127.0.0.1 and enables usage-statistics-enabled." \
   "将保留现有 CPA 配置：%s。请确认其绑定到 127.0.0.1 并启用了 usage-statistics-enabled。" \
   app.cpa_stack.warn.certbot \
-  "Certificate issuance failed. HTTP remains active; fix DNS / inbound port 80 and rerun install." \
-  "证书签发失败。HTTP 将继续可用；请修复 DNS/入站 80 端口后重新执行 install。" \
+  "Certificate issuance failed; HTTP remains active. Ensure A records for %s and %s point to this server and inbound TCP 80 is open, then retry: bash deploy.sh cpa-stack cert" \
+  "证书签发失败，HTTP 将继续可用。请确保 %s 与 %s 的 A 记录指向本服务器且入站 TCP 80 端口已开放，然后重试：bash deploy.sh cpa-stack cert" \
   app.cpa_stack.warn.http_health \
   "%s health check returned HTTP %s." \
   "%s 健康检查返回 HTTP %s。" \
@@ -1478,6 +1495,9 @@ i18n_register_many \
   app.cpa_stack.success.updated \
   "CPA Stack update completed." \
   "CPA Stack 更新完成。" \
+  app.cpa_stack.success.https \
+  "HTTPS certificate issued; Nginx switched to TLS for %s and %s." \
+  "HTTPS 证书已签发；Nginx 已为 %s 与 %s 启用 TLS。" \
   app.cpa_stack.success.backup \
   "Backup created: %s" \
   "备份已创建：%s" \
@@ -1822,6 +1842,11 @@ cpa_stack_random_key() {
 cpa_stack_write_cpa_config() {
   if [[ -f "$CPA_CONFIG_FILE" ]]; then
     warn "$(t app.cpa_stack.warn.config_preserved "$CPA_CONFIG_FILE")"
+    if [[ -z "$CPA_MANAGEMENT_KEY" ]]; then
+      local prior
+      prior="$(sed -nE 's/^[[:space:]]*secret-key:[[:space:]]*"([^"]+)".*/\1/p' "$CPA_CONFIG_FILE" | tail -n 1)"
+      [[ -n "$prior" ]] && CPA_MANAGEMENT_KEY="$prior"
+    fi
     [[ -n "$CPA_MANAGEMENT_KEY" ]] || error "$(t app.cpa_stack.error.config_exists "$CPA_CONFIG_FILE")"
     return 0
   fi
@@ -2085,7 +2110,7 @@ cpa_stack_configure_https() {
   if ! certbot certonly --webroot -w "$ACME_WEBROOT" \
       --email "$CERTBOT_EMAIL" --agree-tos --non-interactive \
       -d "$CPA_DOMAIN" -d "$CPAMP_DOMAIN"; then
-    warn "$(t app.cpa_stack.warn.certbot)"
+    warn "$(t app.cpa_stack.warn.certbot "$CPA_DOMAIN" "$CPAMP_DOMAIN")"
     return 0
   fi
   cpa_stack_write_nginx_https || error "$(t app.cpa_stack.error.nginx "$NGINX_SITE")"
@@ -2169,6 +2194,28 @@ do_update() {
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
   success "$(t app.cpa_stack.success.updated)"
+}
+
+do_cert() {
+  cpa_stack_show_banner
+  cpa_stack_preflight cert
+  acquire_lock
+  if ! cpa_stack_truthy "$ENABLE_HTTPS"; then
+    error "$(t app.cpa_stack.error.https_disabled)"
+  fi
+  [[ -n "$CERTBOT_EMAIL" ]] || error "$(t app.cpa_stack.error.email_required)"
+  cpa_stack_install_dependencies
+  cpa_stack_write_nginx_http
+  cpa_stack_configure_https
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  local scheme="http"
+  cpa_stack_truthy "$ENABLE_HTTPS" && [[ -f "/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem" ]] && scheme="https"
+  if [[ "$scheme" == "https" ]]; then
+    success "$(t app.cpa_stack.success.https "${scheme}://${CPA_DOMAIN}" "${scheme}://${CPAMP_DOMAIN}")"
+  else
+    warn "$(t app.cpa_stack.warn.certbot "$CPA_DOMAIN" "$CPAMP_DOMAIN")"
+  fi
 }
 
 do_backup() {

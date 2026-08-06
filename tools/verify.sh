@@ -1107,6 +1107,8 @@ check_cpa_stack_layout() {
       && grep -Fq 'proxy_pass http://127.0.0.1:18317;' "$file" \
       && grep -Fq 'certbot certonly --webroot' "$file" \
       && grep -Fq 'CPA_STACK_COMPONENT' "$file" \
+      && grep -Fq 'do_cert()' "$file" \
+      && grep -Fq 'app.cpa_stack.success.https' "$file" \
       || {
         echo "CPA Stack must retain local-only backends, verified releases, HTTPS reverse proxy, and component update controls: ${file}" >&2
         return 1
