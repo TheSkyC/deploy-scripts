@@ -2736,21 +2736,105 @@ check_github_release_tag_behavior() {
 # Behavioral test for the shared validators: valid values pass and invalid
 # values abort (error exits), matching how impl scripts rely on them.
 check_shared_validators_accept_and_reject() {
+  # Every shared validator in lib/app.sh must accept valid values and reject
+  # invalid ones. LC_ALL=C keeps the character-range regexes locale-stable so
+  # the results are identical on developer machines and in CI.
   "$BASH_BIN" -c '
     set -euo pipefail
+    export LC_ALL=C
     source "$1/lib/logging.sh"
     source "$1/lib/i18n.sh"
     source "$1/lib/network.sh"
     source "$1/lib/app.sh"
+    # Port
     app_validate_port 8080 "PORT" || { echo "valid port rejected" >&2; exit 1; }
     ( app_validate_port 70000 "PORT" ) 2>/dev/null && { echo "out-of-range port accepted" >&2; exit 1; }
-    ( app_validate_port "abc" "PORT" ) 2>/dev/null && { echo "non-numeric port accepted" >&2; exit 1; }
-    app_validate_bool "PORT" true || { echo "valid bool rejected" >&2; exit 1; }
-    app_validate_bool "PORT" 0 || { echo "valid bool 0 rejected" >&2; exit 1; }
-    ( app_validate_bool "PORT" maybe ) 2>/dev/null && { echo "invalid bool accepted" >&2; exit 1; }
+    ( app_validate_port abc "PORT" ) 2>/dev/null && { echo "non-numeric port accepted" >&2; exit 1; }
+    # Bool
+    app_validate_bool "FLAG" true || { echo "valid bool rejected" >&2; exit 1; }
+    app_validate_bool "FLAG" 0 || { echo "valid bool 0 rejected" >&2; exit 1; }
+    ( app_validate_bool "FLAG" maybe ) 2>/dev/null && { echo "invalid bool accepted" >&2; exit 1; }
+    # Domain (empty is allowed)
     app_validate_domain "DOMAIN" "app.example.com" || { echo "valid domain rejected" >&2; exit 1; }
     app_validate_domain "DOMAIN" "" || { echo "empty domain rejected" >&2; exit 1; }
     ( app_validate_domain "DOMAIN" "bad name" ) 2>/dev/null && { echo "invalid domain accepted" >&2; exit 1; }
+    # http(s) URLs
+    app_validate_http_url "URL" "http://example.com/path" || { echo "valid http url rejected" >&2; exit 1; }
+    app_validate_http_url "URL" "https://api.github.com/v3" || { echo "valid https url rejected" >&2; exit 1; }
+    app_validate_http_url "URL" "http://localhost:8080/x" || { echo "localhost url rejected" >&2; exit 1; }
+    ( app_validate_http_url "URL" "ftp://example.com" ) 2>/dev/null && { echo "non-http scheme accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://" ) 2>/dev/null && { echo "empty host accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://bad name.com" ) 2>/dev/null && { echo "url with space accepted" >&2; exit 1; }
+    app_validate_https_url "URL" "https://example.com" || { echo "valid https-only url rejected" >&2; exit 1; }
+    ( app_validate_https_url "URL" "http://example.com" ) 2>/dev/null && { echo "http url accepted by https validator" >&2; exit 1; }
+    # Go proxy
+    app_validate_goproxy "GOPROXY" "direct" || { echo "goproxy direct rejected" >&2; exit 1; }
+    app_validate_goproxy "GOPROXY" "off" || { echo "goproxy off rejected" >&2; exit 1; }
+    app_validate_goproxy "GOPROXY" "direct,https://proxy.example.com" || { echo "goproxy list rejected" >&2; exit 1; }
+    app_validate_goproxy "GOPROXY" "direct|https://proxy.example.com" || { echo "goproxy pipe list rejected" >&2; exit 1; }
+    ( app_validate_goproxy "GOPROXY" "" ) 2>/dev/null && { echo "empty goproxy accepted" >&2; exit 1; }
+    ( app_validate_goproxy "GOPROXY" "foo" ) 2>/dev/null && { echo "invalid goproxy token accepted" >&2; exit 1; }
+    # Image repo (uppercase must be rejected under LC_ALL=C)
+    app_validate_image_repo "REPO" "nginx" || { echo "bare repo rejected" >&2; exit 1; }
+    app_validate_image_repo "REPO" "vaultwarden/server" || { echo "org/name repo rejected" >&2; exit 1; }
+    app_validate_image_repo "REPO" "docker.io/library/nginx" || { echo "registry repo rejected" >&2; exit 1; }
+    app_validate_image_repo "REPO" "localhost:5000/foo" || { echo "localhost repo rejected" >&2; exit 1; }
+    ( app_validate_image_repo "REPO" "" ) 2>/dev/null && { echo "empty repo accepted" >&2; exit 1; }
+    ( app_validate_image_repo "REPO" "/foo" ) 2>/dev/null && { echo "leading-slash repo accepted" >&2; exit 1; }
+    ( app_validate_image_repo "REPO" "foo//bar" ) 2>/dev/null && { echo "double-slash repo accepted" >&2; exit 1; }
+    ( app_validate_image_repo "REPO" "foo/.." ) 2>/dev/null && { echo "dotdot repo accepted" >&2; exit 1; }
+    ( app_validate_image_repo "REPO" "example.com:70000/foo" ) 2>/dev/null && { echo "out-of-range repo port accepted" >&2; exit 1; }
+    ( app_validate_image_repo "REPO" "Foo/bar" ) 2>/dev/null && { echo "uppercase repo accepted" >&2; exit 1; }
+    # Image tag
+    app_validate_image_tag "TAG" "latest" || { echo "valid tag rejected" >&2; exit 1; }
+    app_validate_image_tag "TAG" "1.36.0-alpine" || { echo "version tag rejected" >&2; exit 1; }
+    ( app_validate_image_tag "TAG" "" ) 2>/dev/null && { echo "empty tag accepted" >&2; exit 1; }
+    ( app_validate_image_tag "TAG" "-bad" ) 2>/dev/null && { echo "leading-dash tag accepted" >&2; exit 1; }
+    # SHA-256
+    app_validate_sha256 "SHA" "a58f4995f568d66d9908649d4df7fc8c36f72096ca5e01f4c2c4291285125685" || { echo "valid sha256 rejected" >&2; exit 1; }
+    ( app_validate_sha256 "SHA" "short" ) 2>/dev/null && { echo "short sha256 accepted" >&2; exit 1; }
+    ( app_validate_sha256 "SHA" "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz" ) 2>/dev/null && { echo "non-hex sha256 accepted" >&2; exit 1; }
+    # Email
+    app_validate_email "EMAIL" "admin@example.com" || { echo "valid email rejected" >&2; exit 1; }
+    app_validate_email "EMAIL" "user.name+tag@sub.example.com" || { echo "plus-address email rejected" >&2; exit 1; }
+    ( app_validate_email "EMAIL" "a b@example.com" ) 2>/dev/null && { echo "email with space accepted" >&2; exit 1; }
+    ( app_validate_email "EMAIL" "a@b@example.com" ) 2>/dev/null && { echo "double-at email accepted" >&2; exit 1; }
+    ( app_validate_email "EMAIL" "@example.com" ) 2>/dev/null && { echo "empty-local email accepted" >&2; exit 1; }
+    ( app_validate_email "EMAIL" "a..b@example.com" ) 2>/dev/null && { echo "dotdot email accepted" >&2; exit 1; }
+    # Release version
+    app_validate_release_version "VER" "1.2" || { echo "x.y version rejected" >&2; exit 1; }
+    app_validate_release_version "VER" "1.2.3" || { echo "x.y.z version rejected" >&2; exit 1; }
+    app_validate_release_version "VER" "1.2.3-rc.1" || { echo "prerelease version rejected" >&2; exit 1; }
+    ( app_validate_release_version "VER" "" ) 2>/dev/null && { echo "empty version accepted" >&2; exit 1; }
+    ( app_validate_release_version "VER" "1" ) 2>/dev/null && { echo "x-only version accepted" >&2; exit 1; }
+    ( app_validate_release_version "VER" "v1.2" ) 2>/dev/null && { echo "v-prefixed version accepted" >&2; exit 1; }
+    # System and systemd names
+    app_validate_system_name "USER" "newapi" || { echo "valid system name rejected" >&2; exit 1; }
+    app_validate_system_name "USER" "my_app-2" || { echo "mixed system name rejected" >&2; exit 1; }
+    ( app_validate_system_name "USER" "1abc" ) 2>/dev/null && { echo "digit-leading system name accepted" >&2; exit 1; }
+    ( app_validate_system_name "USER" "a b" ) 2>/dev/null && { echo "space system name accepted" >&2; exit 1; }
+    app_validate_systemd_name "UNIT" "new-api" || { echo "valid unit name rejected" >&2; exit 1; }
+    app_validate_systemd_name "UNIT" "foo@bar" || { echo "at unit name rejected" >&2; exit 1; }
+    ( app_validate_systemd_name "UNIT" "foo..bar" ) 2>/dev/null && { echo "dotdot unit accepted" >&2; exit 1; }
+    ( app_validate_systemd_name "UNIT" "foo/bar" ) 2>/dev/null && { echo "slash unit accepted" >&2; exit 1; }
+    # GitHub repo
+    app_validate_github_repo "REPO" "owner/repo" || { echo "valid github repo rejected" >&2; exit 1; }
+    app_validate_github_repo "REPO" "QuantumNous/new-api" || { echo "real github repo rejected" >&2; exit 1; }
+    ( app_validate_github_repo "REPO" "owner" ) 2>/dev/null && { echo "slashless github repo accepted" >&2; exit 1; }
+    ( app_validate_github_repo "REPO" "owner/repo/extra" ) 2>/dev/null && { echo "multi-segment github repo accepted" >&2; exit 1; }
+    ( app_validate_github_repo "REPO" "owner/.hidden" ) 2>/dev/null && { echo "hidden-segment github repo accepted" >&2; exit 1; }
+    # Git ref
+    app_validate_git_ref "REF" "main" || { echo "valid git ref rejected" >&2; exit 1; }
+    app_validate_git_ref "REF" "feature/foo" || { echo "slash git ref rejected" >&2; exit 1; }
+    ( app_validate_git_ref "REF" "-bad" ) 2>/dev/null && { echo "leading-dash git ref accepted" >&2; exit 1; }
+    ( app_validate_git_ref "REF" "foo@{1}" ) 2>/dev/null && { echo "at-brace git ref accepted" >&2; exit 1; }
+    ( app_validate_git_ref "REF" "foo..bar" ) 2>/dev/null && { echo "dotdot git ref accepted" >&2; exit 1; }
+    ( app_validate_git_ref "REF" "a b" ) 2>/dev/null && { echo "space git ref accepted" >&2; exit 1; }
+    # DB identifier
+    app_validate_db_identifier "DB" "my_db" || { echo "valid db identifier rejected" >&2; exit 1; }
+    app_validate_db_identifier "DB" "_private" || { echo "underscore db identifier rejected" >&2; exit 1; }
+    ( app_validate_db_identifier "DB" "1abc" ) 2>/dev/null && { echo "digit-leading db identifier accepted" >&2; exit 1; }
+    ( app_validate_db_identifier "DB" "a-b" ) 2>/dev/null && { echo "dash db identifier accepted" >&2; exit 1; }
     exit 0
   ' _ "$ROOT_DIR"
 }
