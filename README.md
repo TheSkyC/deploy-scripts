@@ -110,6 +110,25 @@ Shared framework behavior includes:
 - Connectivity checks.
 - Single-file release bundling.
 
+## Library Conventions
+
+Put behavior in `lib/` only when it is identical across apps apart from
+small, app-supplied parameters. Prefer an `app_*` helper in `lib/` over
+copying the same body into each `impl/install_<app>.sh`:
+
+- `app_check_connectivity <error_key> <url...>` — connectivity checks with
+  per-app endpoints and error keys.
+- `app_write_nginx_config_file` / `app_write_nginx_site_link` — atomic Nginx
+  site config writes and symlinks, with the per-app error key as an argument.
+- `github_latest_release_tag` — GitHub release lookup shared by release-based apps.
+
+Keep app-specific localized keys, prompts, and summary copy in
+`apps/<app>.sh` and pass the key into the shared helper as an argument.
+Do not merge per-app keys into shared libraries, and do not move shared
+helpers into per-app impl scripts. When extracting a shared helper, update
+`tools/verify.sh` so guardrails require the shared form and reject the old
+per-app copy, then keep the full verification suite green.
+
 ## Adding A New App
 
 1. Create `apps/myapp.sh` with metadata and localized messages.
@@ -163,6 +182,7 @@ The verification script checks:
 - Bash syntax for generated releases.
 - English and Chinese dispatch behavior.
 - English and Chinese app descriptions.
+- Registered i18n keys match references in apps, implementations, and verification.
 - No hardcoded Chinese text in implementation scripts.
 - No Chinese comments in source or generated release scripts.
 - No temporary bundled implementation files are left in `dist/`.
