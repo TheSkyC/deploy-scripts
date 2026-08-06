@@ -110,7 +110,11 @@ get_installed_version() {
     return 0
   fi
   version=$("$VW_BIN" --version 2>/dev/null | awk 'NF >= 2 { print $2; exit }' || true)
-  [[ -n "$version" ]] && printf '%s\n' "$version" || t status.unknown
+  if [[ -n "$version" ]]; then
+    printf '%s\n' "$version"
+  else
+    t status.unknown
+  fi
 }
 get_latest_webvault_ver() {
   local json tag
@@ -1524,7 +1528,12 @@ do_status() {
   fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.data_dir "$VW_DATA_DIR")]${NC}"
   if [[ -d "$VW_DATA_DIR" ]]; then
-    ls -lh "${VW_DATA_DIR}" 2>/dev/null | tail -n +2 | awk '{printf "  %-12s  %s\n", $5, $NF}' || true
+    local _data_entry _data_file
+    while IFS= read -r -d '' _data_entry; do
+      _data_file="$_data_entry"
+      [[ -n "$_data_file" ]] || continue
+      printf '  %-12s  %s\n' "$(du -sh "$_data_file" 2>/dev/null | awk '{print $1}' || t status.unknown)" "$(basename "$_data_file")"
+    done < <(find "$VW_DATA_DIR" -mindepth 1 -maxdepth 1 -printf '%p\0' 2>/dev/null | sort -z) || true
     echo "  ──────────────────────────"
     local _data_size
     _data_size=$(du -sh "$VW_DATA_DIR" 2>/dev/null | cut -f1 || t status.unknown)
@@ -1538,8 +1547,13 @@ do_status() {
   fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.backup_files)]${NC}"
   if find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | grep -q .; then
-    ls -lht "${VW_BACKUP_DIR}"/vaultwarden_*.tar.gz 2>/dev/null | head -5 \
-      | awk '{printf "  %-60s  %s\n", $NF, $5}'
+    local _backup_entry _backup_file
+    while IFS= read -r -d '' _backup_entry; do
+      _backup_file="${_backup_entry#* }"
+      [[ -n "$_backup_file" ]] || continue
+      printf '  %-60s  %s\n' "$(basename "$_backup_file")" "$(du -sh "$_backup_file" 2>/dev/null | awk '{print $1}' || t status.unknown)"
+    done < <(find "$VW_BACKUP_DIR" -maxdepth 1 -name 'vaultwarden_*.tar.gz' -printf '%T@ %p\0' 2>/dev/null \
+      | sort -z -rn | head -z -n 5) || true
     echo -e "  $(t app.vaultwarden.status.backup_count "$(find "${VW_BACKUP_DIR}" -maxdepth 1 -name "vaultwarden_*.tar.gz" 2>/dev/null | wc -l)")"
   else
     echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.warn.no_backups)"

@@ -217,7 +217,7 @@ check_vaultwarden_status_display_commands_are_nonfatal() {
       }
       in_status && /_bin_size=\$\(du -sh "\$VW_BIN" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_bin_size=1 }
       in_status && /_bin_time=\$\(stat -c '\''%y'\'' "\$VW_BIN" 2>\/dev\/null \| cut -d'\''\.'\'' -f1 \|\| t status\.unknown\)/ { saw_bin_time=1 }
-      in_status && /ls -lh "\$\{VW_DATA_DIR\}" 2>\/dev\/null \| tail -n \+2 \| awk .* \|\| true/ { saw_ls=1 }
+      in_status && /find "\$VW_DATA_DIR" -mindepth 1 -maxdepth 1 -printf '\''%p\\0'\'' 2>\/dev\/null \| sort -z\) \|\| true/ { saw_ls=1 }
       in_status && /_data_size=\$\(du -sh "\$VW_DATA_DIR" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_data_size=1 }
       in_status && /DB_SIZE=\$\(du -sh "\$\{VW_DATA_DIR\}\/db\.sqlite3" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_db_size=1 }
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
@@ -230,9 +230,10 @@ check_vaultwarden_version_probe_has_fallback() {
       in_func && /\[\[ ! -x "\$VW_BIN" \]\]/ { saw_missing=1 }
       in_func && /t app\.vaultwarden\.status\.not_installed/ { saw_not_installed=1 }
       in_func && /version=\$\("\$VW_BIN" --version 2>\/dev\/null \| awk '\''NF >= 2 \{ print \$2; exit \}'\'' \|\| true\)/ { saw_parse=1 }
-      in_func && /\[\[ -n "\$version" \]\] && printf '\''%s\\n'\'' "\$version" \|\| t status\.unknown/ { saw_unknown=1 }
+      in_func && /if \[\[ -n "\$version" \]\]; then/ { saw_if=1 }
+      in_func && /^[[:space:]]*t status\.unknown/ { saw_unknown=1 }
       in_func && /^}/ {
-        if (!(saw_local && saw_missing && saw_not_installed && saw_parse && saw_unknown)) {
+        if (!(saw_local && saw_missing && saw_not_installed && saw_parse && saw_if && saw_unknown)) {
           printf "%s Vaultwarden version probe must distinguish missing binaries from unparsable version output and fall back under pipefail.\n", FILENAME > "/dev/stderr"
           exit 1
         }

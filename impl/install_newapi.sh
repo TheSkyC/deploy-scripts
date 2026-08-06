@@ -956,7 +956,8 @@ do_status() {
     ufw_rule=$(ufw status 2>/dev/null | grep -E "(^|[[:space:]])${PORT}/tcp([[:space:]]|$)" || true)
     if [[ -n "$ufw_rule" ]]; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.newapi.status.ufw_allowed "$PORT")"
-      echo "$ufw_rule" | sed 's/^/  /'
+      ufw_rule="${ufw_rule//$'\n'/$'\n'  }"
+      printf '  %s\n' "$ufw_rule"
     else
       echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.ufw_missing "$PORT")"
     fi

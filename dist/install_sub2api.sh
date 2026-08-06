@@ -4006,7 +4006,7 @@ do_status() {
   echo -e "\n${BOLD}[$(t app.sub2api.status.dependencies)]${NC}"
   for _svc_port in "PostgreSQL:5432" "Redis:6379"; do
     local _name="${_svc_port%%:*}" _port="${_svc_port##*:}"
-    if (echo >/dev/tcp/127.0.0.1/${_port}) 2>/dev/null; then
+    if (echo >/dev/tcp/127.0.0.1/"${_port}") 2>/dev/null; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.sub2api.status.port_reachable "$_name" "$_port")"
     else
       echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.port_unreachable "$_name" "$_port")"
@@ -4014,7 +4014,11 @@ do_status() {
   done
   if [[ -n "${PG_DSN:-}" ]]; then
     local _dsn_masked
-    _dsn_masked=$(echo "$PG_DSN" | sed 's|:\([^:@]*\)@|:***@|')
+    if [[ "$PG_DSN" =~ ^([^:]+)://([^:@]+):([^@]*)@(.*)$ ]]; then
+      _dsn_masked="${BASH_REMATCH[1]}://${BASH_REMATCH[2]}:***@${BASH_REMATCH[4]}"
+    else
+      _dsn_masked="$PG_DSN"
+    fi
     echo -e "  $(t app.sub2api.status.pg_dsn_masked "$_dsn_masked")"
   else
     echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.pg_dsn_missing)"

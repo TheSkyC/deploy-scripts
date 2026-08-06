@@ -1926,7 +1926,7 @@ cpa_stack_release_tag() {
 cpa_stack_release_asset_url() {
   local json="$1" asset="$2" compact remainder after_asset
   compact="$(printf '%s' "$json" | tr -d '\r\n\t ' )"
-  after_asset="${compact#*\"name\":\"${asset}\"}"
+  after_asset="${compact#*\"name\":\""${asset}"\"}"
   [[ "$after_asset" != "$compact" ]] || return 0
   remainder="${after_asset#*\"browser_download_url\":\"}"
   [[ "$remainder" != "$after_asset" ]] || return 0
