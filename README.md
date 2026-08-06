@@ -41,6 +41,12 @@ For New API, Sub2API, Vaultwarden, Blog, CyberStrikeAI, TickFlow, and CPA Stack 
 
 `cpa-stack` installs CLIProxyAPI (CPA) and CPA Manager Plus (CPAMP) as two systemd services behind Nginx. The public API is served at `https://$CPA_DOMAIN/v1/...`; the management panel is served at `https://$CPAMP_DOMAIN/management.html`. Only Nginx ports `80` and `443` are intended to be public. CPA and CPAMP bind to `127.0.0.1:8317` and `127.0.0.1:18317` respectively.
 
+Both DNS names must resolve to this server before HTTPS can be issued: create A (and AAAA, if needed) records for `$CPA_DOMAIN` and `$CPAMP_DOMAIN` pointing to the server, and allow inbound TCP `80`/`443`. The script keeps HTTP active if certificate issuance fails (for example because DNS is not ready yet); after fixing DNS, retry only the certificate step without re-downloading the releases:
+
+```bash
+sudo bash deploy.sh cpa-stack cert
+```
+
 Set two distinct DNS names and a Let's Encrypt email before installation:
 
 ```bash
