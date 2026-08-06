@@ -15,16 +15,27 @@ check_shellcheck() {
     echo "shellcheck not found; skipping static analysis (install shellcheck to enable)"
     return 0
   fi
-  # SC2034: app/framework contract variables (APP_ID, LOCK_FILE, doctor hooks,
-  # ...) are consumed by name from other scripts and are not unused.
-  # SC1090: impl files source lib/*.sh through runtime-derived paths.
-  # SC1017: git stores LF via .gitattributes even when the working tree is CRLF.
+  # The gate runs at style severity so real issues such as SC2295 (unquoted
+  # expansions inside ${..} patterns, which previously slipped through at
+  # warning severity) are caught. Remaining exclusions are intentional:
+  #   SC2034: app/framework contract variables (APP_ID, LOCK_FILE, doctor
+  #           hooks, ...) are consumed by name from other scripts.
+  #   SC1090/SC1091: impl files source lib/*.sh through runtime-derived paths.
+  #   SC1017: git stores LF via .gitattributes even when the working tree is CRLF.
+  #   SC2016: single-quoted patterns in checks deliberately assert literal text.
+  #   SC2005: `echo "$(cmd)"` wrappers exist to emit formatted command output.
+  #   SC2059: `printf "$text" "$@"` is the intentional i18n format mechanism.
+  #   SC2329: functions invoked indirectly (restore_framework_functions / exit handlers).
+  #   SC2015: `A && B || C` assertion chains in checks are deliberate: every
+  #           grep in the chain must pass before the failure branch runs.
   local file
   local files=()
   while IFS= read -r file; do
     files+=("$file")
   done < <(find apps bin impl lib tools -name '*.sh' -type f | sort; printf '%s\n' deploy.sh)
-  shellcheck --severity=warning --exclude=SC2034,SC1090,SC1017 "${files[@]}"
+  shellcheck --severity=style \
+    --exclude=SC2034,SC1090,SC1091,SC1017,SC2016,SC2005,SC2059,SC2329,SC2015 \
+    "${files[@]}"
 }
 
 check_release_syntax() {
