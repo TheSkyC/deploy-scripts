@@ -1685,9 +1685,6 @@ i18n_register_many \
   app.newapi.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
-  app.newapi.error.port_invalid \
-  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
   app.newapi.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
@@ -1982,15 +1979,6 @@ i18n_register_many \
   app.newapi.step.start \
   "Step 10  Start service" \
   "Step 10  启动服务" \
-  app.newapi.status.unknown_process \
-  "unknown process" \
-  "未知进程" \
-  app.newapi.warn.port_used \
-  "Port %s is already in use (%s)." \
-  "端口 %s 已被占用（%s）。" \
-  app.newapi.warn.port_release \
-  "If this is not the old new-api process, release the port first or the service cannot bind." \
-  "若不是旧的 new-api 进程，请先释放端口，否则服务将无法绑定。" \
   app.newapi.success.service_started \
   "Service started successfully." \
   "服务启动成功。" \
@@ -2408,12 +2396,6 @@ i18n_register_many \
   app.sub2api.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
-  app.sub2api.error.port_invalid \
-  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
-  app.sub2api.error.domain_invalid \
-  "SUB2API_DOMAIN is invalid: '%s'. Use a DNS name such as sub2api.example.com, or leave it empty." \
-  "SUB2API_DOMAIN 无效：'%s'，请使用类似 sub2api.example.com 的 DNS 名称，或留空。" \
   app.sub2api.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
@@ -2927,15 +2909,6 @@ i18n_register_many \
   app.sub2api.step.start_service \
   "Step 14  Start service" \
   "Step 14  启动服务" \
-  app.sub2api.warn.port_used \
-  "Port %s is already in use (%s)." \
-  "端口 %s 已被占用（%s）。" \
-  app.sub2api.warn.port_hint \
-  "If this is not an old sub2api process, release the port first or the service cannot bind to it." \
-  "若不是旧的 sub2api 进程，请先释放端口，否则服务将无法绑定。" \
-  app.sub2api.status.unknown_process \
-  "unknown process" \
-  "未知进程" \
   app.sub2api.success.service_started \
   "Service started successfully." \
   "服务启动成功。" \
@@ -3521,12 +3494,6 @@ i18n_register_many \
   app.vaultwarden.error.noninteractive_email \
   "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
   "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
-  app.vaultwarden.error.port_invalid \
-  "VW_PORT is invalid: '%s'. Set a port between 1 and 65535 at the top of the script." \
-  "VW_PORT 无效：'%s'，请在脚本顶部设置 1-65535 之间的端口号。" \
-  app.vaultwarden.error.bool_invalid \
-  "%s is invalid: '%s'. Set it to true or false in the script or config file." \
-  "%s 无效：'%s'，请在脚本或配置文件中设置为 true 或 false。" \
   app.vaultwarden.error.domain_invalid \
   "VW_DOMAIN is invalid: '%s'. Use a DNS name such as vault.example.com." \
   "VW_DOMAIN 无效：'%s'，请使用类似 vault.example.com 的 DNS 名称。" \
@@ -3686,15 +3653,6 @@ i18n_register_many \
   app.vaultwarden.step.start_service \
   "Step 8  Start Vaultwarden service" \
   "Step 8  启动 Vaultwarden 服务" \
-  app.vaultwarden.status.unknown_process \
-  "unknown process" \
-  "未知进程" \
-  app.vaultwarden.warn.port_used \
-  "Port %s is already in use (%s)." \
-  "端口 %s 已被占用（%s）。" \
-  app.vaultwarden.warn.port_hint \
-  "If this is not an old vaultwarden process, release the port before installing or the service cannot start." \
-  "若不是旧的 vaultwarden 进程，请先释放端口再安装，否则服务将无法启动。" \
   app.vaultwarden.success.service_started \
   "Vaultwarden service started successfully." \
   "Vaultwarden 服务启动成功。" \
@@ -3995,9 +3953,6 @@ i18n_register_many \
   app.vaultwarden.warn.web_vault_update_version \
   "Cannot get the Web Vault version, so the existing Web Vault was left unchanged. Retry the update later after fixing network access to GitHub." \
   "无法获取 Web Vault 版本，现有 Web Vault 未变更。请先修复到 GitHub 的网络访问，再稍后重试更新。" \
-  app.vaultwarden.warn.update_port_used \
-  "Port %s is still in use (%s); the service may not be able to bind to it." \
-  "端口 %s 仍被占用（%s），服务可能无法绑定端口。" \
   app.vaultwarden.success.restart \
   "Vaultwarden service restarted successfully." \
   "Vaultwarden 服务重启成功。" \
@@ -4328,15 +4283,6 @@ i18n_register_many \
   app.cyberstrikeai.error.arch \
   "Unsupported architecture: %s." \
   "不支持的架构：%s。" \
-  app.cyberstrikeai.error.port_invalid \
-  "%s is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "%s 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
-  app.cyberstrikeai.error.bool_invalid \
-  "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0 in the script or config file." \
-  "%s 无效：'%s'，请在脚本或配置文件中使用 true/false、yes/no、on/off 或 1/0。" \
-  app.cyberstrikeai.error.domain_invalid \
-  "%s is invalid: '%s'. Use a DNS name such as app.example.com, or leave it empty." \
-  "%s 无效：'%s'，请使用类似 app.example.com 的 DNS 名称，或留空。" \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
@@ -4568,9 +4514,6 @@ i18n_register_many \
   app.cyberstrikeai.error.install_dir_owner \
   "Failed to reset ownership under %s to %s. Check filesystem permissions and retry." \
   "无法将 %s 下的所有权重置为 %s。请检查文件系统权限后重试。" \
-  app.cyberstrikeai.warn.port_in_use \
-  "Port %s appears to be in use:" \
-  "端口 %s 似乎已被占用：" \
   app.cyberstrikeai.success.running \
   "%s is running" \
   "%s 正在运行" \
@@ -5556,12 +5499,6 @@ i18n_register_many \
   app.tickflow.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
-  app.tickflow.error.port_invalid \
-  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
-  app.tickflow.error.domain_invalid \
-  "TICKFLOW_DOMAIN is invalid: '%s'. Use a DNS name such as panel.example.com, or leave it empty." \
-  "TICKFLOW_DOMAIN 无效：'%s'，请使用类似 panel.example.com 的 DNS 名称，或留空。" \
   app.tickflow.error.repo_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
@@ -5604,9 +5541,6 @@ i18n_register_many \
   app.tickflow.error.service_start \
   "Failed to start %s" \
   "启动 %s 失败" \
-  app.tickflow.error.service_stop \
-  "Failed to stop %s" \
-  "停止 %s 失败" \
   app.tickflow.warn.apt_update \
   "apt-get update partially failed. Continuing install, but package versions may be affected. Inspect /var/log/apt/* or rerun apt-get update after fixing repository/network issues." \
   "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。请检查 /var/log/apt/*，或在修复仓库/网络问题后重新执行 apt-get update。" \
@@ -5631,12 +5565,6 @@ i18n_register_many \
   app.tickflow.warn.service_disable_failed \
   "Could not disable %s during uninstall. Remove it manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
-  app.tickflow.warn.systemd_reload_failed \
-  "Could not reload systemd after removing %s. Run manually: systemctl daemon-reload" \
-  "删除 %s 后无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
-  app.tickflow.error.health \
-  "Health check failed. The panel may still be starting; run status again later." \
-  "健康检查失败，面板可能仍在启动；稍后可再次执行 status。" \
   app.tickflow.warn.non_root_status \
   "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
   "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
@@ -5823,12 +5751,6 @@ i18n_register_many \
   app.tickflow.summary.restart_cmd \
   "restart service" \
   "重启服务" \
-  app.tickflow.summary.update_cmd \
-  "update to the latest version" \
-  "更新到最新版" \
-  app.tickflow.summary.backup_cmd \
-  "back up data now" \
-  "立即备份数据" \
   app.tickflow.backup.error_dir \
   "Cannot prepare backup directory: %s" \
   "无法准备备份目录：%s" \
@@ -5840,10 +5762,7 @@ i18n_register_many \
   "创建备份归档失败：%s" \
   app.tickflow.backup.success \
   "Backup created: %s" \
-  "备份已创建：%s" \
-  app.tickflow.summary.uninstall_cmd \
-  "uninstall the service" \
-  "卸载服务"
+  "备份已创建：%s"
 
 APP_DESCRIPTION="$(t app.tickflow.description)"
 APP_IMPL_SCRIPT="impl/install_tickflow.sh"

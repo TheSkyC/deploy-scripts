@@ -15,15 +15,6 @@ i18n_register_many \
   app.cyberstrikeai.error.arch \
   "Unsupported architecture: %s." \
   "不支持的架构：%s。" \
-  app.cyberstrikeai.error.port_invalid \
-  "%s is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "%s 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
-  app.cyberstrikeai.error.bool_invalid \
-  "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0 in the script or config file." \
-  "%s 无效：'%s'，请在脚本或配置文件中使用 true/false、yes/no、on/off 或 1/0。" \
-  app.cyberstrikeai.error.domain_invalid \
-  "%s is invalid: '%s'. Use a DNS name such as app.example.com, or leave it empty." \
-  "%s 无效：'%s'，请使用类似 app.example.com 的 DNS 名称，或留空。" \
   app.cyberstrikeai.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
@@ -255,9 +246,6 @@ i18n_register_many \
   app.cyberstrikeai.error.install_dir_owner \
   "Failed to reset ownership under %s to %s. Check filesystem permissions and retry." \
   "无法将 %s 下的所有权重置为 %s。请检查文件系统权限后重试。" \
-  app.cyberstrikeai.warn.port_in_use \
-  "Port %s appears to be in use:" \
-  "端口 %s 似乎已被占用：" \
   app.cyberstrikeai.success.running \
   "%s is running" \
   "%s 正在运行" \

@@ -123,12 +123,6 @@ i18n_register_many \
   app.vaultwarden.error.noninteractive_email \
   "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
   "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
-  app.vaultwarden.error.port_invalid \
-  "VW_PORT is invalid: '%s'. Set a port between 1 and 65535 at the top of the script." \
-  "VW_PORT 无效：'%s'，请在脚本顶部设置 1-65535 之间的端口号。" \
-  app.vaultwarden.error.bool_invalid \
-  "%s is invalid: '%s'. Set it to true or false in the script or config file." \
-  "%s 无效：'%s'，请在脚本或配置文件中设置为 true 或 false。" \
   app.vaultwarden.error.domain_invalid \
   "VW_DOMAIN is invalid: '%s'. Use a DNS name such as vault.example.com." \
   "VW_DOMAIN 无效：'%s'，请使用类似 vault.example.com 的 DNS 名称。" \
@@ -288,15 +282,6 @@ i18n_register_many \
   app.vaultwarden.step.start_service \
   "Step 8  Start Vaultwarden service" \
   "Step 8  启动 Vaultwarden 服务" \
-  app.vaultwarden.status.unknown_process \
-  "unknown process" \
-  "未知进程" \
-  app.vaultwarden.warn.port_used \
-  "Port %s is already in use (%s)." \
-  "端口 %s 已被占用（%s）。" \
-  app.vaultwarden.warn.port_hint \
-  "If this is not an old vaultwarden process, release the port before installing or the service cannot start." \
-  "若不是旧的 vaultwarden 进程，请先释放端口再安装，否则服务将无法启动。" \
   app.vaultwarden.success.service_started \
   "Vaultwarden service started successfully." \
   "Vaultwarden 服务启动成功。" \
@@ -597,9 +582,6 @@ i18n_register_many \
   app.vaultwarden.warn.web_vault_update_version \
   "Cannot get the Web Vault version, so the existing Web Vault was left unchanged. Retry the update later after fixing network access to GitHub." \
   "无法获取 Web Vault 版本，现有 Web Vault 未变更。请先修复到 GitHub 的网络访问，再稍后重试更新。" \
-  app.vaultwarden.warn.update_port_used \
-  "Port %s is still in use (%s); the service may not be able to bind to it." \
-  "端口 %s 仍被占用（%s），服务可能无法绑定端口。" \
   app.vaultwarden.success.restart \
   "Vaultwarden service restarted successfully." \
   "Vaultwarden 服务重启成功。" \

@@ -15,12 +15,6 @@ i18n_register_many \
   app.tickflow.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
-  app.tickflow.error.port_invalid \
-  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
-  app.tickflow.error.domain_invalid \
-  "TICKFLOW_DOMAIN is invalid: '%s'. Use a DNS name such as panel.example.com, or leave it empty." \
-  "TICKFLOW_DOMAIN 无效：'%s'，请使用类似 panel.example.com 的 DNS 名称，或留空。" \
   app.tickflow.error.repo_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "无法访问 GitHub，请检查网络或代理后重试。" \
@@ -63,9 +57,6 @@ i18n_register_many \
   app.tickflow.error.service_start \
   "Failed to start %s" \
   "启动 %s 失败" \
-  app.tickflow.error.service_stop \
-  "Failed to stop %s" \
-  "停止 %s 失败" \
   app.tickflow.warn.apt_update \
   "apt-get update partially failed. Continuing install, but package versions may be affected. Inspect /var/log/apt/* or rerun apt-get update after fixing repository/network issues." \
   "apt-get update 部分仓库失败，将尝试继续安装（可能影响包版本）。请检查 /var/log/apt/*，或在修复仓库/网络问题后重新执行 apt-get update。" \
@@ -90,12 +81,6 @@ i18n_register_many \
   app.tickflow.warn.service_disable_failed \
   "Could not disable %s during uninstall. Remove it manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
-  app.tickflow.warn.systemd_reload_failed \
-  "Could not reload systemd after removing %s. Run manually: systemctl daemon-reload" \
-  "删除 %s 后无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
-  app.tickflow.error.health \
-  "Health check failed. The panel may still be starting; run status again later." \
-  "健康检查失败，面板可能仍在启动；稍后可再次执行 status。" \
   app.tickflow.warn.non_root_status \
   "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
   "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
@@ -282,12 +267,6 @@ i18n_register_many \
   app.tickflow.summary.restart_cmd \
   "restart service" \
   "重启服务" \
-  app.tickflow.summary.update_cmd \
-  "update to the latest version" \
-  "更新到最新版" \
-  app.tickflow.summary.backup_cmd \
-  "back up data now" \
-  "立即备份数据" \
   app.tickflow.backup.error_dir \
   "Cannot prepare backup directory: %s" \
   "无法准备备份目录：%s" \
@@ -299,10 +278,7 @@ i18n_register_many \
   "创建备份归档失败：%s" \
   app.tickflow.backup.success \
   "Backup created: %s" \
-  "备份已创建：%s" \
-  app.tickflow.summary.uninstall_cmd \
-  "uninstall the service" \
-  "卸载服务"
+  "备份已创建：%s"
 
 APP_DESCRIPTION="$(t app.tickflow.description)"
 APP_IMPL_SCRIPT="impl/install_tickflow.sh"

@@ -12,9 +12,6 @@ i18n_register_many \
   app.newapi.error.arch \
   "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
   "不支持的架构：%s（支持 x86_64 / aarch64）。" \
-  app.newapi.error.port_invalid \
-  "PORT is invalid: '%s'. Set a port between 1 and 65535 in the script or config file." \
-  "PORT 无效：'%s'，请在脚本或配置文件中设置 1-65535 之间的端口号。" \
   app.newapi.error.github_unreachable \
   "Cannot reach GitHub. Check network/proxy settings and retry." \
   "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
@@ -309,15 +306,6 @@ i18n_register_many \
   app.newapi.step.start \
   "Step 10  Start service" \
   "Step 10  启动服务" \
-  app.newapi.status.unknown_process \
-  "unknown process" \
-  "未知进程" \
-  app.newapi.warn.port_used \
-  "Port %s is already in use (%s)." \
-  "端口 %s 已被占用（%s）。" \
-  app.newapi.warn.port_release \
-  "If this is not the old new-api process, release the port first or the service cannot bind." \
-  "若不是旧的 new-api 进程，请先释放端口，否则服务将无法绑定。" \
   app.newapi.success.service_started \
   "Service started successfully." \
   "服务启动成功。" \
