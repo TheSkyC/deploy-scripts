@@ -77,24 +77,7 @@ check_connectivity() {
     "https://objects.githubusercontent.com" && return 0
   error "$(t app.newapi.error.github_unreachable)"
 }
-get_latest_release() {
-  local json tag
-  json=$(curl -fsSL --max-time 15 \
-    "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null) \
-    || { warn "$(t app.newapi.warn.github_api)"; echo ""; return; }
-  if echo "test" | grep -qP 'test' 2>/dev/null; then
-    tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
-  fi
-  if [[ -z "${tag:-}" ]]; then
-    tag=$(echo "$json" | grep '"tag_name"' | head -1 \
-      | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
-  fi
-  if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
-    echo "$tag"
-  else
-    echo ""
-  fi
-}
+
 get_download_url() {
   local version="$1"
   if [[ "${BIN_ARCH}" == "amd64" ]]; then
@@ -549,7 +532,7 @@ do_install() {
   check_connectivity
   info "$(t app.newapi.info.query_latest)"
   local LATEST
-  LATEST=$(get_latest_release)
+  LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.newapi.warn.github_api")
   [[ -z "$LATEST" ]] && error "$(t app.newapi.error.version_failed)"
   success "$(t app.newapi.success.latest "${BOLD}${LATEST}${NC}")"
   local DOWNLOAD_URL
@@ -690,7 +673,7 @@ do_update() {
   check_connectivity
   info "$(t app.newapi.info.query_latest)"
   local LATEST
-  LATEST=$(get_latest_release)
+  LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.newapi.warn.github_api")
   [[ -z "$LATEST" ]] && error "$(t app.newapi.error.latest_failed)"
   local CURRENT="${INSTALLED_VERSION:-unknown}"
   info "$(t app.newapi.info.current "${YELLOW}${CURRENT}${NC}")"

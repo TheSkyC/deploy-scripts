@@ -102,24 +102,7 @@ _validate_config_values() {
   require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
-get_latest_release() {
-  local json tag
-  json=$(curl -fsSL --max-time 15 \
-    "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null) \
-    || { warn "$(t app.sub2api.warn.github_api)"; echo ""; return; }
-  if echo "test" | grep -qP 'test' 2>/dev/null; then
-    tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
-  fi
-  if [[ -z "${tag:-}" ]]; then
-    tag=$(echo "$json" | grep '"tag_name"' | head -1 \
-      | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
-  fi
-  if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
-    echo "$tag"
-  else
-    echo ""
-  fi
-}
+
 _tag_to_ver() { echo "${1#v}"; }
 get_download_url() {
   local tag="$1"
@@ -1129,7 +1112,7 @@ do_install() {
   check_connectivity
   info "$(t app.sub2api.info.query_release)"
   local LATEST
-  LATEST=$(get_latest_release)
+  LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
   [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.version_lookup)"
   success "$(t app.sub2api.success.latest_version "${BOLD}${LATEST}${NC}")"
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
@@ -1276,7 +1259,7 @@ do_update() {
   step "$(t app.sub2api.step.check_update)"
   check_connectivity
   info "$(t app.sub2api.info.query_release)"
-  local LATEST; LATEST=$(get_latest_release)
+  local LATEST; LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
   [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.latest_lookup)"
   local CURRENT="${INSTALLED_VERSION:-unknown}"
   info "$(t app.sub2api.info.current_version "${YELLOW}${CURRENT}${NC}")"
