@@ -2723,15 +2723,22 @@ check_port_conflict_is_warn_only() {
   ' _ "$ROOT_DIR"
 }
 
-# Behavioral test for github_latest_release_tag with a stubbed curl: the
-# version must be extracted from a release payload, and non-version or
-# failed lookups must print nothing.
+# Behavioral test for the shared GitHub tag helpers with a stubbed curl:
+# json_tag_name must extract (and optionally strip "v" from) tag_name, and
+# github_latest_release_tag must return the tag for version-like payloads and
+# print nothing for non-version or failed lookups.
 check_github_release_tag_behavior() {
   "$BASH_BIN" -c '
     set -euo pipefail
     source "$1/lib/logging.sh"
     source "$1/lib/i18n.sh"
     source "$1/lib/network.sh"
+    tag=$(json_tag_name '"'"'{"tag_name":"v1.2.3","name":"v1.2.3"}'"'"')
+    [[ "$tag" == "v1.2.3" ]] || { echo "json_tag_name expected v1.2.3, got: ${tag}" >&2; exit 1; }
+    tag=$(json_tag_name '"'"'{"tag_name":"v1.2.3"}'"'"' --strip-v)
+    [[ "$tag" == "1.2.3" ]] || { echo "json_tag_name --strip-v expected 1.2.3, got: ${tag}" >&2; exit 1; }
+    tag=$(json_tag_name '"'"'{"id":1}'"'"')
+    [[ -z "$tag" ]] || { echo "json_tag_name expected empty, got: ${tag}" >&2; exit 1; }
     curl() { printf "%s\n" '"'"'{"tag_name":"v1.2.3","name":"v1.2.3"}'"'"'; }
     tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
     [[ "$tag" == "v1.2.3" ]] || { echo "expected v1.2.3, got: ${tag}" >&2; exit 1; }
