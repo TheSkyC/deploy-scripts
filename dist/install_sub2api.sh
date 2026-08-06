@@ -908,7 +908,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1
@@ -3459,7 +3458,8 @@ _backup_silent() {
     return 1
   fi
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
-    local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
+    local pg_archive
+    pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"
     if pg_dump "${PG_DSN}" 2> >(sed 's/^/  /' >&2) | gzip > "$pg_tmp"; then
       if mv "$pg_tmp" "$pg_archive"; then
@@ -3482,7 +3482,8 @@ _backup_silent() {
     warn "$(t app.sub2api.warn.pg_snapshot_skip)"
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
-    local conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local conf_archive
+    conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
     local conf_tmp="${conf_archive}.tmp"
     if tar -czf "$conf_tmp" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then

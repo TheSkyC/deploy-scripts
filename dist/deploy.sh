@@ -909,7 +909,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1
@@ -6537,7 +6536,8 @@ _backup_silent() {
     warn "$(t app.newapi.warn.silent_data_missing "$DATA_DIR")"
     return 1
   fi
-  local archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  local archive
+  archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
@@ -8198,7 +8198,8 @@ _backup_silent() {
     return 1
   fi
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
-    local pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
+    local pg_archive
+    pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     local pg_tmp="${pg_archive}.tmp"
     if pg_dump "${PG_DSN}" 2> >(sed 's/^/  /' >&2) | gzip > "$pg_tmp"; then
       if mv "$pg_tmp" "$pg_archive"; then
@@ -8221,7 +8222,8 @@ _backup_silent() {
     warn "$(t app.sub2api.warn.pg_snapshot_skip)"
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
-    local conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local conf_archive
+    conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
     local conf_tmp="${conf_archive}.tmp"
     if tar -czf "$conf_tmp" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
@@ -9467,7 +9469,8 @@ do_install() {
   VW_VER=$("$VW_BIN" --version 2>/dev/null || echo "unknown")
   info "$(t app.vaultwarden.info.version "$VW_VER")"
   step "$(t app.vaultwarden.step.web_vault)"
-  local _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+  local _wv_install_bak
+  _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     info "$(t app.vaultwarden.info.web_vault_image)"
     if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_install_bak"; then
@@ -10164,7 +10167,8 @@ do_update() {
   success "$(t app.vaultwarden.success.binary_updated)"
   NEW_VER=$(get_installed_version)
   step "$(t app.vaultwarden.step.update_web_vault)"
-  local _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+  local _wv_bak_ts
+  _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_bak_ts"; then
       success "$(t app.vaultwarden.success.web_vault_updated_image)"
@@ -10413,7 +10417,8 @@ _backup_silent() {
     warn "$(t app.vaultwarden.warn.backup_dir_failed "$VW_BACKUP_DIR")"
     return 1
   fi
-  local archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  local archive
+  archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
     _log_backup_helper "$(t app.vaultwarden.backup.script.data_missing "$VW_DATA_DIR")"
@@ -11029,7 +11034,8 @@ clone_or_update_repo() {
 }
 patch_config_port_and_paths() {
   [[ -f "$CONFIG_FILE" ]] || error "$(t app.cyberstrikeai.error.config_missing "$CONFIG_FILE")"
-  local backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
+  local backup
+  backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
   write_backup_file "$CONFIG_FILE" "$backup" \
     || error "$(t app.cyberstrikeai.error.backup_write "$backup")"
   python3 - "$CONFIG_FILE" "$PORT" "$LOG_DIR/cyberstrike-ai.log" "$CSAI_HTTPS" <<'PY'
@@ -13532,7 +13538,8 @@ do_backup() {
       error "$(t app.tickflow.backup.error_source_missing "${TICKFLOW_INSTALL_DIR}/${backup_source}")"
     fi
   done
-  local archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
+  local archive
+  archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if ! tar -czf "$archive_tmp" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env >&2; then
     rm -f "$archive_tmp"

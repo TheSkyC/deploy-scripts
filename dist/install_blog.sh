@@ -908,7 +908,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1

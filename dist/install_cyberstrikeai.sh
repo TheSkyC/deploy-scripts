@@ -908,7 +908,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1
@@ -2318,7 +2317,8 @@ clone_or_update_repo() {
 }
 patch_config_port_and_paths() {
   [[ -f "$CONFIG_FILE" ]] || error "$(t app.cyberstrikeai.error.config_missing "$CONFIG_FILE")"
-  local backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
+  local backup
+  backup="${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
   write_backup_file "$CONFIG_FILE" "$backup" \
     || error "$(t app.cyberstrikeai.error.backup_write "$backup")"
   python3 - "$CONFIG_FILE" "$PORT" "$LOG_DIR/cyberstrike-ai.log" "$CSAI_HTTPS" <<'PY'

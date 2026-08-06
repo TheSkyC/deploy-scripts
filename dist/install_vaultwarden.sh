@@ -908,7 +908,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1
@@ -2848,7 +2847,8 @@ do_install() {
   VW_VER=$("$VW_BIN" --version 2>/dev/null || echo "unknown")
   info "$(t app.vaultwarden.info.version "$VW_VER")"
   step "$(t app.vaultwarden.step.web_vault)"
-  local _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+  local _wv_install_bak
+  _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     info "$(t app.vaultwarden.info.web_vault_image)"
     if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_install_bak"; then
@@ -3545,7 +3545,8 @@ do_update() {
   success "$(t app.vaultwarden.success.binary_updated)"
   NEW_VER=$(get_installed_version)
   step "$(t app.vaultwarden.step.update_web_vault)"
-  local _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+  local _wv_bak_ts
+  _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
   if [[ -n "$EXTRACTED_WEBVAULT_PATH" && -d "$EXTRACTED_WEBVAULT_PATH" ]]; then
     if deploy_web_vault_from_dir "$EXTRACTED_WEBVAULT_PATH" "$_wv_bak_ts"; then
       success "$(t app.vaultwarden.success.web_vault_updated_image)"
@@ -3794,7 +3795,8 @@ _backup_silent() {
     warn "$(t app.vaultwarden.warn.backup_dir_failed "$VW_BACKUP_DIR")"
     return 1
   fi
-  local archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  local archive
+  archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
     _log_backup_helper "$(t app.vaultwarden.backup.script.data_missing "$VW_DATA_DIR")"

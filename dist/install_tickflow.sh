@@ -908,7 +908,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1
@@ -2171,7 +2170,8 @@ do_backup() {
       error "$(t app.tickflow.backup.error_source_missing "${TICKFLOW_INSTALL_DIR}/${backup_source}")"
     fi
   done
-  local archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
+  local archive
+  archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   if ! tar -czf "$archive_tmp" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env >&2; then
     rm -f "$archive_tmp"

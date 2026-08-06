@@ -908,7 +908,6 @@ deploy_assume_yes() {
 }
 
 app_doctor_service_name() {
-  local fn
   if [[ -n "${APP_DOCTOR_SERVICE_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICE_FN" >/dev/null 2>&1; then
     "$APP_DOCTOR_SERVICE_FN" && return 0
     return 1
@@ -2628,7 +2627,8 @@ _backup_silent() {
     warn "$(t app.newapi.warn.silent_data_missing "$DATA_DIR")"
     return 1
   fi
-  local archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  local archive
+  archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   local archive_tmp="${archive}.tmp"
   local DB_FILE="${DATA_DIR}/one-api.db"
   if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
