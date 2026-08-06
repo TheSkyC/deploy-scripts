@@ -94,11 +94,10 @@ preflight_check() {
   _validate_config_values
 }
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.cyberstrikeai.error.github_unreachable \
     "https://api.github.com" \
     "https://github.com" \
-    "https://objects.githubusercontent.com" && return 0
-  error "$(t app.cyberstrikeai.error.github_unreachable)"
+    "https://objects.githubusercontent.com"
 }
 restore_old_go_toolchain() {
   local old_go_backup="$1"

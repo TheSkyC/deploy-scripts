@@ -67,11 +67,10 @@ preflight_check() {
 }
 
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.sub2api.error.github_unreachable \
     "https://api.github.com" \
     "https://github.com" \
-    "https://objects.githubusercontent.com" && return 0
-  error "$(t app.sub2api.error.github_unreachable)"
+    "https://objects.githubusercontent.com"
 }
 _APT_CODENAME_OK=false
 _apt_codename() {

@@ -71,11 +71,10 @@ _validate_config_values() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
 }
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.newapi.error.github_unreachable \
     "https://api.github.com" \
     "https://github.com" \
-    "https://objects.githubusercontent.com" && return 0
-  error "$(t app.newapi.error.github_unreachable)"
+    "https://objects.githubusercontent.com"
 }
 
 get_download_url() {

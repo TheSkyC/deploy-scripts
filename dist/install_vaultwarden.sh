@@ -588,6 +588,16 @@ check_connectivity_urls() {
   return 1
 }
 
+# Checks that at least one of the given endpoints is reachable; when none
+# respond, fails the script through the given i18n error key.
+app_check_connectivity() {
+  local error_key="$1"
+  shift
+  if ! check_connectivity_urls "$@"; then
+    error "$(t "$error_key")"
+  fi
+}
+
 # Fetches the latest release tag for a GitHub repository (owner/repo).
 # Prints the tag (with or without a leading "v") when it looks like a
 # version, otherwise prints nothing and warns with the given i18n key.
@@ -2453,11 +2463,10 @@ preflight_check() {
   _validate_config_values
 }
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.vaultwarden.error.registry_unreachable \
     "https://auth.docker.io/token" \
     "https://registry-1.docker.io/v2/" \
-    "https://api.github.com" && return 0
-  error "$(t app.vaultwarden.error.registry_unreachable)"
+    "https://api.github.com"
 }
 _validate_config_values() {
   app_validate_port "$VW_PORT" "VW_PORT"

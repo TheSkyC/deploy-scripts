@@ -45,10 +45,9 @@ preflight_check() {
 }
 
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.tickflow.error.repo_unreachable \
     "https://github.com" \
-    "https://api.github.com" && return 0
-  error "$(t app.tickflow.error.repo_unreachable)"
+    "https://api.github.com"
 }
 
 _validate_config_values() {

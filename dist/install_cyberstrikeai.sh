@@ -588,6 +588,16 @@ check_connectivity_urls() {
   return 1
 }
 
+# Checks that at least one of the given endpoints is reachable; when none
+# respond, fails the script through the given i18n error key.
+app_check_connectivity() {
+  local error_key="$1"
+  shift
+  if ! check_connectivity_urls "$@"; then
+    error "$(t "$error_key")"
+  fi
+}
+
 # Fetches the latest release tag for a GitHub repository (owner/repo).
 # Prints the tag (with or without a leading "v") when it looks like a
 # version, otherwise prints nothing and warns with the given i18n key.
@@ -2108,11 +2118,10 @@ preflight_check() {
   _validate_config_values
 }
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.cyberstrikeai.error.github_unreachable \
     "https://api.github.com" \
     "https://github.com" \
-    "https://objects.githubusercontent.com" && return 0
-  error "$(t app.cyberstrikeai.error.github_unreachable)"
+    "https://objects.githubusercontent.com"
 }
 restore_old_go_toolchain() {
   local old_go_backup="$1"

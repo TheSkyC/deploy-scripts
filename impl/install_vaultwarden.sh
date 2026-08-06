@@ -73,11 +73,10 @@ preflight_check() {
   _validate_config_values
 }
 check_connectivity() {
-  check_connectivity_urls \
+  app_check_connectivity app.vaultwarden.error.registry_unreachable \
     "https://auth.docker.io/token" \
     "https://registry-1.docker.io/v2/" \
-    "https://api.github.com" && return 0
-  error "$(t app.vaultwarden.error.registry_unreachable)"
+    "https://api.github.com"
 }
 _validate_config_values() {
   app_validate_port "$VW_PORT" "VW_PORT"
