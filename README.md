@@ -153,6 +153,7 @@ For faster local iteration, run a focused verification target:
 bash tools/verify.sh syntax
 bash tools/verify.sh release
 bash tools/verify.sh dispatch
+bash tools/verify.sh shellcheck
 ```
 
 The verification script checks:
@@ -165,3 +166,5 @@ The verification script checks:
 - No hardcoded Chinese text in implementation scripts.
 - No Chinese comments in source or generated release scripts.
 - No temporary bundled implementation files are left in `dist/`.
+- Shellcheck static analysis on source scripts (skipped when shellcheck is not installed).
+- Release scripts in `dist/` match the current source tree.

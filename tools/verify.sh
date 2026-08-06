@@ -13,6 +13,7 @@ Usage: bash tools/verify.sh [all|syntax|release|dispatch|help]
 Targets:
   all       Run the full repository verification suite. This is the default.
   syntax    Check Bash syntax for source scripts only.
+  shellcheck  Run shellcheck static analysis on source scripts (skips if absent).
   release   Rebuild dist/ with deterministic metadata and check release syntax.
   dispatch  Rebuild dist/ and check CLI dispatch, menus, registry, and localization.
 EOF
@@ -27,6 +28,23 @@ check_shell_syntax() {
   while IFS= read -r file; do
     "$BASH_BIN" -n "$file"
   done < <(find apps bin impl lib tools -name '*.sh' -type f | sort; printf '%s\n' deploy.sh)
+}
+
+check_shellcheck() {
+  if ! command -v shellcheck >/dev/null 2>&1; then
+    echo "shellcheck not found; skipping static analysis (install shellcheck to enable)"
+    return 0
+  fi
+  # SC2034: app/framework contract variables (APP_ID, LOCK_FILE, doctor hooks,
+  # ...) are consumed by name from other scripts and are not unused.
+  # SC1090: impl files source lib/*.sh through runtime-derived paths.
+  # SC1017: git stores LF via .gitattributes even when the working tree is CRLF.
+  local file
+  local files=()
+  while IFS= read -r file; do
+    files+=("$file")
+  done < <(find apps bin impl lib tools -name '*.sh' -type f | sort; printf '%s\n' deploy.sh)
+  shellcheck --severity=warning --exclude=SC2034,SC1090,SC1017 "${files[@]}"
 }
 
 check_release_syntax() {
@@ -7774,6 +7792,20 @@ check_blog_publish_helper_is_atomic() {
 }
 
 
+# dist/ must always match the current source tree; run this after
+# build_verified_release so dist/ reflects the sources under verification.
+check_dist_is_up_to_date() {
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "dist freshness check requires a git checkout" >&2
+    return 1
+  fi
+  if ! git diff --quiet -- dist/; then
+    echo "dist/ is out of date with the source tree; rebuild and commit the release scripts:" >&2
+    git diff --stat -- dist/ >&2
+    return 1
+  fi
+}
+
 # A bare call to app_check_port_conflict must never abort the script under
 # `set -e`, even when the checked port is free (warn-only helper).
 check_port_conflict_is_warn_only() {
@@ -7800,6 +7832,7 @@ main() {
       build_verified_release
       check_release_syntax
       check_no_release_temp_files
+      check_dist_is_up_to_date
       echo "Release verification passed"
       return 0
       ;;
@@ -7856,6 +7889,12 @@ main() {
       return 0
       ;;
     all) ;;
+    shellcheck)
+      check_shell_syntax
+      check_shellcheck
+      echo "Shellcheck verification passed"
+      return 0
+      ;;
     help|-h|--help)
       usage
       return 0
@@ -7868,14 +7907,15 @@ main() {
   esac
 
   check_shell_syntax
+  check_shellcheck
   build_verified_release
   check_release_syntax
   check_localized_dispatch
   check_doctor_dispatch
   check_app_help_dispatch
   check_status_json_dispatch
-      check_status_json_services_and_version
-      check_port_conflict_is_warn_only
+  check_status_json_services_and_version
+  check_port_conflict_is_warn_only
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
   check_newapi_uninstall_checks_directory_removal_errors
@@ -7920,6 +7960,7 @@ main() {
   check_no_hardcoded_chinese_impl
   check_no_chinese_comments
   check_no_release_temp_files
+  check_dist_is_up_to_date
   check_release_build_outputs_are_atomic
   check_bundled_impl_temp_names_are_random
   check_bundled_impl_dir_security_failure_cleanup
