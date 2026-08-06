@@ -126,8 +126,9 @@ Keep app-specific localized keys, prompts, and summary copy in
 `apps/<app>.sh` and pass the key into the shared helper as an argument.
 Do not merge per-app keys into shared libraries, and do not move shared
 helpers into per-app impl scripts. When extracting a shared helper, update
-`tools/verify.sh` so guardrails require the shared form and reject the old
-per-app copy, then keep the full verification suite green.
+the verification suite (`tools/checks/*.sh`) so guardrails require the shared
+form and reject the old per-app copy, then keep the full verification suite
+green.
 
 ## Adding A New App
 
@@ -135,7 +136,7 @@ per-app copy, then keep the full verification suite green.
 2. Create `impl/install_myapp.sh` with `do_install` and any supported lifecycle functions.
 3. Create `bin/install_myapp.sh` and a top-level `install_myapp.sh` wrapper following the existing pattern.
 4. Add the app to `tools/build-release.sh`.
-5. Add verification coverage to `tools/verify.sh` when the app has special dispatch or localization behavior. Register each new check in a target arm (`dispatch` or `guards`) as well as `all`; `check_target_groups_cover_all_checks` fails if a check is missing from either.
+5. Add verification coverage when the app has special dispatch or localization behavior: define new `check_*` functions in a `tools/checks/` module (e.g., `tools/checks/app-myapp.sh`) and register each one in a target arm (`dispatch` or `guards`) as well as `all`; `check_target_groups_cover_all_checks` fails if a check is missing from either.
 6. Run verification:
 
 ```bash
@@ -179,6 +180,10 @@ bash tools/verify.sh guards
 The parallel CI jobs run `syntax`, `shellcheck`, `release`, `dispatch`, and
 `guards`; the union of those targets covers every check that `all` runs.
 `bash tools/verify.sh` (no target) still runs the full suite.
+
+Check definitions live in `tools/checks/*.sh` modules (per-app, dispatch,
+release, and framework guardrails); `tools/verify.sh` sources them and only
+holds the runner itself (targets, shared `expect_*` helpers, and `main`).
 
 The verification script checks:
 
