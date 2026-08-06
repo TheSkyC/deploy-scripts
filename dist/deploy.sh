@@ -761,6 +761,10 @@ app_validate_goproxy() {
 
 app_validate_image_repo() {
   local name="$1" value="$2" first rest part
+  # Character ranges in regexes are collation-dependent: under en_US.UTF-8 /
+  # zh_CN.UTF-8, [a-z0-9] also matches uppercase. Pin the C locale so image
+  # repo validation accepts lowercase-only names on every server locale.
+  local LC_ALL=C
   local -a _image_repo_parts
   [[ -n "$value" ]] || error "$(t error.image_repo_invalid "$name" "$value")"
   case "$value" in
