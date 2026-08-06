@@ -2589,27 +2589,38 @@ check_api_status_directory_sizes_are_nonfatal() {
     ' impl/install_sub2api.sh dist/install_sub2api.sh
 }
 
+check_framework_validator_errors_are_actionable() {
+  awk '
+      /^app_validate_port\(\)/ { in_port=1; next }
+      in_port && /t error\.port_invalid/ { saw_port=1 }
+      in_port && /^}/ { in_port=0 }
+      /^app_validate_bool\(\)/ { in_bool=1; next }
+      in_bool && /t error\.bool_invalid/ { saw_bool=1 }
+      in_bool && /^}/ { in_bool=0 }
+      /^app_validate_domain\(\)/ { in_domain=1; next }
+      in_domain && /t error\.domain_invalid/ { saw_domain=1 }
+      in_domain && /^}/ { in_domain=0 }
+      END {
+        if (!(saw_port && saw_bool && saw_domain)) {
+          print "Framework validators must route invalid port, boolean, and domain values to actionable t error.* keys." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/app.sh
+  awk '
+      /error\.port_invalid\)/ && /between 1 and 65535/ { saw_port=1 }
+      /error\.bool_invalid\)/ && /true\/false, yes\/no, on\/off, or 1\/0/ { saw_bool=1 }
+      /error\.domain_invalid\)/ && /DNS name/ { saw_domain=1 }
+      END {
+        if (!(saw_port && saw_bool && saw_domain)) {
+          print "Framework fallback messages must give actionable guidance for invalid port, boolean, and domain values." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/i18n.sh
+}
+
 check_api_ports_are_validated() {
-  awk '
-      /app\.newapi\.error\.port_invalid/ { saw_key=1 }
-      /Set a port between 1 and 65535/ { saw_guidance=1 }
-      END {
-        if (!(saw_key && saw_guidance)) {
-          print "NewAPI must provide an actionable invalid port error." > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' apps/newapi.sh
-  awk '
-      /app\.sub2api\.error\.port_invalid/ { saw_key=1 }
-      /Set a port between 1 and 65535/ { saw_guidance=1 }
-      END {
-        if (!(saw_key && saw_guidance)) {
-          print "Sub2API must provide an actionable invalid port error." > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' apps/sub2api.sh
   awk '
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
@@ -2654,16 +2665,6 @@ check_api_ports_are_validated() {
 
 check_cyberstrikeai_ports_are_validated() {
   awk '
-      /app\.cyberstrikeai\.error\.port_invalid/ { saw_key=1 }
-      /Set a port between 1 and 65535/ { saw_guidance=1 }
-      END {
-        if (!(saw_key && saw_guidance)) {
-          print "CyberStrikeAI must provide an actionable invalid port error." > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' apps/cyberstrikeai.sh
-  awk '
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
         if (!saw_preflight) {
@@ -2687,16 +2688,6 @@ check_cyberstrikeai_ports_are_validated() {
 }
 
 check_cyberstrikeai_booleans_are_validated() {
-  awk '
-      /app\.cyberstrikeai\.error\.bool_invalid/ { saw_key=1 }
-      /true\/false, yes\/no, on\/off, or 1\/0/ { saw_guidance=1 }
-      END {
-        if (!(saw_key && saw_guidance)) {
-          print "CyberStrikeAI must provide an actionable invalid boolean config error." > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' apps/cyberstrikeai.sh
   awk '
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
@@ -2733,17 +2724,15 @@ check_nginx_domains_are_validated() {
       }
     ' lib/network.sh
   awk '
-      /app\.cyberstrikeai\.error\.domain_invalid/ { saw_csai=1 }
-      /app\.sub2api\.error\.domain_invalid/ { saw_sub2api=1 }
       /app\.vaultwarden\.error\.domain_invalid/ { saw_vw=1 }
       /app\.blog\.error\.keep_days_invalid/ { saw_blog_keep_days=1 }
       END {
-        if (!(saw_csai && saw_sub2api && saw_vw && saw_blog_keep_days)) {
+        if (!(saw_vw && saw_blog_keep_days)) {
           print "Nginx domain and Blog retention validation errors must be localized." > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/cyberstrikeai.sh apps/sub2api.sh apps/vaultwarden.sh apps/blog.sh
+    ' apps/vaultwarden.sh apps/blog.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
       in_func && /app_validate_domain "CSAI_DOMAIN"/ { saw_domain=1 }
@@ -2888,17 +2877,6 @@ check_config_value_validators() {
 }
 
 check_vaultwarden_config_values_are_validated() {
-  awk '
-      /app\.vaultwarden\.error\.port_invalid/ { saw_port=1 }
-      /app\.vaultwarden\.error\.bool_invalid/ { saw_bool=1 }
-      /true or false/ { saw_guidance=1 }
-      END {
-        if (!(saw_port && saw_bool && saw_guidance)) {
-          print "Vaultwarden must provide actionable invalid port and boolean config errors." > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' apps/vaultwarden.sh
   awk '
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
@@ -6221,25 +6199,19 @@ check_vaultwarden_service_start_paths_are_explicit() {
     return 1
   fi
   awk '
-      /warn "\$\(t app\.vaultwarden\.warn\.port_hint\)"/ { in_install=1; saw_start_wait=0; next }
+      /^do_install\(\)/ { in_install=1; saw_start_wait=0; next }
       in_install && /if systemctl start vaultwarden && wait_for_service vaultwarden 20; then/ { saw_start_wait=1 }
-      in_install && /warn "\$\(t app\.vaultwarden\.warn\.service_cleanup\)"/ {
+      in_install && /^}/ {
         if (!saw_start_wait) {
           printf "%s Vaultwarden install must gate service success on an explicit start-and-wait branch\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_install=0
       }
-      /warn "\$\(t app\.vaultwarden\.warn\.update_port_used "\$VW_PORT" "\$_port_owner_upd"\)"/ { in_update=1; saw_start_wait2=0; saw_start_wait3=0; next }
-      in_update && /if systemctl start vaultwarden && wait_for_service vaultwarden 20; then/ {
-        if (!saw_start_wait2) {
-          saw_start_wait2=1
-        } else {
-          saw_start_wait3=1
-        }
-      }
-      in_update && /error "\$\(t app\.vaultwarden\.error\.update_rolled_back "\$OLD_VER" "\$_backup_kept"\)"/ {
-        if (!(saw_start_wait2 && saw_start_wait3)) {
+      /^do_update\(\)/ { in_update=1; saw_start_wait_count=0; next }
+      in_update && /if systemctl start vaultwarden && wait_for_service vaultwarden 20; then/ { saw_start_wait_count++ }
+      in_update && /^}/ {
+        if (saw_start_wait_count < 2) {
           printf "%s Vaultwarden update must gate both primary restart and rollback restart on explicit start-and-wait branches\n", FILENAME > "/dev/stderr"
           exit 1
         }
@@ -8006,6 +7978,7 @@ main() {
   check_cyberstrikeai_ports_are_validated
   check_cyberstrikeai_booleans_are_validated
   check_nginx_domains_are_validated
+  check_framework_validator_errors_are_actionable
   check_config_value_validators
   check_vaultwarden_config_values_are_validated
   check_status_port_matches_are_bounded
