@@ -179,9 +179,7 @@ cpa_stack_release_json() {
 }
 
 cpa_stack_release_tag() {
-  local json="$1" compact
-  compact="$(printf '%s' "$json" | tr -d '\r\n\t ' )"
-  printf '%s\n' "$compact" | sed -nE 's/.*"tag_name":"([^"]+)".*/\1/p'
+  json_tag_name "$1"
 }
 
 cpa_stack_release_asset_url() {

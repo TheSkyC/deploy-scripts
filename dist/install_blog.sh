@@ -598,6 +598,27 @@ app_check_connectivity() {
   fi
 }
 
+# Extracts the "tag_name" field from a GitHub releases/latest JSON payload.
+# Pass --strip-v to drop a leading "v" (for example "v1.2.3" -> "1.2.3").
+# Prints nothing when the payload has no parseable tag_name.
+json_tag_name() {
+  local json="$1" strip_v=false tag
+  if [[ "${2:-}" == "--strip-v" ]]; then
+    strip_v=true
+  fi
+  if echo "test" | grep -qP 'test' 2>/dev/null; then
+    tag=$(printf '%s' "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
+  fi
+  if [[ -z "${tag:-}" ]]; then
+    tag=$(printf '%s' "$json" | grep '"tag_name"' | head -1 \
+      | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
+  fi
+  if $strip_v; then
+    tag="${tag#v}"
+  fi
+  printf '%s\n' "$tag"
+}
+
 # Fetches the latest release tag for a GitHub repository (owner/repo).
 # Prints the tag (with or without a leading "v") when it looks like a
 # version, otherwise prints nothing and warns with the given i18n key.
@@ -607,13 +628,7 @@ github_latest_release_tag() {
   json=$(curl -fsSL --max-time 15 \
     "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) \
     || { warn "$(t "$warn_key")"; echo ""; return; }
-  if echo "test" | grep -qP 'test' 2>/dev/null; then
-    tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
-  fi
-  if [[ -z "${tag:-}" ]]; then
-    tag=$(echo "$json" | grep '"tag_name"' | head -1 \
-      | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
-  fi
+  tag="$(json_tag_name "$json")"
   if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
     echo "$tag"
   else
@@ -2448,11 +2463,10 @@ fi
 success "$(t app.blog.deps_installed)"
 step "$(t app.blog.step_install_hugo)"
 info "$(t app.blog.query_hugo)"
-HUGO_VER=$(curl -fsSL --max-time 15 \
-  "https://api.github.com/repos/gohugoio/hugo/releases/latest" \
-  | grep '"tag_name"' | head -1 \
-  | sed 's/.*"v\([^"]*\)".*/\1/') \
+HUGO_JSON=$(curl -fsSL --max-time 15 \
+  "https://api.github.com/repos/gohugoio/hugo/releases/latest") \
   || error "$(t app.blog.error.github_api)"
+HUGO_VER="$(json_tag_name "$HUGO_JSON" --strip-v)"
 [[ -z "$HUGO_VER" ]] && error "$(t app.blog.error.hugo_version)"
 success "$(t app.blog.latest_version "$HUGO_VER")"
 DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"

@@ -266,11 +266,10 @@ fi
 success "$(t app.blog.deps_installed)"
 step "$(t app.blog.step_install_hugo)"
 info "$(t app.blog.query_hugo)"
-HUGO_VER=$(curl -fsSL --max-time 15 \
-  "https://api.github.com/repos/gohugoio/hugo/releases/latest" \
-  | grep '"tag_name"' | head -1 \
-  | sed 's/.*"v\([^"]*\)".*/\1/') \
+HUGO_JSON=$(curl -fsSL --max-time 15 \
+  "https://api.github.com/repos/gohugoio/hugo/releases/latest") \
   || error "$(t app.blog.error.github_api)"
+HUGO_VER="$(json_tag_name "$HUGO_JSON" --strip-v)"
 [[ -z "$HUGO_VER" ]] && error "$(t app.blog.error.hugo_version)"
 success "$(t app.blog.latest_version "$HUGO_VER")"
 DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"

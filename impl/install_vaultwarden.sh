@@ -121,13 +121,7 @@ get_latest_webvault_ver() {
   json=$(curl -fsSL --max-time 15 \
     "https://api.github.com/repos/dani-garcia/bw_web_builds/releases/latest" 2>/dev/null) || true
   [[ -z "$json" ]] && { echo ""; return; }
-  if echo "test" | grep -qP 'test' 2>/dev/null; then
-    tag=$(echo "$json" | grep -oP '"tag_name"\s*:\s*"v?\K[^"]+' 2>/dev/null | head -1 || true)
-  fi
-  if [[ -z "${tag:-}" ]]; then
-    tag=$(echo "$json" | grep '"tag_name"' | head -1 \
-      | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\?\([^"]*\)".*/\1/' 2>/dev/null || true)
-  fi
+  tag="$(json_tag_name "$json" --strip-v)"
   if [[ "$tag" =~ ^[0-9]+\.[0-9]+ ]]; then
     echo "$tag"
   else
