@@ -47,6 +47,15 @@ CONFIG_KEYS=(
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 
+_cpa_stack_doctor_primary_service() {
+  printf '%s\n' "$CPA_SERVICE_NAME"
+}
+_cpa_stack_doctor_services() {
+  printf '%s\n' "$CPA_SERVICE_NAME" "$CPAMP_SERVICE_NAME" nginx
+}
+APP_DOCTOR_SERVICE_FN=_cpa_stack_doctor_primary_service
+APP_DOCTOR_SERVICES_FN=_cpa_stack_doctor_services
+
 cpa_stack_show_banner() {
   echo -e "${BOLD}CLIProxyAPI + CPA Manager Plus Stack${NC}"
 }

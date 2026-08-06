@@ -970,6 +970,52 @@ app_json_value() {
   esac
 }
 
+# Emit one JSON service object for a systemd unit name.
+app_json_service_object() {
+  local service_name="$1"
+  local unit_exists=null active=null enabled=null
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files "${service_name}.service" --no-legend 2>/dev/null | grep -q .; then
+      unit_exists=true
+      if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        active=true
+      else
+        active=false
+      fi
+      if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+        enabled=true
+      else
+        enabled=false
+      fi
+    else
+      unit_exists=false
+    fi
+  fi
+  printf '{"name":%s,"unit_exists":%s,"active":%s,"enabled":%s}' \
+    "$(app_json_string "$service_name")" \
+    "$(app_json_value "$unit_exists")" \
+    "$(app_json_value "$active")" \
+    "$(app_json_value "$enabled")"
+}
+
+# Print the INSTALLED_VERSION recorded in a deployment config file, if any.
+app_config_installed_version() {
+  local conf_file="$1"
+  [[ -f "$conf_file" ]] || return 1
+  local value
+  value="$(awk -F= '
+      /^[[:space:]]*INSTALLED_VERSION=/ {
+        sub(/^[^=]*=[[:space:]]*/, "")
+        gsub(/^"|"$/, "")
+        gsub(/[[:space:]]+$/, "")
+        print
+        exit
+      }
+    ' "$conf_file" 2>/dev/null)" || return 1
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
 do_status_json() {
   local conf_file config_exists=false config_safe=null config_valid=null
   local conf_owner=null conf_mode=null
@@ -1014,6 +1060,13 @@ do_status_json() {
     fi
   fi
 
+  local version=null
+  if [[ "$config_exists" == "true" && "$config_safe" == "true" ]]; then
+    if ! version="$(app_config_installed_version "$conf_file" 2>/dev/null)"; then
+      version=null
+    fi
+  fi
+
   printf '{'
   printf '"app_id":%s,' "$(app_json_string "${APP_ID:-}")"
   printf '"app_name":%s,' "$(app_json_string "${APP_NAME:-}")"
@@ -1026,6 +1079,7 @@ do_status_json() {
   printf '"safe":%s,' "$(app_json_value "$config_safe")"
   printf '"valid":%s' "$(app_json_value "$config_valid")"
   printf '},'
+  printf '"version":%s,' "$(app_json_value "$version")"
   printf '"service":{'
   printf '"name":%s,' "$(app_json_value "$service_name")"
   printf '"systemctl_available":%s,' "$(app_json_bool "$systemctl_available")"
@@ -1033,9 +1087,22 @@ do_status_json() {
   printf '"active":%s,' "$(app_json_value "$service_active")"
   printf '"enabled":%s' "$(app_json_value "$service_enabled")"
   printf '}'
+  if [[ -n "${APP_DOCTOR_SERVICES_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICES_FN" >/dev/null 2>&1; then
+    local first=1 sname
+    printf ',"services":['
+    while IFS= read -r sname; do
+      [[ -n "$sname" ]] || continue
+      if [[ "$first" -eq 1 ]]; then
+        first=0
+      else
+        printf ','
+      fi
+      app_json_service_object "$sname"
+    done < <("$APP_DOCTOR_SERVICES_FN")
+    printf ']'
+  fi
   printf '}\n'
 }
-
 do_doctor() {
   local failures=0 warnings=0
 
@@ -1597,6 +1664,15 @@ CONFIG_KEYS=(
 
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
+
+_cpa_stack_doctor_primary_service() {
+  printf '%s\n' "$CPA_SERVICE_NAME"
+}
+_cpa_stack_doctor_services() {
+  printf '%s\n' "$CPA_SERVICE_NAME" "$CPAMP_SERVICE_NAME" nginx
+}
+APP_DOCTOR_SERVICE_FN=_cpa_stack_doctor_primary_service
+APP_DOCTOR_SERVICES_FN=_cpa_stack_doctor_services
 
 cpa_stack_show_banner() {
   echo -e "${BOLD}CLIProxyAPI + CPA Manager Plus Stack${NC}"

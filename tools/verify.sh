@@ -146,6 +146,16 @@ check_status_json_dispatch() {
   expect_manager_success_output en dist/deploy.sh tickflow json-status '"service"'
 }
 
+# status-json must expose a services array for multi-service apps and a
+# version field for automation consumers.
+check_status_json_services_and_version() {
+  expect_success_output en dist/install_cpa-stack.sh status-json '"services":['
+  expect_success_output en dist/install_cpa-stack.sh status-json '"cli-proxy-api"'
+  expect_success_output en dist/install_cpa-stack.sh status-json '"cpa-manager-plus"'
+  expect_success_output en dist/install_cpa-stack.sh status-json '"version":null'
+  expect_success_output en install_newapi.sh status-json '"version":null'
+}
+
 check_doctor_validates_saved_config() {
   awk '
       /doctor\.config_parse_ok/ { saw_ok_key=1 }
@@ -7799,6 +7809,7 @@ main() {
       check_doctor_dispatch
       check_app_help_dispatch
       check_status_json_dispatch
+      check_status_json_services_and_version
       check_port_conflict_is_warn_only
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
@@ -7863,6 +7874,7 @@ main() {
   check_doctor_dispatch
   check_app_help_dispatch
   check_status_json_dispatch
+      check_status_json_services_and_version
       check_port_conflict_is_warn_only
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
