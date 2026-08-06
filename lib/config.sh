@@ -63,6 +63,15 @@ load_config_file() {
       fi
     done
     $allowed || { warn "$(t warn.config_unknown_key "$key")"; continue; }
+    # printf -v would clobber the deployment shell's own state for reserved
+    # names; the allow-list normally gates keys, but keep a defense-in-depth
+    # guard so future CONFIG_KEYS cannot expose IFS/PATH and similar.
+    case "$key" in
+      IFS|PATH|BASH_ENV|ENV|SHELLOPTS|BASHOPTS|PS4|CDPATH|GLOBIGNORE)
+        warn "$(t warn.config_reserved_key "$key")"
+        continue
+        ;;
+    esac
     printf -v "$key" '%s' "$value"
   done < "$conf_file"
 }

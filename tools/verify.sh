@@ -57,6 +57,9 @@ run_checks_parallel() {
     max_jobs=4
   fi
   tmp_dir="$(mktemp -d)"
+  # Remove the temp dir on any exit path (including Ctrl-C) so interrupted
+  # runs do not leak per-check logs.
+  trap 'rm -rf "$tmp_dir"' EXIT
   while [[ "$i" -lt "${#queue[@]}" ]]; do
     pids=()
     names=()
@@ -79,6 +82,7 @@ run_checks_parallel() {
     done
   done
   rm -rf "$tmp_dir"
+  trap - EXIT
   return "$status"
 }
 
@@ -316,6 +320,7 @@ main() {
       build_verified_release
       check_api_ports_are_validated
       check_api_status_directory_sizes_are_nonfatal
+      check_app_json_string_escapes_controls
       check_apt_sources_are_atomic
       check_atomic_helpers_are_atomic
       check_backup_retention_cleanup_reports_failures
@@ -346,6 +351,7 @@ main() {
       check_config_crlf_handling
       check_config_sanitization_behavior
       check_config_key_shape_locale_independent
+      check_config_reserved_keys_are_rejected
       check_config_save_failures_are_explicit
       check_config_value_validators
       check_config_write_failure_cleanup
@@ -419,6 +425,7 @@ main() {
       check_old_backup_cleanup_reports_failures
       check_optional_count_messages_are_nonfatal
       check_optional_directory_cleanup_is_nonfatal
+      check_port_listening_process_behavior
       check_preupdate_backup_logs_match_guidance
       check_preupdate_backup_warnings_include_followup_guidance
       check_random_head_pipelines_handle_sigpipe

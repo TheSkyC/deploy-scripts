@@ -408,3 +408,45 @@ check_connectivity_helper_behavior() {
   ' _ "$ROOT_DIR"
 }
 
+check_port_listening_process_behavior() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/network.sh"
+    # Empty ss output must not report an owner (returns 1).
+    ss() { return 0; }
+    lsof() { return 0; }
+    ( port_listening_process 8080 ) 2>/dev/null \
+      && { echo "empty ss output must not report an owner" >&2; exit 1; }
+    # A realistic ss users column must yield the process name.
+    ss() { printf "State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\nLISTEN 0 511 0.0.0.0:8080 0.0.0.0:* users:((\"nginx\",pid=123,fd=10))\n"; }
+    [[ "$(port_listening_process 8080)" == "nginx" ]] \
+      || { echo "ss process name extraction failed" >&2; exit 1; }
+    # lsof branch (only reachable when ss is absent).
+    if ! command -v ss >/dev/null 2>&1; then
+      lsof() { printf "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\nnginx 123 root 9u IPv4 12345 0t0 TCP *:8080 (LISTEN)\n"; }
+      [[ "$(port_listening_process 8080)" == "nginx" ]] \
+        || { echo "lsof process name extraction failed" >&2; exit 1; }
+      lsof() { return 0; }
+      ( port_listening_process 8080 ) 2>/dev/null \
+        && { echo "empty lsof output must not report an owner" >&2; exit 1; }
+    fi
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
+check_app_json_string_escapes_controls() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/app.sh"
+    out="$(app_json_string "$(printf "a\tb\nc\rd\x08e\x0cf")")"
+    [[ "$out" == "\"a\\tb\\nc\\rd\\be\\ff\"" ]] \
+      || { echo "control escapes wrong: $out" >&2; exit 1; }
+    out="$(app_json_string "quote\"back\\slash")"
+    [[ "$out" == "\"quote\\\"back\\\\slash\"" ]] \
+      || { echo "quote/backslash escapes wrong: $out" >&2; exit 1; }
+    out="$(app_json_string "$(printf "x\x1fy")")"
+    [[ "$out" == "\"x\\u001fy\"" ]] \
+      || { echo "remaining C0 escape wrong: $out" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+}

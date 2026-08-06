@@ -123,6 +123,7 @@ __deploy_i18n_message() {
     status.inactive) echo "inactive|未运行" ;;
     status.unknown) echo "unknown|未知" ;;
     warn.config_invalid_key) echo "Ignoring invalid config key: %s|已忽略非法配置键：%s" ;;
+    warn.config_reserved_key) echo "Refusing to load reserved config key: %s|已拒绝加载保留配置键：%s" ;;
     warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
     warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;

@@ -132,6 +132,7 @@ __deploy_i18n_message() {
     status.inactive) echo "inactive|未运行" ;;
     status.unknown) echo "unknown|未知" ;;
     warn.config_invalid_key) echo "Ignoring invalid config key: %s|已忽略非法配置键：%s" ;;
+    warn.config_reserved_key) echo "Refusing to load reserved config key: %s|已拒绝加载保留配置键：%s" ;;
     warn.config_owner) echo "%s owner is not root (%s); ignoring it|%s 属主不是 root（当前：%s），已忽略" ;;
     warn.config_permission) echo "%s permissions are too open (%s); ignoring it|%s 权限过于宽松（%s），已忽略" ;;
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
@@ -510,6 +511,15 @@ load_config_file() {
       fi
     done
     $allowed || { warn "$(t warn.config_unknown_key "$key")"; continue; }
+    # printf -v would clobber the deployment shell's own state for reserved
+    # names; the allow-list normally gates keys, but keep a defense-in-depth
+    # guard so future CONFIG_KEYS cannot expose IFS/PATH and similar.
+    case "$key" in
+      IFS|PATH|BASH_ENV|ENV|SHELLOPTS|BASHOPTS|PS4|CDPATH|GLOBIGNORE)
+        warn "$(t warn.config_reserved_key "$key")"
+        continue
+        ;;
+    esac
     printf -v "$key" '%s' "$value"
   done < "$conf_file"
 }
@@ -667,19 +677,27 @@ port_is_listening() {
 }
 
 # Prints the process name (or pid/name from ss) bound to the port.
-# Returns 0 when a process was identified, 1 otherwise.
+# Returns 0 when a process was identified, 1 otherwise (the caller reports
+# the owner as unknown).
 port_listening_process() {
-  local port="$1"
+  local port="$1" owner=""
   if command -v ss >/dev/null 2>&1; then
-    ss -ltnp "( sport = :$port )" 2>/dev/null | awk 'NR>1{
-      n=$NF; gsub(/^.*"/, "", n); gsub(/"$/,"", n); print n; exit
-    }'
-    return 0
+    owner="$(ss -ltnp "( sport = :$port )" 2>/dev/null | awk 'NR>1{
+      n=$NF
+      start=index(n, "\"")
+      if (start > 0) {
+        rest=substr(n, start + 1)
+        stop=index(rest, "\"")
+        if (stop > 0) print substr(rest, 1, stop - 1)
+      }
+      exit
+    }')" || true
   elif command -v lsof >/dev/null 2>&1; then
-    lsof -iTCP:"$port" -sTCP:LISTEN -Pn 2>/dev/null | awk 'NR>1{print $1; exit}'
-    return 0
+    owner="$(lsof -iTCP:"$port" -sTCP:LISTEN -Pn 2>/dev/null | awk 'NR>1{print $1; exit}')" || true
   fi
-  return 1
+  [[ -n "$owner" ]] || return 1
+  printf '%s\n' "$owner"
+  return 0
 }
 
 # Warns when a port is already in use.  Does NOT abort — the caller
@@ -1019,9 +1037,20 @@ app_json_string() {
   local value="${1:-}"
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
+  value="${value//$'\b'/\\b}"
+  value="${value//$'\f'/\\f}"
   value="${value//$'\n'/\\n}"
   value="${value//$'\r'/\\r}"
   value="${value//$'\t'/\\t}"
+  # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
+  # forbids literally. NUL (U+0000) cannot appear in bash strings.
+  local i byte hex
+  for ((i = 1; i < 32; i++)); do
+    case "$i" in 8|9|10|12|13) continue ;; esac
+    printf -v byte "\\$(printf '%03o' "$i")"
+    printf -v hex "%02x" "$i"
+    value="${value//"$byte"/"\\u00${hex}"}"
+  done
   printf '"%s"' "$value"
 }
 

@@ -440,3 +440,44 @@ STUB
 
   rm -rf "$tmp_dir"
 }
+
+check_config_reserved_keys_are_rejected() {
+  local tmp_dir conf err_file
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/deploy.conf"
+  err_file="${tmp_dir}/load.err"
+  printf 'PORT=9090\nIFS=evil\n' > "$conf"
+
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+
+  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/config.sh"
+    PORT=""
+    IFS=$'"'"' 	
+'"'"'
+    set +e
+    load_config_file "$2" PORT IFS 2> "$3" >/dev/null
+    status=$?
+    set -e
+    [[ "$status" -eq 0 ]] || { echo "load_config_file failed" >&2; exit 1; }
+    [[ "$PORT" == "9090" ]] || { echo "PORT was not loaded" >&2; exit 1; }
+    [[ "$IFS" == $'"'"' 	
+'"'"' ]] || { echo "reserved key IFS clobbered the shell" >&2; exit 1; }
+    err="$(cat "$3")"
+    [[ "$err" == *"$(t warn.config_reserved_key IFS)"* ]] || { echo "expected reserved-key warning for IFS; got: $err" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR" "$conf" "$err_file"
+
+  rm -rf "$tmp_dir"
+}

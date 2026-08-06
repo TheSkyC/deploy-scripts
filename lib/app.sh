@@ -317,9 +317,20 @@ app_json_string() {
   local value="${1:-}"
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
+  value="${value//$'\b'/\\b}"
+  value="${value//$'\f'/\\f}"
   value="${value//$'\n'/\\n}"
   value="${value//$'\r'/\\r}"
   value="${value//$'\t'/\\t}"
+  # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
+  # forbids literally. NUL (U+0000) cannot appear in bash strings.
+  local i byte hex
+  for ((i = 1; i < 32; i++)); do
+    case "$i" in 8|9|10|12|13) continue ;; esac
+    printf -v byte "\\$(printf '%03o' "$i")"
+    printf -v hex "%02x" "$i"
+    value="${value//"$byte"/"\\u00${hex}"}"
+  done
   printf '"%s"' "$value"
 }
 
