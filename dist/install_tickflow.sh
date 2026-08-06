@@ -1170,6 +1170,30 @@ app_write_nginx_site_link() {
   fi
 }
 
+# Writes a per-app logrotate policy for the service log directory, staging the
+# file through atomic_write_file. The log directory, target file, and localized
+# error/success keys are app-supplied.
+app_write_logrotate() {
+  local logrotate_file="$1" log_dir="$2" error_key="$3" success_key="$4"
+  if ! atomic_write_file "$logrotate_file" 644 root:root << LOGR
+${log_dir}/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # copytruncate avoids requiring SIGHUP support from the service.
+    # A tiny number of log lines can be lost during rotation.
+    copytruncate
+}
+LOGR
+  then
+    error "$(t "$error_key")"
+  fi
+  success "$(t "$success_key")"
+}
+
 do_doctor() {
   local failures=0 warnings=0
 

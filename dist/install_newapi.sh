@@ -1170,6 +1170,30 @@ app_write_nginx_site_link() {
   fi
 }
 
+# Writes a per-app logrotate policy for the service log directory, staging the
+# file through atomic_write_file. The log directory, target file, and localized
+# error/success keys are app-supplied.
+app_write_logrotate() {
+  local logrotate_file="$1" log_dir="$2" error_key="$3" success_key="$4"
+  if ! atomic_write_file "$logrotate_file" 644 root:root << LOGR
+${log_dir}/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # copytruncate avoids requiring SIGHUP support from the service.
+    # A tiny number of log lines can be lost during rotation.
+    copytruncate
+}
+LOGR
+  then
+    error "$(t "$error_key")"
+  fi
+  success "$(t "$success_key")"
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -2482,37 +2506,6 @@ _configure_firewall() {
     fi
   fi
 }
-_write_logrotate() {
-  local logrotate_file="/etc/logrotate.d/new-api"
-  local logrotate_tmp
-  if ! logrotate_tmp=$(mktemp "${logrotate_file}.XXXXXX"); then
-    error "$(t app.newapi.error.logrotate)"
-  fi
-  if ! cat > "$logrotate_tmp" << LOGR
-${LOG_DIR}/*.log {
-    daily
-    rotate 14
-    compress
-    delaycompress
-    missingok
-    notifempty
-    # copytruncate avoids requiring SIGHUP support from the service.
-    # A tiny number of log lines can be lost during rotation.
-    copytruncate
-}
-LOGR
-  then
-    rm -f "$logrotate_tmp"
-    error "$(t app.newapi.error.logrotate)"
-  fi
-  if ! chmod 644 "$logrotate_tmp" \
-      || ! chown root:root "$logrotate_tmp" \
-      || ! mv "$logrotate_tmp" "$logrotate_file"; then
-    rm -f "$logrotate_tmp"
-    error "$(t app.newapi.error.logrotate)"
-  fi
-  success "$(t app.newapi.success.logrotate)"
-}
 _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
@@ -2824,7 +2817,7 @@ do_install() {
   step "$(t app.newapi.step.firewall)"
   _configure_firewall
   step "$(t app.newapi.step.logrotate)"
-  _write_logrotate
+  app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"
   step "$(t app.newapi.step.cron)"
   _write_backup_script
   local cron_file="/etc/cron.d/new-api-backup"

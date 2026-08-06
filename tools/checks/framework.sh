@@ -2358,6 +2358,19 @@ check_cron_logrotate_are_atomic() {
       dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
 }
 
+# NewAPI and Sub2API share one logrotate writer in lib/app.sh; the per-app
+# copies must not come back. The shared helper stages through atomic_write_file.
+check_logrotate_writes_use_shared_helper() {
+  grep -Fq 'app_write_logrotate() {' lib/app.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' impl/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' dist/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' impl/install_sub2api.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' dist/install_sub2api.sh     || {
+      echo "NewAPI and Sub2API logrotate configs must be written through the shared app_write_logrotate helper." >&2
+      return 1
+    }
+  if grep -nE '^_write_logrotate\(\)' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh; then
+    echo "NewAPI and Sub2API must not define a per-app _write_logrotate copy." >&2
+    return 1
+  fi
+}
+
 check_nginx_configs_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/nginx/sites-available/|"\$NGINX_CONF")|^[[:space:]]*} >> "\$NGINX_CONF"' \
       impl dist 2>/dev/null; then

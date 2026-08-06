@@ -288,6 +288,7 @@ main() {
       check_connectivity_helper_behavior
       check_cpa_stack_layout
       check_cron_logrotate_are_atomic
+      check_logrotate_writes_use_shared_helper
       check_cyberstrikeai_backups_are_atomic
       check_cyberstrikeai_booleans_are_validated
       check_cyberstrikeai_build_temp_cleanup
@@ -637,6 +638,7 @@ main() {
   check_silent_backup_tar_diagnostics_use_stderr
   check_tar_diagnostics_use_stderr
   check_cron_logrotate_are_atomic
+  check_logrotate_writes_use_shared_helper
   check_nginx_configs_are_atomic
   check_nginx_main_config_edits_are_atomic
   check_nginx_test_failures_report_diagnostics

@@ -754,35 +754,6 @@ _configure_firewall() {
     fi
   fi
 }
-_write_logrotate() {
-  local logrotate_file="/etc/logrotate.d/sub2api"
-  local logrotate_tmp
-  if ! logrotate_tmp=$(mktemp "${logrotate_file}.XXXXXX"); then
-    error "$(t app.sub2api.error.logrotate)"
-  fi
-  if ! cat > "$logrotate_tmp" << LOGR
-${LOG_DIR}/*.log {
-    daily
-    rotate 14
-    compress
-    delaycompress
-    missingok
-    notifempty
-    copytruncate
-}
-LOGR
-  then
-    rm -f "$logrotate_tmp"
-    error "$(t app.sub2api.error.logrotate)"
-  fi
-  if ! chmod 644 "$logrotate_tmp" \
-      || ! chown root:root "$logrotate_tmp" \
-      || ! mv "$logrotate_tmp" "$logrotate_file"; then
-    rm -f "$logrotate_tmp"
-    error "$(t app.sub2api.error.logrotate)"
-  fi
-  success "$(t app.sub2api.success.logrotate)"
-}
 _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
@@ -1172,7 +1143,7 @@ do_install() {
   step "$(t app.sub2api.step.firewall)"
   _configure_firewall
   step "$(t app.sub2api.step.logrotate)"
-  _write_logrotate
+  app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"
   step "$(t app.sub2api.step.cron_backup)"
   _write_backup_script
   local cron_file="/etc/cron.d/sub2api-backup"
