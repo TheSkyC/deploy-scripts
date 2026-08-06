@@ -8,7 +8,7 @@ cd "$ROOT_DIR"
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bash tools/verify.sh [all|syntax|release|dispatch|help]
+Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|help]
 
 Targets:
   all       Run the full repository verification suite. This is the default.
@@ -16,6 +16,7 @@ Targets:
   shellcheck  Run shellcheck static analysis on source scripts (skips if absent).
   release   Rebuild dist/ with deterministic metadata and check release syntax.
   dispatch  Rebuild dist/ and check CLI dispatch, menus, registry, and localization.
+  guards    Rebuild dist/ and run structural/behavioral guardrail checks.
 EOF
 }
 
@@ -2475,11 +2476,15 @@ check_netfilter_persistent_save_reports_failures() {
     return 1
   fi
   awk '
-      /if command -v netfilter-persistent &>\/dev\/null; then/ { in_block=1; saw_save=0; saw_success=0; saw_warn=0; next }
-      in_block && /if netfilter-persistent save 2>\/dev\/null; then/ { saw_save=1 }
-      in_block && /success "\$\(t app\.(newapi|sub2api|vaultwarden)\.success\.iptables_saved\)"/ { saw_success=1 }
-      in_block && /warn "\$\(t app\.(newapi|sub2api|vaultwarden)\.warn\.iptables_not_persisted\)"/ { saw_warn=1 }
-      in_block && /elif command -v iptables-save &>\/dev\/null; then|else$/ {
+      /if command -v netfilter-persistent &>\/dev\/null; then/ {
+        in_block=1; saw_save=0; saw_success=0; saw_warn=0
+        block_indent=$0; sub(/[^ \t].*/, "", block_indent)
+        next
+      }
+      in_block && /if netfilter-persistent save 2>\/dev\/null; then/ { saw_save=1; next }
+      in_block && /success "\$\(t app\.(newapi|sub2api|vaultwarden)\.success\.iptables_saved\)"/ { saw_success=1; next }
+      in_block && /warn "\$\(t app\.(newapi|sub2api|vaultwarden)\.warn\.iptables_not_persisted\)"/ { saw_warn=1; next }
+      in_block && ($0 ~ ("^" block_indent "elif command -v iptables-save ") || $0 == (block_indent "else")) {
         if (!(saw_save && saw_success && saw_warn)) {
           printf "%s netfilter-persistent save must report both success and failure outcomes\n", FILENAME > "/dev/stderr"
           exit 1
@@ -7952,6 +7957,37 @@ check_connectivity_helper_behavior() {
   ' _ "$ROOT_DIR"
 }
 
+
+# Verifies that every check_* function is invoked by `all` and that every
+# `all` check is also covered by a non-`all` target (syntax/shellcheck/release/
+# dispatch/guards). Keeps parallel CI jobs from silently dropping checks.
+check_target_groups_cover_all_checks() {
+  awk '
+    /^check_[A-Za-z0-9_]+\(\)/ { d=$0; sub(/\(.*/, "", d); defs[d]=1; next }
+    /^main\(\) \{/ { in_main=1; next }
+    in_main && /^main "\$@"/ { in_main=0; next }
+    in_main && /^  check_[A-Za-z0-9_]+$/ { all_calls[$1]=1; next }
+    in_main && /^      check_[A-Za-z0-9_]+$/ { arm_calls[$1]=1; next }
+    END {
+      for (d in defs) {
+        if (!(d in all_calls) && !(d in arm_calls)) {
+          printf "uninvoked check function: %s\n", d > "/dev/stderr"; exit 1
+        }
+      }
+      for (c in all_calls) {
+        if (!(c in arm_calls)) {
+          printf "check missing from CI targets (syntax/shellcheck/release/dispatch/guards): %s\n", c > "/dev/stderr"; exit 1
+        }
+      }
+      for (c in arm_calls) {
+        if (!(c in all_calls)) {
+          printf "target-only check missing from all: %s\n", c > "/dev/stderr"; exit 1
+        }
+      }
+    }
+  ' "$ROOT_DIR/tools/verify.sh"
+}
+
 main() {
   local target="${1:-all}"
   case "$target" in
@@ -8021,6 +8057,202 @@ main() {
       echo "Dispatch verification passed"
       return 0
       ;;
+    guards)
+      check_shell_syntax
+      build_verified_release
+      check_api_ports_are_validated
+      check_api_status_directory_sizes_are_nonfatal
+      check_apt_sources_are_atomic
+      check_atomic_helpers_are_atomic
+      check_backup_retention_cleanup_reports_failures
+      check_backup_script_dir_failures_are_explicit
+      check_backup_scripts_are_atomic
+      check_backup_temp_moves_handle_failure
+      check_binary_helpers_are_atomic
+      check_binary_replacements_handle_failure
+      check_binary_restores_validate_permissions
+      check_blog_config_persistence
+      check_blog_dependency_failures_are_reported
+      check_blog_enable_failures_are_reported
+      check_blog_hugo_install_failures_are_actionable
+      check_blog_install_summary_matches_local_health
+      check_blog_nginx_start_path_is_explicit
+      check_blog_publish_guidance_uses_staging_output
+      check_blog_publish_helper_is_atomic
+      check_blog_restore_action
+      check_blog_site_files_are_atomic
+      check_blog_site_setup_failures_are_explicit
+      check_blog_static_deploy_failures_are_actionable
+      check_blog_static_deploy_swaps_tree
+      check_bundled_impl_cleanup
+      check_bundled_impl_dir_security_failure_cleanup
+      check_bundled_impl_failure_cleanup
+      check_bundled_impl_temp_names_are_random
+      check_certbot_diagnostics_use_stderr
+      check_config_crlf_handling
+      check_config_save_failures_are_explicit
+      check_config_value_validators
+      check_config_write_failure_cleanup
+      check_config_writes_are_centralized
+      check_connectivity_helper_behavior
+      check_cpa_stack_layout
+      check_cron_logrotate_are_atomic
+      check_cyberstrikeai_backups_are_atomic
+      check_cyberstrikeai_booleans_are_validated
+      check_cyberstrikeai_build_temp_cleanup
+      check_cyberstrikeai_config_patch_is_atomic
+      check_cyberstrikeai_dependency_failures_are_reported
+      check_cyberstrikeai_display_sizes_are_nonfatal
+      check_cyberstrikeai_enable_failures_are_reported
+      check_cyberstrikeai_go_restore_failures_are_reported
+      check_cyberstrikeai_go_version_parse_failures_are_explicit
+      check_cyberstrikeai_health_checks_are_nonfatal_outside_install
+      check_cyberstrikeai_install_summary_matches_health_state
+      check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
+      check_cyberstrikeai_nginx_health_probe_matches_server_name
+      check_cyberstrikeai_pip_upgrade_failures_are_reported
+      check_cyberstrikeai_ports_are_validated
+      check_cyberstrikeai_python_env_failures_are_reported
+      check_cyberstrikeai_repo_go_install_failures_are_reported
+      check_cyberstrikeai_rollback_restore_is_validated
+      check_cyberstrikeai_runtime_dir_failures_are_explicit
+      check_cyberstrikeai_service_start_paths_are_explicit
+      check_cyberstrikeai_source_and_build_prep_failures_are_explicit
+      check_cyberstrikeai_uninstall_stop_disable_failures_are_reported
+      check_cyberstrikeai_update_rollback_stop_failure_aborts_restore
+      check_cyberstrikeai_update_rollbacks_report_restart_failures
+      check_download_temp_creation_failures_are_explicit
+      check_download_validation_failures_cleanup
+      check_fail2ban_configs_are_atomic
+      check_firewall_success_paths_validate_command_results
+      check_framework_validator_errors_are_actionable
+      check_generated_backup_headers_are_shell_quoted
+      check_generated_backup_scripts_handle_missing_dirs
+      check_github_release_tag_behavior
+      check_go_tarball_failures_cleanup
+      check_i18n_keys_are_consistent
+      check_iptables_rules_are_atomic
+      check_keyring_writes_are_atomic
+      check_managed_paths_are_validated
+      check_manual_backup_retention_is_normalized
+      check_mutating_actions_acquire_locks
+      check_netfilter_persistent_save_reports_failures
+      check_newapi_dependency_failures_are_reported
+      check_newapi_enable_failures_are_reported
+      check_newapi_health_checks_are_nonfatal_outside_install
+      check_newapi_install_cleanup_reports_systemctl_failures
+      check_newapi_install_summary_matches_health_state
+      check_newapi_manual_backup_wal_result_is_explicit
+      check_newapi_runtime_dir_failures_are_explicit
+      check_newapi_secret_uses_private_env_file
+      check_newapi_service_start_paths_are_explicit
+      check_newapi_uninstall_stop_disable_failures_are_reported
+      check_newapi_update_rollback_stop_failure_aborts_restore
+      check_newapi_update_rollbacks_report_restart_failures
+      check_newapi_update_stop_failure_aborts_before_replace
+      check_nginx_configs_are_atomic
+      check_nginx_domains_are_validated
+      check_nginx_main_config_edits_are_atomic
+      check_nginx_test_failures_report_diagnostics
+      check_no_chinese_comments
+      check_no_fixed_tmp_downloads
+      check_no_hardcoded_chinese_impl
+      check_no_unsupported_systemctl_options
+      check_old_backup_cleanup_reports_failures
+      check_optional_count_messages_are_nonfatal
+      check_optional_directory_cleanup_is_nonfatal
+      check_preupdate_backup_logs_match_guidance
+      check_preupdate_backup_warnings_include_followup_guidance
+      check_random_head_pipelines_handle_sigpipe
+      check_release_build_outputs_are_atomic
+      check_safe_path_guard
+      check_safe_rm_dir_is_idempotent
+      check_service_status_label
+      check_shared_validators_accept_and_reject
+      check_silent_backup_tar_diagnostics_use_stderr
+      check_status_commands_allow_non_root
+      check_status_port_matches_are_bounded
+      check_sub2api_apt_failures_are_reported
+      check_sub2api_codename_resolution
+      check_sub2api_dependency_services_start_before_success
+      check_sub2api_enable_failures_are_reported
+      check_sub2api_extract_move_failure_cleanup
+      check_sub2api_health_checks_are_nonfatal_outside_install
+      check_sub2api_install_cleanup_reports_systemctl_failures
+      check_sub2api_install_summary_matches_runtime_state
+      check_sub2api_manual_backup_warnings_are_actionable
+      check_sub2api_nginx_install_starts_service_explicitly
+      check_sub2api_nginx_reload_results_are_checked
+      check_sub2api_pg_dump_errors_stay_out_of_backups
+      check_sub2api_pg_password_is_escaped
+      check_sub2api_postgres_rpm_setup_failures_are_explicit
+      check_sub2api_redis_service_handling_is_explicit
+      check_sub2api_rpm_dependency_failures_are_reported
+      check_sub2api_runtime_dir_failures_are_explicit
+      check_sub2api_service_start_paths_are_explicit
+      check_sub2api_summary_does_not_print_pg_password
+      check_sub2api_uninstall_stop_disable_failures_are_reported
+      check_sub2api_update_rollback_stop_failure_aborts_restore
+      check_sub2api_update_rollbacks_report_restart_failures
+      check_sub2api_update_stop_failure_aborts_before_replace
+      check_summary_ip_detection_has_fallback
+      check_systemctl_status_diagnostics_are_nonfatal
+      check_systemd_daemon_reloads_are_explicit
+      check_systemd_helper_is_atomic
+      check_systemd_units_are_atomic
+      check_tar_diagnostics_use_stderr
+      check_tickflow_config_files_are_atomic
+      check_tickflow_dependency_failures_are_reported
+      check_tickflow_directory_setup_failures_are_explicit
+      check_tickflow_env_rewrites_preserve_existing_secrets
+      check_tickflow_manual_backup_is_explicit
+      check_tickflow_paths_are_guarded
+      check_tickflow_preflight_defers_docker_runtime_checks
+      check_tickflow_service_start_failures_show_diagnostics
+      check_tickflow_status_is_structured
+      check_tickflow_systemctl_failures_are_reported
+      check_tickflow_systemd_shell_paths_are_quoted
+      check_tickflow_uninstall_daemon_reload_failure_is_fatal
+      check_tickflow_uninstall_stop_disable_failures_are_reported
+      check_uninstall_binary_cleanup_reports_failures
+      check_uninstall_nginx_paths_preserve_diagnostics
+      check_unsafe_config_loads_fail_closed
+      check_update_backs_up_before_stop
+      check_update_binary_backups_are_atomic
+      check_user_deletion_paths_are_explicit
+      check_vaultwarden_admin_token_file_is_private
+      check_vaultwarden_apt_update_failures_are_reported
+      check_vaultwarden_backup_failures_include_followup_guidance
+      check_vaultwarden_binary_installs_are_atomic
+      check_vaultwarden_certbot_cron_failures_are_reported
+      check_vaultwarden_config_values_are_validated
+      check_vaultwarden_enable_failures_are_reported
+      check_vaultwarden_env_file_is_atomic
+      check_vaultwarden_extract_tool_is_pinned_and_verified
+      check_vaultwarden_fail2ban_restart_failures_are_reported
+      check_vaultwarden_find_head_pipelines_are_nonfatal
+      check_vaultwarden_install_cleanup_reports_systemctl_failures
+      check_vaultwarden_install_summary_matches_health_state
+      check_vaultwarden_install_webvault_replacement_is_recoverable
+      check_vaultwarden_result_chains_are_explicit
+      check_vaultwarden_runtime_dir_failures_are_explicit
+      check_vaultwarden_runtime_service_starts_are_explicit
+      check_vaultwarden_service_start_paths_are_explicit
+      check_vaultwarden_status_display_commands_are_nonfatal
+      check_vaultwarden_status_health_guidance_matches_local_probe
+      check_vaultwarden_uninstall_stop_disable_failures_are_reported
+      check_vaultwarden_update_stop_failure_aborts_before_replace
+      check_vaultwarden_version_probe_has_fallback
+      check_vaultwarden_webvault_archives_are_validated
+      check_vaultwarden_webvault_replacements_are_atomic
+      check_vaultwarden_webvault_restore_cleans_partial
+      check_vaultwarden_webvault_update_warnings_are_actionable
+      check_vaultwarden_workdir_cleanup_traps_are_nonfatal
+      check_target_groups_cover_all_checks
+      echo "Guards verification passed"
+      return 0
+      ;;
+
     all) ;;
     shellcheck)
       check_shell_syntax
@@ -8232,6 +8464,7 @@ main() {
   check_cyberstrikeai_enable_failures_are_reported
   check_vaultwarden_enable_failures_are_reported
   check_vaultwarden_certbot_cron_failures_are_reported
+  check_certbot_diagnostics_use_stderr
   check_vaultwarden_runtime_service_starts_are_explicit
   check_vaultwarden_service_start_paths_are_explicit
   check_vaultwarden_install_cleanup_reports_systemctl_failures
@@ -8260,6 +8493,7 @@ main() {
   check_vaultwarden_install_summary_matches_health_state
   check_vaultwarden_status_health_guidance_matches_local_probe
   check_firewall_success_paths_validate_command_results
+  check_netfilter_persistent_save_reports_failures
   check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
   check_uninstall_nginx_paths_preserve_diagnostics
   check_fail2ban_configs_are_atomic
@@ -8278,6 +8512,7 @@ main() {
   check_blog_site_files_are_atomic
   check_blog_publish_guidance_uses_staging_output
   check_blog_publish_helper_is_atomic
+  check_target_groups_cover_all_checks
   echo "Verification passed"
 }
 
