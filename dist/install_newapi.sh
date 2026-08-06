@@ -718,7 +718,7 @@ app_validate_http_url() {
       ;;
   esac
   scheme="${value%%://*}"
-  host="${value#${scheme}://}"
+  host="${value#"${scheme}"://}"
   host="${host%%/*}"
   host="${host%%:*}"
   if [[ "$host" != "localhost" && ! "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]] && ! is_valid_dns_name "$host"; then
