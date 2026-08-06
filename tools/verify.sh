@@ -7890,6 +7890,68 @@ check_port_conflict_is_warn_only() {
     echo "after"
   ' _ "$ROOT_DIR"
 }
+
+# Behavioral test for github_latest_release_tag with a stubbed curl: the
+# version must be extracted from a release payload, and non-version or
+# failed lookups must print nothing.
+check_github_release_tag_behavior() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/network.sh"
+    curl() { printf "%s\n" '"'"'{"tag_name":"v1.2.3","name":"v1.2.3"}'"'"'; }
+    tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
+    [[ "$tag" == "v1.2.3" ]] || { echo "expected v1.2.3, got: ${tag}" >&2; exit 1; }
+    curl() { printf "%s\n" '"'"'{"tag_name":"not-a-version"}'"'"'; }
+    tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
+    [[ -z "$tag" ]] || { echo "expected empty tag for non-version, got: ${tag}" >&2; exit 1; }
+    curl() { return 1; }
+    tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
+    [[ -z "$tag" ]] || { echo "expected empty tag on failure, got: ${tag}" >&2; exit 1; }
+  ' _ "$ROOT_DIR"
+}
+
+# Behavioral test for the shared validators: valid values pass and invalid
+# values abort (error exits), matching how impl scripts rely on them.
+check_shared_validators_accept_and_reject() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/network.sh"
+    source "$1/lib/app.sh"
+    app_validate_port 8080 "PORT" || { echo "valid port rejected" >&2; exit 1; }
+    ( app_validate_port 70000 "PORT" ) 2>/dev/null && { echo "out-of-range port accepted" >&2; exit 1; }
+    ( app_validate_port "abc" "PORT" ) 2>/dev/null && { echo "non-numeric port accepted" >&2; exit 1; }
+    app_validate_bool "PORT" true || { echo "valid bool rejected" >&2; exit 1; }
+    app_validate_bool "PORT" 0 || { echo "valid bool 0 rejected" >&2; exit 1; }
+    ( app_validate_bool "PORT" maybe ) 2>/dev/null && { echo "invalid bool accepted" >&2; exit 1; }
+    app_validate_domain "DOMAIN" "app.example.com" || { echo "valid domain rejected" >&2; exit 1; }
+    app_validate_domain "DOMAIN" "" || { echo "empty domain rejected" >&2; exit 1; }
+    ( app_validate_domain "DOMAIN" "bad name" ) 2>/dev/null && { echo "invalid domain accepted" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
+# Behavioral test for app_check_connectivity with a stubbed curl: at least
+# one reachable endpoint passes and an unreachable set aborts (error exits).
+check_connectivity_helper_behavior() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/network.sh"
+    curl() { return 0; }
+    app_check_connectivity "test.warn" "https://example.test" \
+      || { echo "reachable endpoint failed" >&2; exit 1; }
+    curl() { return 1; }
+    ( app_check_connectivity "test.warn" "https://example.test" ) 2>/dev/null \
+      && { echo "unreachable endpoints did not abort" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
 main() {
   local target="${1:-all}"
   case "$target" in
@@ -7987,6 +8049,9 @@ main() {
   check_status_json_dispatch
   check_status_json_services_and_version
   check_port_conflict_is_warn_only
+  check_github_release_tag_behavior
+  check_shared_validators_accept_and_reject
+  check_connectivity_helper_behavior
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
   check_newapi_uninstall_checks_directory_removal_errors
