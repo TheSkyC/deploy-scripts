@@ -255,12 +255,16 @@ check_cron_logrotate_are_atomic() {
 }
 
 check_logrotate_writes_use_shared_helper() {
-  grep -Fq 'app_write_logrotate() {' lib/app.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' impl/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' dist/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' impl/install_sub2api.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' dist/install_sub2api.sh     || {
-      echo "NewAPI and Sub2API logrotate configs must be written through the shared app_write_logrotate helper." >&2
+  grep -Fq 'app_write_logrotate() {' lib/app.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' impl/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' dist/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' impl/install_sub2api.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' dist/install_sub2api.sh     && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' impl/install_cyberstrikeai.sh     && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' dist/install_cyberstrikeai.sh     || {
+      echo "NewAPI, Sub2API, and CyberStrikeAI logrotate configs must be written through the shared app_write_logrotate helper." >&2
       return 1
     }
   if grep -nE '^_write_logrotate\(\)' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh; then
     echo "NewAPI and Sub2API must not define a per-app _write_logrotate copy." >&2
+    return 1
+  fi
+  if grep -nE '^write_logrotate\(\)' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh; then
+    echo "CyberStrikeAI must not define a per-app write_logrotate copy." >&2
     return 1
   fi
 }
@@ -394,8 +398,10 @@ check_firewall_success_paths_validate_command_results() {
     && grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' dist/install_newapi.sh \
     && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
     && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' dist/install_sub2api.sh \
+    && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' dist/install_cyberstrikeai.sh \
     || {
-      echo "NewAPI and Sub2API firewall configuration must use the shared app_configure_firewall helper." >&2
+      echo "NewAPI, Sub2API, and CyberStrikeAI firewall configuration must use the shared app_configure_firewall helper." >&2
       return 1
     }
   if grep -nE '^_configure_firewall\(\)' impl/install_newapi.sh impl/install_sub2api.sh \
@@ -421,25 +427,36 @@ check_firewall_success_paths_validate_command_results() {
       /app\.sub2api\.success\.iptables_port/ { sub2api_port=1 }
       /app\.sub2api\.warn\.firewall_config_failed/ { sub2api_cfg_failed=1 }
       /app\.sub2api\.warn\.no_firewall/ { sub2api_no_fw=1 }
+      /app\.cyberstrikeai\.success\.ufw_port/ { csai_ufw=1 }
+      /app\.cyberstrikeai\.success\.iptables_saved/ { csai_saved=1 }
+      /app\.cyberstrikeai\.info\.iptables_rules_written/ { csai_info=1 }
+      /app\.cyberstrikeai\.warn\.iptables_write_failed/ { csai_write_failed=1 }
+      /app\.cyberstrikeai\.warn\.iptables_not_persisted/ { csai_not_persisted=1 }
+      /app\.cyberstrikeai\.success\.iptables_port/ { csai_port=1 }
+      /app\.cyberstrikeai\.warn\.firewall_config_failed/ { csai_cfg_failed=1 }
+      /app\.cyberstrikeai\.warn\.no_firewall/ { csai_no_fw=1 }
       END {
         if (!(newapi_ufw && newapi_saved && newapi_info && newapi_write_failed &&
               newapi_not_persisted && newapi_port && newapi_cfg_failed && newapi_no_fw &&
               sub2api_ufw && sub2api_firewalld && sub2api_saved && sub2api_info &&
               sub2api_write_failed && sub2api_not_persisted && sub2api_port &&
-              sub2api_cfg_failed && sub2api_no_fw)) {
+              sub2api_cfg_failed && sub2api_no_fw &&
+              csai_ufw && csai_saved && csai_info && csai_write_failed &&
+              csai_not_persisted && csai_port && csai_cfg_failed && csai_no_fw)) {
           print "firewall i18n keys must be registered for apps using app_configure_firewall" > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/newapi.sh apps/sub2api.sh
+    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh
   awk '
-      /open_firewall_ports\(\)/ { in_block=1; saw_ufw_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
-      in_block && /if ufw allow "\$\{port_to_open\}\/tcp" >\/dev\/null 2>&1; then/ { saw_ufw_if=1 }
-      in_block && /if iptables -C INPUT -p tcp --dport "\$port_to_open" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
-      in_block && /warn "\$\(t app\.cyberstrikeai\.warn\.firewall_config_failed "\$port_to_open"\)"/ { saw_failure_warn=1 }
+      /open_firewall_ports\(\)/ { in_block=1; saw_gate=0; saw_step=0; saw_port=0; saw_shared=0; next }
+      in_block && /_bool_true "\$OPEN_FIREWALL" \|\| return 0/ { saw_gate=1 }
+      in_block && /step "\$\(t app\.cyberstrikeai\.step\.firewall\)"/ { saw_step=1 }
+      in_block && /_bool_true "\$ENABLE_NGINX" && port_to_open="\$PUBLIC_PORT"/ { saw_port=1 }
+      in_block && /app_configure_firewall "\$port_to_open" "app\.cyberstrikeai" "CyberStrikeAI"/ { saw_shared=1 }
       in_block && /^}/ {
-        if (!(saw_ufw_if && saw_iptables_if && saw_failure_warn)) {
-          printf "%s CyberStrikeAI firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+        if (!(saw_gate && saw_step && saw_port && saw_shared)) {
+          printf "%s CyberStrikeAI firewall configuration must gate on OPEN_FIREWALL and delegate to app_configure_firewall\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_block=0

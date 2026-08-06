@@ -1846,24 +1846,36 @@ i18n_register_many \
   app.cyberstrikeai.step.firewall \
   "Configure firewall" \
   "配置防火墙" \
-  app.cyberstrikeai.success.ufw \
-  "ufw allows public port: %s/tcp" \
-  "ufw 已放行公网端口：%s/tcp" \
-  app.cyberstrikeai.success.ufw_backend \
-  "ufw allows backend port: %s/tcp" \
-  "ufw 已放行后端端口：%s/tcp" \
-  app.cyberstrikeai.success.iptables \
-  "iptables allows port: %s/tcp" \
-  "iptables 已放行端口：%s/tcp" \
+  app.cyberstrikeai.success.ufw_port \
+  "ufw allows port %s/tcp." \
+  "ufw 已放行端口 %s/tcp。" \
+  app.cyberstrikeai.success.iptables_saved \
+  "iptables rules persisted with netfilter-persistent." \
+  "iptables 规则已持久化（netfilter-persistent）。" \
+  app.cyberstrikeai.info.iptables_rules_written \
+  "iptables rules written to /etc/iptables/rules.v4." \
+  "iptables 规则已写入 /etc/iptables/rules.v4。" \
+  app.cyberstrikeai.warn.iptables_write_failed \
+  "Failed to write iptables rules; rules may be lost after reboot." \
+  "iptables 规则写入失败，重启后规则可能丢失。" \
+  app.cyberstrikeai.warn.iptables_not_persisted \
+  "iptables rules are not persisted and may be lost after reboot. Recommended: apt-get install -y iptables-persistent && netfilter-persistent save" \
+  "iptables 规则未持久化（重启后失效）。建议：apt-get install -y iptables-persistent && netfilter-persistent save。" \
+  app.cyberstrikeai.success.iptables_port \
+  "iptables allows port %s/tcp." \
+  "iptables 已放行端口 %s/tcp。" \
   app.cyberstrikeai.warn.firewall_config_failed \
   "Automatic firewall configuration failed for port %s/tcp. Open it manually or retry after fixing the firewall service." \
   "端口 %s/tcp 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.cyberstrikeai.warn.no_firewall \
-  "No active ufw/iptables detected. Cloud security groups may still need manual rules." \
-  "未检测到活跃的 ufw/iptables。云安全组可能仍需手动配置规则。" \
+  "No active ufw/iptables detected. Cloud security groups may still need manual rules for port %s/tcp." \
+  "未检测到活跃的 ufw/iptables。云安全组可能仍需手动放行端口 %s/tcp。" \
+  app.cyberstrikeai.success.logrotate \
+  "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
+  "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
   app.cyberstrikeai.error.logrotate \
-  "Logrotate config write failed: %s" \
-  "日志轮转配置写入失败：%s" \
+  "Logrotate config write failed: /etc/logrotate.d/cyberstrike-ai" \
+  "日志轮转配置写入失败：/etc/logrotate.d/cyberstrike-ai。" \
   app.cyberstrikeai.error.cron \
   "Scheduled backup config write failed: %s" \
   "定时备份配置写入失败：%s" \
@@ -2795,58 +2807,8 @@ open_firewall_ports() {
   _bool_true "$OPEN_FIREWALL" || return 0
   step "$(t app.cyberstrikeai.step.firewall)"
   local port_to_open="$PORT"
-  local fw_error=false
   _bool_true "$ENABLE_NGINX" && port_to_open="$PUBLIC_PORT"
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if ufw allow "${port_to_open}/tcp" >/dev/null 2>&1; then
-      if _bool_true "$ENABLE_NGINX"; then
-        success "$(t app.cyberstrikeai.success.ufw "$PUBLIC_PORT")"
-      else
-        success "$(t app.cyberstrikeai.success.ufw_backend "$PORT")"
-      fi
-      return 0
-    fi
-    fw_error=true
-  fi
-  if command -v iptables >/dev/null 2>&1; then
-    if iptables -C INPUT -p tcp --dport "$port_to_open" -j ACCEPT 2>/dev/null \
-        || iptables -A INPUT -p tcp --dport "$port_to_open" -j ACCEPT; then
-      success "$(t app.cyberstrikeai.success.iptables "$port_to_open")"
-      return 0
-    fi
-    fw_error=true
-  fi
-  if $fw_error; then
-    warn "$(t app.cyberstrikeai.warn.firewall_config_failed "$port_to_open")"
-  else
-    warn "$(t app.cyberstrikeai.warn.no_firewall)"
-  fi
-}
-write_logrotate() {
-  local logrotate_tmp
-  if ! logrotate_tmp=$(mktemp "${LOGROTATE_FILE}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.logrotate)"
-  fi
-  if ! cat > "$logrotate_tmp" <<ROTATE
-${LOG_DIR}/*.log {
-    daily
-    rotate 14
-    missingok
-    notifempty
-    copytruncate
-    compress
-}
-ROTATE
-  then
-    rm -f "$logrotate_tmp"
-    error "$(t app.cyberstrikeai.error.logrotate "$LOGROTATE_FILE")"
-  fi
-  if ! chmod 644 "$logrotate_tmp" \
-      || ! chown root:root "$logrotate_tmp" \
-      || ! mv "$logrotate_tmp" "$LOGROTATE_FILE"; then
-    rm -f "$logrotate_tmp"
-    error "$(t app.cyberstrikeai.error.logrotate "$LOGROTATE_FILE")"
-  fi
+  app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"
 }
 write_backup_script() {
   local install_dir_literal config_file_literal backup_dir_literal keep_days_literal service_name_literal log_file_literal
@@ -3056,7 +3018,7 @@ do_install() {
   install_runtime_dirs
   write_systemd_unit
   write_nginx_config
-  write_logrotate
+  app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"
   write_backup_script
   open_firewall_ports
   app_save_config

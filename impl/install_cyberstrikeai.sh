@@ -635,58 +635,8 @@ open_firewall_ports() {
   _bool_true "$OPEN_FIREWALL" || return 0
   step "$(t app.cyberstrikeai.step.firewall)"
   local port_to_open="$PORT"
-  local fw_error=false
   _bool_true "$ENABLE_NGINX" && port_to_open="$PUBLIC_PORT"
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if ufw allow "${port_to_open}/tcp" >/dev/null 2>&1; then
-      if _bool_true "$ENABLE_NGINX"; then
-        success "$(t app.cyberstrikeai.success.ufw "$PUBLIC_PORT")"
-      else
-        success "$(t app.cyberstrikeai.success.ufw_backend "$PORT")"
-      fi
-      return 0
-    fi
-    fw_error=true
-  fi
-  if command -v iptables >/dev/null 2>&1; then
-    if iptables -C INPUT -p tcp --dport "$port_to_open" -j ACCEPT 2>/dev/null \
-        || iptables -A INPUT -p tcp --dport "$port_to_open" -j ACCEPT; then
-      success "$(t app.cyberstrikeai.success.iptables "$port_to_open")"
-      return 0
-    fi
-    fw_error=true
-  fi
-  if $fw_error; then
-    warn "$(t app.cyberstrikeai.warn.firewall_config_failed "$port_to_open")"
-  else
-    warn "$(t app.cyberstrikeai.warn.no_firewall)"
-  fi
-}
-write_logrotate() {
-  local logrotate_tmp
-  if ! logrotate_tmp=$(mktemp "${LOGROTATE_FILE}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.logrotate)"
-  fi
-  if ! cat > "$logrotate_tmp" <<ROTATE
-${LOG_DIR}/*.log {
-    daily
-    rotate 14
-    missingok
-    notifempty
-    copytruncate
-    compress
-}
-ROTATE
-  then
-    rm -f "$logrotate_tmp"
-    error "$(t app.cyberstrikeai.error.logrotate "$LOGROTATE_FILE")"
-  fi
-  if ! chmod 644 "$logrotate_tmp" \
-      || ! chown root:root "$logrotate_tmp" \
-      || ! mv "$logrotate_tmp" "$LOGROTATE_FILE"; then
-    rm -f "$logrotate_tmp"
-    error "$(t app.cyberstrikeai.error.logrotate "$LOGROTATE_FILE")"
-  fi
+  app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"
 }
 write_backup_script() {
   local install_dir_literal config_file_literal backup_dir_literal keep_days_literal service_name_literal log_file_literal
@@ -896,7 +846,7 @@ do_install() {
   install_runtime_dirs
   write_systemd_unit
   write_nginx_config
-  write_logrotate
+  app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"
   write_backup_script
   open_firewall_ports
   app_save_config

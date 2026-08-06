@@ -219,24 +219,36 @@ i18n_register_many \
   app.cyberstrikeai.step.firewall \
   "Configure firewall" \
   "配置防火墙" \
-  app.cyberstrikeai.success.ufw \
-  "ufw allows public port: %s/tcp" \
-  "ufw 已放行公网端口：%s/tcp" \
-  app.cyberstrikeai.success.ufw_backend \
-  "ufw allows backend port: %s/tcp" \
-  "ufw 已放行后端端口：%s/tcp" \
-  app.cyberstrikeai.success.iptables \
-  "iptables allows port: %s/tcp" \
-  "iptables 已放行端口：%s/tcp" \
+  app.cyberstrikeai.success.ufw_port \
+  "ufw allows port %s/tcp." \
+  "ufw 已放行端口 %s/tcp。" \
+  app.cyberstrikeai.success.iptables_saved \
+  "iptables rules persisted with netfilter-persistent." \
+  "iptables 规则已持久化（netfilter-persistent）。" \
+  app.cyberstrikeai.info.iptables_rules_written \
+  "iptables rules written to /etc/iptables/rules.v4." \
+  "iptables 规则已写入 /etc/iptables/rules.v4。" \
+  app.cyberstrikeai.warn.iptables_write_failed \
+  "Failed to write iptables rules; rules may be lost after reboot." \
+  "iptables 规则写入失败，重启后规则可能丢失。" \
+  app.cyberstrikeai.warn.iptables_not_persisted \
+  "iptables rules are not persisted and may be lost after reboot. Recommended: apt-get install -y iptables-persistent && netfilter-persistent save" \
+  "iptables 规则未持久化（重启后失效）。建议：apt-get install -y iptables-persistent && netfilter-persistent save。" \
+  app.cyberstrikeai.success.iptables_port \
+  "iptables allows port %s/tcp." \
+  "iptables 已放行端口 %s/tcp。" \
   app.cyberstrikeai.warn.firewall_config_failed \
   "Automatic firewall configuration failed for port %s/tcp. Open it manually or retry after fixing the firewall service." \
   "端口 %s/tcp 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
   app.cyberstrikeai.warn.no_firewall \
-  "No active ufw/iptables detected. Cloud security groups may still need manual rules." \
-  "未检测到活跃的 ufw/iptables。云安全组可能仍需手动配置规则。" \
+  "No active ufw/iptables detected. Cloud security groups may still need manual rules for port %s/tcp." \
+  "未检测到活跃的 ufw/iptables。云安全组可能仍需手动放行端口 %s/tcp。" \
+  app.cyberstrikeai.success.logrotate \
+  "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
+  "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
   app.cyberstrikeai.error.logrotate \
-  "Logrotate config write failed: %s" \
-  "日志轮转配置写入失败：%s" \
+  "Logrotate config write failed: /etc/logrotate.d/cyberstrike-ai" \
+  "日志轮转配置写入失败：/etc/logrotate.d/cyberstrike-ai。" \
   app.cyberstrikeai.error.cron \
   "Scheduled backup config write failed: %s" \
   "定时备份配置写入失败：%s" \
