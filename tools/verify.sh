@@ -1104,6 +1104,73 @@ expect_app_description() {
   }
 }
 
+# Every app i18n key referenced by an impl script, an apps file, or verify.sh
+# itself must be registered in the corresponding apps/*.sh file, and every
+# registered key must be referenced somewhere. This catches keys removed while
+# still in use (e.g., by verify.sh content checks) and references to keys that
+# were never registered.
+check_i18n_keys_are_consistent() {
+  local fail=0 apps_file prefix impl_file tmp_dir
+  tmp_dir="$(mktemp -d)"
+  # Full literal app keys referenced by verify.sh (escaped tokens only; regex
+  # alternations and unterminated fragments are pattern matchers, not keys).
+  awk '
+      {
+        line = $0
+        while (match(line, /app\\\.[a-z0-9_]+(\\\.[a-z0-9_]+)*/)) {
+          tok = substr(line, RSTART, RLENGTH)
+          tail = substr(line, RSTART + RLENGTH, 2)
+          if (tail != "\\(" && tail != "\\." && tok !~ /_$/) {
+            gsub(/\\\./, ".", tok)
+            print tok
+          }
+          line = substr(line, RSTART + RLENGTH)
+        }
+      }
+    ' tools/verify.sh | sort -u > "$tmp_dir/verify_keys" || true
+  for apps_file in apps/*.sh; do
+    prefix="$(basename "$apps_file" .sh)"
+    impl_file="impl/install_${prefix}.sh"
+    [[ -f "$impl_file" ]] || continue
+    # Registered keys: single-key i18n_register lines plus bare app.* tokens
+    # inside i18n_register_many blocks (EN/ZH text lines are quoted).
+    awk '
+        /^[[:space:]]*i18n_register[[:space:]]+app\.[a-z0-9_.]+/ { print $2 }
+        /^[[:space:]]*app\.[a-z0-9_.]+[[:space:]]*\\?$/ { print $1 }
+      ' "$apps_file" | sort -u > "$tmp_dir/reg" || true
+    # References from the impl script (t calls and helper key arguments).
+    grep -oE "app\.${prefix}\.[a-z0-9_.]+" "$impl_file" | sort -u > "$tmp_dir/refs_impl" || true
+    # References from t() calls inside the apps file (e.g., APP_DESCRIPTION).
+    grep -oE "\bt[[:space:]]+app\.${prefix}\.[a-z0-9_.]+" "$apps_file" | awk '{print $2}' | sort -u > "$tmp_dir/refs_apps" || true
+    # References from verify.sh and the shared lib / deploy manager.
+    grep "^app\.${prefix}\." "$tmp_dir/verify_keys" > "$tmp_dir/refs_verify" || true
+    grep -hoE "app\.${prefix}\.[a-z0-9_.]+" lib/*.sh deploy.sh 2>/dev/null | sort -u > "$tmp_dir/refs_mgr" || true
+    cat "$tmp_dir/refs_impl" "$tmp_dir/refs_apps" "$tmp_dir/refs_verify" "$tmp_dir/refs_mgr" \
+      | sort -u > "$tmp_dir/refs_all" || true
+    while IFS= read -r key; do
+      echo "$impl_file references unregistered i18n key $key (register it in $apps_file)" >&2
+      fail=1
+    done < <(comm -23 "$tmp_dir/refs_impl" "$tmp_dir/reg")
+    while IFS= read -r key; do
+      echo "$apps_file calls t $key but does not register it" >&2
+      fail=1
+    done < <(comm -23 "$tmp_dir/refs_apps" "$tmp_dir/reg")
+    while IFS= read -r key; do
+      echo "tools/verify.sh references unregistered i18n key $key (register it in $apps_file)" >&2
+      fail=1
+    done < <(comm -23 "$tmp_dir/refs_verify" "$tmp_dir/reg")
+    while IFS= read -r key; do
+      echo "$apps_file registers unused i18n key $key (no impl/apps/verify.sh/lib reference)" >&2
+      fail=1
+    done < <(comm -13 "$tmp_dir/refs_all" "$tmp_dir/reg")
+  done
+  rm -rf "$tmp_dir"
+  if [[ "$fail" -ne 0 ]]; then
+    echo "i18n keys must be consistently registered and referenced." >&2
+    return 1
+  fi
+}
+
 check_app_localized_descriptions() {
   expect_app_description cyberstrikeai en "Source build deployment with Go, Python, systemd, Nginx, and backups."
   expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"
@@ -7961,6 +8028,7 @@ main() {
   check_app_registry_metadata
   check_blog_localized_defaults
   check_app_localized_descriptions
+  check_i18n_keys_are_consistent
   check_no_hardcoded_chinese_impl
   check_no_chinese_comments
   check_no_release_temp_files
