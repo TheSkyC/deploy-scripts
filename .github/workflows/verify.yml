@@ -3,6 +3,15 @@ name: Verify
 on:
   push:
   pull_request:
+  schedule:
+    # Nightly full-suite run catches drift that only shows up over time
+    # (stale dist, runner toolchain changes) without slowing push/PR feedback.
+    - cron: '17 3 * * *'
+
+env:
+  # Pinned so CI matches the shellcheck version used for local development
+  # instead of whatever Ubuntu happens to ship; bump this intentionally.
+  SHELLCHECK_VERSION: 0.11.0
 
 permissions:
   contents: read
@@ -16,6 +25,7 @@ jobs:
   # surface faster. The union of these targets covers every check_* function
   # that `all` runs (enforced by check_target_groups_cover_all_checks).
   verify:
+    if: github.event_name != 'schedule'
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
@@ -30,13 +40,36 @@ jobs:
         run: bash tools/verify.sh ${{ matrix.target }}
 
   shellcheck:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Install shellcheck ${{ env.SHELLCHECK_VERSION }}
+        run: |
+          wget -qO- "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
+            | tar -xz
+          sudo install -m 755 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
 
       - name: Run shellcheck verification
         run: bash tools/verify.sh shellcheck
+
+  # Nightly only: run the full `all` target end-to-end so the auto-enumerated
+  # suite and the release rebuild are exercised on a schedule.
+  nightly-all:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install shellcheck ${{ env.SHELLCHECK_VERSION }}
+        run: |
+          wget -qO- "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
+            | tar -xz
+          sudo install -m 755 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+
+      - name: Run full verification suite
+        run: bash tools/verify.sh all
