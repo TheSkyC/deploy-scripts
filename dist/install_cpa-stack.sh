@@ -616,6 +616,9 @@ port_listening_process() {
 # Warns when a port is already in use.  Does NOT abort — the caller
 # decides whether to proceed.  Pass an optional label for the port
 # (e.g. "Backend port").
+#
+# This helper only warns: it always returns 0 so callers may invoke it as a
+# bare command under `set -e` without aborting when the port is free.
 app_check_port_conflict() {
   local port="$1"
   local label="${2:-Port $port}"
@@ -624,9 +627,8 @@ app_check_port_conflict() {
     owner=$(port_listening_process "$port" 2>/dev/null || echo "unknown")
     warn "$(t warn.port_in_use "$label" "$owner")"
     warn "$(t warn.port_release_hint)"
-    return 0
   fi
-  return 1
+  return 0
 }
 
 # ----- lib/app.sh -----

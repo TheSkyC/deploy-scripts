@@ -7763,6 +7763,20 @@ check_blog_publish_helper_is_atomic() {
     ' impl/install_blog.sh dist/install_blog.sh
 }
 
+
+# A bare call to app_check_port_conflict must never abort the script under
+# `set -e`, even when the checked port is free (warn-only helper).
+check_port_conflict_is_warn_only() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/network.sh"
+    echo "before"
+    app_check_port_conflict 59998 "TEST_PORT"
+    echo "after"
+  ' _ "$ROOT_DIR"
+}
 main() {
   local target="${1:-all}"
   case "$target" in
@@ -7785,6 +7799,7 @@ main() {
       check_doctor_dispatch
       check_app_help_dispatch
       check_status_json_dispatch
+      check_port_conflict_is_warn_only
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
       check_newapi_uninstall_checks_directory_removal_errors
@@ -7848,6 +7863,7 @@ main() {
   check_doctor_dispatch
   check_app_help_dispatch
   check_status_json_dispatch
+      check_port_conflict_is_warn_only
   check_doctor_validates_saved_config
   check_newapi_uninstall_supports_noninteractive_mode
   check_newapi_uninstall_checks_directory_removal_errors
