@@ -81,6 +81,9 @@ i18n_register_many \
   app.cpa_stack.warn.config_preserved \
   "Preserving existing CPA configuration: %s. Confirm it binds to 127.0.0.1 and enables usage-statistics-enabled." \
   "将保留现有 CPA 配置：%s。请确认其绑定到 127.0.0.1 并启用了 usage-statistics-enabled。" \
+  app.cpa_stack.warn.remote_disabled \
+  "CPA_ALLOW_REMOTE=false: the CPAMP management panel cannot reach the CPA management API from a browser. Set it to true unless the panel is only used from localhost." \
+  "CPA_ALLOW_REMOTE=false：CPAMP 管理面板无法从浏览器访问 CPA 管理接口。除非只在 localhost 使用面板，否则请设置为 true。" \
   app.cpa_stack.warn.certbot \
   "Certificate issuance failed; HTTP remains active. Ensure A records for %s and %s point to this server and inbound TCP 80 is open, then retry: bash deploy.sh cpa-stack cert" \
   "证书签发失败，HTTP 将继续可用。请确保 %s 与 %s 的 A 记录指向本服务器且入站 TCP 80 端口已开放，然后重试：bash deploy.sh cpa-stack cert" \

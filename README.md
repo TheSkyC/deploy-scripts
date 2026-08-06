@@ -55,6 +55,7 @@ sudo CPA_DOMAIN=cpa.example.com \
   CERTBOT_EMAIL=admin@example.com \
   bash deploy.sh cpa-stack install
 ```
+By default the script enables CPA remote management (`CPA_ALLOW_REMOTE=true`) so the CPAMP web panel can reach the CPA management API from a browser; set `CPA_ALLOW_REMOTE=false` only when the panel is never used from a browser.
 
 The script downloads verified native release archives, enables CPA usage publishing for CPAMP monitoring, stores CPAMP secrets in a root-only systemd environment file, creates a consistent backup, and supports `status`, `doctor`, `update`, `backup`, and safe uninstall. OAuth login is intentionally a manual post-install operation because provider flows can require localhost callbacks or device-code authorization.
 

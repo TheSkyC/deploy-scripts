@@ -3,6 +3,7 @@
 CPA_DOMAIN="${CPA_DOMAIN:-}"
 CPAMP_DOMAIN="${CPAMP_DOMAIN:-}"
 ENABLE_HTTPS="${ENABLE_HTTPS:-true}"
+CPA_ALLOW_REMOTE="${CPA_ALLOW_REMOTE:-true}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 CPA_STACK_COMPONENT="${CPA_STACK_COMPONENT:-all}"
 CPA_MANAGEMENT_KEY="${CPA_MANAGEMENT_KEY:-}"
@@ -37,6 +38,7 @@ CONFIG_KEYS=(
   CPA_DOMAIN
   CPAMP_DOMAIN
   ENABLE_HTTPS
+  CPA_ALLOW_REMOTE
   CERTBOT_EMAIL
   CPA_STACK_BACKUP_DIR
   BACKUP_KEEP_DAYS
@@ -72,6 +74,7 @@ _validate_config_values() {
   app_validate_domain "CPA_DOMAIN" "$CPA_DOMAIN"
   app_validate_domain "CPAMP_DOMAIN" "$CPAMP_DOMAIN"
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
+  app_validate_bool "CPA_ALLOW_REMOTE" "$CPA_ALLOW_REMOTE"
   if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
     app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
   fi
@@ -323,12 +326,17 @@ api-keys:
 usage-statistics-enabled: true
 
 remote-management:
-  # CPAMP is on this host and connects through 127.0.0.1.
-  allow-remote: false
+  # CPAMP's web panel calls the CPA management API from the browser over the
+  # public domain; CPA rejects non-loopback clients unless allow-remote is
+  # true. Keep false only when the panel is never used from a browser.
+  allow-remote: ${CPA_ALLOW_REMOTE}
   secret-key: "${CPA_MANAGEMENT_KEY}"
 EOF
   then
     error "Failed to write CPA configuration: $CPA_CONFIG_FILE"
+  fi
+  if ! cpa_stack_truthy "$CPA_ALLOW_REMOTE"; then
+    warn "$(t app.cpa_stack.warn.remote_disabled)"
   fi
 }
 
