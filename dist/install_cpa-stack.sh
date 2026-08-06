@@ -1605,6 +1605,75 @@ i18n_register_many \
   app.cpa_stack.prompt.continue \
   "Type YES to remove CPA Stack services and Nginx configuration:" \
   "输入 YES 以移除 CPA Stack 服务和 Nginx 配置：" \
+  app.cpa_stack.status.services \
+  "Services" \
+  "服务" \
+  app.cpa_stack.status.paths \
+  "Paths" \
+  "路径" \
+  app.cpa_stack.status.local_health \
+  "Local health" \
+  "本地健康检查" \
+  app.cpa_stack.banner \
+  "CLIProxyAPI + CPA Manager Plus Stack" \
+  "CLIProxyAPI + CPA Manager Plus Stack" \
+  app.cpa_stack.doctor.domains \
+  "Configured domains: %s, %s" \
+  "已配置域名：%s，%s" \
+  app.cpa_stack.doctor.command_ok \
+  "Command available: %s" \
+  "命令可用：%s" \
+  app.cpa_stack.doctor.command_missing \
+  "Command missing: %s" \
+  "缺少命令：%s" \
+  app.cpa_stack.doctor.service_active \
+  "Service active: %s" \
+  "服务运行中：%s" \
+  app.cpa_stack.doctor.service_inactive \
+  "Service inactive: %s" \
+  "服务未运行：%s" \
+  app.cpa_stack.doctor.cpa_loopback_ok \
+  "CPA is configured for loopback binding and usage publishing." \
+  "CPA 已配置为仅回环绑定并开启用量上报。" \
+  app.cpa_stack.doctor.cpa_loopback_bad \
+  "CPA config should bind 127.0.0.1 and set usage-statistics-enabled: true." \
+  "CPA 配置应绑定 127.0.0.1 并设置 usage-statistics-enabled: true。" \
+  app.cpa_stack.doctor.env_ok \
+  "CPAMP secret environment file exists." \
+  "CPAMP 密钥环境文件存在。" \
+  app.cpa_stack.doctor.public_listener_bad \
+  "CPA or CPAMP appears to listen on a public interface; expected loopback only." \
+  "检测到 CPA 或 CPAMP 监听公网接口，预期仅回环监听。" \
+  app.cpa_stack.doctor.loopback_ok \
+  "CPA and CPAMP listeners are not publicly bound." \
+  "CPA 与 CPAMP 未绑定公网接口。" \
+  app.cpa_stack.doctor.done_blocking \
+  "Doctor completed with %s blocking issue(s) and %s warning(s)." \
+  "诊断完成，发现 %s 个阻塞问题和 %s 个警告。" \
+  app.cpa_stack.doctor.done_warnings \
+  "Doctor completed with %s warning(s)." \
+  "诊断完成，发现 %s 个警告。" \
+  app.cpa_stack.doctor.done_ok \
+  "Doctor completed without blocking issues." \
+  "诊断完成，未发现阻塞性问题。" \
+  app.cpa_stack.error.keep_days \
+  "BACKUP_KEEP_DAYS must be a non-negative integer." \
+  "BACKUP_KEEP_DAYS 必须是非负整数。" \
+  app.cpa_stack.error.binary_backup \
+  "Failed to back up existing binary: %s" \
+  "备份现有二进制文件失败：%s" \
+  app.cpa_stack.error.binary_install \
+  "Failed to install binary: %s" \
+  "安装二进制文件失败：%s" \
+  app.cpa_stack.error.config_write \
+  "Failed to write CPA configuration: %s" \
+  "写入 CPA 配置失败：%s" \
+  app.cpa_stack.error.management_key_required \
+  "CPA_MANAGEMENT_KEY is required to configure CPAMP." \
+  "配置 CPAMP 需要 CPA_MANAGEMENT_KEY。" \
+  app.cpa_stack.error.cpamp_env_write \
+  "Failed to write CPAMP secret environment file: %s" \
+  "写入 CPAMP 密钥环境文件失败：%s" \
   app.cpa_stack.prompt.delete_data \
   "Delete persistent data and credentials under %s? [y/N]:" \
   "删除 %s 下的持久数据和凭据？[y/N]："
@@ -1675,7 +1744,7 @@ APP_DOCTOR_SERVICE_FN=_cpa_stack_doctor_primary_service
 APP_DOCTOR_SERVICES_FN=_cpa_stack_doctor_services
 
 cpa_stack_show_banner() {
-  echo -e "${BOLD}CLIProxyAPI + CPA Manager Plus Stack${NC}"
+  echo -e "${BOLD}$(t app.cpa_stack.banner)${NC}"
 }
 
 cpa_stack_truthy() {
@@ -1705,7 +1774,7 @@ _validate_config_values() {
   if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
     app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
   fi
-  [[ "$BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] || error "BACKUP_KEEP_DAYS must be a non-negative integer."
+  [[ "$BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] || error "$(t app.cpa_stack.error.keep_days)"
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   if [[ -n "$CPA_DOMAIN" && "$CPA_DOMAIN" == "$CPAMP_DOMAIN" ]]; then
     error "$(t app.cpa_stack.error.domains_same)"
@@ -1840,11 +1909,11 @@ cpa_stack_install_binary() {
   [[ -s "$source" ]] || error "$(t app.cpa_stack.error.binary_missing "$(basename "$target")" "$(dirname "$source")")"
   backup="${target}.bak.$(date +%Y%m%d_%H%M%S)"
   if [[ -f "$target" ]] && ! cp -a "$target" "$backup"; then
-    error "Failed to back up existing binary: $target"
+    error "$(t app.cpa_stack.error.binary_backup "$target")"
   fi
   if ! atomic_copy_file "$source" "$target" 0755 "$owner"; then
     [[ -f "$backup" ]] && cp -a "$backup" "$target" || true
-    error "Failed to install binary: $target"
+    error "$(t app.cpa_stack.error.binary_install "$target")"
   fi
 }
 
@@ -1960,7 +2029,7 @@ remote-management:
   secret-key: "${CPA_MANAGEMENT_KEY}"
 EOF
   then
-    error "Failed to write CPA configuration: $CPA_CONFIG_FILE"
+    error "$(t app.cpa_stack.error.config_write "$CPA_CONFIG_FILE")"
   fi
   if ! cpa_stack_truthy "$CPA_ALLOW_REMOTE"; then
     warn "$(t app.cpa_stack.warn.remote_disabled)"
@@ -1977,7 +2046,7 @@ cpa_stack_load_cpamp_env() {
   fi
   [[ -n "$CPAMP_ADMIN_KEY" ]] || CPAMP_ADMIN_KEY="$prior_admin"
   [[ -n "$CPA_MANAGEMENT_KEY" ]] || CPA_MANAGEMENT_KEY="$prior_management"
-  [[ -n "$CPA_MANAGEMENT_KEY" ]] || error "CPA_MANAGEMENT_KEY is required to configure CPAMP."
+  [[ -n "$CPA_MANAGEMENT_KEY" ]] || error "$(t app.cpa_stack.error.management_key_required)"
   [[ -n "$CPAMP_ADMIN_KEY" ]] || CPAMP_ADMIN_KEY="$(cpa_stack_random_key 'cpamp_')"
   CPA_UPSTREAM_URL="${prior_upstream:-http://127.0.0.1:8317}"
 }
@@ -1987,7 +2056,7 @@ cpa_stack_write_cpamp_env() {
   CPA_MANAGER_ADMIN_KEY="$CPAMP_ADMIN_KEY"
   if ! write_config_file "$CPAMP_ENV_FILE" \
     CPA_MANAGER_ADMIN_KEY CPA_UPSTREAM_URL CPA_MANAGEMENT_KEY; then
-    error "Failed to write CPAMP secret environment file: $CPAMP_ENV_FILE"
+    error "$(t app.cpa_stack.error.cpamp_env_write "$CPAMP_ENV_FILE")"
   fi
 }
 
@@ -2370,14 +2439,14 @@ do_backup() {
 do_status() {
   cpa_stack_show_banner
   app_load_config
-  printf '\n[%s]\n' "Services"
+  printf '\n[%s]\n' "$(t app.cpa_stack.status.services)"
   printf '  %s: %s\n' "$CPA_SERVICE_NAME" "$(service_status_label "$CPA_SERVICE_NAME")"
   printf '  %s: %s\n' "$CPAMP_SERVICE_NAME" "$(service_status_label "$CPAMP_SERVICE_NAME")"
   printf '  nginx: %s\n' "$(service_status_label nginx)"
-  printf '\n[%s]\n' "Local health"
+  printf '\n[%s]\n' "$(t app.cpa_stack.status.local_health)"
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
-  printf '\n[%s]\n' "Paths"
+  printf '\n[%s]\n' "$(t app.cpa_stack.status.paths)"
   for path in "$CPA_CONFIG_FILE" "$CPA_AUTH_DIR" "$CPAMP_ENV_FILE" "$CPAMP_DATA_DIR" "$NGINX_SITE" "$CPA_STACK_BACKUP_DIR"; do
     [[ -e "$path" ]] && printf '  [ok] %s\n' "$path" || printf '  [--] %s\n' "$path"
   done
@@ -2389,58 +2458,58 @@ do_doctor() {
   local failures=0 warnings=0
   printf '\n%s\n' "$(t doctor.title)"
   if [[ -n "$CPA_DOMAIN" && -n "$CPAMP_DOMAIN" ]]; then
-    success "Configured domains: $CPA_DOMAIN, $CPAMP_DOMAIN"
+    success "$(t app.cpa_stack.doctor.domains "$CPA_DOMAIN" "$CPAMP_DOMAIN")"
   else
     warn "$(t app.cpa_stack.error.domain_required "CPA_DOMAIN / CPAMP_DOMAIN")"; warnings=$((warnings + 1))
   fi
   for requirement in curl nginx systemctl; do
     if command -v "$requirement" >/dev/null 2>&1; then
-      success "Command available: $requirement"
+      success "$(t app.cpa_stack.doctor.command_ok "$requirement")"
     else
-      warn "Command missing: $requirement"; failures=$((failures + 1))
+      warn "$(t app.cpa_stack.doctor.command_missing "$requirement")"; failures=$((failures + 1))
     fi
   done
   for service in "$CPA_SERVICE_NAME" "$CPAMP_SERVICE_NAME" nginx; do
     if systemctl is-active --quiet "$service" 2>/dev/null; then
-      success "Service active: $service"
+      success "$(t app.cpa_stack.doctor.service_active "$service")"
     else
-      warn "Service inactive: $service"; warnings=$((warnings + 1))
+      warn "$(t app.cpa_stack.doctor.service_inactive "$service")"; warnings=$((warnings + 1))
     fi
   done
   if [[ -f "$CPA_CONFIG_FILE" ]]; then
     if grep -Eq '^host:[[:space:]]*"?127\.0\.0\.1' "$CPA_CONFIG_FILE" \
         && grep -Eq '^usage-statistics-enabled:[[:space:]]*true' "$CPA_CONFIG_FILE"; then
-      success "CPA is configured for loopback binding and usage publishing."
+      success "$(t app.cpa_stack.doctor.cpa_loopback_ok)"
     else
-      warn "CPA config should bind 127.0.0.1 and set usage-statistics-enabled: true."; warnings=$((warnings + 1))
+      warn "$(t app.cpa_stack.doctor.cpa_loopback_bad)"; warnings=$((warnings + 1))
     fi
   else
     warn "$(t app.cpa_stack.warn.config_missing "$CPA_CONFIG_FILE")"; failures=$((failures + 1))
   fi
   if [[ -f "$CPAMP_ENV_FILE" ]]; then
-    success "CPAMP secret environment file exists."
+    success "$(t app.cpa_stack.doctor.env_ok)"
   else
     warn "$(t app.cpa_stack.warn.config_missing "$CPAMP_ENV_FILE")"; failures=$((failures + 1))
   fi
   if command -v ss >/dev/null 2>&1; then
     if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Eq '(^|:)8317$|(^|:)18317$'; then
       if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Eq '(^|:)0\.0\.0\.0:8317$|(^|:)\[::\]:8317$|(^|:)0\.0\.0\.0:18317$|(^|:)\[::\]:18317$'; then
-        warn "CPA or CPAMP appears to listen on a public interface; expected loopback only."; failures=$((failures + 1))
+        warn "$(t app.cpa_stack.doctor.public_listener_bad)"; failures=$((failures + 1))
       else
-        success "CPA and CPAMP listeners are not publicly bound."
+        success "$(t app.cpa_stack.doctor.loopback_ok)"
       fi
     fi
   fi
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
   if (( failures > 0 )); then
-    warn "Doctor completed with ${failures} blocking issue(s) and ${warnings} warning(s)."
+    warn "$(t app.cpa_stack.doctor.done_blocking "$failures" "$warnings")"
     return 1
   fi
   if (( warnings > 0 )); then
-    warn "Doctor completed with ${warnings} warning(s)."
+    warn "$(t app.cpa_stack.doctor.done_warnings "$warnings")"
   else
-    success "Doctor completed without blocking issues."
+    success "$(t app.cpa_stack.doctor.done_ok)"
   fi
 }
 
