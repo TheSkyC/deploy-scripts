@@ -15,9 +15,14 @@ source tools/checks/app-newapi.sh
 source tools/checks/app-sub2api.sh
 source tools/checks/app-tickflow.sh
 source tools/checks/app-vaultwarden.sh
+source tools/checks/backup.sh
+source tools/checks/config-status.sh
 source tools/checks/dispatch.sh
+source tools/checks/firewall-nginx.sh
 source tools/checks/framework.sh
 source tools/checks/release.sh
+source tools/checks/static.sh
+source tools/checks/validators.sh
 
 usage() {
   cat >&2 <<'EOF'
