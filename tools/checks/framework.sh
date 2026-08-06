@@ -26,3 +26,27 @@ check_target_groups_cover_all_checks() {
 }
 
 
+check_run_checks_parallel_cleans_tmpdir() {
+  local tmp_parent
+  tmp_parent="$(mktemp -d)"
+  TMPDIR="$tmp_parent" "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/tools/verify.sh" help >/dev/null 2>&1
+    ok_check() { return 0; }
+    fail_check() { return 1; }
+    before="$(find "$TMPDIR" -mindepth 1 2>/dev/null | wc -l)"
+    PARALLEL_JOBS=1 run_checks_parallel ok_check
+    [[ -z "$(trap -p EXIT)" ]] || { echo "run_checks_parallel left an EXIT trap installed" >&2; exit 1; }
+    set +e
+    run_checks_parallel fail_check
+    st=$?
+    set -e
+    [[ "$st" -ne 0 ]] || { echo "run_checks_parallel did not propagate a failing check" >&2; exit 1; }
+    [[ -z "$(trap -p EXIT)" ]] || { echo "run_checks_parallel left an EXIT trap installed after failure" >&2; exit 1; }
+    after="$(find "$TMPDIR" -mindepth 1 2>/dev/null | wc -l)"
+    [[ "$after" -eq "$before" ]] || { echo "run_checks_parallel leaked a temp directory" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+  rm -rf "$tmp_parent"
+}
+
