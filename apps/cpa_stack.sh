@@ -30,6 +30,9 @@ i18n_register_many \
   app.cpa_stack.error.noninteractive_email \
   "CERTBOT_EMAIL is required when ENABLE_HTTPS=true and DEPLOY_ASSUME_YES=1." \
   "ENABLE_HTTPS=true 且 DEPLOY_ASSUME_YES=1 时必须设置 CERTBOT_EMAIL。" \
+  app.cpa_stack.error.https_disabled \
+  "ENABLE_HTTPS=false; cannot issue a certificate." \
+  "ENABLE_HTTPS=false，无法签发证书。" \
   app.cpa_stack.error.component \
   "CPA_STACK_COMPONENT must be one of: all, cpa, cpamp. Got: %s." \
   "CPA_STACK_COMPONENT 只能是 all、cpa 或 cpamp，当前为：%s。" \
@@ -79,8 +82,8 @@ i18n_register_many \
   "Preserving existing CPA configuration: %s. Confirm it binds to 127.0.0.1 and enables usage-statistics-enabled." \
   "将保留现有 CPA 配置：%s。请确认其绑定到 127.0.0.1 并启用了 usage-statistics-enabled。" \
   app.cpa_stack.warn.certbot \
-  "Certificate issuance failed. HTTP remains active; fix DNS / inbound port 80 and rerun install." \
-  "证书签发失败。HTTP 将继续可用；请修复 DNS/入站 80 端口后重新执行 install。" \
+  "Certificate issuance failed; HTTP remains active. Ensure A records for %s and %s point to this server and inbound TCP 80 is open, then retry: bash deploy.sh cpa-stack cert" \
+  "证书签发失败，HTTP 将继续可用。请确保 %s 与 %s 的 A 记录指向本服务器且入站 TCP 80 端口已开放，然后重试：bash deploy.sh cpa-stack cert" \
   app.cpa_stack.warn.http_health \
   "%s health check returned HTTP %s." \
   "%s 健康检查返回 HTTP %s。" \
@@ -123,6 +126,9 @@ i18n_register_many \
   app.cpa_stack.success.updated \
   "CPA Stack update completed." \
   "CPA Stack 更新完成。" \
+  app.cpa_stack.success.https \
+  "HTTPS certificate issued; Nginx switched to TLS for %s and %s." \
+  "HTTPS 证书已签发；Nginx 已为 %s 与 %s 启用 TLS。" \
   app.cpa_stack.success.backup \
   "Backup created: %s" \
   "备份已创建：%s" \

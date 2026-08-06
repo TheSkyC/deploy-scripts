@@ -301,6 +301,11 @@ cpa_stack_random_key() {
 cpa_stack_write_cpa_config() {
   if [[ -f "$CPA_CONFIG_FILE" ]]; then
     warn "$(t app.cpa_stack.warn.config_preserved "$CPA_CONFIG_FILE")"
+    if [[ -z "$CPA_MANAGEMENT_KEY" ]]; then
+      local prior
+      prior="$(sed -nE 's/^[[:space:]]*secret-key:[[:space:]]*"([^"]+)".*/\1/p' "$CPA_CONFIG_FILE" | tail -n 1)"
+      [[ -n "$prior" ]] && CPA_MANAGEMENT_KEY="$prior"
+    fi
     [[ -n "$CPA_MANAGEMENT_KEY" ]] || error "$(t app.cpa_stack.error.config_exists "$CPA_CONFIG_FILE")"
     return 0
   fi
@@ -564,7 +569,7 @@ cpa_stack_configure_https() {
   if ! certbot certonly --webroot -w "$ACME_WEBROOT" \
       --email "$CERTBOT_EMAIL" --agree-tos --non-interactive \
       -d "$CPA_DOMAIN" -d "$CPAMP_DOMAIN"; then
-    warn "$(t app.cpa_stack.warn.certbot)"
+    warn "$(t app.cpa_stack.warn.certbot "$CPA_DOMAIN" "$CPAMP_DOMAIN")"
     return 0
   fi
   cpa_stack_write_nginx_https || error "$(t app.cpa_stack.error.nginx "$NGINX_SITE")"
@@ -648,6 +653,28 @@ do_update() {
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
   success "$(t app.cpa_stack.success.updated)"
+}
+
+do_cert() {
+  cpa_stack_show_banner
+  cpa_stack_preflight cert
+  acquire_lock
+  if ! cpa_stack_truthy "$ENABLE_HTTPS"; then
+    error "$(t app.cpa_stack.error.https_disabled)"
+  fi
+  [[ -n "$CERTBOT_EMAIL" ]] || error "$(t app.cpa_stack.error.email_required)"
+  cpa_stack_install_dependencies
+  cpa_stack_write_nginx_http
+  cpa_stack_configure_https
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  local scheme="http"
+  cpa_stack_truthy "$ENABLE_HTTPS" && [[ -f "/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem" ]] && scheme="https"
+  if [[ "$scheme" == "https" ]]; then
+    success "$(t app.cpa_stack.success.https "${scheme}://${CPA_DOMAIN}" "${scheme}://${CPAMP_DOMAIN}")"
+  else
+    warn "$(t app.cpa_stack.warn.certbot "$CPA_DOMAIN" "$CPAMP_DOMAIN")"
+  fi
 }
 
 do_backup() {
