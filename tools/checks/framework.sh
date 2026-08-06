@@ -50,3 +50,49 @@ check_run_checks_parallel_cleans_tmpdir() {
   rm -rf "$tmp_parent"
 }
 
+
+# Meta guardrail: top-level wrappers (deploy.sh, install_*.sh) and bin/
+# loaders must mirror each other one-to-one, and each loader must wire the
+# documented sources so a new app cannot ship without its entry points.
+
+check_root_wrappers_match_bin_loaders() {
+  local name app missing=0
+  local -a wrappers loaders
+
+  mapfile -t wrappers < <(cd "$ROOT_DIR" && printf '%s\n' deploy.sh install_*.sh | LC_ALL=C sort)
+  mapfile -t loaders < <(cd "$ROOT_DIR/bin" && printf '%s\n' *.sh | LC_ALL=C sort)
+
+  if [[ "${wrappers[*]}" != "${loaders[*]}" ]]; then
+    echo "Top-level wrappers and bin/ loaders are out of sync:" >&2
+    echo "  root: ${wrappers[*]}" >&2
+    echo "  bin:  ${loaders[*]}" >&2
+    missing=1
+  fi
+
+  for name in "${wrappers[@]}"; do
+    if ! grep -qxF "exec bash \"\${SCRIPT_DIR}/bin/${name}\" \"\$@\"" "${ROOT_DIR}/${name}"; then
+      echo "Top-level wrapper ${name} does not exec bin/${name}" >&2
+      missing=1
+    fi
+
+    if [[ "$name" == "deploy.sh" ]]; then
+      grep -qxF 'source "${DEPLOY_ROOT_DIR}/lib/core.sh"' "${ROOT_DIR}/bin/${name}" \
+        && grep -qxF 'manager_main "$@"' "${ROOT_DIR}/bin/${name}" \
+        || { echo "bin/${name} must source lib/core.sh and call manager_main" >&2; missing=1; }
+    else
+      app="${name#install_}"
+      app="${app%.sh}"
+      grep -qxF 'source "${DEPLOY_ROOT_DIR}/lib/core.sh"' "${ROOT_DIR}/bin/${name}" \
+        && grep -qxF "source \"\${DEPLOY_ROOT_DIR}/apps/${app}.sh\"" "${ROOT_DIR}/bin/${name}" \
+        && grep -qxF 'main "$@"' "${ROOT_DIR}/bin/${name}" \
+        || { echo "bin/${name} must source lib/core.sh and apps/${app}.sh, then call main" >&2; missing=1; }
+      if [[ ! -f "${ROOT_DIR}/apps/${app}.sh" ]]; then
+        echo "bin/${name} references missing apps/${app}.sh" >&2
+        missing=1
+      fi
+    fi
+  done
+
+  [[ "$missing" -eq 0 ]] || return 1
+}
+

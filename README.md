@@ -138,7 +138,7 @@ green.
 
 1. Create `apps/myapp.sh` with metadata and localized messages.
 2. Create `impl/install_myapp.sh` with `do_install` and any supported lifecycle functions.
-3. Create `bin/install_myapp.sh` and a top-level `install_myapp.sh` wrapper following the existing pattern.
+3. Create `bin/install_myapp.sh` and a top-level `install_myapp.sh` wrapper following the existing pattern (wrapper/bin symmetry is enforced by `check_root_wrappers_match_bin_loaders` in the `guards` target).
 4. Add the app to `tools/build-release.sh`.
 5. Add verification coverage when the app has special dispatch or localization behavior: define new `check_*` functions in a `tools/checks/` module (e.g., `tools/checks/app-myapp.sh`) and register each one in a target arm (`dispatch` or `guards`); the `all` target picks up `check_*` functions automatically, and `check_target_groups_cover_all_checks` fails if a check is missing from a target arm.
 6. Run verification:
