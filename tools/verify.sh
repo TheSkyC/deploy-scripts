@@ -1288,7 +1288,7 @@ check_safe_path_guard() {
     set -euo pipefail
     source lib/core.sh
 
-    unsafe_paths=("" "/" "." ".." "relative/path" "/tmp" "/opt" "/var" "/var/log" "/var/lib" "/usr/local/bin" "/opt/app/../other")
+    unsafe_paths=("" "/" "." ".." "relative/path" "/tmp" "/opt" "/var" "/var/log" "/var/lib" "/usr/local/bin" "/opt/app/../other" "/srv" "/mnt" "/data" "/media" "/backup" "/www" "/export" "/pool" "/var/www" "/usr/share" "/usr/local/lib" "/var/cache")
     for path in "${unsafe_paths[@]}"; do
       if is_safe_path "$path"; then
         echo "Expected unsafe path to be rejected: ${path:-empty}" >&2
@@ -1296,7 +1296,7 @@ check_safe_path_guard() {
       fi
     done
 
-    safe_paths=("/opt/new-api" "/opt/new-api/data" "/var/lib/vaultwarden" "/var/log/vaultwarden" "/tmp/deploy-scripts.newapi.abc123")
+    safe_paths=("/opt/new-api" "/opt/new-api/data" "/var/lib/vaultwarden" "/var/log/vaultwarden" "/tmp/deploy-scripts.newapi.abc123" "/srv/myapp" "/var/www/blog" "/mnt/data/app")
     for path in "${safe_paths[@]}"; do
       if ! is_safe_path "$path"; then
         echo "Expected safe path to be accepted: ${path}" >&2

@@ -23,7 +23,21 @@ is_safe_path() {
     /|.|..|*'/../'*|*'/..'|*'/./'*|*'/.')
       return 1
       ;;
-    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var|/var/lib|/var/log|/usr/local|/usr/local/bin)
+    /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var|/usr/local)
+      return 1
+      ;;
+  esac
+
+  # Reject every top-level directory (for example /srv, /mnt, /data):
+  # deployment and deletion targets must always live inside a named
+  # subdirectory.  This keeps the guard fail-closed instead of relying on an
+  # exhaustive blacklist of mount points.
+  local remainder="${path#/}"
+  [[ "$remainder" == */* ]] || return 1
+
+  # Additional nested system directories that must never be targets.
+  case "$path" in
+    /var/lib|/var/log|/var/www|/var/cache|/var/run|/var/spool|/usr/local/bin|/usr/local/lib|/usr/share|/mnt|/media|/srv|/data|/backup|/www|/export|/pool)
       return 1
       ;;
   esac
