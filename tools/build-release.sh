@@ -144,7 +144,7 @@ build_one() {
     usage
     exit 1
   }
-  output="${DIST_DIR}/install_${app}.sh"
+  output="${DIST_DIR}/install_${app//-/_}.sh"
   output_tmp="$(prepare_output_file "$output")"
   commit="$(release_build_commit)"
   built_at="$(release_built_at)"

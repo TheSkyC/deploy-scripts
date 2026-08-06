@@ -167,10 +167,10 @@ check_status_json_dispatch() {
 # status-json must expose a services array for multi-service apps and a
 # version field for automation consumers.
 check_status_json_services_and_version() {
-  expect_success_output en dist/install_cpa-stack.sh status-json '"services":['
-  expect_success_output en dist/install_cpa-stack.sh status-json '"cli-proxy-api"'
-  expect_success_output en dist/install_cpa-stack.sh status-json '"cpa-manager-plus"'
-  expect_success_output en dist/install_cpa-stack.sh status-json '"version":null'
+  expect_success_output en dist/install_cpa_stack.sh status-json '"services":['
+  expect_success_output en dist/install_cpa_stack.sh status-json '"cli-proxy-api"'
+  expect_success_output en dist/install_cpa_stack.sh status-json '"cpa-manager-plus"'
+  expect_success_output en dist/install_cpa_stack.sh status-json '"version":null'
   expect_success_output en install_newapi.sh status-json '"version":null'
 }
 
@@ -1121,7 +1121,7 @@ check_app_localized_descriptions() {
 
 check_cpa_stack_layout() {
   local file
-  for file in impl/install_cpa_stack.sh dist/install_cpa-stack.sh; do
+  for file in impl/install_cpa_stack.sh dist/install_cpa_stack.sh; do
     grep -Fq 'host: "127.0.0.1"' "$file" \
       && grep -Fq 'usage-statistics-enabled: true' "$file" \
       && grep -Fq 'Environment=HTTP_ADDR=127.0.0.1:18317' "$file" \
