@@ -480,6 +480,10 @@ config_file_is_safe() {
 
 load_config_file() {
   local conf_file="$1"
+  # Character ranges in regexes are collation-dependent: under en_US.UTF-8 /
+  # zh_CN.UTF-8, [A-Z0-9] also matches lowercase. Pin the C locale so config
+  # keys must be uppercase on every server locale.
+  local LC_ALL=C
   shift
   local -a allowed_keys=("$@")
   [[ -f "$conf_file" ]] || return 0

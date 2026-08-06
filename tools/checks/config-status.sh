@@ -391,4 +391,52 @@ check_config_sanitization_behavior() {
     exit 0
   ' _ "$ROOT_DIR"
 }
+check_config_key_shape_locale_independent() {
+  local tmp_dir conf locale err_file
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/deploy.conf"
+  err_file="${tmp_dir}/load.err"
+  printf 'PORT=9090\nport=8080\npORT=9999\n' > "$conf"
 
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+
+  # The shape regex ^[A-Z_][A-Z0-9_]*$ must reject lowercase/mixed-case keys on
+  # every locale. UTF-8 collation locales (en_US.UTF-8, zh_CN.UTF-8) used to let
+  # [A-Z0-9] match lowercase; run the behavior check under C and under each
+  # UTF-8 locale whose collation actually differs from C, so the pin in
+  # load_config_file cannot regress silently.
+  for locale in C en_US.UTF-8 zh_CN.UTF-8; do
+    if [[ "$locale" == "C" ]] || LC_ALL="$locale" "$BASH_BIN" -c '[[ "port" =~ ^[A-Z_][A-Z0-9_]*$ ]]'; then
+      PATH="${tmp_dir}:$PATH" LC_ALL="$locale" "$BASH_BIN" -c '
+        set -euo pipefail
+        source "$1/lib/logging.sh"
+        source "$1/lib/i18n.sh"
+        source "$1/lib/config.sh"
+        PORT=""
+        port=""
+        pORT=""
+        set +e
+        load_config_file "$2" PORT 2> "$3" >/dev/null
+        status=$?
+        set -e
+        [[ "$status" -eq 0 ]] || { echo "load_config_file failed under LC_ALL=${LC_ALL:-unset}" >&2; exit 1; }
+        [[ "$PORT" == "9090" ]] || { echo "PORT was not loaded under LC_ALL=${LC_ALL:-unset}" >&2; exit 1; }
+        [[ -z "$port" && -z "$pORT" ]] || { echo "lowercase/mixed-case config key was assigned under LC_ALL=${LC_ALL:-unset}" >&2; exit 1; }
+        err="$(cat "$3")"
+        [[ "$err" == *"$(t warn.config_invalid_key port)"* ]] || { echo "expected invalid-key warning for "port" under LC_ALL=${LC_ALL:-unset}; got: $err" >&2; exit 1; }
+        [[ "$err" == *"$(t warn.config_invalid_key pORT)"* ]] || { echo "expected invalid-key warning for "pORT" under LC_ALL=${LC_ALL:-unset}; got: $err" >&2; exit 1; }
+        exit 0
+      ' _ "$ROOT_DIR" "$conf" "$err_file"
+    fi
+  done
+
+  rm -rf "$tmp_dir"
+}
