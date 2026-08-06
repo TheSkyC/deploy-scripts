@@ -206,62 +206,6 @@ EOF
     error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
   fi
 }
-_configure_firewall() {
-  local FW_DONE=false
-  local FW_ERROR=false
-  if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if ufw allow "${PORT}/tcp" comment "New API" > /dev/null; then
-      success "$(t app.newapi.success.ufw_port "$PORT")"
-      FW_DONE=true
-    else
-      FW_ERROR=true
-    fi
-  fi
-  if ! $FW_DONE && command -v iptables &>/dev/null; then
-    if iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null \
-        || iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT; then
-      if command -v netfilter-persistent &>/dev/null; then
-        if netfilter-persistent save 2>/dev/null; then
-          success "$(t app.newapi.success.iptables_saved)"
-        else
-          warn "$(t app.newapi.warn.iptables_not_persisted)"
-        fi
-      elif command -v iptables-save &>/dev/null; then
-        local iptables_dir="/etc/iptables"
-        if mkdir -p "$iptables_dir"; then
-          local iptables_rules="${iptables_dir}/rules.v4"
-          local iptables_tmp
-          if ! iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX"); then
-            warn "$(t app.newapi.warn.iptables_write_failed)"
-          elif iptables-save > "$iptables_tmp" 2>/dev/null \
-              && chmod 644 "$iptables_tmp" \
-              && chown root:root "$iptables_tmp" \
-              && mv "$iptables_tmp" "$iptables_rules"; then
-            info "$(t app.newapi.info.iptables_rules_written)"
-          else
-            rm -f "$iptables_tmp"
-            warn "$(t app.newapi.warn.iptables_write_failed)"
-          fi
-        else
-          warn "$(t app.newapi.warn.iptables_write_failed)"
-        fi
-      else
-        warn "$(t app.newapi.warn.iptables_not_persisted)"
-      fi
-      success "$(t app.newapi.success.iptables_port "$PORT")"
-      FW_DONE=true
-    else
-      FW_ERROR=true
-    fi
-  fi
-  if ! $FW_DONE; then
-    if $FW_ERROR; then
-      warn "$(t app.newapi.warn.firewall_config_failed "$PORT")"
-    else
-      warn "$(t app.newapi.warn.no_firewall "$PORT")"
-    fi
-  fi
-}
 _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
@@ -571,7 +515,7 @@ do_install() {
   _write_systemd_unit
   success "$(t app.newapi.success.systemd "$SERVICE_NAME")"
   step "$(t app.newapi.step.firewall)"
-  _configure_firewall
+  app_configure_firewall "$PORT" "app.newapi" "New API"
   step "$(t app.newapi.step.logrotate)"
   app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"
   step "$(t app.newapi.step.cron)"

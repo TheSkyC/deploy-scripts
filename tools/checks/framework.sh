@@ -619,7 +619,7 @@ check_iptables_rules_are_atomic() {
   awk '
       /iptables_dir="\/etc\/iptables"/ { saw_dir=1 }
       /if mkdir -p "\$iptables_dir"; then/ { saw_dir_if=1 }
-      /warn "\$\(t app\.(newapi|sub2api)\.warn\.iptables_write_failed\)"/ { saw_warn=1 }
+      /app_prefix\}\.warn\.iptables_write_failed/ { saw_warn=1 }
       /if ! iptables_tmp=\$\(mktemp "\$\{iptables_rules\}\.XXXXXX"\); then/ { saw_tmp=1 }
       /iptables-save > "\$iptables_tmp"/ { saw_save=1 }
       /mv "\$iptables_tmp" "\$iptables_rules"/ { saw_mv=1 }
@@ -630,7 +630,7 @@ check_iptables_rules_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+    ' lib/app.sh dist/install_newapi.sh dist/install_sub2api.sh
 }
 
 check_netfilter_persistent_save_reports_failures() {
@@ -648,7 +648,9 @@ check_netfilter_persistent_save_reports_failures() {
       }
       in_block && /if netfilter-persistent save 2>\/dev\/null; then/ { saw_save=1; next }
       in_block && /success "\$\(t app\.(newapi|sub2api|vaultwarden)\.success\.iptables_saved\)"/ { saw_success=1; next }
+      in_block && /success "\$\(t "\$\{app_prefix\}\.success\.iptables_saved"\)"/ { saw_success=1; next }
       in_block && /warn "\$\(t app\.(newapi|sub2api|vaultwarden)\.warn\.iptables_not_persisted\)"/ { saw_warn=1; next }
+      in_block && /warn "\$\(t "\$\{app_prefix\}\.warn\.iptables_not_persisted"\)"/ { saw_warn=1; next }
       in_block && ($0 ~ ("^" block_indent "elif command -v iptables-save ") || $0 == (block_indent "else")) {
         if (!(saw_save && saw_success && saw_warn)) {
           printf "%s netfilter-persistent save must report both success and failure outcomes\n", FILENAME > "/dev/stderr"
@@ -656,8 +658,7 @@ check_netfilter_persistent_save_reports_failures() {
         }
         in_block=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+    ' lib/app.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
 check_random_head_pipelines_handle_sigpipe() {
@@ -2483,32 +2484,61 @@ check_firewall_success_paths_validate_command_results() {
     return 1
   fi
   awk '
-      /_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
-      in_block && /if ufw allow "\$\{PORT\}\/tcp" comment "New API" > \/dev\/null; then/ { saw_ufw_if=1 }
-      in_block && /if iptables -C INPUT -p tcp --dport "\$PORT" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
-      in_block && /warn "\$\(t app\.newapi\.warn\.firewall_config_failed "\$PORT"\)"/ { saw_failure_warn=1 }
-      in_block && /^}/ {
-        if (!(saw_ufw_if && saw_iptables_if && saw_failure_warn)) {
-          printf "%s NewAPI firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_block=0
-      }
-    ' impl/install_newapi.sh dist/install_newapi.sh
-  awk '
-      /_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_firewalld_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
-      in_block && /if ufw allow "\$\{PORT\}\/tcp" comment "Sub2API" > \/dev\/null; then/ { saw_ufw_if=1 }
-      in_block && /if firewall-cmd --permanent --add-port="\$\{PORT\}\/tcp" >\/dev\/null 2>&1/ { saw_firewalld_if=1 }
-      in_block && /if iptables -C INPUT -p tcp --dport "\$PORT" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
-      in_block && /warn "\$\(t app\.sub2api\.warn\.firewall_config_failed "\$PORT"\)"/ { saw_failure_warn=1 }
+      /app_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_firewalld_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
+      in_block && /if ufw allow "\$\{port\}\/tcp" comment "\$app_label" > \/dev\/null; then/ { saw_ufw_if=1 }
+      in_block && /if firewall-cmd --permanent --add-port="\$\{port\}\/tcp" >\/dev\/null 2>&1/ { saw_firewalld_if=1 }
+      in_block && /if iptables -C INPUT -p tcp --dport "\$port" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
+      in_block && /warn "\$\(t "\$\{app_prefix\}\.warn\.firewall_config_failed" "\$port"\)"/ { saw_failure_warn=1 }
       in_block && /^}/ {
         if (!(saw_ufw_if && saw_firewalld_if && saw_iptables_if && saw_failure_warn)) {
-          printf "%s Sub2API firewall configuration must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
+          printf "%s shared firewall helper must only report success after command success and warn on failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_block=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' lib/app.sh
+  grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' impl/install_newapi.sh \
+    && grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' dist/install_newapi.sh \
+    && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
+    && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' dist/install_sub2api.sh \
+    || {
+      echo "NewAPI and Sub2API firewall configuration must use the shared app_configure_firewall helper." >&2
+      return 1
+    }
+  if grep -nE '^_configure_firewall\(\)' impl/install_newapi.sh impl/install_sub2api.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh; then
+    echo "NewAPI and Sub2API must not define a per-app _configure_firewall copy." >&2
+    return 1
+  fi
+  awk '
+      /app\.newapi\.success\.ufw_port/ { newapi_ufw=1 }
+      /app\.newapi\.success\.iptables_saved/ { newapi_saved=1 }
+      /app\.newapi\.info\.iptables_rules_written/ { newapi_info=1 }
+      /app\.newapi\.warn\.iptables_write_failed/ { newapi_write_failed=1 }
+      /app\.newapi\.warn\.iptables_not_persisted/ { newapi_not_persisted=1 }
+      /app\.newapi\.success\.iptables_port/ { newapi_port=1 }
+      /app\.newapi\.warn\.firewall_config_failed/ { newapi_cfg_failed=1 }
+      /app\.newapi\.warn\.no_firewall/ { newapi_no_fw=1 }
+      /app\.sub2api\.success\.ufw_port/ { sub2api_ufw=1 }
+      /app\.sub2api\.success\.firewalld_port/ { sub2api_firewalld=1 }
+      /app\.sub2api\.success\.iptables_saved/ { sub2api_saved=1 }
+      /app\.sub2api\.info\.iptables_rules_written/ { sub2api_info=1 }
+      /app\.sub2api\.warn\.iptables_write_failed/ { sub2api_write_failed=1 }
+      /app\.sub2api\.warn\.iptables_not_persisted/ { sub2api_not_persisted=1 }
+      /app\.sub2api\.success\.iptables_port/ { sub2api_port=1 }
+      /app\.sub2api\.warn\.firewall_config_failed/ { sub2api_cfg_failed=1 }
+      /app\.sub2api\.warn\.no_firewall/ { sub2api_no_fw=1 }
+      END {
+        if (!(newapi_ufw && newapi_saved && newapi_info && newapi_write_failed &&
+              newapi_not_persisted && newapi_port && newapi_cfg_failed && newapi_no_fw &&
+              sub2api_ufw && sub2api_firewalld && sub2api_saved && sub2api_info &&
+              sub2api_write_failed && sub2api_not_persisted && sub2api_port &&
+              sub2api_cfg_failed && sub2api_no_fw)) {
+          print "firewall i18n keys must be registered for apps using app_configure_firewall" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' apps/newapi.sh apps/sub2api.sh
   awk '
       /open_firewall_ports\(\)/ { in_block=1; saw_ufw_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
       in_block && /if ufw allow "\$\{port_to_open\}\/tcp" >\/dev\/null 2>&1; then/ { saw_ufw_if=1 }
@@ -2951,3 +2981,5 @@ check_target_groups_cover_all_checks() {
     }
   ' "$ROOT_DIR/tools/verify.sh" "$ROOT_DIR"/tools/checks/*.sh
 }
+
+

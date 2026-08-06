@@ -243,7 +243,7 @@ i18n_register_many \
   app.sub2api.success.iptables_saved \
   "iptables rules persisted with netfilter-persistent." \
   "iptables 规则已持久化（netfilter-persistent）。" \
-  app.sub2api.info.iptables_written \
+  app.sub2api.info.iptables_rules_written \
   "iptables rules written to /etc/iptables/rules.v4." \
   "iptables 规则已写入 /etc/iptables/rules.v4。" \
   app.sub2api.warn.iptables_write_failed \
