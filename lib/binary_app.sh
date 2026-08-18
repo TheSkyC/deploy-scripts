@@ -1077,7 +1077,7 @@ bapp_update() {
   info "$(t binary_app.info.old_binary "$bak_path")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
     rm -f "$tmp_bin" 2>/dev/null || true
-    error "$(t binary_app.error.stop_service_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    error "$(t binary_app.error.stop_service_failed "$SERVICE_NAME")"
   fi
   ba_install_binary "$tmp_bin"
   if ! command systemctl daemon-reload; then
@@ -1099,7 +1099,7 @@ bapp_update() {
     fi
     if ! app_binary_restore_backup "$bak_path"; then
       warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
-      error "$(t binary_app.error.update_failed "$current" "$SERVICE_NAME" "$bak_path")"
+      error "$(t binary_app.error.update_failed "$current")"
     fi
     if systemctl start "$SERVICE_NAME"; then
       if wait_for_service "$SERVICE_NAME" 15; then
@@ -1110,7 +1110,7 @@ bapp_update() {
     else
       warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
     fi
-    error "$(t binary_app.error.update_failed "$current" "$SERVICE_NAME" "$bak_path")"
+    error "$(t binary_app.error.update_failed "$current")"
   fi
 }
 bapp_status() {
@@ -1168,12 +1168,12 @@ bapp_uninstall() {
   info "$(t binary_app.info.stop_disable "$SERVICE_NAME")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-      error "$(t binary_app.error.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      error "$(t binary_app.error.uninstall_stop_failed "$SERVICE_NAME")"
     fi
-    warn "$(t binary_app.warn.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    warn "$(t binary_app.warn.uninstall_stop_failed "$SERVICE_NAME")"
   fi
   if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
-    warn "$(t binary_app.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    warn "$(t binary_app.warn.uninstall_disable_failed "$SERVICE_NAME")"
   fi
   ba_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SERVICE_FILE"
   if ! command systemctl daemon-reload; then
