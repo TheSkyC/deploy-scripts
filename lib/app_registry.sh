@@ -9,6 +9,7 @@ DEPLOY_APP_SPECS=(
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh"
   "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh"
   "ntfy|ntfy|apps/ntfy.sh|impl/install_ntfy.sh"
+  "meilisearch|Meilisearch|apps/meilisearch.sh|impl/install_meilisearch.sh"
 )
 
 DEPLOY_APP_IDS=()
