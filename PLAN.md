@@ -89,7 +89,11 @@
 - ✅ `fix(meilisearch): derive env file path without shellcheck SC2153` — 修复 style 级 shellcheck。
 - ✅ `feat(lib): support configurable apt packages in binary install` — 新增 `BA_APT_PACKAGES` 变量（Gitea 需要系统 `git`）。
 - ✅ README 新增 “Binary App Deployments” 章节（各应用端口/默认值/示例命令）。
-- ⏳ 最终全量 `tools/verify.sh all`（含重建 dist 比对）—— 提交后运行。
+- ✅ `fix(lib): harden binary-app systemd paths, dirs, and ExecStart` — 校验 INSTALL_DIR/BIN_PATH/DATA_DIR/LOG_DIR/BACKUP_DIR/BA_READWRITE_PATHS 无空白字符且为 safe path；新目录递归 chown、既有目录非递归 chown；systemd ExecStart 正确引号；新增对应守卫检查并接入 `tools/verify.sh guards`。
+- ✅ `fix(lib): stop duplicate i18n output from excess format args` — 5 处 `t()` 调用传参多于注册消息 `%s` 数量，bash printf 会重复整条消息；已裁剪为恰好匹配。
+- ✅ `fix(frps,gitea): make managed config readable by service user` — frps.toml（600 root:root）与 gitea app.ini（640 root:root）改为 `0660 root:${SERVICE_USER}`，与 cpa_stack 约定一致，修复服务进程（以 SERVICE_USER 运行）无法读取自身配置而启动失败的问题；同步更新 app check 与 dist。
+- ✅ 审计复核：7 个二进制应用（ntfy/meilisearch/alist/filebrowser/navidrome/frps/gitea）的 lib + impl + apps + checks 全部审阅；i18n `%s` 与传参逐一比对（Python 解析器）未发现剩余不匹配。
+- ✅ 最终验证：`tools/verify.sh release`（重建 dist 比对）、`tools/verify.sh guards`、`tools/verify.sh dispatch` 均通过（仅预期内的负向控制 `fail_check` 输出）；shellcheck 与 bash -n 通过。
 
 ### 应用清单（全部默认端口）
 
