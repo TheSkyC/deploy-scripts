@@ -337,6 +337,7 @@ main() {
       check_binary_helpers_are_atomic
       check_binary_replacements_handle_failure
       check_binary_restores_validate_permissions
+      check_binary_app_systemd_paths_are_validated
       check_blog_config_persistence
       check_blog_dependency_failures_are_reported
       check_blog_enable_failures_are_reported

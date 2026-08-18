@@ -347,6 +347,22 @@ check_systemd_helper_is_atomic() {
     ' lib/service.sh dist/install_newapi.sh
 }
 
+check_binary_app_systemd_paths_are_validated() {
+  local file
+  for file in lib/binary_app.sh dist/install_ntfy.sh dist/install_meilisearch.sh \
+      dist/install_alist.sh dist/install_filebrowser.sh dist/install_navidrome.sh \
+      dist/install_frps.sh dist/install_gitea.sh; do
+    grep -Fq 'bapp_validate_no_whitespace' "$file" \
+      && grep -Fq 'binary_app.error.path_whitespace' "$file" \
+      && grep -Fq 'require_safe_path "BA_READWRITE_PATHS"' "$file" \
+      && grep -Fq 'ExecStart="${BIN_PATH}"${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}' "$file" \
+      || {
+        echo "$file must validate binary-app systemd paths (no whitespace) and quote ExecStart." >&2
+        return 1
+      }
+  done
+}
+
 check_no_unsupported_systemctl_options() {
   if grep -R -nE 'systemctl[[:space:]]+stop[[:space:]][^;&|]*--timeout' impl lib dist 2>/dev/null; then
     echo "systemctl stop does not support --timeout; use the default blocking stop behavior." >&2

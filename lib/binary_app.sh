@@ -43,6 +43,9 @@ i18n_register_many \
   binary_app.error.dir_owner \
   "Failed to set ownership %s on %s." \
   "设置 %s 的所有者为 %s 失败。" \
+  binary_app.error.path_whitespace \
+  "Path for %s must not contain whitespace: %s" \
+  "%s 的路径不能包含空白字符：%s" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -448,9 +451,20 @@ _binary_app_derive_paths() {
   LOG_FILE="${LOG_DIR}/${BA_BIN_NAME}.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
+# systemd unit directives (ExecStart, ReadWritePaths) cannot contain
+# whitespace; reject any custom path early so it cannot silently break the
+# generated unit file.
+bapp_validate_no_whitespace() {
+  local name="$1" value="$2"
+  if [[ "$value" =~ [[:space:]] ]]; then
+    error "$(t binary_app.error.path_whitespace "$name" "$value")"
+  fi
+}
+
 # Shared validators run for every binary app; apps add checks through
 # ba_validate_extra when they need more.
 bapp_validate_cfg() {
+  local attr rw_path
   app_validate_port "$PORT" "PORT"
   app_validate_domain "DOMAIN" "$DOMAIN"
   app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"
@@ -461,6 +475,15 @@ bapp_validate_cfg() {
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  for attr in INSTALL_DIR BIN_PATH DATA_DIR LOG_DIR BACKUP_DIR; do
+    bapp_validate_no_whitespace "$attr" "${!attr}"
+  done
+  if [[ -n "${BA_READWRITE_PATHS:-}" ]]; then
+    for rw_path in ${BA_READWRITE_PATHS}; do
+      require_safe_path "BA_READWRITE_PATHS" "$rw_path"
+      bapp_validate_no_whitespace "BA_READWRITE_PATHS" "$rw_path"
+    done
+  fi
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -590,14 +613,32 @@ ba_setup_user_dirs() {
   else
     info "$(t binary_app.info.user_exists "$SERVICE_USER")"
   fi
+  local -a new_dirs=() existing_dirs=()
+  local existed=false
   for d in "${dirs[@]}"; do
     require_safe_path "$(basename "$d")" "$d"
+    existed=false
+    [[ -e "$d" || -L "$d" ]] && existed=true
+    if ! mkdir -p "$d"; then
+      error "$(t binary_app.error.dir_create "$d")"
+    fi
+    if $existed; then
+      existing_dirs+=("$d")
+    else
+      new_dirs+=("$d")
+    fi
   done
-  if ! mkdir -p "${dirs[@]}"; then
-    error "$(t binary_app.error.dir_create "${dirs[*]}")"
+  # Recursively own only directories created by this deployment; pre-existing
+  # directories get non-recursive ownership so unrelated files are untouched.
+  if [[ ${#new_dirs[@]} -gt 0 ]]; then
+    if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "${new_dirs[@]}"; then
+      error "$(t binary_app.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "${new_dirs[*]}")"
+    fi
   fi
-  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "${dirs[@]}"; then
-    error "$(t binary_app.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "${dirs[*]}")"
+  if [[ ${#existing_dirs[@]} -gt 0 ]]; then
+    if ! chown "${SERVICE_USER}:${SERVICE_USER}" "${existing_dirs[@]}"; then
+      error "$(t binary_app.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "${existing_dirs[*]}")"
+    fi
   fi
   success "$(t binary_app.success.dirs "$INSTALL_DIR $DATA_DIR $LOG_DIR")"
 }
@@ -651,7 +692,7 @@ Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${DATA_DIR}
-ExecStart=${BIN_PATH}${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}
+ExecStart="${BIN_PATH}"${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}
 Restart=always
 RestartSec=5
 StartLimitInterval=60
