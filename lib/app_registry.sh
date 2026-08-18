@@ -13,6 +13,7 @@ DEPLOY_APP_SPECS=(
   "alist|Alist|apps/alist.sh|impl/install_alist.sh"
   "filebrowser|Filebrowser|apps/filebrowser.sh|impl/install_filebrowser.sh"
   "navidrome|Navidrome|apps/navidrome.sh|impl/install_navidrome.sh"
+  "frps|frps|apps/frps.sh|impl/install_frps.sh"
 )
 
 DEPLOY_APP_IDS=()

@@ -2632,6 +2632,7 @@ DEPLOY_APP_SPECS=(
   "alist|Alist|apps/alist.sh|impl/install_alist.sh"
   "filebrowser|Filebrowser|apps/filebrowser.sh|impl/install_filebrowser.sh"
   "navidrome|Navidrome|apps/navidrome.sh|impl/install_navidrome.sh"
+  "frps|frps|apps/frps.sh|impl/install_frps.sh"
 )
 
 DEPLOY_APP_IDS=()
@@ -7547,6 +7548,37 @@ i18n_register_many \
 
 APP_DESCRIPTION="$(t app.navidrome.description)"
 APP_IMPL_SCRIPT="impl/install_navidrome.sh"
+
+load_app_impl "$APP_IMPL_SCRIPT"
+__DEPLOY_APP_DEFINITION_END__
+
+__DEPLOY_APP_DEFINITION__ frps
+
+APP_ID="frps"
+APP_NAME="frps"
+
+i18n_register_many \
+  app.frps.description \
+  "frp server (frps) deployment with systemd and backups." \
+  "使用 systemd 和备份的 frp 服务端（frps）部署脚本。" \
+  app.frps.success.config_written \
+  "Server configuration written to %s." \
+  "服务端配置已写入 %s。" \
+  app.frps.error.config_write \
+  "Failed to write server configuration: %s" \
+  "服务端配置写入失败：%s。" \
+  app.frps.warn.config_dir_remove \
+  "Failed to remove configuration directory %s; clean it manually if needed." \
+  "配置目录 %s 删除失败，如需清理请手动删除。" \
+  app.frps.success.removed_config \
+  "Server configuration removed." \
+  "服务端配置已移除。" \
+  app.frps.hint.token \
+  "Client authentication token saved in %s (auth.token)." \
+  "客户端认证令牌保存在 %s（auth.token）。"
+
+APP_DESCRIPTION="$(t app.frps.description)"
+APP_IMPL_SCRIPT="impl/install_frps.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
 __DEPLOY_APP_DEFINITION_END__
@@ -16184,6 +16216,137 @@ ba_pre_start() {
     error "$(t app.navidrome.error.music_prepare "$MUSIC_DIR")"
   fi
   success "$(t app.navidrome.success.music_prepared "$MUSIC_DIR")"
+}
+
+# Thin lifecycle delegates over the shared binary-app library.
+preflight_check() {
+  bapp_preflight "$@"
+}
+
+_validate_config_values() {
+  bapp_validate_cfg
+}
+
+do_install() {
+  acquire_lock
+  bapp_install
+}
+
+do_update() {
+  acquire_lock
+  bapp_update
+}
+
+do_backup() {
+  acquire_lock
+  bapp_backup
+}
+
+do_status() {
+  bapp_status
+}
+
+do_uninstall() {
+  acquire_lock
+  bapp_uninstall
+}
+
+binary_app_bootstrap
+__DEPLOY_APP_IMPL_SCRIPT_END__
+
+__DEPLOY_APP_IMPL_SCRIPT__ install_frps_impl.sh
+#!/bin/bash
+set -euo pipefail
+umask 077
+
+# frp (https://github.com/fatedier/frp) ships a tarball containing frps,
+# frpc, and example configs; the shared binary-app library (lib/binary_app.sh)
+# provides the lifecycle and this file configures it for the frps server.
+# frps listens on a raw TCP proxy port, so the health probe checks the systemd
+# unit instead of an HTTP endpoint.
+# See PLAN.md section 2 for the verified release asset mapping.
+
+DOMAIN="${DOMAIN:-}"
+PORT="${PORT:-7000}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/frps}"
+DATA_DIR="${DATA_DIR:-/var/lib/frps}"
+LOG_DIR="${LOG_DIR:-/var/log/frps}"
+SERVICE_NAME="${SERVICE_NAME:-frps}"
+SERVICE_USER="${SERVICE_USER:-frps}"
+GITHUB_REPO="${GITHUB_REPO:-fatedier/frp}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/frps-backups}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+BA_BIN_NAME="frps"
+BA_ARCHIVE_TYPE="tar.gz"
+BA_USE_ENV_FILE=0
+BA_FIREWALL=1
+BA_SERVICE_DESCRIPTION="frp server (frps)"
+BA_SERVICE_ARGS="-c /etc/frps/frps.toml"
+CONFIG_KEYS=(
+  DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+)
+
+# Upstream embeds the version without the leading v in the asset name.
+ba_asset_name() {
+  local version="$1"
+  printf 'frp_%s_linux_%s.tar.gz\n' "${version#v}" "$BA_ARCH"
+}
+
+# Write the managed frps server configuration under /etc/frps.  The auth token
+# is generated on first install and preserved on any reinstall.
+ba_write_config() {
+  local config_dir="/etc/frps"
+  local config_file="${config_dir}/frps.toml"
+  local token="" line=""
+  if [[ -f "$config_file" ]]; then
+    line="$(grep -E '^auth\.token' "$config_file" 2>/dev/null | head -1 || true)"
+    if [[ -n "$line" ]]; then
+      token="${line#*\"}"
+      token="${token%\"*}"
+    fi
+  fi
+  if [[ -z "$token" ]]; then
+    token="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true)"
+    [[ -n "$token" ]] || token="frps-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
+  fi
+  if ! atomic_write_file "$config_file" 644 root:root <<EOF
+bindAddr = "0.0.0.0"
+bindPort = ${PORT}
+auth.token = "${token}"
+EOF
+  then
+    error "$(t app.frps.error.config_write "$config_file")"
+  fi
+  success "$(t app.frps.success.config_written "$config_file")"
+}
+
+# Remove the managed server configuration during uninstall.
+ba_uninstall_extra() {
+  local config_dir="/etc/frps"
+  local config_file="${config_dir}/frps.toml"
+  ba_remove_file_or_error "$config_file" "FRPS_CONFIG_FILE"
+  if [[ -d "$config_dir" ]] && [[ -z "$(ls -A "$config_dir" 2>/dev/null)" ]]; then
+    if ! safe_rm_dir "$config_dir" "FRPS_CONFIG_DIR"; then
+      warn "$(t app.frps.warn.config_dir_remove "$config_dir")"
+    fi
+  fi
+  success "$(t app.frps.success.removed_config)"
+}
+
+# frps has no HTTP endpoint; check the systemd unit state instead.
+bapp_health_probe() {
+  if systemctl is-active --quiet "$SERVICE_NAME"; then
+    success "$(t binary_app.success.started "$SERVICE_NAME")"
+    return 0
+  fi
+  warn "$(t binary_app.warn.health "inactive")"
+  warn "$(t binary_app.warn.debug_command "$SERVICE_NAME")"
+  return 1
+}
+
+ba_summary_extra() {
+  echo -e "  ${BOLD}$(t app.frps.hint.token "/etc/frps/frps.toml")${NC}"
 }
 
 # Thin lifecycle delegates over the shared binary-app library.
