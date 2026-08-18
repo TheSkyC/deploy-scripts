@@ -2191,7 +2191,12 @@ bapp_install() {
   if ! apt-get update -qq; then
     error "$(t binary_app.error.apt_update)"
   fi
-  if ! apt-get install -y -qq curl ca-certificates; then
+  local apt_deps="curl ca-certificates"
+  if [[ -n "${BA_APT_PACKAGES:-}" ]]; then
+    apt_deps="${apt_deps} ${BA_APT_PACKAGES}"
+  fi
+  # shellcheck disable=SC2086
+  if ! apt-get install -y -qq $apt_deps; then
     error "$(t binary_app.error.deps_install)"
   fi
   success "$(t binary_app.success.deps)"
