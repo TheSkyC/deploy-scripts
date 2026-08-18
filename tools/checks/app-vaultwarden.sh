@@ -1101,3 +1101,40 @@ check_vaultwarden_webvault_archives_are_validated() {
       ' "$file"
   done
 }
+
+check_vaultwarden_legacy_extract_tool_config_is_usable() {
+  local tmp_dir conf
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/deploy.conf"
+  printf 'EXTRACT_TOOL_COMMIT=main\nEXTRACT_TOOL_SHA256=""\n' > "$conf"
+
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+
+  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/impl/install_vaultwarden.sh"
+    load_config_file "$2" "${CONFIG_KEYS[@]}"
+    _VW_DERIVE_PATHS
+    _validate_config_values
+    [[ "$EXTRACT_TOOL_COMMIT" == "4273b2796da5055e431b4db5efe29a71bba12b45" ]] \
+      || { echo "legacy EXTRACT_TOOL_COMMIT=main was not migrated: [$EXTRACT_TOOL_COMMIT]" >&2; exit 1; }
+    [[ "$EXTRACT_TOOL_SHA256" == "a58f4995f568d66d9908649d4df7fc8c36f72096ca5e01f4c2c4291285125685" ]] \
+      || { echo "empty EXTRACT_TOOL_SHA256 clobbered the pinned default: [$EXTRACT_TOOL_SHA256]" >&2; exit 1; }
+    EXTRACT_TOOL_COMMIT="4273b2796da5055e431b4db5efe29a71bba12b45"
+    _VW_DERIVE_PATHS
+    [[ "$EXTRACT_TOOL_COMMIT" == "4273b2796da5055e431b4db5efe29a71bba12b45" ]] \
+      || { echo "an explicitly pinned commit was unexpectedly rewritten: [$EXTRACT_TOOL_COMMIT]" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR" "$conf"
+
+  rm -rf "$tmp_dir"
+}

@@ -498,6 +498,7 @@ main() {
       check_vaultwarden_enable_failures_are_reported
       check_vaultwarden_env_file_is_atomic
       check_vaultwarden_extract_tool_is_pinned_and_verified
+      check_vaultwarden_legacy_extract_tool_config_is_usable
       check_vaultwarden_fail2ban_restart_failures_are_reported
       check_vaultwarden_find_head_pipelines_are_nonfatal
       check_vaultwarden_install_cleanup_reports_systemctl_failures

@@ -8940,6 +8940,12 @@ CONFIG_KEYS=(
 )
 _VW_DERIVE_PATHS() {
   VW_BIN="${VW_BIN_DIR}/vaultwarden"
+  # Legacy configs saved when EXTRACT_TOOL_COMMIT defaulted to the unpinned
+  # "main" ref keep that value; migrate it to the pinned default so the
+  # pinned SHA verification stays consistent.
+  if [[ "${EXTRACT_TOOL_COMMIT:-}" == "main" ]]; then
+    EXTRACT_TOOL_COMMIT="4273b2796da5055e431b4db5efe29a71bba12b45"
+  fi
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
 APP_CONFIG_DERIVE_HOOK=_VW_DERIVE_PATHS
