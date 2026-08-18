@@ -283,6 +283,8 @@ check_app_localized_descriptions() {
   expect_app_description tickflow zh "TickFlow 股票分析面板的 Docker Compose 部署脚本。"
   expect_app_description cpa_stack en "Native CLIProxyAPI (CPA) and CPA Manager Plus deployment with systemd, Nginx, HTTPS, backups, and diagnostics."
   expect_app_description cpa_stack zh "使用 systemd、Nginx、HTTPS、备份和诊断部署原生 CLIProxyAPI（CPA）与 CPA Manager Plus。"
+  expect_app_description ntfy en "Push notification service deployment with systemd and backups."
+  expect_app_description ntfy zh "使用 systemd 和备份的推送通知服务部署脚本。"
 }
 check_no_hardcoded_chinese_impl() {
   if LC_ALL=C.UTF-8 grep -R -nP '[\p{Han}]' impl; then

@@ -8,6 +8,7 @@ DEPLOY_APP_SPECS=(
   "blog|Hugo Blog|apps/blog.sh|impl/install_blog.sh"
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh"
   "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh"
+  "ntfy|ntfy|apps/ntfy.sh|impl/install_ntfy.sh"
 )
 
 DEPLOY_APP_IDS=()
