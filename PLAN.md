@@ -79,24 +79,34 @@
 - i18n：全部消息走 `t` + `binary_app.*` 键（中英双语，`i18n_register_many` 注册于库文件顶部）；`impl/` 不得含硬编码中文；注释一律英文。
 - 路径默认值必须是 safe path（`is_safe_path` 拒绝 `/opt`、`/var`、`/srv` 顶层；必须 `/opt/<app>`、`/var/lib/<app>` 这类二级路径）。
 
-## 4. 当前进度（2026-08-18 快照，随工作实时更新）
+## 4. 当前进度（2026-08-19 快照，随工作实时更新）
 
 ### 已完成并提交
 
 - ✅ `feat(lib): add shared binary app lifecycle` — `lib/binary_app.sh`（约 1200 行；i18n 全量注册 + 生命周期函数 + hook 机制）+ `lib/core.sh` 引用顺序 + `tools/build-release.sh` 打包库 + 随 verify 重建 `dist/*.sh`。
 - ✅ `fix(lib): repair i18n block continuation strings` — 修复 i18n 块续行粘连缺陷。
-- ✅ `feat(ntfy): ...` — ntfy 已实现并提交（端口 2586，`/etc/ntfy/server.yml` 原子写入）。
-- ✅ `feat(meilisearch): ...` — meilisearch 已实现并提交（裸二进制 aarch64 命名，MEILI 环境文件 + 保留 master key）。
+- ✅ `feat(ntfy): ...` / `feat(meilisearch): ...` / `feat(alist): ...` / `feat(filebrowser): ...` / `feat(navidrome): ...` / `feat(frps): ...` / `feat(gitea): ...` — 七个二进制应用全部实现并逐个提交（apps/impl/bin/wrapper/registry/checks + 重建 dist）。
 - ✅ `fix(meilisearch): derive env file path without shellcheck SC2153` — 修复 style 级 shellcheck。
-- ✅ `feat(alist): ...` — alist 已实现并提交（`server --data ${DATA_DIR}`）。
-- ✅ `feat(filebrowser): ...` — filebrowser 已实现并提交（FB_ROOT 就绪 + READWRITE_PATHS）。
-- ✅ `tools/verify.sh all`（全量：syntax + shellcheck + release + dispatch + guards + 全部 check）已完整通过。
+- ✅ `feat(lib): support configurable apt packages in binary install` — 新增 `BA_APT_PACKAGES` 变量（Gitea 需要系统 `git`）。
+- ✅ README 新增 “Binary App Deployments” 章节（各应用端口/默认值/示例命令）。
+- ⏳ 最终全量 `tools/verify.sh all`（含重建 dist 比对）—— 提交后运行。
 
-### 当前工作区状态
+### 应用清单（全部默认端口）
 
-- 分支 `codex/script-audit-optimizations`，所有实现同 commit 同步 dist。
-- 下一步：navidrome / frps / gitea（每个一个 feat commit；gitea 若复杂则跳过）。
-- 最后：README 更新 + 最终全量 verify。
+| 应用 | 端口 | 关键点 |
+|---|---|---|
+| ntfy | 2586 | `/etc/ntfy/server.yml` |
+| meilisearch | 7700 | 裸二进制 aarch64 命名；`/etc/meilisearch.env`（保留 master key） |
+| alist | 5244 | `server --data ${DATA_DIR}` |
+| filebrowser | 8081 | `FB_ROOT`（默认 `/srv/filebrowser`） |
+| navidrome | 4533 | `ND_*` env；`MUSIC_DIR`（默认 `/srv/music`） |
+| frps | 7000 | `/etc/frps/frps.toml` + auth.token；systemd 健康检查 |
+| gitea | 3000 | 裸二进制；`BA_APT_PACKAGES="git"`；`/etc/gitea/app.ini` |
+
+### 后续（非本轮必需）
+
+- miniflux / gotify / adguard / minio / listmonk / syncthing / beszel 未纳入本轮队列（性价比未排到；miniflux 资产未核实）。
+- gatus 已核实无二进制资产，明确跳过。
 
 ## 5. 提交计划（粒度）
 

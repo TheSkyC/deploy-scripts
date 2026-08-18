@@ -60,6 +60,43 @@ By default the script enables CPA remote management (`CPA_ALLOW_REMOTE=true`) so
 The script downloads verified native release archives, enables CPA usage publishing for CPAMP monitoring, stores CPAMP secrets in a root-only systemd environment file, creates a consistent backup, and supports `status`, `doctor`, `update`, `backup`, and safe uninstall. OAuth login is intentionally a manual post-install operation because provider flows can require localhost callbacks or device-code authorization.
 
 Use `CPA_STACK_COMPONENT=cpa` or `CPA_STACK_COMPONENT=cpamp` with `update` to update one component; the default is `all`.
+## Binary App Deployments
+
+The following self-hosted services ship GitHub-release binaries and are deployed
+through the shared binary-app lifecycle (`lib/binary_app.sh`), which installs
+the release, sets up a systemd service, backups, firewall rules, and logrotate,
+with `install`, `update`, `backup`, `status`, and safe `uninstall` actions:
+
+| App | Default port | Notes |
+|---|---|---|
+| ntfy | 2586 | Push notification server; config at `/etc/ntfy/server.yml`. |
+| Meilisearch | 7700 | Search engine; admin key in `/etc/meilisearch.env` (`MEILI_MASTER_KEY`). |
+| Alist | 5244 | File listing service; data under `/var/lib/alist`. |
+| Filebrowser | 8081 | Web file manager; served root defaults to `/srv/filebrowser` (`FB_ROOT`). |
+| Navidrome | 4533 | Music server; music folder defaults to `/srv/music` (`MUSIC_DIR`). |
+| frps | 7000 | frp server; config at `/etc/frps/frps.toml` (client auth token preserved). |
+| Gitea | 3000 | Git hosting; config at `/etc/gitea/app.ini`; installs the system `git` package. |
+
+These apps can be managed through the central scheduler or directly:
+
+```bash
+sudo bash deploy.sh ntfy install
+sudo bash install_meilisearch.sh status
+sudo DEPLOY_LANG=zh bash dist/install_gitea.sh update
+```
+
+Defaults can be overridden per run, for example:
+
+```bash
+sudo PORT=8088 FB_ROOT=/srv/files bash install_filebrowser.sh install
+sudo MUSIC_DIR=/mnt/music bash install_navidrome.sh install
+```
+
+For binary apps, `DEPLOY_ASSUME_YES=1` confirms uninstall without prompts while
+keeping data, config, install directories, and backups by default; add
+`DEPLOY_DELETE_DATA=1` or `DEPLOY_DELETE_BACKUP=1` only when those removals are
+intended.
+
 ## Localization
 
 English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework messages and localized application messages for the bundled scripts.
