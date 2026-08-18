@@ -295,6 +295,8 @@ check_app_localized_descriptions() {
   expect_app_description navidrome zh "使用 systemd 和备份的 Navidrome 音乐服务器部署脚本。"
   expect_app_description frps en "frp server (frps) deployment with systemd and backups."
   expect_app_description frps zh "使用 systemd 和备份的 frp 服务端（frps）部署脚本。"
+  expect_app_description gitea en "Gitea git server deployment with systemd and backups."
+  expect_app_description gitea zh "使用 systemd 和备份的 Gitea 代码托管服务部署脚本。"
 }
 check_no_hardcoded_chinese_impl() {
   if LC_ALL=C.UTF-8 grep -R -nP '[\p{Han}]' impl; then

@@ -14,6 +14,7 @@ source tools/checks/app-cpa-stack.sh
 source tools/checks/app-cyberstrikeai.sh
 source tools/checks/app-filebrowser.sh
 source tools/checks/app-frps.sh
+source tools/checks/app-gitea.sh
 source tools/checks/app-navidrome.sh
 source tools/checks/app-newapi.sh
 source tools/checks/app-ntfy.sh
@@ -535,6 +536,9 @@ main() {
       check_ntfy_uses_shared_binary_lifecycle
       check_ntfy_release_asset_mapping
       check_ntfy_config_is_managed_atomically
+      check_gitea_uses_shared_binary_lifecycle
+      check_gitea_release_asset_mapping
+      check_gitea_config_is_managed_atomically
       check_frps_uses_shared_binary_lifecycle
       check_frps_release_asset_mapping
       check_frps_config_is_managed_atomically

@@ -2192,7 +2192,12 @@ bapp_install() {
   if ! apt-get update -qq; then
     error "$(t binary_app.error.apt_update)"
   fi
-  if ! apt-get install -y -qq curl ca-certificates; then
+  local apt_deps="curl ca-certificates"
+  if [[ -n "${BA_APT_PACKAGES:-}" ]]; then
+    apt_deps="${apt_deps} ${BA_APT_PACKAGES}"
+  fi
+  # shellcheck disable=SC2086
+  if ! apt-get install -y -qq $apt_deps; then
     error "$(t binary_app.error.deps_install)"
   fi
   success "$(t binary_app.success.deps)"
@@ -2633,6 +2638,7 @@ DEPLOY_APP_SPECS=(
   "filebrowser|Filebrowser|apps/filebrowser.sh|impl/install_filebrowser.sh"
   "navidrome|Navidrome|apps/navidrome.sh|impl/install_navidrome.sh"
   "frps|frps|apps/frps.sh|impl/install_frps.sh"
+  "gitea|Gitea|apps/gitea.sh|impl/install_gitea.sh"
 )
 
 DEPLOY_APP_IDS=()
@@ -7579,6 +7585,37 @@ i18n_register_many \
 
 APP_DESCRIPTION="$(t app.frps.description)"
 APP_IMPL_SCRIPT="impl/install_frps.sh"
+
+load_app_impl "$APP_IMPL_SCRIPT"
+__DEPLOY_APP_DEFINITION_END__
+
+__DEPLOY_APP_DEFINITION__ gitea
+
+APP_ID="gitea"
+APP_NAME="Gitea"
+
+i18n_register_many \
+  app.gitea.description \
+  "Gitea git server deployment with systemd and backups." \
+  "使用 systemd 和备份的 Gitea 代码托管服务部署脚本。" \
+  app.gitea.success.config_written \
+  "Server configuration written to %s." \
+  "服务端配置已写入 %s。" \
+  app.gitea.error.config_write \
+  "Failed to write server configuration: %s" \
+  "服务端配置写入失败：%s。" \
+  app.gitea.warn.config_dir_remove \
+  "Failed to remove configuration directory %s; clean it manually if needed." \
+  "配置目录 %s 删除失败，如需清理请手动删除。" \
+  app.gitea.success.removed_config \
+  "Server configuration removed." \
+  "服务端配置已移除。" \
+  app.gitea.hint.admin_create \
+  "Create an admin user with: gitea admin create-user --admin --config /etc/gitea/app.ini" \
+  "创建管理员账号：gitea admin create-user --admin --config /etc/gitea/app.ini"
+
+APP_DESCRIPTION="$(t app.gitea.description)"
+APP_IMPL_SCRIPT="impl/install_gitea.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
 __DEPLOY_APP_DEFINITION_END__
@@ -16347,6 +16384,137 @@ bapp_health_probe() {
 
 ba_summary_extra() {
   echo -e "  ${BOLD}$(t app.frps.hint.token "/etc/frps/frps.toml")${NC}"
+}
+
+# Thin lifecycle delegates over the shared binary-app library.
+preflight_check() {
+  bapp_preflight "$@"
+}
+
+_validate_config_values() {
+  bapp_validate_cfg
+}
+
+do_install() {
+  acquire_lock
+  bapp_install
+}
+
+do_update() {
+  acquire_lock
+  bapp_update
+}
+
+do_backup() {
+  acquire_lock
+  bapp_backup
+}
+
+do_status() {
+  bapp_status
+}
+
+do_uninstall() {
+  acquire_lock
+  bapp_uninstall
+}
+
+binary_app_bootstrap
+__DEPLOY_APP_IMPL_SCRIPT_END__
+
+__DEPLOY_APP_IMPL_SCRIPT__ install_gitea_impl.sh
+#!/bin/bash
+set -euo pipefail
+umask 077
+
+# Gitea (https://github.com/go-gitea/gitea) ships a bare, versioned binary
+# named gitea-<version>-linux-<arch> and needs the system git binary for repo
+# operations.  The shared binary-app library (lib/binary_app.sh) provides the
+# lifecycle; this file configures it and adds Gitea-specific hooks.
+# See PLAN.md section 2 for the verified release asset mapping.
+
+DOMAIN="${DOMAIN:-}"
+PORT="${PORT:-3000}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/gitea}"
+DATA_DIR="${DATA_DIR:-/var/lib/gitea}"
+LOG_DIR="${LOG_DIR:-/var/log/gitea}"
+SERVICE_NAME="${SERVICE_NAME:-gitea}"
+SERVICE_USER="${SERVICE_USER:-gitea}"
+GITHUB_REPO="${GITHUB_REPO:-go-gitea/gitea}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/gitea-backups}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+BA_BIN_NAME="gitea"
+BA_ARCHIVE_TYPE="none"
+BA_APT_PACKAGES="git"
+BA_USE_ENV_FILE=0
+BA_FIREWALL=1
+BA_SERVICE_DESCRIPTION="Gitea git server"
+BA_SERVICE_ARGS="web --config /etc/gitea/app.ini --work-path ${DATA_DIR}"
+BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
+BA_HEALTH_CODES="^(200|301|302|403)$"
+CONFIG_KEYS=(
+  DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+)
+
+# Upstream embeds the version without the leading v in the binary name.
+ba_asset_name() {
+  local version="$1"
+  printf 'gitea-%s-linux-%s\n' "${version#v}" "$BA_ARCH"
+}
+
+# Write the managed Gitea configuration under /etc/gitea.
+ba_write_config() {
+  local config_dir="/etc/gitea"
+  local config_file="${config_dir}/app.ini"
+  local server_name="${DOMAIN:-localhost}"
+  if ! atomic_write_file "$config_file" 640 root:root <<EOF
+RUN_USER = ${SERVICE_USER}
+RUN_MODE = prod
+
+[server]
+APP_DATA_PATH = ${DATA_DIR}
+PROTOCOL = http
+HTTP_ADDR = 0.0.0.0
+HTTP_PORT = ${PORT}
+DOMAIN = ${server_name}
+ROOT_URL = http://${server_name}:${PORT}/
+DISABLE_SSH = true
+LFS_START_SERVER = false
+
+[database]
+DB_TYPE = sqlite
+PATH = ${DATA_DIR}/gitea.db
+
+[service]
+DISABLE_REGISTRATION = false
+
+[log]
+MODE = console
+LEVEL = Info
+EOF
+  then
+    error "$(t app.gitea.error.config_write "$config_file")"
+  fi
+  success "$(t app.gitea.success.config_written "$config_file")"
+}
+
+# Remove the managed server configuration during uninstall.
+ba_uninstall_extra() {
+  local config_dir="/etc/gitea"
+  local config_file="${config_dir}/app.ini"
+  ba_remove_file_or_error "$config_file" "GITEA_CONFIG_FILE"
+  if [[ -d "$config_dir" ]] && [[ -z "$(ls -A "$config_dir" 2>/dev/null)" ]]; then
+    if ! safe_rm_dir "$config_dir" "GITEA_CONFIG_DIR"; then
+      warn "$(t app.gitea.warn.config_dir_remove "$config_dir")"
+    fi
+  fi
+  success "$(t app.gitea.success.removed_config)"
+}
+
+# Remind users to create the first admin account after install.
+ba_summary_extra() {
+  echo -e "  ${BOLD}$(t app.gitea.hint.admin_create)${NC}"
 }
 
 # Thin lifecycle delegates over the shared binary-app library.

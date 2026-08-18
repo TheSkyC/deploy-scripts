@@ -14,6 +14,7 @@ DEPLOY_APP_SPECS=(
   "filebrowser|Filebrowser|apps/filebrowser.sh|impl/install_filebrowser.sh"
   "navidrome|Navidrome|apps/navidrome.sh|impl/install_navidrome.sh"
   "frps|frps|apps/frps.sh|impl/install_frps.sh"
+  "gitea|Gitea|apps/gitea.sh|impl/install_gitea.sh"
 )
 
 DEPLOY_APP_IDS=()
