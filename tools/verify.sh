@@ -349,6 +349,7 @@ main() {
       check_bundled_impl_temp_names_are_random
       check_certbot_diagnostics_use_stderr
       check_config_crlf_handling
+      check_config_empty_values_keep_defaults
       check_config_sanitization_behavior
       check_config_key_shape_locale_independent
       check_config_reserved_keys_are_rejected

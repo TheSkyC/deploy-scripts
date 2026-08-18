@@ -521,6 +521,11 @@ load_config_file() {
         continue
         ;;
     esac
+    # A blank value means "not configured": keep the script default instead of
+    # clobbering it. Older configs can store empty placeholders for keys that
+    # later gained pinned defaults (e.g. EXTRACT_TOOL_SHA256); applying them
+    # would make validation fail.
+    [[ -z "$value" ]] && continue
     printf -v "$key" '%s' "$value"
   done < "$conf_file"
 }

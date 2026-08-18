@@ -481,3 +481,37 @@ STUB
 
   rm -rf "$tmp_dir"
 }
+
+check_config_empty_values_keep_defaults() {
+  local tmp_dir conf
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/deploy.conf"
+  printf 'FOO=""\nBAR=   \nBAZ=nonempty\n' > "$conf"
+
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+
+  PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/config.sh"
+    FOO="default-foo"
+    BAR="default-bar"
+    BAZ="default-baz"
+    load_config_file "$2" FOO BAR BAZ
+    [[ "$FOO" == "default-foo" ]] || { echo "empty quoted config value clobbered the script default: [$FOO]" >&2; exit 1; }
+    [[ "$BAR" == "default-bar" ]] || { echo "blank config value clobbered the script default: [$BAR]" >&2; exit 1; }
+    [[ "$BAZ" == "nonempty" ]] || { echo "non-empty config value was not loaded: [$BAZ]" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR" "$conf"
+
+  rm -rf "$tmp_dir"
+}
