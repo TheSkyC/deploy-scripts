@@ -12,6 +12,7 @@ DEPLOY_APP_SPECS=(
   "meilisearch|Meilisearch|apps/meilisearch.sh|impl/install_meilisearch.sh"
   "alist|Alist|apps/alist.sh|impl/install_alist.sh"
   "filebrowser|Filebrowser|apps/filebrowser.sh|impl/install_filebrowser.sh"
+  "navidrome|Navidrome|apps/navidrome.sh|impl/install_navidrome.sh"
 )
 
 DEPLOY_APP_IDS=()

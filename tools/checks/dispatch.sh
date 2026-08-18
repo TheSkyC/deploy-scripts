@@ -291,6 +291,8 @@ check_app_localized_descriptions() {
   expect_app_description alist zh "使用 systemd 和备份的 Alist 文件列表服务部署脚本。"
   expect_app_description filebrowser en "Filebrowser web file manager deployment with systemd and backups."
   expect_app_description filebrowser zh "使用 systemd 和备份的 Filebrowser 网页文件管理器部署脚本。"
+  expect_app_description navidrome en "Navidrome music server deployment with systemd and backups."
+  expect_app_description navidrome zh "使用 systemd 和备份的 Navidrome 音乐服务器部署脚本。"
 }
 check_no_hardcoded_chinese_impl() {
   if LC_ALL=C.UTF-8 grep -R -nP '[\p{Han}]' impl; then
