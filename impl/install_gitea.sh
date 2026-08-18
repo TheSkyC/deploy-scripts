@@ -43,7 +43,7 @@ ba_write_config() {
   local config_dir="/etc/gitea"
   local config_file="${config_dir}/app.ini"
   local server_name="${DOMAIN:-localhost}"
-  if ! atomic_write_file "$config_file" 640 root:root <<EOF
+  if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
 RUN_USER = ${SERVICE_USER}
 RUN_MODE = prod
 

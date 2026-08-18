@@ -2992,7 +2992,7 @@ ba_write_config() {
     token="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true)"
     [[ -n "$token" ]] || token="frps-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
-  if ! atomic_write_file "$config_file" 600 root:root <<EOF
+  if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
 bindAddr = "0.0.0.0"
 bindPort = ${PORT}
 auth.token = "${token}"
