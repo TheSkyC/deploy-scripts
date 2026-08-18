@@ -2928,7 +2928,7 @@ ba_asset_name() {
 # Write the managed environment file.  The master key is generated on first
 # install and preserved on any reinstall so existing data stays accessible.
 ba_write_config() {
-  local env_file="$ENV_FILE" key=""
+  local env_file="/etc/${SERVICE_NAME}.env" key=""
   if [[ -f "$env_file" ]]; then
     key="$(grep -E '^MEILI_MASTER_KEY=' "$env_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
   fi
@@ -2949,7 +2949,7 @@ EOF
 
 # Point users at the admin key location after install.
 ba_summary_extra() {
-  echo -e "  ${BOLD}$(t app.meilisearch.hint.master_key "$ENV_FILE")${NC}"
+  echo -e "  ${BOLD}$(t app.meilisearch.hint.master_key "/etc/${SERVICE_NAME}.env")${NC}"
 }
 
 # Thin lifecycle delegates over the shared binary-app library.
