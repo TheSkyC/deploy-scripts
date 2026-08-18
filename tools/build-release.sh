@@ -15,6 +15,7 @@ COMMON_RELEASE_LIB_FILES=(
   lib/service.sh
   lib/network.sh
   lib/app.sh
+  lib/binary_app.sh
 )
 
 source "${ROOT_DIR}/lib/app_registry.sh"
