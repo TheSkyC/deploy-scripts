@@ -12,6 +12,7 @@ source tools/checks/app-blog.sh
 source tools/checks/app-alist.sh
 source tools/checks/app-cpa-stack.sh
 source tools/checks/app-cyberstrikeai.sh
+source tools/checks/app-filebrowser.sh
 source tools/checks/app-newapi.sh
 source tools/checks/app-ntfy.sh
 source tools/checks/app-meilisearch.sh
@@ -521,6 +522,9 @@ main() {
       check_vaultwarden_webvault_restore_cleans_partial
       check_vaultwarden_webvault_update_warnings_are_actionable
       check_vaultwarden_workdir_cleanup_traps_are_nonfatal
+      check_filebrowser_uses_shared_binary_lifecycle
+      check_filebrowser_release_asset_mapping
+      check_filebrowser_root_directory_is_prepared
       check_alist_uses_shared_binary_lifecycle
       check_alist_release_asset_mapping
       check_meilisearch_uses_shared_binary_lifecycle
