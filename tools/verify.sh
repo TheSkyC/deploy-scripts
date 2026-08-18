@@ -9,6 +9,7 @@ cd "$ROOT_DIR"
 # Check definitions are split into per-area modules under tools/checks/;
 # each module defines only check_* functions and is sourced before main().
 source tools/checks/app-blog.sh
+source tools/checks/app-alist.sh
 source tools/checks/app-cpa-stack.sh
 source tools/checks/app-cyberstrikeai.sh
 source tools/checks/app-newapi.sh
@@ -520,6 +521,8 @@ main() {
       check_vaultwarden_webvault_restore_cleans_partial
       check_vaultwarden_webvault_update_warnings_are_actionable
       check_vaultwarden_workdir_cleanup_traps_are_nonfatal
+      check_alist_uses_shared_binary_lifecycle
+      check_alist_release_asset_mapping
       check_meilisearch_uses_shared_binary_lifecycle
       check_meilisearch_release_asset_mapping
       check_meilisearch_config_is_managed_atomically

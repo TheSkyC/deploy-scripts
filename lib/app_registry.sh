@@ -10,6 +10,7 @@ DEPLOY_APP_SPECS=(
   "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh"
   "ntfy|ntfy|apps/ntfy.sh|impl/install_ntfy.sh"
   "meilisearch|Meilisearch|apps/meilisearch.sh|impl/install_meilisearch.sh"
+  "alist|Alist|apps/alist.sh|impl/install_alist.sh"
 )
 
 DEPLOY_APP_IDS=()
