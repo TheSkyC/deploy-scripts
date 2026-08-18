@@ -66,7 +66,7 @@ __deploy_i18n_message() {
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
     common.quit) echo "quit|退出" ;;
     common.selection_prompt) echo "Selection [1-7/q]:|请输入选项 [1-7/q]：" ;;
-    common.usage) echo "Usage: sudo bash %s [install|update|backup|restore|status|status-json|doctor|uninstall]|用法：sudo bash %s [install|update|backup|restore|status|status-json|doctor|uninstall]" ;;
+    common.usage) echo "Usage: sudo bash %s [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
     config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
     config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
