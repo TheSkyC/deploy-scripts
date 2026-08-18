@@ -1500,7 +1500,7 @@ i18n_register_many \
   "系统用户 %s 已创建。" \
   binary_app.success.deps \
   "Required packages installed." \
-  "依赖包已安装。"i18n_register_many \
+  "依赖包已安装。"\
   binary_app.step.latest \
   "Querying the latest release" \
   "查询最新版本" \
@@ -1656,7 +1656,7 @@ i18n_register_many \
   "已清理 %s 个旧二进制备份。" \
   binary_app.warn.cleanup_old_failed \
   "Failed to remove old binary backup: %s" \
-  "删除旧二进制备份失败：%s"i18n_register_many \
+  "删除旧二进制备份失败：%s"\
   binary_app.error.data_missing \
   "Data directory does not exist (%s); backup aborted." \
   "数据目录不存在（%s），备份中止。" \
@@ -1827,7 +1827,7 @@ i18n_register_many \
   "实时查看日志" \
   binary_app.summary.restart \
   "restart service" \
-  "重启服务"i18n_register_many \
+  "重启服务"\
   binary_app.success.ufw_port \
   "ufw allows port %s." \
   "ufw 已放行端口 %s。" \
