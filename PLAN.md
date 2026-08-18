@@ -79,30 +79,24 @@
 - i18n：全部消息走 `t` + `binary_app.*` 键（中英双语，`i18n_register_many` 注册于库文件顶部）；`impl/` 不得含硬编码中文；注释一律英文。
 - 路径默认值必须是 safe path（`is_safe_path` 拒绝 `/opt`、`/var`、`/srv` 顶层；必须 `/opt/<app>`、`/var/lib/<app>` 这类二级路径）。
 
-## 4. 当前进度（2026-08-18 快照）
+## 4. 当前进度（2026-08-18 快照，随工作实时更新）
 
-### 已完成
+### 已完成并提交
 
-- ✅ `lib/binary_app.sh` 创建（约 1200 行；i18n 全量注册 + 生命周期函数 + hook 机制）。
-- ✅ 修复初始语法错误：`}` 与后续 token 粘连（如 `}# comment`、`}do_install() {`）导致 bash 把 `}` 吞进注释/函数名 —— 已拆分。
-- ✅ 命名避让全部完成（见 3.1）。
-- ✅ `APP_CONFIG_DERIVE_HOOK` 移入 `binary_app_bootstrap`；库内 `acquire_lock` 移除（由薄包装层持有）。
-- ✅ `lib/core.sh` 在 `app.sh` 之后 `source binary_app.sh`；`tools/build-release.sh` 的 `COMMON_RELEASE_LIB_FILES` 追加 `lib/binary_app.sh`。
-- ✅ dist 已用 `DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0` 重建（8 个 dist 脚本各 +1199 行左右）。
-- ✅ verify 目标状态：
-  - `syntax` ✅（通过）
-  - `shellcheck` ✅（通过）
-  - `dispatch` ✅（通过）
-  - `guards` ✅（通过；输出中的 `check failed: fail_check` 是 harness 自带的反向自测，rc=0）
-  - `release` ⏳ 显示 dist 过期 —— 因为尚未提交，提交后即通过
-- ⏳ 尚未提交任何 commit（下一步立即提交）。
+- ✅ `feat(lib): add shared binary app lifecycle` — `lib/binary_app.sh`（约 1200 行；i18n 全量注册 + 生命周期函数 + hook 机制）+ `lib/core.sh` 引用顺序 + `tools/build-release.sh` 打包库 + 随 verify 重建 `dist/*.sh`。
+- ✅ `fix(lib): repair i18n block continuation strings` — 修复 i18n 块续行粘连缺陷。
+- ✅ `feat(ntfy): ...` — ntfy 已实现并提交（端口 2586，`/etc/ntfy/server.yml` 原子写入）。
+- ✅ `feat(meilisearch): ...` — meilisearch 已实现并提交（裸二进制 aarch64 命名，MEILI 环境文件 + 保留 master key）。
+- ✅ `fix(meilisearch): derive env file path without shellcheck SC2153` — 修复 style 级 shellcheck。
+- ✅ `feat(alist): ...` — alist 已实现并提交（`server --data ${DATA_DIR}`）。
+- ✅ `feat(filebrowser): ...` — filebrowser 已实现并提交（FB_ROOT 就绪 + READWRITE_PATHS）。
+- ✅ `tools/verify.sh all`（全量：syntax + shellcheck + release + dispatch + guards + 全部 check）已完整通过。
 
-### 待办（严格按提交粒度，见 §5）
+### 当前工作区状态
 
-1. 提交库里程碑（commit 1）。
-2. ntfy → meilisearch/alist/filebrowser → navidrome/frps/gitea（每个一个 feat commit）。
-3. README 文档更新。
-4. 最终全量 verify（`tools/verify.sh` 完整跑通）。
+- 分支 `codex/script-audit-optimizations`，所有实现同 commit 同步 dist。
+- 下一步：navidrome / frps / gitea（每个一个 feat commit；gitea 若复杂则跳过）。
+- 最后：README 更新 + 最终全量 verify。
 
 ## 5. 提交计划（粒度）
 
