@@ -36,8 +36,9 @@
   1. ntfy（最简单、配置最少）
   2. meilisearch / alist / filebrowser
   3. navidrome / frps / gitea（gitea 若复杂度失控则跳过）
+  4. gotify（zip 发行包；使用环境变量配置）
 - **已跳过**：gatus —— 已核实其 GitHub release 无任何二进制资产（expanded_assets 为空），只适合源码构建/Docker。
-- **未纳入当前队列**：miniflux、gotify、adguard、minio、listmonk、syncthing、beszel（候选清单其余项，本轮性价比顺序未排到；miniflux 资产尚未核实）。
+- **未纳入当前队列**：miniflux、adguard、minio、listmonk、syncthing、beszel（候选清单其余项，本轮性价比顺序未排到；miniflux 资产尚未核实）。
 - **明确不做**：Docker Compose 类应用（需框架级扩展）、PHP/DB 栈、重平台（GitLab/Grafana 等）、与 Nginx 反代定位冲突的反代工具。
 
 ## 3. 技术方案：共享生命周期库 lib/binary_app.sh
@@ -87,12 +88,13 @@
 - ✅ `fix(lib): repair i18n block continuation strings` — 修复 i18n 块续行粘连缺陷。
 - ✅ `feat(ntfy): ...` / `feat(meilisearch): ...` / `feat(alist): ...` / `feat(filebrowser): ...` / `feat(navidrome): ...` / `feat(frps): ...` / `feat(gitea): ...` — 七个二进制应用全部实现并逐个提交（apps/impl/bin/wrapper/registry/checks + 重建 dist）。
 - ✅ `fix(meilisearch): derive env file path without shellcheck SC2153` — 修复 style 级 shellcheck。
+- ✅ `feat(gotify): add GitHub-release binary deployment` — Gotify 通过 zip 发行包接入共享二进制生命周期；使用 root-only `/etc/gotify.env`，首次生成并保留随机管理员密码（用户名 `admin`）。
 - ✅ `feat(lib): support configurable apt packages in binary install` — 新增 `BA_APT_PACKAGES` 变量（Gitea 需要系统 `git`）。
 - ✅ README 新增 “Binary App Deployments” 章节（各应用端口/默认值/示例命令）。
 - ✅ `fix(lib): harden binary-app systemd paths, dirs, and ExecStart` — 校验 INSTALL_DIR/BIN_PATH/DATA_DIR/LOG_DIR/BACKUP_DIR/BA_READWRITE_PATHS 无空白字符且为 safe path；新目录递归 chown、既有目录非递归 chown；systemd ExecStart 正确引号；新增对应守卫检查并接入 `tools/verify.sh guards`。
 - ✅ `fix(lib): stop duplicate i18n output from excess format args` — 5 处 `t()` 调用传参多于注册消息 `%s` 数量，bash printf 会重复整条消息；已裁剪为恰好匹配。
 - ✅ `fix(frps,gitea): make managed config readable by service user` — frps.toml（600 root:root）与 gitea app.ini（640 root:root）改为 `0660 root:${SERVICE_USER}`，与 cpa_stack 约定一致，修复服务进程（以 SERVICE_USER 运行）无法读取自身配置而启动失败的问题；同步更新 app check 与 dist。
-- ✅ 审计复核：7 个二进制应用（ntfy/meilisearch/alist/filebrowser/navidrome/frps/gitea）的 lib + impl + apps + checks 全部审阅；i18n `%s` 与传参逐一比对（Python 解析器）未发现剩余不匹配。
+- ✅ 审计复核：8 个二进制应用（ntfy/meilisearch/alist/filebrowser/navidrome/frps/gitea/gotify）的 lib + impl + apps + checks 全部审阅；i18n `%s` 与传参逐一比对（Python 解析器）未发现剩余不匹配。
 - ✅ 最终验证：`tools/verify.sh release`（重建 dist 比对）、`tools/verify.sh guards`、`tools/verify.sh dispatch` 均通过（仅预期内的负向控制 `fail_check` 输出）；shellcheck 与 bash -n 通过。
 
 ### 应用清单（全部默认端口）
@@ -106,10 +108,11 @@
 | navidrome | 4533 | `ND_*` env；`MUSIC_DIR`（默认 `/srv/music`） |
 | frps | 7000 | `/etc/frps/frps.toml` + auth.token；systemd 健康检查 |
 | gitea | 3000 | 裸二进制；`BA_APT_PACKAGES="git"`；`/etc/gitea/app.ini` |
+| gotify | 8080 | zip 发行包；`/etc/gotify.env`；首次生成并保留随机管理员密码 |
 
 ### 后续（非本轮必需）
 
-- miniflux / gotify / adguard / minio / listmonk / syncthing / beszel 未纳入本轮队列（性价比未排到；miniflux 资产未核实）。
+- miniflux / adguard / minio / listmonk / syncthing / beszel 未纳入本轮队列（性价比未排到；miniflux 资产未核实）。
 - gatus 已核实无二进制资产，明确跳过。
 
 ## 5. 提交计划（粒度）
@@ -118,7 +121,7 @@
 2. 每个新应用一个 feat commit（apps/impl/bin/wrapper/registry/checks + 重新生成的 dist）：
    - `feat(ntfy): add GitHub-release binary deployment`
    - `feat(meilisearch): ...` / `feat(alist): ...` / `feat(filebrowser): ...`
-   - `feat(navidrome): ...` / `feat(frps): ...` / `feat(gitea): ...`（若做）
+   - `feat(navidrome): ...` / `feat(frps): ...` / `feat(gitea): ...` / `feat(gotify): ...`
 3. `docs(readme): document new applications`
 4. 最终全量 verify 后收尾。
 

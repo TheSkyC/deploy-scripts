@@ -15,6 +15,7 @@ DEPLOY_APP_SPECS=(
   "navidrome|Navidrome|apps/navidrome.sh|impl/install_navidrome.sh"
   "frps|frps|apps/frps.sh|impl/install_frps.sh"
   "gitea|Gitea|apps/gitea.sh|impl/install_gitea.sh"
+  "gotify|Gotify|apps/gotify.sh|impl/install_gotify.sh"
 )
 
 DEPLOY_APP_IDS=()

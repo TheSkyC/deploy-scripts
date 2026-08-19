@@ -76,6 +76,7 @@ with `install`, `update`, `backup`, `status`, and safe `uninstall` actions:
 | Navidrome | 4533 | Music server; music folder defaults to `/srv/music` (`MUSIC_DIR`). |
 | frps | 7000 | frp server; config at `/etc/frps/frps.toml` (client auth token preserved). |
 | Gitea | 3000 | Git hosting; config at `/etc/gitea/app.ini`; installs the system `git` package. |
+| Gotify | 8080 | Push notification server; generated admin password in `/etc/gotify.env` (user: `admin`). |
 
 These apps can be managed through the central scheduler or directly:
 
