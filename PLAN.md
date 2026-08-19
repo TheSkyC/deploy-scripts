@@ -39,8 +39,17 @@
   4. gotify（zip 发行包；使用环境变量配置）
   5. beszel（Hub 单二进制 tar.gz；PocketBase 数据目录）
 - **已跳过**：gatus —— 已核实其 GitHub release 无任何二进制资产（expanded_assets 为空），只适合源码构建/Docker。
-- **未纳入当前队列**：miniflux、adguard、minio、listmonk、syncthing（候选清单其余项，本轮性价比顺序未排到；miniflux 资产尚未核实）。
+- **未纳入当前队列**：miniflux、adguard、minio、listmonk、syncthing（候选清单其余项，已完成初步资产/架构复核，但暂不纳入共享二进制应用队列）。
 - **明确不做**：Docker Compose 类应用（需框架级扩展）、PHP/DB 栈、重平台（GitLab/Grafana 等）、与 Nginx 反代定位冲突的反代工具。
+
+### 2.3 后续候选复核（2026-08-19）
+
+- **Miniflux：暂缓**。GitHub Release 已确认有 `miniflux-linux-amd64` / `miniflux-linux-arm64` 裸二进制，但 Miniflux 强制依赖 PostgreSQL，并需要数据库初始化与首个管理员创建流程；直接套用当前共享二进制生命周期会留下不可用安装，后续需先设计数据库依赖 hook。
+- **AdGuard Home：暂缓**。发行包可用，但服务同时涉及 DNS 53 端口、Web UI 端口和首次 Web 配置向导，当前 `binary_app` 的单端口/单配置模型不足以安全覆盖该流程。
+- **Syncthing：暂缓**。发行包可用，但默认配置、GUI 认证、同步目录与服务用户权限需要专门的配置生成和安全策略，不适合仅用薄配置接入。
+- **MinIO：暂缓**。当前 Release 页面未发现可直接映射到现有二进制下载模板的稳定 Linux 资产，需重新核实上游发布渠道后再决定。
+- **listmonk：暂缓**。候选仓库和发布渠道需要重新核实，且其数据库依赖与初始化流程也超出当前共享二进制应用的薄封装范围。
+- **Beszel：已实现**。Hub 是单二进制 PocketBase 应用，数据目录和 HTTP 健康检查可以直接映射到当前生命周期库。
 
 ## 3. 技术方案：共享生命周期库 lib/binary_app.sh
 
