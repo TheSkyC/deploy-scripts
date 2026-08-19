@@ -299,6 +299,8 @@ check_app_localized_descriptions() {
   expect_app_description gitea zh "使用 systemd 和备份的 Gitea 代码托管服务部署脚本。"
   expect_app_description gotify en "Gotify push notification server deployment with systemd and backups."
   expect_app_description gotify zh "使用 systemd 和备份的 Gotify 推送通知服务部署脚本。"
+  expect_app_description beszel en "Beszel monitoring hub deployment with systemd and backups."
+  expect_app_description beszel zh "使用 systemd 和备份的 Beszel 监控中心部署脚本。"
 }
 check_no_hardcoded_chinese_impl() {
   if LC_ALL=C.UTF-8 grep -R -nP '[\p{Han}]' impl; then

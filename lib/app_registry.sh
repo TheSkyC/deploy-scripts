@@ -16,6 +16,7 @@ DEPLOY_APP_SPECS=(
   "frps|frps|apps/frps.sh|impl/install_frps.sh"
   "gitea|Gitea|apps/gitea.sh|impl/install_gitea.sh"
   "gotify|Gotify|apps/gotify.sh|impl/install_gotify.sh"
+  "beszel|Beszel|apps/beszel.sh|impl/install_beszel.sh"
 )
 
 DEPLOY_APP_IDS=()

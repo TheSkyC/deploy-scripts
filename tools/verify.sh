@@ -16,6 +16,7 @@ source tools/checks/app-filebrowser.sh
 source tools/checks/app-frps.sh
 source tools/checks/app-gitea.sh
 source tools/checks/app-gotify.sh
+source tools/checks/app-beszel.sh
 source tools/checks/app-navidrome.sh
 source tools/checks/app-newapi.sh
 source tools/checks/app-ntfy.sh
@@ -541,6 +542,9 @@ main() {
       check_gotify_uses_shared_binary_lifecycle
       check_gotify_release_asset_mapping
       check_gotify_env_is_managed_atomically
+      check_beszel_uses_shared_binary_lifecycle
+      check_beszel_release_asset_mapping
+      check_beszel_env_is_managed_atomically
       check_gitea_uses_shared_binary_lifecycle
       check_gitea_release_asset_mapping
       check_gitea_config_is_managed_atomically

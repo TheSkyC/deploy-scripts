@@ -77,6 +77,7 @@ with `install`, `update`, `backup`, `status`, and safe `uninstall` actions:
 | frps | 7000 | frp server; config at `/etc/frps/frps.toml` (client auth token preserved). |
 | Gitea | 3000 | Git hosting; config at `/etc/gitea/app.ini`; installs the system `git` package. |
 | Gotify | 8080 | Push notification server; generated admin password in `/etc/gotify.env` (user: `admin`). |
+| Beszel | 8090 | Monitoring hub; data under `/var/lib/beszel`; open `/api/health` for health checks. |
 
 These apps can be managed through the central scheduler or directly:
 
@@ -84,6 +85,7 @@ These apps can be managed through the central scheduler or directly:
 sudo bash deploy.sh ntfy install
 sudo bash install_meilisearch.sh status
 sudo DEPLOY_LANG=zh bash dist/install_gitea.sh update
+sudo bash deploy.sh beszel install
 ```
 
 Defaults can be overridden per run, for example:
