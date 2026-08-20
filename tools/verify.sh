@@ -338,6 +338,7 @@ main() {
       check_version_helpers
       check_operation_records
       check_backup_all_dry_run
+      check_doctor_all_target
       echo "Operation verification passed"
       return 0
       ;;
@@ -576,6 +577,7 @@ main() {
       check_version_helpers
       check_operation_records
       check_backup_all_dry_run
+      check_doctor_all_target
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0
