@@ -168,3 +168,77 @@ PY
   [[ "$output" != *token* ]] || { rm -rf "$managed_root" "$fake_bin" "$fixture"; return 1; }
   rm -rf "$managed_root" "$fake_bin" "$fixture"
 }
+
+
+check_self_update_dry_run_validation() {
+  local managed_root fake_bin fixture_dir stage_dir archive_path fixture_snapshot output
+  managed_root="$(mktemp -d)"
+  fake_bin="$(mktemp -d)"
+  fixture_dir="$(mktemp -d)"
+  stage_dir="$(mktemp -d)"
+  mkdir -p "${managed_root}/releases/v1.2.3" "${managed_root}/current" "${managed_root}/previous"
+  printf '%s
+' '{"schema_version":1,"project":"deploy-scripts","version":"v1.2.3","build_commit":"0123456789012345678901234567890123456789","built_at":"1970-01-01T00:00:00Z"}' >"${managed_root}/releases/v1.2.3/RELEASE.json"
+  cp "${managed_root}/releases/v1.2.3/RELEASE.json" "${managed_root}/current/RELEASE.json"
+  cp "${managed_root}/releases/v1.2.3/RELEASE.json" "${managed_root}/previous/RELEASE.json"
+  mkdir -p "${stage_dir}/deploy-scripts-v1.3.0/lib"
+  printf '#!/usr/bin/env bash
+' >"${stage_dir}/deploy-scripts-v1.3.0/deploy.sh"
+  printf '#!/usr/bin/env bash
+' >"${stage_dir}/deploy-scripts-v1.3.0/lib/core.sh"
+  printf '%s
+' '{"schema_version":1,"project":"deploy-scripts","version":"v1.3.0","build_commit":"0123456789012345678901234567890123456789","built_at":"1970-01-01T00:00:00Z"}' >"${stage_dir}/deploy-scripts-v1.3.0/RELEASE.json"
+  archive_path="${fixture_dir}/deploy-scripts-v1.3.0.tar.gz"
+  tar -C "$stage_dir" -czf "$archive_path" deploy-scripts-v1.3.0
+  local sha256 size_bytes
+  sha256="$(sha256sum "$archive_path" | awk '{print $1}')"
+  size_bytes="$(wc -c <"$archive_path" | tr -d '[:space:]')"
+  cat >"${fixture_dir}/manifest.json" <<JSON
+{"schema_version":1,"project":"deploy-scripts","channel":"stable","version":"v1.3.0","artifacts":{"source":{"name":"deploy-scripts-v1.3.0.tar.gz","url":"https://updates.invalid/v1.3.0/deploy-scripts-v1.3.0.tar.gz","sha256":"${sha256}","size_bytes":${size_bytes}}}}
+JSON
+  cat >"${fake_bin}/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+output=""
+while (($#)); do
+  if [[ "$1" == -o ]]; then output="$2"; shift 2
+  else shift
+  fi
+done
+case "$(basename "$output")" in
+  manifest.json) cp "${SELF_UPDATE_FIXTURE}/manifest.json" "$output" ;;
+  *) cp "${SELF_UPDATE_FIXTURE}/deploy-scripts-v1.3.0.tar.gz" "$output" ;;
+esac
+SH
+  chmod 700 "${fake_bin}/curl"
+  fixture_snapshot="$(find "$managed_root" -type f -printf '%P
+' | sort)"
+  if ! output="$(env PATH="${fake_bin}:$PATH" SELF_UPDATE_FIXTURE="$fixture_dir" \
+    DEPLOY_ROOT_DIR="${managed_root}/releases/v1.2.3" DEPLOY_SELF_UPDATE_ROOT="$managed_root" \
+    DEPLOY_SELF_UPDATE_URL='https://updates.invalid/v1.3.0' "$BASH_BIN" -c '
+      set -euo pipefail
+      source lib/core.sh
+      self_update_main --dry-run --json
+    ')"; then
+    rm -rf "$managed_root" "$fake_bin" "$fixture_dir" "$stage_dir"
+    return 1
+  fi
+  if ! python - "$output" <<'PY'
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "validated"
+assert payload["latest_version"] == "v1.3.0"
+assert payload["artifact_size_bytes"] > 0
+PY
+  then
+    rm -rf "$managed_root" "$fake_bin" "$fixture_dir" "$stage_dir"
+    return 1
+  fi
+  [[ "$(find "$managed_root" -type f -printf '%P
+' | sort)" == "$fixture_snapshot" ]] || {
+    rm -rf "$managed_root" "$fake_bin" "$fixture_dir" "$stage_dir"
+    return 1
+  }
+  rm -rf "$managed_root" "$fake_bin" "$fixture_dir" "$stage_dir"
+}
