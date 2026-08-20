@@ -354,6 +354,7 @@ main() {
       check_update_version_cache_and_network_failures
       check_check_update_target
       check_update_all_dry_run_target
+      check_update_all_execution_is_serial_and_safe
       echo "Update verification passed"
       return 0
       ;;
@@ -602,6 +603,7 @@ main() {
       check_update_version_cache_and_network_failures
       check_check_update_target
       check_update_all_dry_run_target
+      check_update_all_execution_is_serial_and_safe
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0

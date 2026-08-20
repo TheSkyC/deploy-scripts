@@ -227,7 +227,7 @@ check_mutating_actions_acquire_locks() {
         }
         in_run=0
       }
-      /acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; saw_exec=0; saw_handler=0; next }
+      /^acquire_lock\(\)/ { in_func=1; saw_mkdir=0; saw_error=0; saw_exec=0; saw_handler=0; next }
       in_func && /if ! mkdir -p "\$\(dirname "\$lock_file"\)"; then/ { saw_mkdir=1 }
       in_func && /if ! exec 9>"\$lock_file"; then/ { saw_exec=1 }
       in_func && /error "\$\(t error\.lock_failed "\$lock_file"\)"/ { saw_error=1 }

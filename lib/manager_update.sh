@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 MANAGER_UPDATE_USAGE="Usage: deploy.sh check-update [--json] [--refresh|--no-network] [--include id,id,...] [--exclude id,id,...]"
-MANAGER_UPDATE_ALL_USAGE="Usage: deploy.sh update-all --dry-run [--json] [--refresh|--no-network] [--include id,id,...] [--exclude id,id,...]"
+MANAGER_UPDATE_ALL_USAGE="Usage: deploy.sh update-all [--dry-run] [--yes] [--json] [--refresh|--no-network] [--include id,id,...] [--exclude id,id,...]"
 
 manager_update_print_usage() { echo "$MANAGER_UPDATE_USAGE" >&2; }
 manager_update_all_print_usage() { echo "$MANAGER_UPDATE_ALL_USAGE" >&2; }
@@ -177,10 +177,60 @@ manager_update_plan_record() {
     "$(app_json_string "$action")" "$(app_json_string "$reason")" "$version_json"
 }
 
+manager_update_acquire_lock() {
+  local lock_file="${DEPLOY_MANAGER_LOCK_FILE:-${DEPLOY_OPERATION_ROOT}/locks/manager.lock}" lock_dir
+  lock_dir="$(dirname "$lock_file")"
+  [[ ! -L "$lock_dir" ]] || return 1
+  mkdir -p "$lock_dir" || return 1
+  operation_set_owner_and_mode "$lock_dir" 750 || return 1
+  command -v flock >/dev/null 2>&1 || return 1
+  exec 8>"$lock_file" || return 1
+  operation_set_owner_and_mode "$lock_file" 600 || { exec 8>&-; return 1; }
+  flock -n 8 || { exec 8>&-; return 9; }
+}
+
+manager_update_release_lock() {
+  flock -u 8 2>/dev/null || true
+  exec 8>&- 2>/dev/null || true
+}
+
+manager_update_confirm() {
+  local yes="$1" planned="$2" answer
+  [[ "$yes" == 1 || "${DEPLOY_ASSUME_YES:-0}" == 1 ]] && return 0
+  if [[ ! -t 0 ]]; then
+    echo 'update-all requires --yes or DEPLOY_ASSUME_YES=1 when standard input is not interactive.' >&2
+    return 2
+  fi
+  printf 'Update %s application(s)? [y/N] ' "$planned" >&2
+  read -r answer
+  [[ "${answer,,}" == y || "${answer,,}" == yes ]]
+}
+
+# Run through the normal app dispatcher so each update retains its own app
+# operation record and lifecycle lock. The caller deliberately invokes this in
+# a subshell so app configuration and traps cannot leak into later targets.
+manager_update_execute_app() {
+  local app_id="$1"
+  manager_load_app "$app_id"
+  dispatch_action update
+}
+
+manager_update_execution_record() {
+  local plan_record="$1" state="$2" status="$3" reason="$4" app_id app_name install_state version_json status_json
+  app_id="$(state_json_field "$plan_record" app_id)"
+  app_name="$(state_json_field "$plan_record" app_name)"
+  install_state="$(state_json_field "$plan_record" install_state)"
+  version_json="$(state_json_raw_field "$plan_record" version)" || return 1
+  [[ "$status" =~ ^[0-9]+$ ]] && status_json="$status" || status_json=null
+  printf '{"app_id":%s,"app_name":%s,"install_state":%s,"state":%s,"status":%s,"reason":%s,"version":%s}' \
+    "$(app_json_string "$app_id")" "$(app_json_string "$app_name")" "$(app_json_string "$install_state")" \
+    "$(app_json_string "$state")" "$status_json" "$(state_json_nullable "$reason")" "$version_json"
+}
+
 manager_update_all_main() {
-  local dry_run=0 json=0 refresh=0 no_network=0 include_csv="" exclude_csv="" arg record plan_record action
-  local planned=0 skipped=0 first=1 status
-  local -a plan_records=()
+  local dry_run=0 json=0 refresh=0 no_network=0 yes=0 include_csv="" exclude_csv="" arg record plan_record action
+  local planned=0 skipped=0 updated=0 failed=0 first=1 status=0 app_id execution_record
+  local -a plan_records=() execution_records=()
   while (($#)); do
     arg="$1"; shift
     case "$arg" in
@@ -188,6 +238,7 @@ manager_update_all_main() {
       --json) json=1 ;;
       --refresh) refresh=1 ;;
       --no-network) no_network=1 ;;
+      --yes) yes=1 ;;
       --include) (($#)) || { manager_update_all_print_usage; return 2; }; include_csv="$1"; shift ;;
       --exclude) (($#)) || { manager_update_all_print_usage; return 2; }; exclude_csv="$1"; shift ;;
       --include=*) include_csv="${arg#*=}" ;;
@@ -197,34 +248,83 @@ manager_update_all_main() {
       *) manager_update_all_print_usage; return 2 ;;
     esac
   done
-  (( dry_run )) || { echo 'update-all currently requires --dry-run; direct update execution is not enabled yet.' >&2; return 2; }
   (( refresh && no_network )) && { manager_update_all_print_usage; return 2; }
-  set +e
-  manager_update_collect "$refresh" "$no_network" "$include_csv" "$exclude_csv"
-  status=$?
-  set -e
-  (( status == 0 )) || return "$status"
+  manager_update_collect "$refresh" "$no_network" "$include_csv" "$exclude_csv" || return $?
   for record in "${MANAGER_UPDATE_RECORDS[@]}"; do
     plan_record="$(manager_update_plan_record "$record")" || return 1
     action="$(state_json_field "$plan_record" action)"
     [[ "$action" == plan ]] && planned=$((planned + 1)) || skipped=$((skipped + 1))
     plan_records+=("$plan_record")
   done
+
+  if (( dry_run )); then
+    if (( json )); then
+      printf '{"schema_version":1,"generated_at":%s,"dry_run":true,"refresh":%s,"no_network":%s,"summary":{"selected":%s,"planned":%s,"skipped":%s,"check_failed":%s,"errors":%s},"records":[' \
+        "$(app_json_string "$(state_now)")" "$([[ "$refresh" == 1 ]] && printf true || printf false)" "$([[ "$no_network" == 1 ]] && printf true || printf false)" \
+        "$MANAGER_UPDATE_SELECTED" "$planned" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
+      for plan_record in "${plan_records[@]}"; do (( first )) || printf ','; first=0; printf '%s' "$plan_record"; done
+      printf ']}\n'
+    else
+      printf 'update-all dry-run: selected=%s planned=%s skipped=%s check_failed=%s errors=%s\n' \
+        "$MANAGER_UPDATE_SELECTED" "$planned" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
+      printf '%-16s %-10s %-18s %s\n' App Action Update Reason
+      for plan_record in "${plan_records[@]}"; do
+        printf '%-16s %-10s %-18s %s\n' \
+          "$(state_json_field "$plan_record" app_id)" "$(state_json_field "$plan_record" action)" \
+          "$(state_json_field "$plan_record" version.update_state)" "$(state_json_field "$plan_record" reason)"
+      done
+    fi
+    manager_update_collect_status
+    return $?
+  fi
+
+  if (( planned > 0 )); then
+    if (( json )) && [[ "$yes" != 1 && "${DEPLOY_ASSUME_YES:-0}" != 1 ]]; then
+      echo 'update-all --json with planned updates requires --yes or DEPLOY_ASSUME_YES=1.' >&2
+      return 2
+    fi
+    manager_update_confirm "$yes" "$planned" || return $?
+    manager_update_acquire_lock
+    status=$?
+    if (( status != 0 )); then
+      echo 'Unable to acquire the manager update lock.' >&2
+      return "$status"
+    fi
+  fi
+  for plan_record in "${plan_records[@]}"; do
+    action="$(state_json_field "$plan_record" action)"
+    if [[ "$action" != plan ]]; then
+      execution_records+=("$(manager_update_execution_record "$plan_record" skipped "" "$(state_json_field "$plan_record" reason)")")
+      continue
+    fi
+    app_id="$(state_json_field "$plan_record" app_id)"
+    if (( json )); then
+      if ( manager_update_execute_app "$app_id" ) >&2; then status=0; else status=$?; fi
+    else
+      printf '\n== Updating %s ==\n' "$app_id"
+      if ( manager_update_execute_app "$app_id" ); then status=0; else status=$?; fi
+    fi
+    if (( status == 0 )); then
+      updated=$((updated + 1))
+      execution_records+=("$(manager_update_execution_record "$plan_record" succeeded "$status" "")")
+    else
+      failed=$((failed + 1))
+      execution_records+=("$(manager_update_execution_record "$plan_record" failed "$status" "update_failed")")
+    fi
+  done
+  (( planned > 0 )) && manager_update_release_lock
+
   if (( json )); then
-    printf '{"schema_version":1,"generated_at":%s,"dry_run":true,"refresh":%s,"no_network":%s,"summary":{"selected":%s,"planned":%s,"skipped":%s,"check_failed":%s,"errors":%s},"records":[' \
+    first=1
+    printf '{"schema_version":1,"generated_at":%s,"dry_run":false,"refresh":%s,"no_network":%s,"summary":{"selected":%s,"planned":%s,"updated":%s,"failed":%s,"skipped":%s,"check_failed":%s,"errors":%s},"records":[' \
       "$(app_json_string "$(state_now)")" "$([[ "$refresh" == 1 ]] && printf true || printf false)" "$([[ "$no_network" == 1 ]] && printf true || printf false)" \
-      "$MANAGER_UPDATE_SELECTED" "$planned" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
-    for plan_record in "${plan_records[@]}"; do (( first )) || printf ','; first=0; printf '%s' "$plan_record"; done
+      "$MANAGER_UPDATE_SELECTED" "$planned" "$updated" "$failed" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
+    for execution_record in "${execution_records[@]}"; do (( first )) || printf ','; first=0; printf '%s' "$execution_record"; done
     printf ']}\n'
   else
-    printf 'update-all dry-run: selected=%s planned=%s skipped=%s check_failed=%s errors=%s\n' \
-      "$MANAGER_UPDATE_SELECTED" "$planned" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
-    printf '%-16s %-10s %-18s %s\n' App Action Update Reason
-    for plan_record in "${plan_records[@]}"; do
-      printf '%-16s %-10s %-18s %s\n' \
-        "$(state_json_field "$plan_record" app_id)" "$(state_json_field "$plan_record" action)" \
-        "$(state_json_field "$plan_record" version.update_state)" "$(state_json_field "$plan_record" reason)"
-    done
+    printf '\nupdate-all: selected=%s planned=%s updated=%s failed=%s skipped=%s check_failed=%s errors=%s\n' \
+      "$MANAGER_UPDATE_SELECTED" "$planned" "$updated" "$failed" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
   fi
+  (( failed == 0 )) || return 1
   manager_update_collect_status
 }
