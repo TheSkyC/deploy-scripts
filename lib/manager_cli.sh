@@ -90,6 +90,10 @@ manager_main() {
       shift || true
       manager_doctor_main "$@"
       ;;
+    backup-all)
+      shift || true
+      manager_backup_main "$@"
+      ;;
     history)
       shift || true
       manager_history_main "$@"

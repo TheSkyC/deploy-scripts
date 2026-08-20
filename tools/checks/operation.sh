@@ -75,3 +75,26 @@ check_doctor_all_target() {
   python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert x["records"] == []' "$json_file"
   rm -f "$json_file"
 }
+
+check_backup_all_dry_run() {
+  local output json_file
+  output="$($BASH_BIN deploy.sh backup-all --dry-run --json --include newapi)"
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+assert payload["schema_version"] == 1
+assert payload["dry_run"] is True
+assert payload["summary"]["selected"] == 1
+assert len(payload["records"]) == 1
+assert payload["records"][0]["app_id"] == "newapi"
+assert payload["records"][0]["action"] in {"skip", "plan", "error"}
+PY
+  local status=$?
+  rm -f "$json_file"
+  return "$status"
+}
