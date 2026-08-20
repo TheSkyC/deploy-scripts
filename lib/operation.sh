@@ -96,10 +96,65 @@ operation_write_record() {
 }
 operation_append_history() { local state_file; state_file="$(operation_state_file_for "$OPERATION_SCOPE" "${OPERATION_APP_ID:-}")" || return 1; [[ -f "$state_file" ]] || return 1; cat "$state_file" >> "$DEPLOY_OPERATION_HISTORY_FILE" || return 1; operation_set_owner_and_mode "$DEPLOY_OPERATION_HISTORY_FILE" 640; }
 operation_start() {
-  local scope="$1" app_id="$2" action="$3"; operation_is_valid_scope "$scope" || return 2; operation_is_valid_action "$action" || return 2; [[ "$scope" != app || -n "$app_id" ]] || return 2; [[ "$scope" != app ]] || operation_is_valid_app_id "$app_id" || return 2; operation_ensure_directories || return 1; operation_reset
-  OPERATION_ACTIVE=1; OPERATION_SCOPE="$scope"; OPERATION_APP_ID="$app_id"; OPERATION_ACTION="$action"; OPERATION_RUN_ID="$(operation_new_run_id "$scope" "$app_id" "$action")"; OPERATION_STARTED_AT="$(operation_timestamp)"; OPERATION_STATE=running
-  OPERATION_LOG_PATH="$(operation_log_path_for "$scope" "$app_id" "$OPERATION_RUN_ID")" || { operation_reset; return 1; }; OPERATION_STEPS_FILE="$(mktemp "${DEPLOY_OPERATION_ROOT}/.operation-steps.XXXXXX")" || { operation_reset; return 1; }; operation_set_owner_and_mode "$OPERATION_STEPS_FILE" 600 || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }; : > "$OPERATION_LOG_PATH" || return 1; operation_set_owner_and_mode "$OPERATION_LOG_PATH" 640 || return 1; operation_write_record
+  local scope="$1" app_id="$2" action="$3"
+  operation_is_valid_scope "$scope" || return 2
+  operation_is_valid_action "$action" || return 2
+  [[ "$scope" != app || -n "$app_id" ]] || return 2
+  [[ "$scope" != app ]] || operation_is_valid_app_id "$app_id" || return 2
+  operation_ensure_directories || return 1
+  operation_reset
+
+  OPERATION_ACTIVE=1
+  OPERATION_SCOPE="$scope"
+  OPERATION_APP_ID="$app_id"
+  OPERATION_ACTION="$action"
+  OPERATION_RUN_ID="$(operation_new_run_id "$scope" "$app_id" "$action")"
+  OPERATION_STARTED_AT="$(operation_timestamp)"
+  OPERATION_STATE=running
+  OPERATION_LOG_PATH="$(operation_log_path_for "$scope" "$app_id" "$OPERATION_RUN_ID")" || { operation_reset; return 1; }
+  OPERATION_STEPS_FILE="$(mktemp "${DEPLOY_OPERATION_ROOT}/.operation-steps.XXXXXX")" || { operation_reset; return 1; }
+  operation_set_owner_and_mode "$OPERATION_STEPS_FILE" 600 || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }
+  : > "$OPERATION_LOG_PATH" || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }
+  operation_set_owner_and_mode "$OPERATION_LOG_PATH" 640 || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }
+  operation_write_record || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }
 }
 operation_step_start() { local name="$1" now updated; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$name" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 1; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; awk -F '\t' -v name="$name" '$1 != name { print }' "$OPERATION_STEPS_FILE" > "$updated" || return 1; printf '%s\trunning\t%s\t\n' "$name" "$now" >> "$updated"; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_step_finish() { local name="$1" state="${2:-succeeded}" now updated found=0 step_name step_state started_at finished_at; [[ "${OPERATION_ACTIVE:-0}" == 1 ]] || return 1; case "$state" in succeeded|failed|skipped) ;; *) return 2;; esac; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; while IFS=$'\t' read -r step_name step_state started_at finished_at; do [[ -n "$step_name" ]] || continue; if [[ "$step_name" == "$name" ]]; then printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$started_at" "$now" >> "$updated"; found=1; else printf '%s\t%s\t%s\t%s\n' "$step_name" "$step_state" "$started_at" "$finished_at" >> "$updated"; fi; done < "$OPERATION_STEPS_FILE"; [[ "$found" -eq 1 ]] || { rm -f "$updated"; return 1; }; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_finish() { local exit_code="${1:-1}" state="${2:-}" summary="${3:-}"; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$exit_code" =~ ^[0-9]+$ ]] || return 1; [[ -n "$state" ]] || { [[ "$exit_code" -eq 0 ]] && state=succeeded || state=failed; }; case "$state" in succeeded|failed|cancelled|interrupted|rolled_back|rollback_failed) ;; *) return 2;; esac; OPERATION_STATE="$state"; OPERATION_EXIT_CODE="$exit_code"; OPERATION_FINISHED_AT="$(operation_timestamp)"; OPERATION_ERROR_SUMMARY="$(operation_safe_summary "$summary")"; operation_write_record || return 1; operation_append_history || return 1; rm -f "$OPERATION_STEPS_FILE"; operation_reset; }
+operation_action_exit_trap() {
+  local status="$?" action="${OPERATION_ACTION:-unknown}"
+  trap - EXIT
+  if [[ "${OPERATION_ACTIVE:-0}" == 1 ]]; then
+    if [[ "$status" -eq 0 ]]; then
+      operation_step_finish execute succeeded || true
+    else
+      operation_step_finish execute failed || true
+    fi
+    operation_finish "$status" "" "${action} exited with status ${status}" || true
+  fi
+  exit "$status"
+}
+
+operation_run_app_action() {
+  local action="$1" function_name="$2" status
+  operation_is_valid_action "$action" || return 2
+  [[ "$function_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || return 2
+  declare -f "$function_name" >/dev/null 2>&1 || return 2
+  operation_start app "${APP_ID:-}" "$action" || error "Unable to start operation record for ${APP_NAME:-app} ${action}"
+  if ! operation_step_start execute; then
+    operation_finish 1 failed "failed to start execute step" || true
+    error "Unable to record operation step for ${APP_NAME:-app} ${action}"
+  fi
+  trap 'operation_action_exit_trap' EXIT
+  "$function_name"
+  status=$?
+  trap - EXIT
+  if [[ "$status" -eq 0 ]]; then
+    operation_step_finish execute succeeded || operation_finish 1 failed "failed to finish execute step"
+    operation_finish 0 || return 1
+  else
+    operation_step_finish execute failed || true
+    operation_finish "$status" "" "${action} exited with status ${status}" || true
+  fi
+  return "$status"
+}

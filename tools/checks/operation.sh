@@ -49,6 +49,72 @@ PY
   return "$status"
 }
 
+check_app_action_operation_wrapping() {
+  local temp_root status
+  temp_root="$(mktemp -d)"
+  if ! DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/operation.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    error() { return 1; }
+    do_succeed() { :; }
+    operation_run_app_action update do_succeed
+  '; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  if ! python - "${temp_root}/state/state/newapi.json" "${temp_root}/state/history/operations.jsonl" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["action"] == "update"
+assert record["state"] == "succeeded"
+assert record["exit_code"] == 0
+assert record["steps"] == [{"name": "execute", "state": "succeeded", "started_at": record["steps"][0]["started_at"], "finished_at": record["steps"][0]["finished_at"]}]
+assert record["steps"][0]["finished_at"]
+with open(sys.argv[2], encoding="utf-8") as handle:
+    assert len(handle.readlines()) == 1
+PY
+  then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  set +e
+  DEPLOY_OPERATION_ROOT="${temp_root}/failure-state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/failure-log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/operation.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    error() { return 1; }
+    do_fail() { exit 7; }
+    operation_run_app_action update do_fail
+  '
+  status=$?
+  set -e
+  if [[ "$status" -ne 7 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  python - "${temp_root}/failure-state/state/newapi.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["action"] == "update"
+assert record["state"] == "failed"
+assert record["exit_code"] == 7
+assert record["steps"][0]["name"] == "execute"
+assert record["steps"][0]["state"] == "failed"
+assert record["steps"][0]["finished_at"]
+PY
+  status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
 check_history_command() {
   local temp_root output json_file
   temp_root="$(mktemp -d)"

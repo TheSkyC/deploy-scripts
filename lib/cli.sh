@@ -35,19 +35,19 @@ dispatch_action() {
     action="$(deploy_trim "$action")"
   fi
   case "${action,,}" in
-      install|1) do_install ;;
-      update|2) do_update ;;
-      backup|3) do_backup ;;
+      install|1) operation_run_app_action install do_install ;;
+      update|2) operation_run_app_action update do_update ;;
+      backup|3) operation_run_app_action backup do_backup ;;
       restore|4)
         if declare -f do_restore >/dev/null 2>&1; then
-          do_restore
+          operation_run_app_action restore do_restore
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
         fi
         ;;
       cert|https)
         if declare -f do_cert >/dev/null 2>&1; then
-          do_cert
+          operation_run_app_action cert do_cert
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
         fi
@@ -55,7 +55,7 @@ dispatch_action() {
       status|5) do_status ;;
       status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;
-      uninstall|7) do_uninstall ;;
+      uninstall|7) operation_run_app_action uninstall do_uninstall ;;
     menu|"") show_menu ;;
     help|-h|--help) usage ;;
     q|quit|exit) exit 0 ;;
