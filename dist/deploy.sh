@@ -2173,17 +2173,16 @@ app_json_string() {
   value="${value//$'\r'/\\r}"
   value="${value//$'\t'/\\t}"
   # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
-  # forbids literally. NUL (U+0000) cannot appear in bash strings.
-  if [[ "$value" =~ $'[\x01-\x07\x0E-\x1F]' ]]; then
-    local i byte hex octal
-    for ((i = 1; i < 32; i++)); do
-      case "$i" in 8|9|10|12|13) continue ;; esac
-      printf -v octal '%03o' "$i"
-      printf -v byte '%b' "\\$octal"
-      printf -v hex '%02x' "$i"
-      value="${value//"$byte"/"\\u00${hex}"}"
-    done
-  fi
+  # forbids literally. NUL (U+0000) cannot appear in bash strings. Do this
+  # unconditionally: Bash regex ranges over control bytes vary across builds.
+  local i byte hex octal
+  for ((i = 1; i < 32; i++)); do
+    case "$i" in 8|9|10|12|13) continue ;; esac
+    printf -v octal '%03o' "$i"
+    printf -v byte '%b' "\0$octal"
+    printf -v hex '%02x' "$i"
+    value="${value//"$byte"/"\u00${hex}"}"
+  done
   printf '"%s"' "$value"
 }
 
