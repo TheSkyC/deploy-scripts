@@ -32,11 +32,12 @@ source tools/checks/framework.sh
 source tools/checks/release.sh
 source tools/checks/static.sh
 source tools/checks/operation.sh
+source tools/checks/state.sh
 source tools/checks/validators.sh
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|help]
+Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|state|operation|help]
 
 Targets:
   all       Run the full repository verification suite. This is the default.
@@ -46,6 +47,8 @@ Targets:
   release   Rebuild dist/ with deterministic metadata and check release syntax.
   dispatch  Rebuild dist/ and check CLI dispatch, menus, registry, and localization.
   guards    Rebuild dist/ and run structural/behavioral guardrail checks.
+  state     Run state-center and status JSON checks.
+  operation Run version and operation-record checks.
 EOF
 }
 
@@ -325,6 +328,18 @@ main() {
       echo "Dispatch verification passed"
       return 0
       ;;
+    state)
+      check_state_json_contract
+      check_state_target_selection
+      echo "State verification passed"
+      return 0
+      ;;
+    operation)
+      check_version_helpers
+      check_operation_records
+      echo "Operation verification passed"
+      return 0
+      ;;
     guards)
       check_shell_syntax
       build_verified_release
@@ -555,6 +570,8 @@ main() {
       check_navidrome_uses_shared_binary_lifecycle
       check_navidrome_release_asset_mapping
       check_navidrome_music_folder_is_prepared
+      check_state_json_contract
+      check_state_target_selection
       check_version_helpers
       check_operation_records
       check_target_groups_cover_all_checks

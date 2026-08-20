@@ -16,6 +16,8 @@ COMMON_RELEASE_LIB_FILES=(
   lib/network.sh
   lib/version.sh
   lib/operation.sh
+  lib/state.sh
+  lib/manager_status.sh
   lib/app.sh
   lib/binary_app.sh
 )

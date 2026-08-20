@@ -82,6 +82,10 @@ manager_main() {
   local command="${1:-menu}" app_id status action
   command="$(deploy_trim "$command")"
   case "${command,,}" in
+    overview|status-all|problems)
+      shift || true
+      manager_status_main "${command,,}" "$@"
+      ;;
     menu|"")
       show_manager_menu
       ;;

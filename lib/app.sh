@@ -324,13 +324,16 @@ app_json_string() {
   value="${value//$'\t'/\\t}"
   # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
   # forbids literally. NUL (U+0000) cannot appear in bash strings.
-  local i byte hex
-  for ((i = 1; i < 32; i++)); do
-    case "$i" in 8|9|10|12|13) continue ;; esac
-    printf -v byte "\\$(printf '%03o' "$i")"
-    printf -v hex "%02x" "$i"
-    value="${value//"$byte"/"\\u00${hex}"}"
-  done
+  if [[ "$value" =~ $'[\x01-\x07\x0E-\x1F]' ]]; then
+    local i byte hex octal
+    for ((i = 1; i < 32; i++)); do
+      case "$i" in 8|9|10|12|13) continue ;; esac
+      printf -v octal '%03o' "$i"
+      printf -v byte '%b' "\\$octal"
+      printf -v hex '%02x' "$i"
+      value="${value//"$byte"/"\\u00${hex}"}"
+    done
+  fi
   printf '"%s"' "$value"
 }
 
@@ -397,93 +400,9 @@ app_config_installed_version() {
 }
 
 do_status_json() {
-  local conf_file config_exists=false config_safe=null config_valid=null
-  local conf_owner=null conf_mode=null
-  conf_file="$(app_conf_file)"
-
-  if [[ -f "$conf_file" ]]; then
-    config_exists=true
-    config_safe=true
-    # GNU stat (coreutils) is assumed: -c '%U'/'%a' is not portable to BSD stat.
-    if command -v stat >/dev/null 2>&1; then
-      conf_owner="$(stat -c '%U' "$conf_file" 2>/dev/null || echo unknown)"
-      conf_mode="$(stat -c '%a' "$conf_file" 2>/dev/null || echo unknown)"
-      if [[ "$conf_owner" != "root" || ( "$conf_mode" != "600" && "$conf_mode" != "400" ) ]]; then
-        config_safe=false
-      fi
-    fi
-    if [[ "$config_safe" == "true" ]] && app_doctor_validate_saved_config "$conf_file" >/dev/null 2>&1; then
-      config_valid=true
-    elif [[ "$config_safe" == "true" ]]; then
-      config_valid=false
-    fi
-  fi
-
-  local service_name=null systemctl_available=false unit_exists=null service_active=null service_enabled=null
-  if service_name="$(app_doctor_service_name 2>/dev/null)"; then
-    if command -v systemctl >/dev/null 2>&1; then
-      systemctl_available=true
-      if systemctl list-unit-files "${service_name}.service" --no-legend 2>/dev/null | grep -q .; then
-        unit_exists=true
-        if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-          service_active=true
-        else
-          service_active=false
-        fi
-        if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
-          service_enabled=true
-        else
-          service_enabled=false
-        fi
-      else
-        unit_exists=false
-      fi
-    fi
-  fi
-
-  local version=null
-  if [[ "$config_exists" == "true" && "$config_safe" == "true" ]]; then
-    if ! version="$(app_config_installed_version "$conf_file" 2>/dev/null)"; then
-      version=null
-    fi
-  fi
-
-  printf '{'
-  printf '"app_id":%s,' "$(app_json_string "${APP_ID:-}")"
-  printf '"app_name":%s,' "$(app_json_string "${APP_NAME:-}")"
-  printf '"root":%s,' "$(app_json_bool "$([[ ${EUID:-$(id -u)} -eq 0 ]] && echo true || echo false)")"
-  printf '"config":{'
-  printf '"path":%s,' "$(app_json_string "$conf_file")"
-  printf '"exists":%s,' "$(app_json_bool "$config_exists")"
-  printf '"owner":%s,' "$(app_json_value "$conf_owner")"
-  printf '"mode":%s,' "$(app_json_value "$conf_mode")"
-  printf '"safe":%s,' "$(app_json_value "$config_safe")"
-  printf '"valid":%s' "$(app_json_value "$config_valid")"
-  printf '},'
-  printf '"version":%s,' "$(app_json_value "$version")"
-  printf '"service":{'
-  printf '"name":%s,' "$(app_json_value "$service_name")"
-  printf '"systemctl_available":%s,' "$(app_json_bool "$systemctl_available")"
-  printf '"unit_exists":%s,' "$(app_json_value "$unit_exists")"
-  printf '"active":%s,' "$(app_json_value "$service_active")"
-  printf '"enabled":%s' "$(app_json_value "$service_enabled")"
-  printf '}'
-  if [[ -n "${APP_DOCTOR_SERVICES_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICES_FN" >/dev/null 2>&1; then
-    local first=1 sname
-    printf ',"services":['
-    while IFS= read -r sname; do
-      [[ -n "$sname" ]] || continue
-      if [[ "$first" -eq 1 ]]; then
-        first=0
-      else
-        printf ','
-      fi
-      app_json_service_object "$sname"
-    done < <("$APP_DOCTOR_SERVICES_FN")
-    printf ']'
-  fi
-  printf '}\n'
+  app_status_collect_json
 }
+
 # Writes an Nginx site config from stdin through an atomic helper.
 app_write_nginx_config_file() {
   local nginx_conf="$1" error_key="$2"
