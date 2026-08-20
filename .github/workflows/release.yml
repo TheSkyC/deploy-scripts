@@ -45,7 +45,8 @@ jobs:
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
           tag_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
-          [[ "$tag_commit" == "${GITHUB_SHA}" ]]
+          checked_out_commit="$(git rev-parse HEAD)"
+          [[ "$tag_commit" == "$checked_out_commit" ]]
           [[ -z "$(git status --porcelain)" ]]
 
       - name: Run release verification
