@@ -57,10 +57,11 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          archive="deploy-scripts-${RELEASE_TAG}.tar.gz"
+          asset_dir="${RUNNER_TEMP}/deploy-scripts-release-assets"
+          mkdir -p "$asset_dir"
+          archive="${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz"
           tar \
             --exclude='./.git' \
-            --exclude='./deploy-scripts-*.tar.gz' \
             -czf "$archive" .
           sha256sum "$archive" > "${archive}.sha256"
 
@@ -76,7 +77,8 @@ jobs:
           [[ "${RELEASE_DRAFT:-false}" != "true" ]] || flags+=(--draft)
           [[ "${RELEASE_PRERELEASE:-false}" != "true" ]] || flags+=(--prerelease)
 
-          assets=(dist/*.sh "deploy-scripts-${RELEASE_TAG}.tar.gz" "deploy-scripts-${RELEASE_TAG}.tar.gz.sha256")
+          asset_dir="${RUNNER_TEMP}/deploy-scripts-release-assets"
+          assets=(dist/*.sh "${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz" "${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz.sha256")
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" "${flags[@]}"
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
