@@ -31,6 +31,7 @@ source tools/checks/firewall-nginx.sh
 source tools/checks/framework.sh
 source tools/checks/release.sh
 source tools/checks/static.sh
+source tools/checks/operation.sh
 source tools/checks/validators.sh
 
 usage() {
@@ -554,6 +555,8 @@ main() {
       check_navidrome_uses_shared_binary_lifecycle
       check_navidrome_release_asset_mapping
       check_navidrome_music_folder_is_prepared
+      check_version_helpers
+      check_operation_records
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0

@@ -14,6 +14,8 @@ COMMON_RELEASE_LIB_FILES=(
   lib/config.sh
   lib/service.sh
   lib/network.sh
+  lib/version.sh
+  lib/operation.sh
   lib/app.sh
   lib/binary_app.sh
 )
