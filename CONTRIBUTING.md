@@ -42,3 +42,34 @@ a target arm (for example `guards`) and in the `all` list;
 Use conventional commits, e.g. `fix(scope): subject` / `feat(scope): subject`,
 with a concise imperative subject and a body when the change is user-facing or
 complex. Commit `dist/` together with the source changes that produce it.
+## Publishing a release
+
+Releases are tag-driven. The repository includes a guarded local publisher and a
+GitHub Actions workflow:
+
+```bash
+bash tools/publish-release.sh v0.1.0
+```
+
+The publisher requires a clean working tree, runs `tools/verify.sh release`,
+creates an annotated tag, and pushes it to `origin`. Pushing a SemVer tag such
+as `v0.1.0` triggers `.github/workflows/release.yml`, which checks out the exact
+tagged commit, rebuilds and verifies `dist/`, creates a source archive and
+SHA256 file, and creates or updates the GitHub Release idempotently.
+
+To wait for the remote workflow to finish:
+
+```bash
+bash tools/publish-release.sh --wait v0.1.0
+```
+
+Existing tags are never overwritten implicitly. To intentionally replace one:
+
+```bash
+bash tools/publish-release.sh --replace-existing --wait v0.1.0
+```
+
+`--allow-dirty` exists for emergency use but is not recommended: uncommitted
+files are not included in the tag or GitHub Release. The workflow publishes a
+normal non-draft release by default. Repository variables `RELEASE_DRAFT=true`
+and `RELEASE_PRERELEASE=true` can opt into draft or prerelease behavior.

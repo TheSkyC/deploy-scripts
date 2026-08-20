@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# The workflow creates the GitHub Release and uploads generated artifacts.
+# It is intentionally tag-driven: a release is never created from an ordinary
+# branch push or a pull request.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  SHELLCHECK_VERSION: 0.11.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: Verify, package, and publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install ShellCheck
+        run: |
+          wget -qO- "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
+            | tar -xz
+          sudo install -m 755 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+
+      - name: Validate tag and repository state
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          [[ "$(git describe --tags --exact-match HEAD)" == "$RELEASE_TAG" ]]
+          [[ -z "$(git status --porcelain)" ]]
+
+      - name: Run release verification
+        run: bash tools/verify.sh release
+
+      - name: Create source archive
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          archive="deploy-scripts-${RELEASE_TAG}.tar.gz"
+          tar \
+            --exclude='./.git' \
+            --exclude='./deploy-scripts-*.tar.gz' \
+            -czf "$archive" .
+          sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_DRAFT: ${{ vars.RELEASE_DRAFT }}
+          RELEASE_PRERELEASE: ${{ vars.RELEASE_PRERELEASE }}
+        run: |
+          title="Deploy Scripts ${RELEASE_TAG}"
+          flags=(--repo "$GITHUB_REPOSITORY" --title "$title")
+          [[ "${RELEASE_DRAFT:-false}" != "true" ]] || flags+=(--draft)
+          [[ "${RELEASE_PRERELEASE:-false}" != "true" ]] || flags+=(--prerelease)
+
+          assets=(dist/*.sh "deploy-scripts-${RELEASE_TAG}.tar.gz" "deploy-scripts-${RELEASE_TAG}.tar.gz.sha256")
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" "${flags[@]}"
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --generate-notes "${flags[@]}"
+          fi
+
+      - name: Print published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,url
