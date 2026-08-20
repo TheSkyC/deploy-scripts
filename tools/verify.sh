@@ -331,12 +331,17 @@ main() {
     state)
       check_state_json_contract
       check_state_target_selection
+      check_state_scalar_parser_and_severity
+      check_state_no_network_locality
+      check_state_problems_filtering
+      check_health_all_target
       echo "State verification passed"
       return 0
       ;;
     operation)
       check_version_helpers
       check_operation_records
+      check_history_command
       check_app_action_operation_wrapping
       check_backup_all_dry_run
       check_doctor_all_target
@@ -575,8 +580,13 @@ main() {
       check_navidrome_music_folder_is_prepared
       check_state_json_contract
       check_state_target_selection
+      check_state_scalar_parser_and_severity
+      check_state_no_network_locality
+      check_state_problems_filtering
+      check_health_all_target
       check_version_helpers
       check_operation_records
+      check_history_command
       check_app_action_operation_wrapping
       check_backup_all_dry_run
       check_doctor_all_target

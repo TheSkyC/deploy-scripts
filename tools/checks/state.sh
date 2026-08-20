@@ -34,18 +34,20 @@ check_state_target_selection() {
 }
 
 check_state_scalar_parser_and_severity() {
-  local output json
-  output="$($BASH_BIN -c '
-    source lib/core.sh
-    value="quote\"back\\slash"
-    json=$(printf "{\\"message\\":%s,\\"nested\\":{\\"value\\":%s}}" "$(app_json_string "$value")" "$(app_json_string "$value")")
-    parsed=$(state_json_field "$json" message)
-    nested=$(state_json_field "$json" nested.value)
-    [[ "$parsed" == "$value" && "$nested" == "$value" ]] || exit 1
-    [[ "$(state_json_field "{\\"value\\":null}" value)" == null ]] || exit 1
-    [[ "$(state_severity installed true false not_managed unsupported unknown null)" == critical ]] || exit 1
-    printf ok
-  ')"
+  local output
+  output="$($BASH_BIN <<'BASH'
+set -euo pipefail
+source lib/core.sh
+value='quote"back\slash'
+json=$(printf '{"message":%s,"nested":{"value":%s}}' "$(app_json_string "$value")" "$(app_json_string "$value")")
+parsed=$(state_json_field "$json" message)
+nested=$(state_json_field "$json" nested.value)
+[[ "$parsed" == "$value" && "$nested" == "$value" ]]
+[[ "$(state_json_field '{"value":null}' value)" == null ]]
+[[ "$(state_severity installed true false not_managed unsupported unknown null)" == critical ]]
+printf ok
+BASH
+  )"
   [[ "$output" == ok ]]
 }
 

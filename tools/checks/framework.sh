@@ -56,8 +56,12 @@ check_run_checks_parallel_cleans_tmpdir() {
 # documented sources so a new app cannot ship without its entry points.
 
 check_root_wrappers_match_bin_loaders() {
-  local name app missing=0
+  local name app_id app_file candidate_id missing=0
   local -a wrappers loaders
+
+  # Wrapper names are derived by the registry and may intentionally differ
+  # from an app ID (for example blog -> install_hugo_blog.sh).
+  source "${ROOT_DIR}/lib/app_registry.sh"
 
   mapfile -t wrappers < <(cd "$ROOT_DIR" && printf '%s\n' deploy.sh install_*.sh | LC_ALL=C sort)
   mapfile -t loaders < <(cd "$ROOT_DIR/bin" && printf '%s\n' *.sh | LC_ALL=C sort)
@@ -80,14 +84,25 @@ check_root_wrappers_match_bin_loaders() {
         && grep -qxF 'manager_main "$@"' "${ROOT_DIR}/bin/${name}" \
         || { echo "bin/${name} must source lib/core.sh and call manager_main" >&2; missing=1; }
     else
-      app="${name#install_}"
-      app="${app%.sh}"
+      app_id=""
+      for candidate_id in "${DEPLOY_APP_IDS[@]}"; do
+        if [[ "$(deploy_app_script_name_for "$candidate_id")" == "$name" ]]; then
+          app_id="$candidate_id"
+          break
+        fi
+      done
+      if [[ -z "$app_id" ]]; then
+        echo "bin/${name} has no matching app registry entry" >&2
+        missing=1
+        continue
+      fi
+      app_file="$(deploy_app_file_for "$app_id")"
       grep -qxF 'source "${DEPLOY_ROOT_DIR}/lib/core.sh"' "${ROOT_DIR}/bin/${name}" \
-        && grep -qxF "source \"\${DEPLOY_ROOT_DIR}/apps/${app}.sh\"" "${ROOT_DIR}/bin/${name}" \
+        && grep -qxF "source \"\${DEPLOY_ROOT_DIR}/${app_file}\"" "${ROOT_DIR}/bin/${name}" \
         && grep -qxF 'main "$@"' "${ROOT_DIR}/bin/${name}" \
-        || { echo "bin/${name} must source lib/core.sh and apps/${app}.sh, then call main" >&2; missing=1; }
-      if [[ ! -f "${ROOT_DIR}/apps/${app}.sh" ]]; then
-        echo "bin/${name} references missing apps/${app}.sh" >&2
+        || { echo "bin/${name} must source lib/core.sh and ${app_file}, then call main" >&2; missing=1; }
+      if [[ ! -f "${ROOT_DIR}/${app_file}" ]]; then
+        echo "bin/${name} references missing ${app_file}" >&2
         missing=1
       fi
     fi
