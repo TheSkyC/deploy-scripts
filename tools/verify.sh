@@ -362,6 +362,7 @@ main() {
       ;;
     self-update)
       check_release_package_artifacts
+      check_self_version_and_manifest_checks
       echo "Self-update foundation verification passed"
       return 0
       ;;
@@ -612,6 +613,7 @@ main() {
       check_update_all_dry_run_target
       check_update_all_execution_is_serial_and_safe
       check_release_package_artifacts
+      check_self_version_and_manifest_checks
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0

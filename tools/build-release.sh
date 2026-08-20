@@ -53,6 +53,14 @@ emit_release_header() {
   echo
 }
 
+emit_release_root_setup() {
+  echo 'DEPLOY_SCRIPT_PATH="${BASH_SOURCE[0]}"'
+  echo 'if command -v readlink >/dev/null 2>&1 && resolved_script_path="$(readlink -f -- "$DEPLOY_SCRIPT_PATH" 2>/dev/null)" && [[ -n "$resolved_script_path" ]]; then'
+  echo '  DEPLOY_SCRIPT_PATH="$resolved_script_path"'
+  echo 'fi'
+  echo 'DEPLOY_ROOT_DIR="$(cd -- "$(dirname -- "$DEPLOY_SCRIPT_PATH")" && pwd)"'
+}
+
 emit_release_files() {
   local file
   for file in "$@"; do
@@ -162,7 +170,7 @@ build_one() {
   if ! {
     emit_release_header "$commit" "$built_at"
     echo 'DEPLOY_BUNDLED=1'
-    echo 'DEPLOY_ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"'
+    emit_release_root_setup
     echo
     emit_common_release_libs
     emit_app_loader_file "$app"
@@ -195,10 +203,10 @@ build_manager() {
     emit_release_header "$commit" "$built_at"
     echo 'DEPLOY_BUNDLED=1'
     echo 'DEPLOY_BUNDLED_MANAGER=1'
-    echo 'DEPLOY_ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"'
+    emit_release_root_setup
     echo
     emit_common_release_libs
-    emit_release_files lib/app_registry.sh
+    emit_release_files lib/self_update.sh lib/app_registry.sh
     emit_app_loader_file
     emit_release_files lib/cli.sh lib/manager_cli.sh
     echo 'manager_main "$@"'

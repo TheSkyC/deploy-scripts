@@ -5,7 +5,11 @@ set -euo pipefail
 # Edit source files under lib/ and apps/, then rebuild this file.
 
 DEPLOY_BUNDLED=1
-DEPLOY_ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_SCRIPT_PATH="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1 && resolved_script_path="$(readlink -f -- "$DEPLOY_SCRIPT_PATH" 2>/dev/null)" && [[ -n "$resolved_script_path" ]]; then
+  DEPLOY_SCRIPT_PATH="$resolved_script_path"
+fi
+DEPLOY_ROOT_DIR="$(cd -- "$(dirname -- "$DEPLOY_SCRIPT_PATH")" && pwd)"
 
 # ----- lib/i18n.sh -----
 

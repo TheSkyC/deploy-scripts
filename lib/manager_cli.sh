@@ -106,6 +106,24 @@ manager_main() {
       shift || true
       manager_history_main "$@"
       ;;
+    self-version)
+      shift || true
+      local self_version_json=0 self_version_arg
+      while (($#)); do
+        self_version_arg="$1"
+        case "$self_version_arg" in
+          --json) self_version_json=1; shift ;;
+          -h|--help) printf '%s\n' "Usage: deploy.sh self-version [--json]" >&2; return 0 ;;
+          *) printf 'self-version: unknown option: %s\n' "$self_version_arg" >&2; return 2 ;;
+        esac
+      done
+      self_update_load_config || { printf 'self-version: invalid self-update configuration\n' >&2; return 1; }
+      self_update_print_version "$self_version_json"
+      ;;
+    self-update)
+      shift || true
+      self_update_main "$@"
+      ;;
     menu|"")
       show_manager_menu
       ;;

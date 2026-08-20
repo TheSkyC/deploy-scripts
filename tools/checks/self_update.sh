@@ -81,3 +81,90 @@ PY
   fi
   rm -rf "$first_dir" "$second_dir"
 }
+
+check_self_version_and_manifest_checks() {
+  local managed_root fake_bin fixture output
+  managed_root="$(mktemp -d)"
+  fake_bin="$(mktemp -d)"
+  fixture="$(mktemp)"
+  mkdir -p "${managed_root}/releases/v1.2.3" "${managed_root}/releases/v1.1.0"
+  mkdir -p "${managed_root}/current" "${managed_root}/previous"
+  cat >"${managed_root}/releases/v1.2.3/RELEASE.json" <<'JSON'
+{"schema_version":1,"project":"deploy-scripts","version":"v1.2.3","build_commit":"0123456789012345678901234567890123456789","built_at":"1970-01-01T00:00:00Z"}
+JSON
+  cp "${managed_root}/releases/v1.2.3/RELEASE.json" "${managed_root}/current/RELEASE.json"
+  cat >"${managed_root}/releases/v1.1.0/RELEASE.json" <<'JSON'
+{"schema_version":1,"project":"deploy-scripts","version":"v1.1.0","build_commit":"0123456789012345678901234567890123456789","built_at":"1970-01-01T00:00:00Z"}
+JSON
+  cp "${managed_root}/releases/v1.1.0/RELEASE.json" "${managed_root}/previous/RELEASE.json"
+  cat >"$fixture" <<'JSON'
+{"schema_version":1,"project":"deploy-scripts","channel":"stable","version":"v1.3.0","published_at":"1970-01-01T00:00:00Z","minimum":{"bash":"4.3"},"artifacts":{"source":{"name":"deploy-scripts-v1.3.0.tar.gz","url":"https://updates.invalid/v1.3.0/deploy-scripts-v1.3.0.tar.gz","sha256":"0123456789012345678901234567890123456789012345678901234567890123","size_bytes":1234}},"notes":[]}
+JSON
+  cat >"${fake_bin}/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+output=""
+while (($#)); do
+  if [[ "$1" == -o ]]; then output="$2"; shift 2
+  else shift
+  fi
+done
+[[ -n "$output" ]]
+cat "${SELF_UPDATE_FIXTURE}" > "$output"
+SH
+  chmod 700 "${fake_bin}/curl"
+  if ! output="$(env DEPLOY_ROOT_DIR="${managed_root}/releases/v1.2.3" DEPLOY_SELF_UPDATE_ROOT="$managed_root" \
+    "$BASH_BIN" -c '
+      set -euo pipefail
+      source lib/core.sh
+      self_update_load_config
+      self_update_version_json
+    ')"; then
+    rm -rf "$managed_root" "$fake_bin" "$fixture"
+    return 1
+  fi
+  if ! python - "$output" <<'PY'
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["mode"] == "managed_release"
+assert payload["version"] == "v1.2.3"
+assert payload["previous_version"] == "v1.1.0"
+assert payload["can_update"] is True
+PY
+  then
+    rm -rf "$managed_root" "$fake_bin" "$fixture"
+    return 1
+  fi
+  if ! output="$(env PATH="${fake_bin}:$PATH" SELF_UPDATE_FIXTURE="$fixture" \
+    DEPLOY_ROOT_DIR="${managed_root}/releases/v1.2.3" DEPLOY_SELF_UPDATE_ROOT="$managed_root" \
+    DEPLOY_SELF_UPDATE_URL='https://updates.invalid/v1.3.0' "$BASH_BIN" -c '
+      set -euo pipefail
+      source lib/core.sh
+      self_update_check_main 1
+    ')"; then
+    rm -rf "$managed_root" "$fake_bin" "$fixture"
+    return 1
+  fi
+  if ! python - "$output" <<'PY'
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "update_available"
+assert payload["current_version"] == "v1.2.3"
+assert payload["latest_version"] == "v1.3.0"
+assert payload["artifact"]["name"] == "deploy-scripts-v1.3.0.tar.gz"
+PY
+  then
+    rm -rf "$managed_root" "$fake_bin" "$fixture"
+    return 1
+  fi
+  output="$(env DEPLOY_ROOT_DIR="${managed_root}/releases/v1.2.3" DEPLOY_SELF_UPDATE_ROOT="$managed_root" \
+    DEPLOY_SELF_UPDATE_URL='https://token@example.invalid/v1.3.0' "$BASH_BIN" -c '
+      set +e
+      source lib/core.sh
+      self_update_check_main 1
+    ' 2>/dev/null || true)"
+  [[ "$output" != *token* ]] || { rm -rf "$managed_root" "$fake_bin" "$fixture"; return 1; }
+  rm -rf "$managed_root" "$fake_bin" "$fixture"
+}
