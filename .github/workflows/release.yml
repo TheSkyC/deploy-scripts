@@ -53,17 +53,15 @@ jobs:
       - name: Run release verification
         run: bash tools/verify.sh release
 
-      - name: Create source archive
+      - name: Build verified release package
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           asset_dir="${RUNNER_TEMP}/deploy-scripts-release-assets"
-          mkdir -p "$asset_dir"
-          archive="${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz"
-          tar \
-            --exclude='./.git' \
-            -czf "$archive" .
-          sha256sum "$archive" > "${archive}.sha256"
+          bash tools/package-release.sh \
+            --output-dir "$asset_dir" \
+            --download-base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}" \
+            "$RELEASE_TAG"
 
       - name: Create or update GitHub Release
         env:
@@ -78,7 +76,7 @@ jobs:
           [[ "${RELEASE_PRERELEASE:-false}" != "true" ]] || flags+=(--prerelease)
 
           asset_dir="${RUNNER_TEMP}/deploy-scripts-release-assets"
-          assets=(dist/*.sh "${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz" "${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz.sha256")
+          assets=(dist/*.sh "${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz" "${asset_dir}/deploy-scripts-${RELEASE_TAG}.tar.gz.sha256" "${asset_dir}/manifest.json")
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" "${flags[@]}"
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
