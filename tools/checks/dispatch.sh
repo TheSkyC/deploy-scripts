@@ -15,10 +15,10 @@ check_localized_dispatch() {
   expect_manager_failure_output zh deploy.sh " newapi " "无效选项" " not-a-command "
   expect_manager_failure_output en dist/deploy.sh " newapi " "Invalid choice" " not-a-command "
   expect_manager_failure_output zh dist/deploy.sh " newapi " "无效选项" " not-a-command "
-  expect_failure_output en install_blog.sh "Please run as root" update
-  expect_failure_output zh install_blog.sh "请使用 root 权限运行" update
-  expect_failure_output en dist/install_blog.sh "Please run as root" update
-  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" update
+  expect_failure_output en install_hugo_blog.sh "Please run as root" update
+  expect_failure_output zh install_hugo_blog.sh "请使用 root 权限运行" update
+  expect_failure_output en dist/install_hugo_blog.sh "Please run as root" update
+  expect_failure_output zh dist/install_hugo_blog.sh "请使用 root 权限运行" update
   expect_manager_failure_output en deploy.sh blog "Please run as root" update
   expect_manager_failure_output zh deploy.sh blog "请使用 root 权限运行" update
   expect_manager_failure_output en dist/deploy.sh blog "Please run as root" update
@@ -118,10 +118,10 @@ check_no_argument_menu() {
   expect_menu_output zh deploy.sh "请选择应用"
   expect_menu_output en dist/deploy.sh "Choose an application"
   expect_menu_output zh dist/deploy.sh "请选择应用"
-  expect_menu_output en install_blog.sh "Choose an action"
-  expect_menu_output zh install_blog.sh "请选择操作"
-  expect_menu_output en dist/install_blog.sh "Choose an action"
-  expect_menu_output zh dist/install_blog.sh "请选择操作"
+  expect_menu_output en install_hugo_blog.sh "Choose an action"
+  expect_menu_output zh install_hugo_blog.sh "请选择操作"
+  expect_menu_output en dist/install_hugo_blog.sh "Choose an action"
+  expect_menu_output zh dist/install_hugo_blog.sh "请选择操作"
   expect_menu_output en install_tickflow.sh "Choose an action"
   expect_menu_output zh install_tickflow.sh "请选择操作"
   expect_menu_output en dist/install_tickflow.sh "Choose an action"

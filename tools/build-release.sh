@@ -61,7 +61,7 @@ emit_app_loader_file() {
   local app="${1:-}"
   echo '# ----- lib/app_loader.sh -----'
   if [[ -n "$app" ]]; then
-    echo "BUNDLED_APP_IMPL_SCRIPT_NAME=\"install_${app}_impl.sh\""
+    printf 'BUNDLED_APP_IMPL_SCRIPT_NAME="%s"\n' "$(deploy_app_bundled_impl_script_name_for "$app")"
   fi
   emit_without_shebang "${ROOT_DIR}/lib/app_loader.sh"
   echo
@@ -96,7 +96,7 @@ emit_manager_app_impl_payloads() {
   for app in "${DEPLOY_APP_IDS[@]}"; do
     impl_file="$(deploy_app_impl_file_for "$app")"
     echo
-    echo "__DEPLOY_APP_IMPL_SCRIPT__ install_${app}_impl.sh"
+    echo "__DEPLOY_APP_IMPL_SCRIPT__ $(deploy_app_bundled_impl_script_name_for "$app")"
     cat "${ROOT_DIR}/${impl_file}"
     echo "__DEPLOY_APP_IMPL_SCRIPT_END__"
   done
@@ -145,7 +145,7 @@ build_one() {
     usage
     exit 1
   }
-  output="${DIST_DIR}/install_${app//-/_}.sh"
+  output="${DIST_DIR}/$(deploy_app_script_name_for "$app")"
   output_tmp="$(prepare_output_file "$output")"
   commit="$(release_build_commit)"
   built_at="$(release_built_at)"

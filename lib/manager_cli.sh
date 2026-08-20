@@ -45,7 +45,7 @@ show_manager_menu() {
 manager_load_app() {
   local app_id="$1" app_file
   if [[ "${DEPLOY_BUNDLED_MANAGER:-0}" == "1" ]]; then
-    BUNDLED_APP_IMPL_SCRIPT_NAME="install_${app_id}_impl.sh"
+    BUNDLED_APP_IMPL_SCRIPT_NAME="$(deploy_app_bundled_impl_script_name_for "$app_id")"
     manager_source_bundled_app_definition "$app_id"
     return 0
   fi

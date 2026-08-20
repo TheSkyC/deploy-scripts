@@ -2663,7 +2663,7 @@ bapp_uninstall() {
 
 
 # ----- lib/app_loader.sh -----
-BUNDLED_APP_IMPL_SCRIPT_NAME="install_blog_impl.sh"
+BUNDLED_APP_IMPL_SCRIPT_NAME="install_hugo_blog_impl.sh"
 
 ensure_bundled_impl_dir() {
   [[ "${DEPLOY_BUNDLED:-0}" == "1" ]] || return 0
@@ -3568,7 +3568,7 @@ i18n_register_many \
   "删除失败：%s"
 
 APP_DESCRIPTION="$(t app.blog.description)"
-APP_IMPL_SCRIPT="impl/install_blog.sh"
+APP_IMPL_SCRIPT="impl/install_hugo_blog.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
 

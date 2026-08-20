@@ -56,7 +56,7 @@ check_config_writes_are_centralized() {
           exit 1
         }
       }
-    ' impl/install_blog.sh impl/install_cpa_stack.sh impl/install_cyberstrikeai.sh \
+    ' impl/install_hugo_blog.sh impl/install_cpa_stack.sh impl/install_cyberstrikeai.sh \
       impl/install_newapi.sh impl/install_sub2api.sh impl/install_tickflow.sh impl/install_vaultwarden.sh
 }
 
@@ -202,21 +202,21 @@ check_config_save_failures_are_explicit() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_blog.sh lib/app.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
+      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_hugo_blog.sh lib/app.sh
 }
 
 check_summary_ip_detection_has_fallback() {
   if grep -R -n 'hostname -I .*| awk '\''{print $1}'\''' \
-      impl/install_blog.sh impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
-      dist/install_blog.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh 2>/dev/null \
+      impl/install_hugo_blog.sh impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
+      dist/install_hugo_blog.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh 2>/dev/null \
       | grep -v '|| true'; then
     echo "Summary IP detection must tolerate hostname -I failures and provide YOUR_SERVER_IP fallback." >&2
     return 1
   fi
   local file
-  for file in impl/install_blog.sh impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
-      dist/install_blog.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh; do
+  for file in impl/install_hugo_blog.sh impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
+      dist/install_hugo_blog.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh dist/install_cyberstrikeai.sh; do
     awk '
         /hostname -I 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| true/ { saw_safe=1 }
         /YOUR_SERVER_IP/ { saw_fallback=1 }

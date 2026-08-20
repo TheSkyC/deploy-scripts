@@ -84,7 +84,7 @@ check_safe_path_guard() {
         }
         in_blog=0
       }
-    ' impl/install_blog.sh impl/install_vaultwarden.sh
+    ' impl/install_hugo_blog.sh impl/install_vaultwarden.sh
   awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_install_dir_guard=0; saw_vw_bin_guard=0; next }
       in_uninstall && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_dir_guard=1 }
@@ -199,7 +199,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_safe_rm_dir_is_idempotent() {
@@ -225,7 +225,7 @@ check_safe_rm_dir_is_idempotent() {
         in_func=0
         in_heredoc=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_atomic_helpers_are_atomic() {

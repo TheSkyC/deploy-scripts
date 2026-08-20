@@ -157,7 +157,7 @@ check_nginx_domains_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_config_value_validators() {
@@ -228,8 +228,8 @@ check_config_value_validators() {
     'impl/install_vaultwarden.sh|app_validate_git_ref "EXTRACT_TOOL_COMMIT" "$EXTRACT_TOOL_COMMIT"'
     'impl/install_vaultwarden.sh|app_validate_sha256 "EXTRACT_TOOL_SHA256" "$EXTRACT_TOOL_SHA256"'
     'impl/install_vaultwarden.sh|app_validate_release_version "WEB_VAULT_VER" "$WEB_VAULT_VER"'
-    'impl/install_blog.sh|app_validate_https_url "THEME_REPO" "$THEME_REPO"'
-    'impl/install_blog.sh|app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"'
+    'impl/install_hugo_blog.sh|app_validate_https_url "THEME_REPO" "$THEME_REPO"'
+    'impl/install_hugo_blog.sh|app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"'
   )
   local check file pattern
   for check in "${checks[@]}"; do

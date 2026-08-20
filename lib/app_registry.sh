@@ -5,7 +5,7 @@ DEPLOY_APP_SPECS=(
   "sub2api|Sub2API|apps/sub2api.sh|impl/install_sub2api.sh"
   "vaultwarden|Vaultwarden|apps/vaultwarden.sh|impl/install_vaultwarden.sh"
   "cyberstrikeai|CyberStrikeAI|apps/cyberstrikeai.sh|impl/install_cyberstrikeai.sh"
-  "blog|Hugo Blog|apps/blog.sh|impl/install_blog.sh"
+  "blog|Hugo Blog|apps/blog.sh|impl/install_hugo_blog.sh"
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh"
   "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh"
   "ntfy|ntfy|apps/ntfy.sh|impl/install_ntfy.sh"
@@ -72,6 +72,22 @@ deploy_app_file_for() {
 
 deploy_app_impl_file_for() {
   deploy_app_metadata_for "$1" impl_file
+}
+
+deploy_app_script_name_for() {
+  local app_id="$1"
+  case "$app_id" in
+    blog) echo "install_hugo_blog.sh" ;;
+    *) echo "install_${app_id//-/_}.sh" ;;
+  esac
+}
+
+deploy_app_bundled_impl_script_name_for() {
+  local app_id="$1"
+  case "$app_id" in
+    blog) echo "install_hugo_blog_impl.sh" ;;
+    *) echo "install_${app_id}_impl.sh" ;;
+  esac
 }
 
 deploy_app_name_for() {

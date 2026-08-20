@@ -662,7 +662,7 @@ i18n_register_many \
   "删除失败：%s"
 
 APP_DESCRIPTION="$(t app.blog.description)"
-APP_IMPL_SCRIPT="impl/install_blog.sh"
+APP_IMPL_SCRIPT="impl/install_hugo_blog.sh"
 
 load_app_impl "$APP_IMPL_SCRIPT"
 

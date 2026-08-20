@@ -894,7 +894,7 @@ check_manual_backup_retention_is_normalized() {
       in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
       in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
   awk '
       /^do_backup\(\) \{/ {
         in_func=1

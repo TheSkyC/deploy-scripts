@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # shellcheck source=../verify.sh
-# Verify checks for the blog app (apps/blog.sh, impl/install_blog.sh).
+# Verify checks for the blog app (apps/blog.sh, impl/install_hugo_blog.sh).
 
 check_blog_uninstall_supports_noninteractive_mode() {
   awk '
@@ -17,30 +17,30 @@ check_blog_uninstall_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_status_dispatch() {
-  expect_success_output en install_blog.sh status "Inspect Hugo Blog deployment status"
-  expect_success_output zh install_blog.sh status "检查 Hugo Blog 部署状态"
-  expect_success_output en dist/install_blog.sh status "Inspect Hugo Blog deployment status"
-  expect_success_output zh dist/install_blog.sh status "检查 Hugo Blog 部署状态"
-  expect_failure_output en install_blog.sh "Please run as root" backup
-  expect_failure_output zh install_blog.sh "请使用 root 权限运行" backup
-  expect_failure_output en dist/install_blog.sh "Please run as root" backup
-  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" backup
-  expect_failure_output en install_blog.sh "Please run as root" restore
-  expect_failure_output zh install_blog.sh "请使用 root 权限运行" restore
-  expect_failure_output en dist/install_blog.sh "Please run as root" restore
-  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" restore
-  expect_failure_output en install_blog.sh "Please run as root" uninstall
-  expect_failure_output zh install_blog.sh "请使用 root 权限运行" uninstall
-  expect_failure_output en dist/install_blog.sh "Please run as root" uninstall
-  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" uninstall
-  expect_failure_output en install_blog.sh "Please run as root" update
-  expect_failure_output zh install_blog.sh "请使用 root 权限运行" update
-  expect_failure_output en dist/install_blog.sh "Please run as root" update
-  expect_failure_output zh dist/install_blog.sh "请使用 root 权限运行" update
+  expect_success_output en install_hugo_blog.sh status "Inspect Hugo Blog deployment status"
+  expect_success_output zh install_hugo_blog.sh status "检查 Hugo Blog 部署状态"
+  expect_success_output en dist/install_hugo_blog.sh status "Inspect Hugo Blog deployment status"
+  expect_success_output zh dist/install_hugo_blog.sh status "检查 Hugo Blog 部署状态"
+  expect_failure_output en install_hugo_blog.sh "Please run as root" backup
+  expect_failure_output zh install_hugo_blog.sh "请使用 root 权限运行" backup
+  expect_failure_output en dist/install_hugo_blog.sh "Please run as root" backup
+  expect_failure_output zh dist/install_hugo_blog.sh "请使用 root 权限运行" backup
+  expect_failure_output en install_hugo_blog.sh "Please run as root" restore
+  expect_failure_output zh install_hugo_blog.sh "请使用 root 权限运行" restore
+  expect_failure_output en dist/install_hugo_blog.sh "Please run as root" restore
+  expect_failure_output zh dist/install_hugo_blog.sh "请使用 root 权限运行" restore
+  expect_failure_output en install_hugo_blog.sh "Please run as root" uninstall
+  expect_failure_output zh install_hugo_blog.sh "请使用 root 权限运行" uninstall
+  expect_failure_output en dist/install_hugo_blog.sh "Please run as root" uninstall
+  expect_failure_output zh dist/install_hugo_blog.sh "请使用 root 权限运行" uninstall
+  expect_failure_output en install_hugo_blog.sh "Please run as root" update
+  expect_failure_output zh install_hugo_blog.sh "请使用 root 权限运行" update
+  expect_failure_output en dist/install_hugo_blog.sh "Please run as root" update
+  expect_failure_output zh dist/install_hugo_blog.sh "请使用 root 权限运行" update
 }
 
 check_blog_install_surfaces_default_nginx_site_removal_failures() {
@@ -55,7 +55,7 @@ check_blog_install_surfaces_default_nginx_site_removal_failures() {
         }
         in_nginx=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_localized_defaults() {
@@ -90,7 +90,7 @@ check_blog_config_persistence() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_restore_action() {
@@ -121,12 +121,12 @@ check_blog_restore_action() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl wget git nginx ca-certificates$' \
-      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog dependency installation must use explicit conditionals with actionable errors." >&2
     return 1
   fi
@@ -155,7 +155,7 @@ check_blog_dependency_failures_are_reported() {
         }
         in_block=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_hugo_install_failures_are_actionable() {
@@ -222,7 +222,7 @@ check_blog_hugo_install_failures_are_actionable() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_site_setup_failures_are_explicit() {
@@ -331,7 +331,7 @@ check_blog_site_setup_failures_are_explicit() {
         }
         in_nginx=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_enable_failures_are_reported() {
@@ -345,12 +345,12 @@ check_blog_enable_failures_are_reported() {
           exit 1
         }
       }
-    ' apps/blog.sh impl/install_blog.sh dist/install_blog.sh
+    ' apps/blog.sh impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_nginx_start_path_is_explicit() {
   if grep -R -n '^systemctl restart nginx$' \
-      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog nginx startup must branch explicitly on restart failure." >&2
     return 1
   fi
@@ -364,7 +364,7 @@ check_blog_nginx_start_path_is_explicit() {
         }
         in_block=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_install_summary_matches_local_health() {
@@ -394,21 +394,21 @@ check_blog_install_summary_matches_local_health() {
         }
         in_health=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_static_deploy_swaps_tree() {
-  if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+  if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not copy directly into the live Nginx root." >&2
     return 1
   fi
   if grep -R -n '^[[:space:]]*\[\[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" \]\] && mv "\$DEPLOY_BAK" "\$NGINX_ROOT" || true' \
-      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment rollback must validate restoring the Nginx root." >&2
     return 1
   fi
   if grep -R -nE '\[\[ -e "\\?\$DEPLOY_BAK" \|\| -L "\\?\$DEPLOY_BAK" \]\] && rm -rf "\\?\$DEPLOY_BAK"' \
-      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not let a missing previous backup trip set -e after a successful first deploy." >&2
     return 1
   fi
@@ -449,7 +449,7 @@ check_blog_static_deploy_swaps_tree() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_static_deploy_failures_are_actionable() {
@@ -474,16 +474,16 @@ check_blog_static_deploy_failures_are_actionable() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_site_files_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > "\$CONFIG_FILE"|^[[:space:]]*cat > "\$\{SITE_DIR\}/|^[[:space:]]*cat > "\$\{CMS_ADMIN_DIR\}/' \
-      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog site files must be written through temporary files before replacement." >&2
     return 1
   fi
-  if grep -R -n '^[[:space:]]*cp "\$CONFIG_FILE" "\${CONFIG_FILE}.bak.' impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+  if grep -R -n '^[[:space:]]*cp "\$CONFIG_FILE" "\${CONFIG_FILE}.bak.' impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog config backups must copy to a temporary file before replacing the final backup path." >&2
     return 1
   fi
@@ -519,7 +519,7 @@ check_blog_site_files_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_publish_guidance_uses_staging_output() {
@@ -555,7 +555,7 @@ check_blog_publish_guidance_uses_staging_output() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_blog_publish_helper_is_atomic() {
@@ -587,5 +587,5 @@ check_blog_publish_helper_is_atomic() {
           exit 1
         }
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }

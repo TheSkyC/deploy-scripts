@@ -19,7 +19,7 @@ sudo bash install_vaultwarden.sh status
 sudo bash install_tickflow.sh doctor
 sudo bash install_newapi.sh --help
 sudo bash install_cyberstrikeai.sh backup
-sudo bash install_blog.sh install
+sudo bash install_hugo_blog.sh install
 ```
 
 Run the central scheduler or an app script without arguments to open the interactive menu:
@@ -106,7 +106,7 @@ English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework m
 
 ```bash
 sudo DEPLOY_LANG=zh bash install_newapi.sh install
-sudo DEPLOY_LANG=zh bash dist/install_blog.sh update
+sudo DEPLOY_LANG=zh bash dist/install_hugo_blog.sh update
 ```
 
 Localization is intentionally layered:

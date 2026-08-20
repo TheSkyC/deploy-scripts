@@ -305,7 +305,7 @@ check_nginx_configs_are_atomic() {
         in_link=0
       }
     ' lib/app.sh \
-      dist/install_blog.sh dist/install_cyberstrikeai.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+      dist/install_hugo_blog.sh dist/install_cyberstrikeai.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
   awk '
       FNR == 1 {
         if (NR > 1 && !(prev_cfg && prev_link)) {
@@ -328,7 +328,7 @@ check_nginx_configs_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_blog.sh
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_hugo_blog.sh
 }
 
 check_nginx_main_config_edits_are_atomic() {
@@ -376,7 +376,7 @@ check_firewall_success_paths_validate_command_results() {
     return 1
   fi
   if grep -R -n 'ufw allow "Nginx Full" > /dev/null 2>&1 || ufw allow 80/tcp > /dev/null' \
-      impl/install_blog.sh dist/install_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog firewall fallback must not report success unless both HTTP and HTTPS rules are applied." >&2
     return 1
   fi
@@ -487,7 +487,7 @@ check_firewall_success_paths_validate_command_results() {
         }
         in_block=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_uninstall_nginx_paths_preserve_diagnostics() {
@@ -578,7 +578,7 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_blog.sh dist/install_blog.sh
+    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
 }
 
 check_fail2ban_configs_are_atomic() {
