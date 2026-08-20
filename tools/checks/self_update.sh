@@ -242,3 +242,102 @@ PY
   }
   rm -rf "$managed_root" "$fake_bin" "$fixture_dir" "$stage_dir"
 }
+
+
+check_self_update_activation_and_rollback() {
+  if ! "$BASH_BIN" -c '
+    set -euo pipefail
+    managed_root="$(mktemp -d)"
+    trap "rm -rf \"$managed_root\"" EXIT
+    mkdir -p "${managed_root}/releases/v1.2.3"
+    printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"version\":\"v1.2.3\",\"build_commit\":\"0123456789012345678901234567890123456789\",\"built_at\":\"1970-01-01T00:00:00Z\"}" >"${managed_root}/releases/v1.2.3/RELEASE.json"
+    export DEPLOY_ROOT_DIR="${managed_root}/releases/v1.2.3"
+    export DEPLOY_SELF_UPDATE_ROOT="$managed_root"
+    export DEPLOY_SELF_UPDATE_URL="https://updates.invalid/v1.3.0"
+    export DEPLOY_SELF_UPDATE_ALLOW_NONROOT_TEST=1
+    export DEPLOY_OPERATION_ROOT="${managed_root}/operation"
+    export DEPLOY_OPERATION_LOG_ROOT="${managed_root}/logs"
+    export DEPLOY_SELF_UPDATE_LOCK_FILE="${managed_root}/self-update.lock"
+    fake_bin="${managed_root}/bin"
+    mkdir -p "$fake_bin"
+    printf "%s\\n" "#!/usr/bin/env bash" "exit 0" >"${fake_bin}/flock"
+    chmod +x "${fake_bin}/flock"
+    export PATH="${fake_bin}:$PATH"
+    source lib/core.sh
+    atomic_symlink() {
+      rm -rf -- "$2"
+      printf "%s\n" "$1" >"$2"
+    }
+    self_update_current_target_for() {
+      if [[ -f "${managed_root}/current" ]]; then cat "${managed_root}/current"; else printf "%s\n" "${managed_root}/releases/v1.2.3"; fi
+    }
+    self_update_previous_target_for() {
+      [[ -f "${managed_root}/previous" ]] || return 1
+      cat "${managed_root}/previous"
+    }
+    self_update_confirm() { return 0; }
+    self_update_cleanup_releases() { return 0; }
+    self_update_smoke_check() { return "${SMOKE_STATUS:-0}"; }
+    self_update_prepare_candidate() {
+      local temp_dir="$1" version candidate
+      version="${NEXT_VERSION:-v1.3.0}"
+      candidate="${temp_dir}/extracted/deploy-scripts-${version}"
+      mkdir -p "${candidate}/lib"
+      printf "#!/usr/bin/env bash\n" >"${candidate}/deploy.sh"
+      printf "#!/usr/bin/env bash\n" >"${candidate}/lib/core.sh"
+      printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"version\":\"${version}\",\"build_commit\":\"0123456789012345678901234567890123456789\",\"built_at\":\"1970-01-01T00:00:00Z\"}" >"${candidate}/RELEASE.json"
+      SELF_UPDATE_MANIFEST_VERSION="$version"
+      SELF_UPDATE_MANIFEST_NAME="deploy-scripts-${version}.tar.gz"
+      SELF_UPDATE_MANIFEST_SHA256="0123456789012345678901234567890123456789012345678901234567890123"
+      SELF_UPDATE_MANIFEST_SIZE_BYTES=1
+      SELF_UPDATE_CANDIDATE_ROOT="$candidate"
+      SELF_UPDATE_CANDIDATE_ARCHIVE="${temp_dir}/archive"
+    }
+    output="$(self_update_apply_main 1 1)"
+    python - "$output" <<"PY"
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "succeeded"
+assert payload["latest_version"] == "v1.3.0"
+PY
+    [[ "$(cat "${managed_root}/current")" == "${managed_root}/releases/v1.3.0" ]]
+    [[ "$(cat "${managed_root}/previous")" == "${managed_root}/releases/v1.2.3" ]]
+    export NEXT_VERSION=v1.4.0
+    export SMOKE_STATUS=1
+    output="$(self_update_apply_main 1 1)" || status=$?
+    [[ "${status:-0}" -eq 1 ]]
+    python - "$output" <<"PY"
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "rolled_back"
+PY
+    [[ "$(cat "${managed_root}/current")" == "${managed_root}/releases/v1.3.0" ]]
+    [[ "$(cat "${managed_root}/previous")" == "${managed_root}/releases/v1.2.3" ]]
+    export SMOKE_STATUS=0
+    output="$(self_update_rollback_main 1 1)"
+    python - "$output" <<"PY"
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "succeeded"
+assert payload["target_version"] == "v1.2.3"
+PY
+    [[ "$(cat "${managed_root}/current")" == "${managed_root}/releases/v1.2.3" ]]
+    [[ "$(cat "${managed_root}/previous")" == "${managed_root}/releases/v1.3.0" ]]
+    output="$(self_update_list_main 1)"
+    python - "$output" <<"PY"
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["mode"] == "managed_release"
+assert len(payload["releases"]) == 2
+PY
+    if self_update_main --check --list >/dev/null 2>&1; then
+      exit 1
+    fi
+  '; then
+    return 1
+  fi
+}
