@@ -98,6 +98,10 @@ manager_main() {
       shift || true
       manager_update_main "$@"
       ;;
+    update-all)
+      shift || true
+      manager_update_all_main "$@"
+      ;;
     history)
       shift || true
       manager_history_main "$@"

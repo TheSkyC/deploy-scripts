@@ -353,6 +353,7 @@ main() {
     update)
       check_update_version_cache_and_network_failures
       check_check_update_target
+      check_update_all_dry_run_target
       echo "Update verification passed"
       return 0
       ;;
@@ -600,6 +601,7 @@ main() {
       check_doctor_all_target
       check_update_version_cache_and_network_failures
       check_check_update_target
+      check_update_all_dry_run_target
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0

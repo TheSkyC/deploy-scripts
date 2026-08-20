@@ -73,3 +73,27 @@ PY
   rm -f "$json_file"
   return "$status"
 }
+
+check_update_all_dry_run_target() {
+  local output json_file status
+  output="$($BASH_BIN deploy.sh update-all --dry-run --json --include newapi)" || return 1
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+assert payload["schema_version"] == 1
+assert payload["dry_run"] is True
+assert payload["summary"]["selected"] == 1
+assert payload["summary"]["planned"] == 0
+assert payload["records"][0]["app_id"] == "newapi"
+assert payload["records"][0]["action"] == "skip"
+assert payload["records"][0]["reason"] == "not_installed"
+PY
+  status=$?
+  rm -f "$json_file"
+  return "$status"
+}
