@@ -47,7 +47,8 @@ jobs:
           tag_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
           checked_out_commit="$(git rev-parse HEAD)"
           [[ "$tag_commit" == "$checked_out_commit" ]]
-          [[ -z "$(git status --porcelain)" ]]
+          git diff --quiet
+          git diff --cached --quiet
 
       - name: Run release verification
         run: bash tools/verify.sh release

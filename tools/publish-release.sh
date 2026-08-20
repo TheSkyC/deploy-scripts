@@ -55,12 +55,12 @@ check_clean_tree() {
 }
 
 wait_for_release_workflow() {
-  local tag="$1" run_id="" attempt=0 repo=""
+  local tag="$1" commit="$2" run_id="" attempt=0 repo=""
   repo="$(cd "$ROOT_DIR" && gh repo view --json nameWithOwner --jq .nameWithOwner)" \
     || fail "cannot determine GitHub repository for remote $REMOTE"
   printf 'Waiting for GitHub Actions release workflow for %s...\n' "$tag" >&2
   while (( attempt < 30 )); do
-    run_id="$(gh run list --workflow release.yml --repo "$repo" --event push --branch "$tag" --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+    run_id="$(gh run list --workflow release.yml --repo "$repo" --event push --commit "$commit" --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
     if [[ -n "$run_id" ]]; then
       gh run watch "$run_id" --exit-status
       printf 'GitHub Actions release workflow completed: %s\n' "$run_id" >&2
@@ -130,12 +130,14 @@ main() {
   fi
 
   git -C "$ROOT_DIR" tag -a "$tag" -m "release $tag"
+  local tag_commit
+  tag_commit="$(git -C "$ROOT_DIR" rev-parse "${tag}^{commit}")"
   printf 'Pushing tag %s to %s...\n' "$tag" "$REMOTE" >&2
   git -C "$ROOT_DIR" push "$REMOTE" "refs/tags/$tag"
   printf 'Tag pushed. GitHub Actions will create/update the Release automatically.\n' >&2
 
   if [[ "$WAIT" -eq 1 ]]; then
-    wait_for_release_workflow "$tag"
+    wait_for_release_workflow "$tag" "$tag_commit"
   fi
 }
 
