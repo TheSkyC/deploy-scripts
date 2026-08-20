@@ -82,9 +82,13 @@ manager_main() {
   local command="${1:-menu}" app_id status action
   command="$(deploy_trim "$command")"
   case "${command,,}" in
-    overview|status-all|problems)
+    overview|status-all|problems|health-all)
       shift || true
       manager_status_main "${command,,}" "$@"
+      ;;
+    doctor-all)
+      shift || true
+      manager_doctor_main "$@"
       ;;
     history)
       shift || true

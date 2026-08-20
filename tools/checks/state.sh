@@ -71,3 +71,13 @@ check_state_problems_filtering() {
   python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["apps"] == []; assert x["summary"]["registered"] == 16; assert x["summary"]["selected"] == 1' "$json_file"
   rm -f "$json_file"
 }
+
+
+check_health_all_target() {
+  local output json_file
+  output="$(DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh health-all --json --include newapi)"
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert x["apps"] == []; assert x["summary"]["selected"] == 1' "$json_file"
+  rm -f "$json_file"
+}

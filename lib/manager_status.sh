@@ -186,6 +186,7 @@ manager_status_main() {
     esac
   done
   [[ "$command" != problems ]] || strict=1
+  [[ "$command" != health-all ]] || only_installed=1
   manager_status_collect "$include_csv" "$exclude_csv" "$only_installed" || return $?
   temp_dir="$MANAGER_STATUS_TEMP_DIR"
   if (( json )); then

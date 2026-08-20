@@ -19,6 +19,7 @@ COMMON_RELEASE_LIB_FILES=(
   lib/state.sh
   lib/manager_status.sh
   lib/manager_history.sh
+  lib/manager_doctor.sh
   lib/app.sh
   lib/binary_app.sh
 )

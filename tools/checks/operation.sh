@@ -65,3 +65,13 @@ check_history_command() {
   rm -f "$json_file"
   rm -rf "$temp_root"
 }
+
+
+check_doctor_all_target() {
+  local output json_file
+  output="$($BASH_BIN deploy.sh doctor-all --json --include newapi)"
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert x["records"] == []' "$json_file"
+  rm -f "$json_file"
+}
