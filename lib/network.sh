@@ -42,20 +42,34 @@ json_tag_name() {
 }
 
 # Fetches the latest release tag for a GitHub repository (owner/repo).
-# Prints the tag (with or without a leading "v") when it looks like a
-# version, otherwise prints nothing and warns with the given i18n key.
-github_latest_release_tag() {
-  local repo="$1" warn_key="$2"
-  local json tag
-  json=$(curl -fsSL --max-time 15 \
-    "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) \
-    || { warn "$(t "$warn_key")"; echo ""; return; }
+# The checked variant is intentionally silent so JSON-producing callers can
+# handle failures without contaminating stdout. GITHUB_TOKEN, when present,
+# is passed to curl only and is never logged or returned.
+github_latest_release_tag_checked() {
+  local repo="$1" json tag timeout_seconds
+  local -a curl_args
+  [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
+  timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
+  [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
+  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
-  if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
-    echo "$tag"
-  else
-    echo ""
+  [[ "${tag:-}" =~ ^v?[0-9] ]] || return 2
+  printf '%s\n' "$tag"
+}
+
+# Compatibility wrapper for existing lifecycle paths. It retains the prior
+# warning-and-empty-output contract while delegating request handling to the
+# silent helper used by the central version checker.
+github_latest_release_tag() {
+  local repo="$1" warn_key="$2" tag
+  if ! tag="$(github_latest_release_tag_checked "$repo")"; then
+    warn "$(t "$warn_key")"
+    printf '\n'
+    return 0
   fi
+  printf '%s\n' "$tag"
 }
 
 is_valid_dns_name() {

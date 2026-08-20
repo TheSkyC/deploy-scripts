@@ -94,6 +94,10 @@ manager_main() {
       shift || true
       manager_backup_main "$@"
       ;;
+    check-update)
+      shift || true
+      manager_update_main "$@"
+      ;;
     history)
       shift || true
       manager_history_main "$@"

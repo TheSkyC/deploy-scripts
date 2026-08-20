@@ -499,6 +499,21 @@ binary_app_bootstrap() {
   bapp_validate_cfg
 }
 
+# Version adapters used by the central status and check-update commands. These
+# deliberately share only the GitHub-release binary lifecycle: applications
+# with custom update logic must opt in with their own adapter instead.
+bapp_status_version_json() {
+  local conf_file installed
+  conf_file="$(app_conf_file)"
+  installed="$(app_config_installed_version "$conf_file" 2>/dev/null || true)"
+  version_check_cached_binary_release_json "$APP_ID" "$installed"
+}
+
+bapp_check_update_json() {
+  local installed="$1" refresh="${2:-0}" no_network="${3:-0}"
+  version_check_binary_release_json "$APP_ID" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
+}
+
 # Root/apt/arch preflight shared by install, update, backup, and uninstall.
 bapp_preflight() {
   local action="${1:-}"

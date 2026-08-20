@@ -33,11 +33,12 @@ source tools/checks/release.sh
 source tools/checks/static.sh
 source tools/checks/operation.sh
 source tools/checks/state.sh
+source tools/checks/update.sh
 source tools/checks/validators.sh
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|state|operation|help]
+Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|state|operation|update|help]
 
 Targets:
   all       Run the full repository verification suite. This is the default.
@@ -49,6 +50,7 @@ Targets:
   guards    Rebuild dist/ and run structural/behavioral guardrail checks.
   state     Run state-center and status JSON checks.
   operation Run version and operation-record checks.
+  update    Run cached application version-check and check-update checks.
 EOF
 }
 
@@ -348,6 +350,12 @@ main() {
       echo "Operation verification passed"
       return 0
       ;;
+    update)
+      check_update_version_cache_and_network_failures
+      check_check_update_target
+      echo "Update verification passed"
+      return 0
+      ;;
     guards)
       check_shell_syntax
       build_verified_release
@@ -590,6 +598,8 @@ main() {
       check_app_action_operation_wrapping
       check_backup_all_dry_run
       check_doctor_all_target
+      check_update_version_cache_and_network_failures
+      check_check_update_target
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0

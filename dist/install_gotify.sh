@@ -639,20 +639,34 @@ json_tag_name() {
 }
 
 # Fetches the latest release tag for a GitHub repository (owner/repo).
-# Prints the tag (with or without a leading "v") when it looks like a
-# version, otherwise prints nothing and warns with the given i18n key.
-github_latest_release_tag() {
-  local repo="$1" warn_key="$2"
-  local json tag
-  json=$(curl -fsSL --max-time 15 \
-    "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) \
-    || { warn "$(t "$warn_key")"; echo ""; return; }
+# The checked variant is intentionally silent so JSON-producing callers can
+# handle failures without contaminating stdout. GITHUB_TOKEN, when present,
+# is passed to curl only and is never logged or returned.
+github_latest_release_tag_checked() {
+  local repo="$1" json tag timeout_seconds
+  local -a curl_args
+  [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
+  timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
+  [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
+  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
-  if [[ "${tag:-}" =~ ^v?[0-9] ]]; then
-    echo "$tag"
-  else
-    echo ""
+  [[ "${tag:-}" =~ ^v?[0-9] ]] || return 2
+  printf '%s\n' "$tag"
+}
+
+# Compatibility wrapper for existing lifecycle paths. It retains the prior
+# warning-and-empty-output contract while delegating request handling to the
+# silent helper used by the central version checker.
+github_latest_release_tag() {
+  local repo="$1" warn_key="$2" tag
+  if ! tag="$(github_latest_release_tag_checked "$repo")"; then
+    warn "$(t "$warn_key")"
+    printf '\n'
+    return 0
   fi
+  printf '%s\n' "$tag"
 }
 
 is_valid_dns_name() {
@@ -1266,7 +1280,15 @@ state_version_json() {
       printf '%s' "$output"; return
     fi
   fi
-  [[ -n "${GITHUB_REPO:-}" ]] && source=binary_release
+  # BA_BIN_NAME is set only by implementations using the shared binary-app
+  # lifecycle. Do not infer support from GITHUB_REPO alone: several custom
+  # applications use GitHub for a non-comparable source/update workflow.
+  if [[ -n "${BA_BIN_NAME:-}" ]] && declare -f bapp_status_version_json >/dev/null 2>&1; then
+    output="$(bapp_status_version_json 2>/dev/null || true)"
+    if [[ "$(printf '%s\n' "$output" | wc -l)" -eq 1 && "$output" == \{*\} && -n "$(state_json_field "$output" installed 2>/dev/null || true)" ]]; then
+      printf '%s' "$output"; return
+    fi
+  fi
   printf '{"installed":%s,"latest":%s,"checked_at":%s,"update_state":%s,"source":%s}' "$installed" "$latest" "$checked_at" "$(app_json_string "$update_state")" "$(app_json_string "$source")"
 }
 
@@ -1337,6 +1359,201 @@ app_status_collect_json() {
 
 
 
+
+# ----- lib/version_check.sh -----
+
+# Shared, read-only GitHub-release version checking with a small on-disk cache.
+# Status collection consumes this cache but never calls the network; only the
+# central check-update command refreshes expired entries (or all entries with
+# --refresh).
+DEPLOY_VERSION_CACHE_ROOT="${DEPLOY_VERSION_CACHE_ROOT:-/var/lib/deploy-scripts/version-cache}"
+DEPLOY_VERSION_CACHE_TTL_SECONDS="${DEPLOY_VERSION_CACHE_TTL_SECONDS:-21600}"
+DEPLOY_VERSION_CACHE_SCHEMA_VERSION=1
+
+version_check_now_epoch() {
+  local now="${DEPLOY_VERSION_NOW_EPOCH:-}"
+  if [[ "$now" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$now"
+  else
+    date +%s
+  fi
+}
+
+version_check_timestamp_for_epoch() {
+  local epoch="$1"
+  if date -u -d "@${epoch}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null; then
+    return 0
+  fi
+  state_now
+}
+
+version_cache_file_for() {
+  local app_id="$1"
+  [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
+  printf '%s/%s.json\n' "${DEPLOY_VERSION_CACHE_ROOT%/}" "$app_id"
+}
+
+version_cache_ensure_directory() {
+  [[ -n "${DEPLOY_VERSION_CACHE_ROOT:-}" && "${DEPLOY_VERSION_CACHE_ROOT}" = /* ]] || return 1
+  [[ ! -L "$DEPLOY_VERSION_CACHE_ROOT" ]] || return 1
+  mkdir -p "$DEPLOY_VERSION_CACHE_ROOT" || return 1
+  chmod 700 "$DEPLOY_VERSION_CACHE_ROOT" || return 1
+}
+
+version_cache_file_is_safe() {
+  local file="$1" mode
+  [[ -f "$file" && ! -L "$file" ]] || return 1
+  if command -v stat >/dev/null 2>&1; then
+    # Git Bash translates Windows ACLs to synthetic POSIX modes, so a file
+    # successfully chmodded to 0600 can still be reported as 0644. Linux
+    # deployments retain the strict group/other-write rejection below.
+    case "$(uname -s 2>/dev/null || true)" in MINGW*|MSYS*) return 0 ;; esac
+    mode="$(stat -c '%a' "$file" 2>/dev/null || true)"
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    mode="${mode: -3}"
+    [[ "${mode:1:1}" == 0 && "${mode:2:1}" == 0 ]] || return 1
+  fi
+}
+
+version_cache_reset_loaded() {
+  VERSION_CACHE_APP_ID=""
+  VERSION_CACHE_LATEST=""
+  VERSION_CACHE_CHECKED_AT=""
+  VERSION_CACHE_SOURCE=""
+  VERSION_CACHE_RESULT=""
+  VERSION_CACHE_EXPIRES_AT=""
+  VERSION_CACHE_EXPIRES_AT_EPOCH=""
+  VERSION_CACHE_FRESH=0
+}
+
+# Load and validate a successful cache entry. A malformed or unsafe entry is
+# treated as a cache miss instead of being trusted as state.
+version_cache_load() {
+  local app_id="$1" file payload schema cached_app latest checked_at source result expires_at expires_at_epoch now
+  version_cache_reset_loaded
+  file="$(version_cache_file_for "$app_id")" || return 2
+  version_cache_file_is_safe "$file" || return 1
+  payload="$(cat "$file")" || return 1
+  [[ "$(printf '%s\n' "$payload" | wc -l)" -eq 1 && "$payload" == \{*\} ]] || return 1
+  schema="$(state_json_field "$payload" schema_version 2>/dev/null || true)"
+  cached_app="$(state_json_field "$payload" app_id 2>/dev/null || true)"
+  latest="$(state_json_field "$payload" latest 2>/dev/null || true)"
+  checked_at="$(state_json_field "$payload" checked_at 2>/dev/null || true)"
+  source="$(state_json_field "$payload" source 2>/dev/null || true)"
+  result="$(state_json_field "$payload" result 2>/dev/null || true)"
+  expires_at="$(state_json_field "$payload" expires_at 2>/dev/null || true)"
+  expires_at_epoch="$(state_json_field "$payload" expires_at_epoch 2>/dev/null || true)"
+  [[ "$schema" == "$DEPLOY_VERSION_CACHE_SCHEMA_VERSION" && "$cached_app" == "$app_id" && -n "$latest" && -n "$checked_at" && -n "$expires_at" && "$source" == github_release ]] || return 1
+  case "$result" in up_to_date|update_available|unknown) ;; *) return 1 ;; esac
+  [[ "$expires_at_epoch" =~ ^[0-9]+$ ]] || return 1
+  now="$(version_check_now_epoch)"
+  VERSION_CACHE_APP_ID="$cached_app"
+  VERSION_CACHE_LATEST="$latest"
+  VERSION_CACHE_CHECKED_AT="$checked_at"
+  VERSION_CACHE_SOURCE="$source"
+  VERSION_CACHE_RESULT="$result"
+  VERSION_CACHE_EXPIRES_AT="$expires_at"
+  VERSION_CACHE_EXPIRES_AT_EPOCH="$expires_at_epoch"
+  (( now <= expires_at_epoch )) && VERSION_CACHE_FRESH=1
+  return 0
+}
+
+version_check_result_for_versions() {
+  local installed="$1" latest="$2" compared
+  [[ -n "$installed" && -n "$latest" ]] || { printf 'unknown\n'; return 0; }
+  deploy_version_is_stable "$installed" && deploy_version_is_stable "$latest" || { printf 'unknown\n'; return 0; }
+  compared="$(deploy_version_compare "$latest" "$installed" 2>/dev/null)" || { printf 'unknown\n'; return 0; }
+  case "$compared" in
+    1) printf 'update_available\n' ;;
+    0) printf 'up_to_date\n' ;;
+    *) printf 'unknown\n' ;;
+  esac
+}
+
+version_check_emit_json() {
+  local installed="$1" latest="$2" checked_at="$3" update_state="$4" source="$5" cache_state="$6" error_summary="${7:-}"
+  printf '{"installed":%s,"latest":%s,"checked_at":%s,"update_state":%s,"source":%s,"cache_state":%s,"error":%s}' \
+    "$(state_json_nullable "$installed")" "$(state_json_nullable "$latest")" "$(state_json_nullable "$checked_at")" \
+    "$(app_json_string "$update_state")" "$(app_json_string "$source")" "$(app_json_string "$cache_state")" \
+    "$(state_json_nullable "$(operation_safe_summary "$error_summary")")"
+}
+
+version_cache_write() {
+  local app_id="$1" latest="$2" checked_at="$3" result="$4" source="$5" now expires_at_epoch expires_at file
+  now="$(version_check_now_epoch)"
+  [[ "$now" =~ ^[0-9]+$ ]] || return 1
+  [[ "$DEPLOY_VERSION_CACHE_TTL_SECONDS" =~ ^[0-9]+$ && "$DEPLOY_VERSION_CACHE_TTL_SECONDS" -gt 0 ]] || return 1
+  expires_at_epoch=$((now + DEPLOY_VERSION_CACHE_TTL_SECONDS))
+  expires_at="$(version_check_timestamp_for_epoch "$expires_at_epoch")" || return 1
+  file="$(version_cache_file_for "$app_id")" || return 2
+  version_cache_ensure_directory || return 1
+  atomic_write_file "$file" 600 <<EOF
+{"schema_version":${DEPLOY_VERSION_CACHE_SCHEMA_VERSION},"app_id":$(app_json_string "$app_id"),"checked_at":$(app_json_string "$checked_at"),"latest":$(app_json_string "$latest"),"source":$(app_json_string "$source"),"result":$(app_json_string "$result"),"expires_at":$(app_json_string "$expires_at"),"expires_at_epoch":${expires_at_epoch}}
+EOF
+}
+
+# Return the last network check without making a network request. Expired
+# cache data remains visible but is explicitly marked stale.
+version_check_cached_binary_release_json() {
+  local app_id="$1" installed="$2" cache_state=miss result
+  if version_cache_load "$app_id"; then
+    result="$(version_check_result_for_versions "$installed" "$VERSION_CACHE_LATEST")"
+    if (( VERSION_CACHE_FRESH )); then
+      cache_state=fresh
+    else
+      result=stale
+      cache_state=stale
+    fi
+    version_check_emit_json "$installed" "$VERSION_CACHE_LATEST" "$VERSION_CACHE_CHECKED_AT" "$result" "$VERSION_CACHE_SOURCE" "$cache_state"
+    return 0
+  fi
+  version_check_emit_json "$installed" "" "" unknown github_release "$cache_state"
+}
+
+# Check one binary application. refresh=1 always requests GitHub; without it,
+# only cache misses or expired entries are refreshed. no_network=1 never calls
+# curl and reports an expired cache as stale.
+version_check_binary_release_json() {
+  local app_id="$1" repo="$2" installed="$3" refresh="${4:-0}" no_network="${5:-0}"
+  local latest checked_at result cache_state=miss
+  [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
+  [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || {
+    version_check_emit_json "$installed" "" "" unsupported github_release unsupported "binary release repository is not configured"
+    return 0
+  }
+  if version_cache_load "$app_id"; then
+    if (( ! refresh && VERSION_CACHE_FRESH )); then
+      result="$(version_check_result_for_versions "$installed" "$VERSION_CACHE_LATEST")"
+      version_check_emit_json "$installed" "$VERSION_CACHE_LATEST" "$VERSION_CACHE_CHECKED_AT" "$result" "$VERSION_CACHE_SOURCE" fresh
+      return 0
+    fi
+    cache_state=stale
+  fi
+  if [[ "$no_network" == 1 ]]; then
+    if [[ -n "$VERSION_CACHE_LATEST" ]]; then
+      version_check_emit_json "$installed" "$VERSION_CACHE_LATEST" "$VERSION_CACHE_CHECKED_AT" stale "$VERSION_CACHE_SOURCE" stale
+    else
+      version_check_emit_json "$installed" "" "" unknown github_release no_network
+    fi
+    return 0
+  fi
+  if latest="$(github_latest_release_tag_checked "$repo")"; then
+    checked_at="$(state_now)"
+    result="$(version_check_result_for_versions "$installed" "$latest")"
+    if version_cache_write "$app_id" "$latest" "$checked_at" "$result" github_release; then
+      cache_state=refreshed
+    else
+      cache_state=not_persisted
+    fi
+    version_check_emit_json "$installed" "$latest" "$checked_at" "$result" github_release "$cache_state"
+    return 0
+  fi
+  if [[ -n "$VERSION_CACHE_LATEST" ]]; then
+    version_check_emit_json "$installed" "$VERSION_CACHE_LATEST" "$VERSION_CACHE_CHECKED_AT" stale "$VERSION_CACHE_SOURCE" stale "release check failed; using stale cache"
+  else
+    version_check_emit_json "$installed" "" "" check_failed github_release miss "release check failed"
+  fi
+}
 
 # ----- lib/manager_status.sh -----
 
@@ -1845,6 +2062,136 @@ manager_backup_main() {
     for record in "${records[@]}"; do printf '%s\n' "$record"; done
   fi
   (( errors == 0 )) || return 1
+}
+
+# ----- lib/manager_update.sh -----
+
+MANAGER_UPDATE_USAGE="Usage: deploy.sh check-update [--json] [--refresh|--no-network] [--include id,id,...] [--exclude id,id,...]"
+
+manager_update_print_usage() { echo "$MANAGER_UPDATE_USAGE" >&2; }
+
+manager_update_record() {
+  local app_id="$1" app_name="$2" install_state="$3" state="$4" reason="$5" version_json="$6"
+  printf '{"app_id":%s,"app_name":%s,"install_state":%s,"state":%s,"reason":%s,"version":%s}' \
+    "$(app_json_string "$app_id")" "$(app_json_string "$app_name")" \
+    "$(app_json_string "$install_state")" "$(app_json_string "$state")" \
+    "$(state_json_nullable "$reason")" "$version_json"
+}
+
+manager_update_unsupported_version_json() {
+  local installed="$1" reason="$2"
+  version_check_emit_json "$installed" "" "" unsupported config unsupported "$reason"
+}
+
+# All application loading happens in a subshell. Implementations set global
+# defaults and hooks, and isolation prevents one application's BA_* settings
+# from being mistaken for another application's capability.
+manager_update_check_app_version() {
+  local app_id="$1" installed="$2" refresh="$3" no_network="$4"
+  manager_load_app "$app_id" || return 1
+  if [[ -z "${BA_BIN_NAME:-}" ]] || ! declare -f bapp_check_update_json >/dev/null 2>&1; then
+    manager_update_unsupported_version_json "$installed" "version checking is not supported"
+    return 0
+  fi
+  bapp_check_update_json "$installed" "$refresh" "$no_network"
+}
+
+manager_update_main() {
+  local json=0 refresh=0 no_network=0 include_csv="" exclude_csv="" arg selected app_id app_name
+  local state_file err_file install_state config_safe installed version_json update_state record_state reason collection_error
+  local installed_count=0 update_available=0 up_to_date=0 unsupported=0 unknown=0 stale=0 check_failed=0 errors=0
+  local -a ids=() records=()
+  while (($#)); do
+    arg="$1"; shift
+    case "$arg" in
+      --json) json=1 ;;
+      --refresh) refresh=1 ;;
+      --no-network) no_network=1 ;;
+      --include) (($#)) || { manager_update_print_usage; return 2; }; include_csv="$1"; shift ;;
+      --exclude) (($#)) || { manager_update_print_usage; return 2; }; exclude_csv="$1"; shift ;;
+      --include=*) include_csv="${arg#*=}" ;;
+      --exclude=*) exclude_csv="${arg#*=}" ;;
+      --only-installed|--continue-on-error) ;;
+      --help|-h) manager_update_print_usage; return 0 ;;
+      *) manager_update_print_usage; return 2 ;;
+    esac
+  done
+  (( refresh && no_network )) && { manager_update_print_usage; return 2; }
+  if ! selected="$(manager_status_selected_ids "$include_csv" "$exclude_csv")"; then return 2; fi
+  [[ -n "$selected" ]] && mapfile -t ids < <(printf '%s\n' "$selected")
+
+  for app_id in "${ids[@]}"; do
+    app_name="$(deploy_app_name_for "$app_id")"
+    state_file="$(mktemp)"; err_file="$(mktemp)"
+    if ! manager_status_collect_app_json "$app_id" "$state_file" "$err_file"; then
+      collection_error="$(tr '\n' ' ' < "$err_file" 2>/dev/null || true)"
+      version_json="$(version_check_emit_json "" "" "" check_failed config miss "$collection_error")"
+      records+=("$(manager_update_record "$app_id" "$app_name" unknown error status_collection_failed "$version_json")")
+      errors=$((errors + 1))
+      rm -f "$state_file" "$err_file"
+      continue
+    fi
+    install_state="$(manager_status_json_field "$state_file" install_state 2>/dev/null || printf unknown)"
+    if [[ "$install_state" != installed ]]; then
+      version_json="$(manager_update_unsupported_version_json "" "application is not installed")"
+      records+=("$(manager_update_record "$app_id" "$app_name" "$install_state" skipped not_installed "$version_json")")
+      rm -f "$state_file" "$err_file"
+      continue
+    fi
+    installed_count=$((installed_count + 1))
+    config_safe="$(manager_status_json_field "$state_file" config.safe 2>/dev/null || printf false)"
+    installed="$(manager_status_json_field "$state_file" version.installed 2>/dev/null || true)"
+    [[ "$installed" == null ]] && installed=""
+    if [[ "$config_safe" != true ]]; then
+      version_json="$(version_check_emit_json "$installed" "" "" unknown config blocked "managed configuration is unsafe")"
+      records+=("$(manager_update_record "$app_id" "$app_name" "$install_state" skipped unsafe_config "$version_json")")
+      unknown=$((unknown + 1))
+      rm -f "$state_file" "$err_file"
+      continue
+    fi
+    if version_json="$(manager_update_check_app_version "$app_id" "$installed" "$refresh" "$no_network" 2>"$err_file")"; then
+      update_state="$(state_json_field "$version_json" update_state 2>/dev/null || printf check_failed)"
+      reason=""
+      record_state=checked
+      case "$update_state" in
+        update_available) update_available=$((update_available + 1)) ;;
+        up_to_date) up_to_date=$((up_to_date + 1)) ;;
+        unsupported) unsupported=$((unsupported + 1)); record_state=skipped; reason=unsupported ;;
+        stale) stale=$((stale + 1)) ;;
+        unknown) unknown=$((unknown + 1)) ;;
+        check_failed) check_failed=$((check_failed + 1)); record_state=error; reason=release_check_failed ;;
+        *) check_failed=$((check_failed + 1)); record_state=error; reason=invalid_version_result ;;
+      esac
+      records+=("$(manager_update_record "$app_id" "$app_name" "$install_state" "$record_state" "$reason" "$version_json")")
+    else
+      collection_error="$(tr '\n' ' ' < "$err_file" 2>/dev/null || true)"
+      version_json="$(version_check_emit_json "$installed" "" "" check_failed config miss "$collection_error")"
+      records+=("$(manager_update_record "$app_id" "$app_name" "$install_state" error version_adapter_failed "$version_json")")
+      errors=$((errors + 1))
+    fi
+    rm -f "$state_file" "$err_file"
+  done
+
+  if (( json )); then
+    local first=1 record
+    printf '{"schema_version":1,"generated_at":%s,"refresh":%s,"no_network":%s,"summary":{"selected":%s,"installed":%s,"update_available":%s,"up_to_date":%s,"unsupported":%s,"unknown":%s,"stale":%s,"check_failed":%s,"errors":%s},"records":[' \
+      "$(app_json_string "$(state_now)")" "$([[ "$refresh" == 1 ]] && printf true || printf false)" "$([[ "$no_network" == 1 ]] && printf true || printf false)" \
+      "${#ids[@]}" "$installed_count" "$update_available" "$up_to_date" "$unsupported" "$unknown" "$stale" "$check_failed" "$errors"
+    for record in "${records[@]}"; do (( first )) || printf ','; first=0; printf '%s' "$record"; done
+    printf ']}\n'
+  else
+    printf 'check-update: selected=%s installed=%s update_available=%s up_to_date=%s unsupported=%s unknown=%s stale=%s check_failed=%s errors=%s\n' \
+      "${#ids[@]}" "$installed_count" "$update_available" "$up_to_date" "$unsupported" "$unknown" "$stale" "$check_failed" "$errors"
+    printf '%-16s %-12s %-18s %-18s %s\n' App State Update Cache Reason
+    for record in "${records[@]}"; do
+      printf '%-16s %-12s %-18s %-18s %s\n' \
+        "$(state_json_field "$record" app_id)" "$(state_json_field "$record" state)" \
+        "$(state_json_field "$record" version.update_state)" "$(state_json_field "$record" version.cache_state)" \
+        "$(state_json_field "$record" reason)"
+    done
+  fi
+  (( errors == 0 )) || return 1
+  (( check_failed == 0 )) || return 10
 }
 
 # ----- lib/app.sh -----
@@ -2958,6 +3305,21 @@ binary_app_bootstrap() {
   LOCK_FILE="$(app_lock_file)"
   _binary_app_derive_paths
   bapp_validate_cfg
+}
+
+# Version adapters used by the central status and check-update commands. These
+# deliberately share only the GitHub-release binary lifecycle: applications
+# with custom update logic must opt in with their own adapter instead.
+bapp_status_version_json() {
+  local conf_file installed
+  conf_file="$(app_conf_file)"
+  installed="$(app_config_installed_version "$conf_file" 2>/dev/null || true)"
+  version_check_cached_binary_release_json "$APP_ID" "$installed"
+}
+
+bapp_check_update_json() {
+  local installed="$1" refresh="${2:-0}" no_network="${3:-0}"
+  version_check_binary_release_json "$APP_ID" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
 }
 
 # Root/apt/arch preflight shared by install, update, backup, and uninstall.

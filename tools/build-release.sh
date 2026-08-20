@@ -17,10 +17,12 @@ COMMON_RELEASE_LIB_FILES=(
   lib/version.sh
   lib/operation.sh
   lib/state.sh
+  lib/version_check.sh
   lib/manager_status.sh
   lib/manager_history.sh
   lib/manager_doctor.sh
   lib/manager_backup.sh
+  lib/manager_update.sh
   lib/app.sh
   lib/binary_app.sh
 )

@@ -255,7 +255,15 @@ state_version_json() {
       printf '%s' "$output"; return
     fi
   fi
-  [[ -n "${GITHUB_REPO:-}" ]] && source=binary_release
+  # BA_BIN_NAME is set only by implementations using the shared binary-app
+  # lifecycle. Do not infer support from GITHUB_REPO alone: several custom
+  # applications use GitHub for a non-comparable source/update workflow.
+  if [[ -n "${BA_BIN_NAME:-}" ]] && declare -f bapp_status_version_json >/dev/null 2>&1; then
+    output="$(bapp_status_version_json 2>/dev/null || true)"
+    if [[ "$(printf '%s\n' "$output" | wc -l)" -eq 1 && "$output" == \{*\} && -n "$(state_json_field "$output" installed 2>/dev/null || true)" ]]; then
+      printf '%s' "$output"; return
+    fi
+  fi
   printf '{"installed":%s,"latest":%s,"checked_at":%s,"update_state":%s,"source":%s}' "$installed" "$latest" "$checked_at" "$(app_json_string "$update_state")" "$(app_json_string "$source")"
 }
 
