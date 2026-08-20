@@ -32,7 +32,7 @@ check_operation_records() {
     return 1
   fi
   set +e
-  python3 - "$temp_root/state/state/newapi.json" "$temp_root/state/history/operations.jsonl" <<'PY'
+  python - "$temp_root/state/state/newapi.json" "$temp_root/state/history/operations.jsonl" <<'PY'
 import json
 import sys
 
@@ -47,4 +47,21 @@ PY
   local status=$?
   rm -rf "$temp_root"
   return "$status"
+}
+
+check_history_command() {
+  local temp_root output json_file
+  temp_root="$(mktemp -d)"
+  DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/operation.sh
+    operation_start app newapi update
+    operation_finish 0
+  '
+  output="$(DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" deploy.sh history --json --limit 5)"
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert len(x["records"]) == 1; assert x["records"][0]["app_id"] == "newapi"; assert x["records"][0]["state"] == "succeeded"' "$json_file"
+  rm -f "$json_file"
+  rm -rf "$temp_root"
 }

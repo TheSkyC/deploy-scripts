@@ -61,3 +61,13 @@ check_state_no_network_locality() {
   ')"
   [[ "$output" == ok ]]
 }
+
+
+check_state_problems_filtering() {
+  local output json_file
+  output="$(DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh problems --json --include newapi)"
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["apps"] == []; assert x["summary"]["registered"] == 16; assert x["summary"]["selected"] == 1' "$json_file"
+  rm -f "$json_file"
+}

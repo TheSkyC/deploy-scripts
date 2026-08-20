@@ -86,6 +86,10 @@ manager_main() {
       shift || true
       manager_status_main "${command,,}" "$@"
       ;;
+    history)
+      shift || true
+      manager_history_main "$@"
+      ;;
     menu|"")
       show_manager_menu
       ;;
