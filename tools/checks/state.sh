@@ -54,7 +54,7 @@ BASH
 check_state_operation_error_code_projection() {
   local temp_root output json_file
   temp_root="$(mktemp -d)"
-  output="$(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/logs" "$BASH_BIN" -c '
+  output="(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/logs" STATUS_TEST_CONFIG="$temp_root/config" "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
     APP_ID=newapi
@@ -93,7 +93,8 @@ check_state_backup_extension_contract() {
     source lib/core.sh
     APP_ID=newapi
     APP_NAME="New API"
-    app_conf_file() { printf "/tmp/missing.conf"; }
+    : > /tmp/deploy-status-backup-test.conf
+    app_conf_file() { printf "%s" /tmp/deploy-status-backup-test.conf; }
     app_doctor_service_name() { return 1; }
     APP_STATUS_BACKUP_FN=check_backup
     check_backup() {
