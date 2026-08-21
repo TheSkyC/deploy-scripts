@@ -356,6 +356,7 @@ main() {
       check_history_command
       check_app_action_operation_wrapping
       check_operation_failure_traps
+      check_operation_signal_interruption
       check_backup_all_dry_run
       check_backup_all_executes_serially_and_records_manager_operation
       check_batch_target_selection_is_local_only
@@ -628,6 +629,7 @@ main() {
       check_history_command
       check_app_action_operation_wrapping
       check_operation_failure_traps
+      check_operation_signal_interruption
       check_backup_all_dry_run
       check_backup_all_executes_serially_and_records_manager_operation
       check_batch_target_selection_is_local_only

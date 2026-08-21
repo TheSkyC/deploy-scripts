@@ -297,3 +297,53 @@ PY
   rm -f "$json_file"
   return "$status"
 }
+
+check_operation_signal_interruption() {
+  local temp_root signal status expected marker
+  temp_root="$(mktemp -d)"
+  for signal in INT TERM HUP; do
+    case "$signal" in
+      INT) expected=130 ;;
+      TERM) expected=143 ;;
+      HUP) expected=129 ;;
+    esac
+    marker="${temp_root}/${signal}.marker"
+    set +e
+    DEPLOY_OPERATION_ROOT="${temp_root}/${signal}-state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/${signal}-log" "$BASH_BIN" -c '
+      set -euo pipefail
+      source lib/lock.sh
+      source lib/operation.sh
+      APP_ID=newapi
+      APP_NAME="New API"
+      marker="$1"
+      signal="$2"
+      record_exit() { printf "exit:%s\n" "$?" >> "$marker"; }
+      deploy_add_exit_handler record_exit
+      do_interrupt() {
+        printf "before interrupt %s\n" "$signal"
+        kill -s "$signal" "$$"
+      }
+      operation_run_app_action update do_interrupt
+    ' _ "$marker" "$signal"
+    status=$?
+    set -e
+    [[ "$status" -eq "$expected" ]] || { rm -rf "$temp_root"; return 1; }
+    python - "${temp_root}/${signal}-state/state/newapi.json" "$marker" "$signal" "$expected" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["state"] == "interrupted"
+assert record["exit_code"] == int(sys.argv[4])
+assert f"SIG{sys.argv[3]}" in record["error"]
+assert record["steps"][0]["name"] == "execute"
+assert record["steps"][0]["state"] == "failed"
+with open(sys.argv[2], encoding="utf-8") as handle:
+    assert handle.read() == f"exit:{sys.argv[4]}\n"
+PY
+    status=$?
+    [[ "$status" -eq 0 ]] || { rm -rf "$temp_root"; return "$status"; }
+  done
+  rm -rf "$temp_root"
+}
