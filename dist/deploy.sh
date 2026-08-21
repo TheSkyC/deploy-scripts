@@ -1365,12 +1365,17 @@ state_json_field() {
 state_json_object_field() { state_json_field "$1" "$2"; }
 state_object_field() { state_json_field "$1" "$2"; }
 
-state_operation_field() {
-  local app_id="$1" key="$2" file object
+state_operation_record() {
+  local app_id="$1" file
   operation_is_valid_app_id "$app_id" || return 1
   file="$(operation_state_file_for app "$app_id")" || return 1
   [[ -f "$file" ]] || return 1
-  object="$(cat "$file")" || return 1
+  cat "$file"
+}
+
+state_operation_field() {
+  local app_id="$1" key="$2" object
+  object="$(state_operation_record "$app_id")" || return 1
   state_json_field "$object" "$key"
 }
 
@@ -1524,7 +1529,11 @@ app_status_collect_json() {
     services_json+=']'
   fi
   if [[ -n "${APP_ID:-}" ]]; then
-    last_action="$(state_operation_field "$APP_ID" action || true)"; last_result="$(state_operation_field "$APP_ID" state || true)"; last_started="$(state_operation_field "$APP_ID" started_at || true)"; last_finished="$(state_operation_field "$APP_ID" finished_at || true)"; last_step="$(state_operation_field "$APP_ID" last_step || true)"; last_error_summary="$(state_operation_field "$APP_ID" error || true)"; last_log_path="$(state_operation_field "$APP_ID" log_path || true)"
+    local operation_json=""
+    operation_json="$(state_operation_record "$APP_ID" 2>/dev/null || true)"
+    if [[ -n "$operation_json" ]]; then
+      last_action="$(state_json_field "$operation_json" action || true)"; last_result="$(state_json_field "$operation_json" state || true)"; last_started="$(state_json_field "$operation_json" started_at || true)"; last_finished="$(state_json_field "$operation_json" finished_at || true)"; last_step="$(state_json_field "$operation_json" last_step || true)"; last_error_summary="$(state_json_field "$operation_json" error || true)"; last_log_path="$(state_json_field "$operation_json" log_path || true)"
+    fi
     [[ "$last_result" == running ]] && operation_state=running
     if [[ "$last_result" == failed ]]; then
       case "$last_action" in
@@ -1797,9 +1806,14 @@ manager_status_collect_app_json() {
   pid=$!
   timeout_seconds="${DEPLOY_STATUS_TIMEOUT_SECONDS:-8}"
   if [[ "$timeout_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk "BEGIN { exit !($timeout_seconds > 0) }"; then
-    start="$(date +%s)"
+    # `date` is relatively expensive on Git Bash/Windows. Calling it from the
+    # polling loop used to add enough process churn to make healthy collectors
+    # miss the timeout window. Bash's monotonic SECONDS variable avoids that
+    # overhead while retaining the existing integer-second contract.
+    local start_seconds=$SECONDS timeout_limit="${timeout_seconds%.*}"
+    (( timeout_limit > 0 )) || timeout_limit=1
     while kill -0 "$pid" 2>/dev/null; do
-      if (( $(date +%s) - start >= ${timeout_seconds%.*} )); then
+      if (( SECONDS - start_seconds >= timeout_limit )); then
         kill "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
         printf 'status collection timed out after %ss' "$timeout_seconds" >>"$error_file"
