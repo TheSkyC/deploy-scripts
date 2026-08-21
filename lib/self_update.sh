@@ -263,21 +263,23 @@ self_update_fetch_file() {
 
 self_update_validate_archive_layout() {
   local archive_path="$1" extraction_root="$2" expected_version="$3"
-  local member member_type top_prefix
+  local member member_type top_prefix archive_members archive_listing
   top_prefix="deploy-scripts-${expected_version}/"
+  archive_members="$(tar -tzf "$archive_path" 2>/dev/null)" || return 1
   while IFS= read -r member; do
     [[ -n "$member" ]] || continue
     case "$member" in
       /*|../*|*/../*|*/..|*/./*|./*) return 1 ;;
     esac
     [[ "$member" == "$top_prefix"* ]] || return 1
-  done < <(tar -tzf "$archive_path")
+  done <<< "$archive_members"
+  archive_listing="$(tar -tvzf "$archive_path" 2>/dev/null)" || return 1
   while IFS= read -r member_type; do
     case "${member_type:0:1}" in
       -|d) ;;
       *) return 1 ;;
     esac
-  done < <(tar -tvzf "$archive_path" | awk '{ print $1 }')
+  done < <(printf '%s\n' "$archive_listing" | awk '{ print $1 }')
   mkdir -p "$extraction_root" || return 1
   tar --extract --gzip --file "$archive_path" --directory "$extraction_root" \
     --no-same-owner --no-same-permissions || return 1
