@@ -86,6 +86,39 @@ PY
   return "$status"
 }
 
+check_state_backup_extension_contract() {
+  local output json_file
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    app_conf_file() { printf "/tmp/missing.conf"; }
+    app_doctor_service_name() { return 1; }
+    APP_STATUS_BACKUP_FN=check_backup
+    check_backup() {
+      printf "%s" "{\"state\":\"available\",\"last_success_at\":\"2026-08-21T00:00:00+08:00\",\"path\":\"/var/backups/newapi\",\"message\":null}"
+    }
+    app_status_collect_json
+  ')"
+  json_file="$(mktemp)"
+  printf '%s' "$output" >"$json_file"
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+backup = payload["backup"]
+assert backup["state"] == "available"
+assert backup["last_success_at"] == "2026-08-21T00:00:00+08:00"
+assert backup["path"] == "/var/backups/newapi"
+PY
+  local status=$?
+  rm -f "$json_file"
+  return "$status"
+}
+
 check_state_no_network_locality() {
   local output
   output="$($BASH_BIN -c '
