@@ -429,6 +429,8 @@ __deploy_run_exit_handlers() {
   trap - EXIT
   for (( index=${#__DEPLOY_EXIT_HANDLERS[@]} - 1; index >= 0; index-- )); do
     handler="${__DEPLOY_EXIT_HANDLERS[$index]}"
+    # Protect the status-setting return from errexit while keeping it visible
+    # as `$?` to the handler.
     if __deploy_set_exit_status "$status"; then
       "$handler" || true
     else
@@ -879,6 +881,9 @@ deploy_version_is_older() {
 
 DEPLOY_OPERATION_ROOT="${DEPLOY_OPERATION_ROOT:-/var/lib/deploy-scripts}"
 DEPLOY_OPERATION_LOG_ROOT="${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}"
+DEPLOY_OPERATION_LOGROTATE_FILE="${DEPLOY_OPERATION_LOGROTATE_FILE:-/etc/logrotate.d/deploy-scripts}"
+DEPLOY_OPERATION_LOGROTATE_DAYS="${DEPLOY_OPERATION_LOGROTATE_DAYS:-30}"
+DEPLOY_OPERATION_LOGROTATE_FILES="${DEPLOY_OPERATION_LOGROTATE_FILES:-20}"
 DEPLOY_OPERATION_STATE_DIR="${DEPLOY_OPERATION_ROOT}/state"
 DEPLOY_OPERATION_HISTORY_DIR="${DEPLOY_OPERATION_ROOT}/history"
 DEPLOY_OPERATION_HISTORY_FILE="${DEPLOY_OPERATION_HISTORY_DIR}/operations.jsonl"
@@ -960,11 +965,56 @@ operation_set_owner_and_mode() {
   local path="$1" mode="$2"; chmod "$mode" "$path" || return 1
   if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then chown root:root "$path" || return 1; fi
 }
+operation_write_logrotate() {
+  local target="${DEPLOY_OPERATION_LOGROTATE_FILE:-}" tmp days files log_root
+  [[ -n "$target" ]] || return 0
+  [[ "$target" != *$'\n'* && "$target" != *$'\r'* ]] || return 1
+  days="${DEPLOY_OPERATION_LOGROTATE_DAYS:-30}"
+  files="${DEPLOY_OPERATION_LOGROTATE_FILES:-20}"
+  [[ "$days" =~ ^[1-9][0-9]*$ && "$files" =~ ^[1-9][0-9]*$ ]] || return 1
+  log_root="${DEPLOY_OPERATION_LOG_ROOT%/}"
+  [[ -n "$log_root" && "$log_root" != *$'\n'* && "$log_root" != *$'\r'* ]] || return 1
+  mkdir -p "$(dirname "$target")" || return 1
+  tmp="$(mktemp "$(dirname "$target")/.$(basename "$target").XXXXXX")" || return 1
+  if ! cat >"$tmp" <<LOGROTATE
+${log_root}/*/*.log {
+    daily
+    rotate ${files}
+    maxage ${days}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root root
+}
+LOGROTATE
+  then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! chmod 644 "$tmp" || { [[ "${EUID:-$(id -u)}" -eq 0 ]] && ! chown root:root "$tmp"; }; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
+}
+
+operation_ensure_logrotate() {
+  # Framework installation owns the system policy; unprivileged dry-runs and
+  # tests must not repeatedly attempt to mutate /etc.
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || return 0
+  operation_write_logrotate || {
+    printf 'warning: unable to write operation logrotate policy: %s\n' "${DEPLOY_OPERATION_LOGROTATE_FILE:-unset}" >&2
+    return 0
+  }
+}
+
 operation_ensure_directories() {
   local dir
   for dir in "$DEPLOY_OPERATION_ROOT" "$DEPLOY_OPERATION_STATE_DIR" "$DEPLOY_OPERATION_HISTORY_DIR" "$DEPLOY_OPERATION_LOG_ROOT"; do
     mkdir -p "$dir" || return 1; operation_set_owner_and_mode "$dir" 750 || return 1
   done
+  operation_ensure_logrotate
 }
 operation_state_file_for() {
   local scope="$1" app_id="${2:-}"
