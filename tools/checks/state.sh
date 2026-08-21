@@ -51,6 +51,41 @@ BASH
   [[ "$output" == ok ]]
 }
 
+check_state_operation_error_code_projection() {
+  local temp_root output json_file
+  temp_root="$(mktemp -d)"
+  output="$(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/logs" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    app_conf_file() { printf "%s" "$DEPLOY_OPERATION_ROOT/missing.conf"; }
+    app_doctor_service_name() { return 1; }
+    mkdir -p "$DEPLOY_OPERATION_STATE_DIR"
+    cat >"$DEPLOY_OPERATION_STATE_DIR/newapi.json" <<"JSON"
+{"schema_version":1,"run_id":"run","scope":"app","app_id":"newapi","action":"update","state":"failed","started_at":"2026-08-21T00:00:00+08:00","finished_at":"2026-08-21T00:01:00+08:00","last_step":"health","steps":[],"exit_code":7,"error":"TOKEN=[REDACTED]","log_path":"/tmp/deploy.log"}
+JSON
+    app_status_collect_json
+  ')"
+  json_file="$(mktemp)"
+  printf '%s' "$output" >"$json_file"
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+operation = payload["operation"]
+assert operation["last_result"] == "failed"
+assert operation["last_error_code"] == 7
+assert operation["last_error_summary"] == "TOKEN=[REDACTED]"
+PY
+  local status=$?
+  rm -f "$json_file"
+  rm -rf "$temp_root"
+  return "$status"
+}
+
 check_state_no_network_locality() {
   local output
   output="$($BASH_BIN -c '
