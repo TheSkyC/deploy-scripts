@@ -37,7 +37,10 @@ manager_doctor_main() {
   for app_id in "${ids[@]}"; do
     local state_file err_file install_state collection_error
     state_file="$(mktemp)"; err_file="$(mktemp)"
-    if ! manager_status_collect_app_json "$app_id" "$state_file" "$err_file"; then
+    # Target selection is a local read-only pass. Do not run health probes or
+    # remote checks here; the batch action itself decides what to execute.
+    if ! ( DEPLOY_STATUS_NO_PROBE=1 DEPLOY_STATUS_NO_NETWORK=1
+           manager_status_collect_app_json "$app_id" "$state_file" "$err_file" ); then
       collection_error="$(tr '\n' ' ' < "$err_file" 2>/dev/null || true)"
       records+=("$(manager_doctor_record "$app_id" error "" "$collection_error" "status_collection_failed")")
       errors=$((errors + 1))
