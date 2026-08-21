@@ -1467,7 +1467,11 @@ state_health_json() {
 }
 
 state_backup_json() {
-  local output
+  local install_state="${1:-unknown}" output
+  if [[ "$install_state" == not_installed || "$install_state" == install_failed || "$install_state" == uninstalling ]]; then
+    printf '{"state":"unsupported","last_success_at":null,"path":null,"message":null}'
+    return
+  fi
   if [[ -n "${APP_STATUS_BACKUP_FN:-}" ]] && declare -f "$APP_STATUS_BACKUP_FN" >/dev/null 2>&1; then
     output="$("$APP_STATUS_BACKUP_FN" 2>/dev/null || true)"
     if [[ "$(printf '%s\n' "$output" | wc -l)" -eq 1 && "$output" == \{*\} ]]; then
