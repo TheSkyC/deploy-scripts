@@ -97,6 +97,27 @@ PY
   rm -f "$json_file"
   return "$status"
 }
+check_update_target_selection_is_local_only() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_status_selected_ids() { printf "newapi\n"; }
+    manager_status_collect_app_json() {
+      [[ "${DEPLOY_STATUS_NO_PROBE:-0}" == 1 ]] || return 91
+      [[ "${DEPLOY_STATUS_NO_NETWORK:-0}" == 1 ]] || return 92
+      printf '{"install_state":"not_installed"}' > "$2"
+      : > "$3"
+    }
+    manager_update_collect 0 0 "" ""
+    [[ "$MANAGER_UPDATE_ERRORS" == 0 ]]
+    [[ "$(state_json_field "${MANAGER_UPDATE_RECORDS[0]}" state)" == skipped ]]
+    [[ "$(state_json_field "${MANAGER_UPDATE_RECORDS[0]}" reason)" == not_installed ]]
+    printf ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
 check_update_all_execution_is_serial_and_safe() {
   local temp_root output json_file status
   temp_root="$(mktemp -d)"
