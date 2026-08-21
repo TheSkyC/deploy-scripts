@@ -3917,15 +3917,60 @@ bapp_validate_cfg() {
 # impl after configuration defaults and hooks are declared).
 binary_app_bootstrap() {
   APP_CONFIG_DERIVE_HOOK=_binary_app_derive_paths
+  APP_STATUS_BACKUP_FN=bapp_status_backup_json
   CONF_FILE="$(app_conf_file)"
   LOCK_FILE="$(app_lock_file)"
   _binary_app_derive_paths
   bapp_validate_cfg
 }
 
-# Version adapters used by the central status and check-update commands. These
+# Status adapters used by the central status and check-update commands. These
 # deliberately share only the GitHub-release binary lifecycle: applications
 # with custom update logic must opt in with their own adapter instead.
+bapp_status_backup_json() {
+  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
+  backup_dir="${BACKUP_DIR:-}"
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  if [[ -f "$conf_file" ]]; then
+    local owner mode configured_dir
+    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
+    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
+    if [[ "$owner" == root && ( "$mode" == 600 || "$mode" == 400 ) ]]; then
+      configured_dir="$(awk -F= '
+        /^[[:space:]]*BACKUP_DIR=/ {
+          value=$0
+          sub(/^[^=]*=[[:space:]]*/, "", value)
+          gsub(/^"|"$/, "", value)
+          gsub(/[[:space:]]+$/, "", value)
+          print value
+          exit
+        }
+      ' "$conf_file" 2>/dev/null)"
+      [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
+    fi
+  fi
+  if [[ ! -d "$backup_dir" ]]; then
+    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name "${APP_ID}_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null | sort -nr)"; then
+    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  latest_archive="${latest_archive%%$'\n'*}"
+  if [[ -z "$latest_archive" ]]; then
+    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  archive_name="${latest_archive#* }"
+  archive_mtime="${latest_archive%% *}"
+  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
+    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
+    return
+  fi
+  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
+    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+}
 bapp_status_version_json() {
   local conf_file installed
   conf_file="$(app_conf_file)"
@@ -5681,10 +5726,11 @@ _newapi_status_backup() {
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
     return
   fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'new-api_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1)"; then
+  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'new-api_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr)"; then
     printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
     return
   fi
+  latest_archive="${latest_archive%%$'\n'*}"
   if [[ -z "$latest_archive" ]]; then
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
     return
