@@ -152,3 +152,67 @@ check_health_all_target() {
   python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert x["apps"] == []; assert x["summary"]["selected"] == 1' "$json_file"
   rm -f "$json_file"
 }
+
+check_state_status_matrix() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    [[ "$(state_severity not_installed true true not_managed unsupported unknown null)" == info ]]
+    [[ "$(state_severity installed true true stopped not_checked unknown unsupported)" == error ]]
+    [[ "$(state_severity installed true true running unhealthy unknown unsupported)" == error ]]
+    [[ "$(state_severity installed false true running healthy unknown unsupported)" == critical ]]
+    [[ "$(state_severity installed true true running healthy unknown unsupported)" == ok ]]
+    state_service_names() { printf "one\\ntwo\\n"; }
+    state_service_object() {
+      case "$1" in
+        one) printf "{\\"state\\":\\"running\\"}" ;;
+        two) printf "{\\"state\\":\\"stopped\\"}" ;;
+      esac
+    }
+    [[ "$(state_service_aggregate)" == stopped ]]
+    state_service_object() { printf "{\\"state\\":\\"failed\\"}"; }
+    [[ "$(state_service_aggregate)" == failed ]]
+    state_health_json installed running
+    state_version_json /definitely/missing/config
+  ')"
+  [[ "$output" == *'"state":"not_checked"'* ]]
+  [[ "$output" == *'"update_state":"unknown"'* ]]
+}
+
+check_state_load_failure_isolation() {
+  local temp_root output status json_file
+  temp_root="$(mktemp -d)"
+  set +e
+  output="$(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_status_selected_ids() { printf "broken\\nhealthy\\n"; }
+    manager_status_collect_app_json() {
+      if [[ "$1" == broken ]]; then
+        printf "definition load failed" > "$3"
+        return 1
+      fi
+      printf "%s" '{"app_id":"healthy","app_name":"Healthy","install_state":"installed","severity":"ok","health":{"state":"healthy"},"version":{"update_state":"unknown"},"service":{"state":"running"}}' > "$2"
+    }
+    manager_status_main status-all --json --strict
+  ')"
+  status=$?
+  set -e
+  json_file="$(mktemp)"
+  printf '%s' "$output" > "$json_file"
+  python - "$json_file" "$status" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+assert int(sys.argv[2]) == 1
+assert [app["app_id"] for app in payload["apps"]] == ["healthy"]
+assert payload["errors"][0]["app_id"] == "broken"
+assert payload["errors"][0]["summary"] == "definition load failed"
+PY
+  status=$?
+  rm -f "$json_file"
+  rm -rf "$temp_root"
+  return "$status"
+}

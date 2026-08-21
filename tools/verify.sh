@@ -338,6 +338,8 @@ main() {
       check_state_scalar_parser_and_severity
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
+      check_state_status_matrix
+      check_state_load_failure_isolation
       check_state_no_network_locality
       check_state_problems_filtering
       check_health_all_target
@@ -611,6 +613,8 @@ main() {
       check_state_scalar_parser_and_severity
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
+      check_state_status_matrix
+      check_state_load_failure_isolation
       check_state_no_network_locality
       check_state_problems_filtering
       check_health_all_target
