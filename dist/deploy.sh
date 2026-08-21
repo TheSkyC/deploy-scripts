@@ -958,6 +958,18 @@ operation_stream_error() {
   operation_log_stream "$log_path" >&2
 }
 
+operation_discard_output_streams() {
+  local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
+  [[ -n "$output_dir" ]] || return 0
+  [[ -z "$stdout_pid" ]] || kill "$stdout_pid" 2>/dev/null || true
+  [[ -z "$stderr_pid" ]] || kill "$stderr_pid" 2>/dev/null || true
+  [[ -z "$stdout_pid" ]] || wait "$stdout_pid" 2>/dev/null || true
+  [[ -z "$stderr_pid" ]] || wait "$stderr_pid" 2>/dev/null || true
+  [[ -z "$saved_stdout_fd" ]] || eval "exec ${saved_stdout_fd}>&-" || true
+  [[ -z "$saved_stderr_fd" ]] || eval "exec ${saved_stderr_fd}>&-" || true
+  rm -rf -- "$output_dir"
+  unset OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD
+}
 operation_finish_output_streams() {
   local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
   [[ -n "$output_dir" ]] || return 0
@@ -1045,7 +1057,7 @@ operation_log_path_for() {
   printf '%s/%s.log\n' "$directory" "$run_id"
 }
 operation_new_run_id() { printf '%s-%s-%s-%04x%04x\n' "$(operation_run_timestamp)" "${2:-$1}" "$3" "$RANDOM" "$RANDOM"; }
-operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD OPERATION_PREVIOUS_EXIT_TRAP; }
+operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD OPERATION_PREVIOUS_EXIT_TRAP OPERATION_PREVIOUS_INT_TRAP OPERATION_PREVIOUS_TERM_TRAP OPERATION_PREVIOUS_HUP_TRAP OPERATION_INTERRUPTED_SIGNAL; }
 operation_restore_exit_trap() {
   local previous_trap="${1:-}"
   if [[ -n "$previous_trap" ]]; then
@@ -1059,6 +1071,38 @@ operation_return_status() {
   return "$1"
 }
 
+operation_restore_signal_trap() {
+  local signal="$1" previous_trap="${2:-}"
+  if [[ -n "$previous_trap" ]]; then
+    eval "$previous_trap"
+  else
+    trap - "$signal"
+  fi
+}
+
+operation_restore_signal_traps() {
+  operation_restore_signal_trap INT "${OPERATION_PREVIOUS_INT_TRAP:-}"
+  operation_restore_signal_trap TERM "${OPERATION_PREVIOUS_TERM_TRAP:-}"
+  operation_restore_signal_trap HUP "${OPERATION_PREVIOUS_HUP_TRAP:-}"
+}
+
+operation_signal_exit_code() {
+  case "${1:-TERM}" in
+    INT) printf '130' ;;
+    HUP) printf '129' ;;
+    TERM) printf '143' ;;
+    *) printf '1' ;;
+  esac
+}
+
+operation_action_signal_trap() {
+  local signal="${1:-TERM}" exit_code
+  [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]] && return 0
+  OPERATION_INTERRUPTED_SIGNAL="$signal"
+  exit_code="$(operation_signal_exit_code "$signal")"
+  trap - INT TERM HUP
+  exit "$exit_code"
+}
 operation_invoke_exit_trap() {
   local status="$1" previous_trap="${2:-}" command had_errexit=0
   [[ -n "$previous_trap" ]] || exit "$status"
@@ -1134,13 +1178,22 @@ operation_action_exit_trap() {
   fi
   trap - EXIT
   if [[ "${OPERATION_ACTIVE:-0}" == 1 ]]; then
-    operation_finish_output_streams || true
+    operation_restore_signal_traps || true
+    if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]]; then
+      operation_discard_output_streams || true
+    else
+      operation_finish_output_streams || true
+    fi
     if [[ "$status" -eq 0 ]]; then
       operation_step_finish execute succeeded || true
     else
       operation_step_finish execute failed || true
     fi
-    operation_finish "$status" "" "${action} exited with status ${status}" || true
+    if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]]; then
+      operation_finish "$status" interrupted "${action} interrupted by SIG${OPERATION_INTERRUPTED_SIGNAL}" || true
+    else
+      operation_finish "$status" "" "${action} exited with status ${status}" || true
+    fi
   fi
   operation_invoke_exit_trap "$status" "$previous_trap"
 }
@@ -1164,10 +1217,19 @@ operation_run_app_action() {
     operation_finish 1 failed "failed to start execute step" || true
     error "Unable to record operation step for ${APP_NAME:-app} ${action}"
   fi
-  local previous_trap
+  local previous_trap previous_int_trap previous_term_trap previous_hup_trap
   previous_trap="$(trap -p EXIT)"
+  previous_int_trap="$(trap -p INT)"
+  previous_term_trap="$(trap -p TERM)"
+  previous_hup_trap="$(trap -p HUP)"
   OPERATION_PREVIOUS_EXIT_TRAP="$previous_trap"
+  OPERATION_PREVIOUS_INT_TRAP="$previous_int_trap"
+  OPERATION_PREVIOUS_TERM_TRAP="$previous_term_trap"
+  OPERATION_PREVIOUS_HUP_TRAP="$previous_hup_trap"
   trap 'operation_action_exit_trap' EXIT
+  trap 'operation_action_signal_trap INT' INT
+  trap 'operation_action_signal_trap TERM' TERM
+  trap 'operation_action_signal_trap HUP' HUP
   log_path="$OPERATION_LOG_PATH"
   output_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-operation-output.XXXXXX")" || {
     operation_restore_exit_trap "$previous_trap" || true
@@ -1207,6 +1269,7 @@ operation_run_app_action() {
   "$function_name" >"${output_dir}/stdout" 2>"${output_dir}/stderr"
   status=$?
   operation_finish_output_streams || true
+  operation_restore_signal_traps || true
   operation_restore_exit_trap "$previous_trap" || true
   if [[ "$status" -eq 0 ]]; then
     operation_step_finish execute succeeded || operation_finish 1 failed "failed to finish execute step"
