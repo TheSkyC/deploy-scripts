@@ -1083,3 +1083,41 @@ check_tar_diagnostics_use_stderr() {
     ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
 }
 
+
+check_backup_all_executes_serially_and_records_manager_operation() {
+  local temp_root output status
+  temp_root="$(mktemp -d)"
+  set +e
+  output="$(DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_status_selected_ids() { printf "alpha\\nbeta\\n"; }
+    manager_status_collect_app_json() { printf "{\"install_state\":\"installed\"}" > "$2"; : > "$3"; }
+    manager_backup_capability() { printf supported; }
+    manager_update_acquire_lock() { return 0; }
+    manager_update_release_lock() { :; }
+    manager_backup_execute_app() { [[ "$1" == alpha ]] && return 0 || return 7; }
+    manager_backup_main --yes --json >/dev/null
+  ')"
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  python - "${temp_root}/state/state/manager.json" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["scope"] == "manager"
+assert record["action"] == "backup-all"
+assert record["state"] == "failed"
+assert record["exit_code"] == 1
+assert record["steps"][0]["name"] == "execute"
+assert record["steps"][0]["state"] == "failed"
+PY
+  status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
