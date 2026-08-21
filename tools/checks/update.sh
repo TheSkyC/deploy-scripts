@@ -118,11 +118,43 @@ check_update_target_selection_is_local_only() {
   [[ "$output" == ok ]]
 }
 
+check_update_all_writes_manager_operation_record() {
+  local temp_root output
+  temp_root="$(mktemp -d)"
+  output="$(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/logs" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    available="$(version_check_emit_json v1.0.0 v1.1.0 now update_available github_release fresh)"
+    manager_update_collect() {
+      MANAGER_UPDATE_SELECTED=1
+      MANAGER_UPDATE_INSTALLED=1
+      MANAGER_UPDATE_AVAILABLE=1
+      MANAGER_UPDATE_CURRENT=0
+      MANAGER_UPDATE_UNSUPPORTED=0
+      MANAGER_UPDATE_UNKNOWN=0
+      MANAGER_UPDATE_STALE=0
+      MANAGER_UPDATE_CHECK_FAILED=0
+      MANAGER_UPDATE_ERRORS=0
+      MANAGER_UPDATE_RECORDS=("$(manager_update_record alpha Alpha installed checked "" "$available")")
+    }
+    manager_update_collect_status() { return 0; }
+    manager_update_acquire_lock() { return 0; }
+    manager_update_release_lock() { :; }
+    manager_update_execute_app() { return 0; }
+    manager_update_all_main --yes --json >/dev/null
+    cat "$DEPLOY_OPERATION_STATE_DIR/manager.json"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["scope"] == "manager"; assert x["action"] == "update-all"; assert x["state"] == "succeeded"; assert x["exit_code"] == 0; assert x["steps"][0]["name"] == "execute"; assert x["steps"][0]["state"] == "succeeded"' "$output"
+  local status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
+
 check_update_all_execution_is_serial_and_safe() {
   local temp_root output json_file status
   temp_root="$(mktemp -d)"
   set +e
-  output="$(ORDER_FILE="${temp_root}/order" "$BASH_BIN" -c '
+  output="$(ORDER_FILE="${temp_root}/order" DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
     manager_update_collect() {
