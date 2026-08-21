@@ -424,7 +424,10 @@ __deploy_set_exit_status() {
 }
 
 __deploy_run_exit_handlers() {
-  local status="${__DEPLOY_EXIT_STATUS:-$?}" handler index
+  local status=$? handler index
+  if [[ -n "${__DEPLOY_EXIT_STATUS:-}" ]]; then
+    status="$__DEPLOY_EXIT_STATUS"
+  fi
   unset __DEPLOY_EXIT_STATUS
   trap - EXIT
   for (( index=${#__DEPLOY_EXIT_HANDLERS[@]} - 1; index >= 0; index-- )); do
