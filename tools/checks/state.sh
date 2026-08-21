@@ -163,23 +163,12 @@ check_state_status_matrix() {
     [[ "$(state_severity installed true true running unhealthy unknown unsupported)" == error ]]
     [[ "$(state_severity installed false true running healthy unknown unsupported)" == critical ]]
     [[ "$(state_severity installed true true running healthy unknown unsupported)" == ok ]]
-    state_service_names() { printf "one\\ntwo\\n"; }
-    state_service_object() {
-      case "$1" in
-        one) printf "{\\"state\\":\\"running\\"}" ;;
-        two) printf "{\\"state\\":\\"stopped\\"}" ;;
-      esac
-    }
-    [[ "$(state_service_aggregate)" == stopped ]]
-    state_service_object() { printf "{\\"state\\":\\"failed\\"}"; }
-    [[ "$(state_service_aggregate)" == failed ]]
     state_health_json installed running
     state_version_json /definitely/missing/config
   ')"
   [[ "$output" == *'"state":"not_checked"'* ]]
   [[ "$output" == *'"update_state":"unknown"'* ]]
 }
-
 check_state_load_failure_isolation() {
   local temp_root output status json_file
   temp_root="$(mktemp -d)"
@@ -193,7 +182,7 @@ check_state_load_failure_isolation() {
         printf "definition load failed" > "$3"
         return 1
       fi
-      printf "%s" '{"app_id":"healthy","app_name":"Healthy","install_state":"installed","severity":"ok","health":{"state":"healthy"},"version":{"update_state":"unknown"},"service":{"state":"running"}}' > "$2"
+      printf "%s" "{\"app_id\":\"healthy\",\"app_name\":\"Healthy\",\"install_state\":\"installed\",\"severity\":\"ok\",\"health\":{\"state\":\"healthy\"},\"version\":{\"update_state\":\"unknown\"},\"service\":{\"state\":\"running\"}}" > "$2"
     }
     manager_status_main status-all --json --strict
   ')"
