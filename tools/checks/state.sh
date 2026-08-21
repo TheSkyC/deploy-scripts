@@ -163,6 +163,7 @@ check_state_status_matrix() {
     [[ "$(state_severity installed true true running unhealthy unknown unsupported)" == error ]]
     [[ "$(state_severity installed false true running healthy unknown unsupported)" == critical ]]
     [[ "$(state_severity installed true true running healthy unknown unsupported)" == ok ]]
+    [[ "$(state_severity installed true true running healthy unknown true failed)" == warning ]]
     state_health_json installed running
     state_version_json /definitely/missing/config
   ')"
