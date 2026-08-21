@@ -1465,6 +1465,21 @@ state_health_json() {
   fi
 }
 
+state_backup_json() {
+  local output
+  if [[ -n "${APP_STATUS_BACKUP_FN:-}" ]] && declare -f "$APP_STATUS_BACKUP_FN" >/dev/null 2>&1; then
+    output="$("$APP_STATUS_BACKUP_FN" 2>/dev/null || true)"
+    if [[ "$(printf '%s\n' "$output" | wc -l)" -eq 1 && "$output" == \{*\} ]]; then
+      case "$(state_json_field "$output" state 2>/dev/null || true)" in
+        available|missing|failed|not_checked|unsupported|unknown) printf '%s' "$output"; return ;;
+      esac
+    fi
+    printf '{"state":"unknown","last_success_at":null,"path":null,"message":"backup status returned invalid JSON"}'
+    return
+  fi
+  printf '{"state":"unsupported","last_success_at":null,"path":null,"message":null}'
+}
+
 state_version_json() {
   local conf_file="$1" installed latest=null checked_at=null update_state=unknown source=config output
   installed="$(app_config_installed_version "$conf_file" 2>/dev/null || true)"
@@ -1500,7 +1515,7 @@ state_severity() {
 app_status_collect_json() {
   local conf_file config_exists=false config_safe=null config_valid=null owner=null mode=null
   local install_state=not_installed service_name="" service_state=not_managed service_enabled=null
-  local health_json version_json services_json='[]' operation_state=idle
+  local health_json version_json backup_json services_json='[]' operation_state=idle
   local last_action="" last_result="" last_started="" last_finished="" last_step="" last_error_summary="" last_log_path="" last_error_code_json=null health_state="" update_state="" severity="" version_installed_json=""
   conf_file="$(app_conf_file)"
   if [[ -f "$conf_file" ]]; then
@@ -1522,6 +1537,7 @@ app_status_collect_json() {
   fi
   health_json="$(state_health_json "$install_state" "$service_state" 2>/dev/null || printf '{"state":"unknown","checked_at":null,"probe_type":null,"url":null,"http_code":null,"message":"collection failed"}')"
   version_json="$(state_version_json "$conf_file")"
+  backup_json="$(state_backup_json "$install_state")"
   if [[ -n "${APP_DOCTOR_SERVICES_FN:-}" ]] && declare -f "$APP_DOCTOR_SERVICES_FN" >/dev/null 2>&1; then
     local name first=1; services_json='['
     while IFS= read -r name; do [[ -n "$name" ]] || continue; (( first )) || services_json+=','; first=0; services_json+="$(state_service_object "$name")"; done < <("$APP_DOCTOR_SERVICES_FN" 2>/dev/null || true)
@@ -1556,7 +1572,7 @@ app_status_collect_json() {
   severity="$(state_severity "$install_state" "$config_safe" "$config_valid" "$service_state" "$health_state" "$update_state" "$service_enabled")"
   version_installed_json="$(state_json_raw_field "$version_json" installed 2>/dev/null || true)"
   [[ -n "$version_installed_json" ]] || version_installed_json=null
-  printf '{"schema_version":%s,"collected_at":%s,"app_id":%s,"app_name":%s,"root":%s,"install_state":%s,"severity":%s,"config":{"path":%s,"exists":%s,"owner":%s,"mode":%s,"safe":%s,"valid":%s},"version":%s,"version_info":%s,"service":{"name":%s,"systemctl_available":%s,"unit_exists":%s,"active":%s,"enabled":%s,"state":%s},"services":%s,"health":%s,"backup":{"state":"unsupported","last_success_at":null,"path":null,"message":null},"operation":{"state":%s,"last_action":%s,"last_result":%s,"last_started_at":%s,"last_finished_at":%s,"last_step":%s,"last_error_code":%s,"last_error_summary":%s,"log_path":%s}}\n' "$DEPLOY_STATE_SCHEMA_VERSION" "$(app_json_string "$(state_now)")" "$(app_json_string "${APP_ID:-}")" "$(app_json_string "${APP_NAME:-}")" "$(app_json_bool "$([[ ${EUID:-$(id -u)} -eq 0 ]] && printf true || printf false)")" "$(app_json_string "$install_state")" "$(app_json_string "$severity")" "$(app_json_string "$conf_file")" "$(app_json_bool "$config_exists")" "$(app_json_value "$owner")" "$(app_json_value "$mode")" "$(app_json_value "$config_safe")" "$(app_json_value "$config_valid")" "$version_installed_json" "$version_json" "$(state_json_nullable "$service_name")" "$(app_json_bool "$service_systemctl")" "$(app_json_value "$service_unit_exists")" "$(app_json_value "$service_active")" "$(app_json_value "$service_enabled")" "$(app_json_string "$service_state")" "$services_json" "$health_json" "$(app_json_string "$operation_state")" "$(state_json_nullable "$last_action")" "$(state_json_nullable "$last_result")" "$(state_json_nullable "$last_started")" "$(state_json_nullable "$last_finished")" "$(state_json_nullable "$last_step")" "$last_error_code_json" "$(state_json_nullable "$last_error_summary")" "$(state_json_nullable "$last_log_path")"
+  printf '{"schema_version":%s,"collected_at":%s,"app_id":%s,"app_name":%s,"root":%s,"install_state":%s,"severity":%s,"config":{"path":%s,"exists":%s,"owner":%s,"mode":%s,"safe":%s,"valid":%s},"version":%s,"version_info":%s,"service":{"name":%s,"systemctl_available":%s,"unit_exists":%s,"active":%s,"enabled":%s,"state":%s},"services":%s,"health":%s,"backup":%s,"operation":{"state":%s,"last_action":%s,"last_result":%s,"last_started_at":%s,"last_finished_at":%s,"last_step":%s,"last_error_code":%s,"last_error_summary":%s,"log_path":%s}}\n' "$DEPLOY_STATE_SCHEMA_VERSION" "$(app_json_string "$(state_now)")" "$(app_json_string "${APP_ID:-}")" "$(app_json_string "${APP_NAME:-}")" "$(app_json_bool "$([[ ${EUID:-$(id -u)} -eq 0 ]] && printf true || printf false)")" "$(app_json_string "$install_state")" "$(app_json_string "$severity")" "$(app_json_string "$conf_file")" "$(app_json_bool "$config_exists")" "$(app_json_value "$owner")" "$(app_json_value "$mode")" "$(app_json_value "$config_safe")" "$(app_json_value "$config_valid")" "$version_installed_json" "$version_json" "$(state_json_nullable "$service_name")" "$(app_json_bool "$service_systemctl")" "$(app_json_value "$service_unit_exists")" "$(app_json_value "$service_active")" "$(app_json_value "$service_enabled")" "$(app_json_string "$service_state")" "$services_json" "$health_json" "$backup_json" "$(app_json_string "$operation_state")" "$(state_json_nullable "$last_action")" "$(state_json_nullable "$last_result")" "$(state_json_nullable "$last_started")" "$(state_json_nullable "$last_finished")" "$(state_json_nullable "$last_step")" "$last_error_code_json" "$(state_json_nullable "$last_error_summary")" "$(state_json_nullable "$last_log_path")"
 }
 
 
