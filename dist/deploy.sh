@@ -1983,6 +1983,9 @@ manager_status_main() {
   fi
   status=0
   if (( strict )); then
+    if [[ -s "${temp_dir}/errors" ]]; then
+      status=1
+    fi
     while IFS= read -r file; do
       [[ -n "$file" ]] || continue
       case "$(manager_status_human_field "$file" severity)" in
