@@ -1148,7 +1148,9 @@ operation_run_app_action() {
   # A non-root invocation cannot create the framework's root-owned operation
   # paths. Let the action's own root guard produce the established, actionable
   # error instead of masking it with an operation-record setup failure.
-  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  if [[ "${EUID:-$(id -u)}" -ne 0 &&
+        "${DEPLOY_OPERATION_ROOT:-/var/lib/deploy-scripts}" == /var/lib/deploy-scripts &&
+        "${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}" == /var/log/deploy-scripts ]]; then
     "$function_name"
     return $?
   fi
