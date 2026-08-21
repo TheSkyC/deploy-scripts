@@ -341,3 +341,44 @@ PY
     return 1
   fi
 }
+
+check_self_update_rejects_archive_listing_failure() {
+  local temp_root fake_bin archive extraction_root
+  temp_root="$(mktemp -d)"
+  fake_bin="${temp_root}/bin"
+  archive="${temp_root}/archive.tar.gz"
+  extraction_root="${temp_root}/extracted"
+  mkdir -p "$fake_bin"
+  : > "$archive"
+  cat >"${fake_bin}/tar" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == --extract ]]; then
+  extraction_root=""
+  for ((index = 1; index <= $#; index++)); do
+    if [[ "${!index:-}" == --directory ]]; then
+      next=$((index + 1))
+      extraction_root="${!next}"
+      break
+    fi
+  done
+  root="${extraction_root}/deploy-scripts-v1.3.0"
+  mkdir -p "${root}/lib"
+  printf '#!/usr/bin/env bash\n' >"${root}/deploy.sh"
+  printf '#!/usr/bin/env bash\n' >"${root}/lib/core.sh"
+  printf '%s\n' '{"schema_version":1,"project":"deploy-scripts","version":"v1.3.0"}' >"${root}/RELEASE.json"
+  exit 0
+fi
+exit 1
+SCRIPT
+  chmod +x "${fake_bin}/tar"
+  if PATH="${fake_bin}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    self_update_validate_archive_layout "$1" "$2" v1.3.0
+  ' _ "$archive" "$extraction_root"; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  rm -rf "$temp_root"
+}

@@ -379,6 +379,7 @@ main() {
       check_self_version_and_manifest_checks
       check_self_update_dry_run_validation
       check_self_update_activation_and_rollback
+      check_self_update_rejects_archive_listing_failure
       echo "Self-update foundation verification passed"
       return 0
       ;;
@@ -644,6 +645,7 @@ main() {
       check_self_version_and_manifest_checks
       check_self_update_dry_run_validation
       check_self_update_activation_and_rollback
+      check_self_update_rejects_archive_listing_failure
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0
