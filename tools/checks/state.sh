@@ -206,3 +206,22 @@ PY
   rm -rf "$temp_root"
   return "$status"
 }
+
+check_state_binary_backup_adapter() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    mkdir -p "$tmp_dir/backups"
+    touch -d "2026-08-20 12:34:56 UTC" "$tmp_dir/backups/ntfy_manual_20260820_123456.tar.gz"
+    source lib/core.sh
+    APP_ID=ntfy
+    APP_NAME="ntfy"
+    BACKUP_DIR="$tmp_dir/backups"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    APP_STATUS_BACKUP_FN=bapp_status_backup_json
+    bapp_status_backup_json
+    rm -rf "$tmp_dir"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert x["path"].endswith("ntfy_manual_20260820_123456.tar.gz"); assert x["last_success_at"]' "$output"
+}

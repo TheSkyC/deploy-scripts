@@ -340,6 +340,7 @@ main() {
       check_state_scalar_parser_and_severity
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
+      check_state_binary_backup_adapter
       check_state_status_matrix
       check_state_load_failure_isolation
       check_state_no_network_locality
@@ -615,6 +616,7 @@ main() {
       check_state_scalar_parser_and_severity
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
+      check_state_binary_backup_adapter
       check_state_status_matrix
       check_state_load_failure_isolation
       check_state_no_network_locality
