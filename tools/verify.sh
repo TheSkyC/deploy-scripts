@@ -345,6 +345,7 @@ main() {
     operation)
       check_version_helpers
       check_operation_records
+      check_operation_logrotate_policy
       check_history_command
       check_app_action_operation_wrapping
       check_operation_failure_traps
@@ -607,6 +608,7 @@ main() {
       check_health_all_target
       check_version_helpers
       check_operation_records
+      check_operation_logrotate_policy
       check_history_command
       check_app_action_operation_wrapping
       check_operation_failure_traps

@@ -19,6 +19,8 @@ __deploy_run_exit_handlers() {
   trap - EXIT
   for (( index=${#__DEPLOY_EXIT_HANDLERS[@]} - 1; index >= 0; index-- )); do
     handler="${__DEPLOY_EXIT_HANDLERS[$index]}"
+    # Protect the status-setting return from errexit while keeping it visible
+    # as `$?` to the handler.
     if __deploy_set_exit_status "$status"; then
       "$handler" || true
     else

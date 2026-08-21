@@ -49,6 +49,34 @@ PY
   return "$status"
 }
 
+check_operation_logrotate_policy() {
+  local temp_root policy_path
+  temp_root="$(mktemp -d)"
+  policy_path="${temp_root}/etc/logrotate.d/deploy-scripts"
+  if ! DEPLOY_OPERATION_LOG_ROOT="${temp_root}/var/log/deploy-scripts" \
+    DEPLOY_OPERATION_LOGROTATE_FILE="$policy_path" \
+    DEPLOY_OPERATION_LOGROTATE_DAYS=30 \
+    DEPLOY_OPERATION_LOGROTATE_FILES=20 \
+    "$BASH_BIN" -c '
+      set -euo pipefail
+      source lib/operation.sh
+      operation_write_logrotate
+    '; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  if ! grep -Fqx "${temp_root}/var/log/deploy-scripts/*/*.log {" "$policy_path" \
+    || ! grep -Fqx '    daily' "$policy_path" \
+    || ! grep -Fqx '    rotate 20' "$policy_path" \
+    || ! grep -Fqx '    maxage 30' "$policy_path" \
+    || ! grep -Fqx '    create 0640 root root' "$policy_path" \
+    || [[ "$(stat -c '%a' "$policy_path" 2>/dev/null || true)" != 644 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  rm -rf "$temp_root"
+}
+
 check_app_action_operation_wrapping() {
   local temp_root status
   temp_root="$(mktemp -d)"
