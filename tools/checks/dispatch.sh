@@ -128,6 +128,24 @@ check_no_argument_menu() {
   expect_menu_output zh dist/install_tickflow.sh "请选择操作"
 }
 
+
+check_manager_menu_shortcuts() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_status_main() { [[ "$1" == status-all ]]; }
+    manager_update_main() { return 0; }
+    self_update_main() { [[ "$1" == --check ]]; }
+    printf "s\\n" | show_manager_menu
+  ')"
+  [[ "$output" == *"s) all application status"* && "$output" == *"p) problems only"* && "$output" == *"u) check application updates"* && "$output" == *"f) check framework updates"* ]] || return 1
+  output="$(DEPLOY_LANG=zh "$BASH_BIN" -c '
+    source lib/core.sh
+    printf "q\\n" | show_manager_menu
+  ')"
+  [[ "$output" == *"s) 全部应用状态"* && "$output" == *"p) 仅查看异常"* && "$output" == *"u) 检查应用更新"* && "$output" == *"f) 检查中控更新"* ]]
+}
 check_manager_list() {
   expect_manager_list_output deploy.sh
   expect_manager_list_output deploy.sh " list "
