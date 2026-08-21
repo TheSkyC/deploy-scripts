@@ -419,12 +419,21 @@ deploy_add_exit_handler() {
   trap '__deploy_run_exit_handlers' EXIT
 }
 
+__deploy_set_exit_status() {
+  return "$1"
+}
+
 __deploy_run_exit_handlers() {
-  local status=$? handler index
+  local status="${__DEPLOY_EXIT_STATUS:-$?}" handler index
+  unset __DEPLOY_EXIT_STATUS
   trap - EXIT
   for (( index=${#__DEPLOY_EXIT_HANDLERS[@]} - 1; index >= 0; index-- )); do
     handler="${__DEPLOY_EXIT_HANDLERS[$index]}"
-    "$handler" || true
+    if __deploy_set_exit_status "$status"; then
+      "$handler" || true
+    else
+      "$handler" || true
+    fi
   done
   exit "$status"
 }
@@ -909,27 +918,42 @@ operation_safe_summary() {
   printf '%s' "$value"
 }
 
-operation_log_stream() {
-  local log_path="$1"
-  if command -v sed >/dev/null 2>&1; then
-    sed -E \
-      -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
-      -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-      -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g' \
-      | tee -a "$log_path"
-  else
-    tee -a "$log_path"
-  fi
+operation_redact_line() {
+  local line="$1"
+  printf '%s\n' "$line" | sed -E \
+    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
+    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
 }
 
-operation_replay_captured_output() {
-  local capture_dir="${OPERATION_CAPTURE_DIR:-}" log_path="${OPERATION_LOG_PATH:-}"
-  [[ -n "$capture_dir" && -d "$capture_dir" ]] || return 0
-  [[ -n "$log_path" ]] || return 1
-  operation_log_stream "$log_path" <"${capture_dir}/stdout" || true
-  operation_log_stream "$log_path" <"${capture_dir}/stderr" >&2 || true
-  rm -rf -- "$capture_dir"
-  unset OPERATION_CAPTURE_DIR
+operation_log_stream() {
+  local log_path="$1" line=""
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    printf '%s\n' "$line"
+    operation_redact_line "$line" >>"$log_path"
+    line=""
+  done
+}
+
+operation_stream_output() {
+  local log_path="$1"
+  operation_log_stream "$log_path"
+}
+
+operation_stream_error() {
+  local log_path="$1"
+  operation_log_stream "$log_path" >&2
+}
+
+operation_finish_output_streams() {
+  local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
+  [[ -n "$output_dir" ]] || return 0
+  [[ -z "$stdout_pid" ]] || wait "$stdout_pid" || true
+  [[ -z "$stderr_pid" ]] || wait "$stderr_pid" || true
+  [[ -z "$saved_stdout_fd" ]] || eval "exec ${saved_stdout_fd}>&-" || true
+  [[ -z "$saved_stderr_fd" ]] || eval "exec ${saved_stderr_fd}>&-" || true
+  rm -rf -- "$output_dir"
+  unset OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD
 }
 
 operation_set_owner_and_mode() {
@@ -963,7 +987,40 @@ operation_log_path_for() {
   printf '%s/%s.log\n' "$directory" "$run_id"
 }
 operation_new_run_id() { printf '%s-%s-%s-%04x%04x\n' "$(operation_run_timestamp)" "${2:-$1}" "$3" "$RANDOM" "$RANDOM"; }
-operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID; }
+operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD OPERATION_PREVIOUS_EXIT_TRAP; }
+operation_restore_exit_trap() {
+  local previous_trap="${1:-}"
+  if [[ -n "$previous_trap" ]]; then
+    eval "$previous_trap"
+  else
+    trap - EXIT
+  fi
+}
+
+operation_return_status() {
+  return "$1"
+}
+
+operation_invoke_exit_trap() {
+  local status="$1" previous_trap="${2:-}" command had_errexit=0
+  [[ -n "$previous_trap" ]] || exit "$status"
+  command="${previous_trap#trap -- }"
+  command="${command% EXIT}"
+  if [[ "$command" == "'__deploy_run_exit_handlers'" &&
+        "$(type -t __deploy_run_exit_handlers 2>/dev/null || true)" == function ]]; then
+    __DEPLOY_EXIT_STATUS="$status"
+    __deploy_run_exit_handlers
+  fi
+  [[ "$-" == *e* ]] && had_errexit=1
+  set +e
+  # Make the original status available as `$?` to an arbitrary prior EXIT
+  # trap. The status-setting function is deliberately the command immediately
+  # before eval; assignments and local declarations would otherwise erase it.
+  operation_return_status "$status"
+  eval "$command"
+  (( had_errexit == 1 )) && set -e
+  exit "$status"
+}
 
 operation_steps_json() {
   local first=1 name state started_at finished_at; printf '['
@@ -1013,10 +1070,13 @@ operation_step_start() { local name="$1" now updated; [[ "${OPERATION_ACTIVE:-0}
 operation_step_finish() { local name="$1" state="${2:-succeeded}" now updated found=0 step_name step_state started_at finished_at; [[ "${OPERATION_ACTIVE:-0}" == 1 ]] || return 1; case "$state" in succeeded|failed|skipped) ;; *) return 2;; esac; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; while IFS=$'\t' read -r step_name step_state started_at finished_at; do [[ -n "$step_name" ]] || continue; if [[ "$step_name" == "$name" ]]; then printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$started_at" "$now" >> "$updated"; found=1; else printf '%s\t%s\t%s\t%s\n' "$step_name" "$step_state" "$started_at" "$finished_at" >> "$updated"; fi; done < "$OPERATION_STEPS_FILE"; [[ "$found" -eq 1 ]] || { rm -f "$updated"; return 1; }; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_finish() { local exit_code="${1:-1}" state="${2:-}" summary="${3:-}"; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$exit_code" =~ ^[0-9]+$ ]] || return 1; [[ -n "$state" ]] || { [[ "$exit_code" -eq 0 ]] && state=succeeded || state=failed; }; case "$state" in succeeded|failed|cancelled|interrupted|rolled_back|rollback_failed) ;; *) return 2;; esac; OPERATION_STATE="$state"; OPERATION_EXIT_CODE="$exit_code"; OPERATION_FINISHED_AT="$(operation_timestamp)"; OPERATION_ERROR_SUMMARY="$(operation_safe_summary "$summary")"; operation_write_record || return 1; operation_append_history || return 1; rm -f "$OPERATION_STEPS_FILE"; operation_reset; }
 operation_action_exit_trap() {
-  local status="$?" action="${OPERATION_ACTION:-unknown}"
+  local status="$?" action="${OPERATION_ACTION:-unknown}" previous_trap="${OPERATION_PREVIOUS_EXIT_TRAP:-}"
+  if [[ -n "${OPERATION_SAVED_STDOUT_FD:-}" ]]; then
+    eval "exec 1>&${OPERATION_SAVED_STDOUT_FD} 2>&${OPERATION_SAVED_STDERR_FD}" || true
+  fi
   trap - EXIT
   if [[ "${OPERATION_ACTIVE:-0}" == 1 ]]; then
-    operation_replay_captured_output || true
+    operation_finish_output_streams || true
     if [[ "$status" -eq 0 ]]; then
       operation_step_finish execute succeeded || true
     else
@@ -1024,11 +1084,11 @@ operation_action_exit_trap() {
     fi
     operation_finish "$status" "" "${action} exited with status ${status}" || true
   fi
-  exit "$status"
+  operation_invoke_exit_trap "$status" "$previous_trap"
 }
 
 operation_run_app_action() {
-  local action="$1" function_name="$2" status
+  local action="$1" function_name="$2" status output_dir log_path
   operation_is_valid_action "$action" || return 2
   [[ "$function_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || return 2
   declare -f "$function_name" >/dev/null 2>&1 || return 2
@@ -1037,29 +1097,50 @@ operation_run_app_action() {
     operation_finish 1 failed "failed to start execute step" || true
     error "Unable to record operation step for ${APP_NAME:-app} ${action}"
   fi
+  local previous_trap
+  previous_trap="$(trap -p EXIT)"
+  OPERATION_PREVIOUS_EXIT_TRAP="$previous_trap"
   trap 'operation_action_exit_trap' EXIT
-  OPERATION_CAPTURE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/deploy-operation-output.XXXXXX")" || {
-    trap - EXIT
-    operation_finish 1 failed 'failed to create operation output capture directory' || true
+  log_path="$OPERATION_LOG_PATH"
+  output_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-operation-output.XXXXXX")" || {
+    operation_restore_exit_trap "$previous_trap" || true
+    operation_finish 1 failed 'failed to create operation output directory' || true
     return 1
   }
-  chmod 700 "$OPERATION_CAPTURE_DIR" || {
-    rm -rf -- "$OPERATION_CAPTURE_DIR"
-    unset OPERATION_CAPTURE_DIR
-    trap - EXIT
-    operation_finish 1 failed 'failed to secure operation output capture directory' || true
+  chmod 700 "$output_dir" || {
+    rm -rf -- "$output_dir"
+    operation_restore_exit_trap "$previous_trap" || true
+    operation_finish 1 failed 'failed to secure operation output directory' || true
     return 1
   }
-  : >"${OPERATION_CAPTURE_DIR}/stdout" || return 1
-  : >"${OPERATION_CAPTURE_DIR}/stderr" || return 1
-  # Capture first so redaction and replay are synchronous and complete before
-  # the operation record is finalized. The captured output is replayed below.
-  "$function_name" \
-    >"${OPERATION_CAPTURE_DIR}/stdout" \
-    2>"${OPERATION_CAPTURE_DIR}/stderr"
+  command -v mkfifo >/dev/null 2>&1 || {
+    rm -rf -- "$output_dir"
+    operation_restore_exit_trap "$previous_trap" || true
+    operation_finish 1 failed 'mkfifo is required for operation logging' || true
+    return 1
+  }
+  mkfifo "${output_dir}/stdout" "${output_dir}/stderr" || {
+    rm -rf -- "$output_dir"
+    operation_restore_exit_trap "$previous_trap" || true
+    operation_finish 1 failed 'failed to create operation output pipes' || true
+    return 1
+  }
+  OPERATION_OUTPUT_DIR="$output_dir"
+  ( trap - EXIT; operation_stream_output "$log_path" <"${output_dir}/stdout" ) &
+  OPERATION_STDOUT_PID=$!
+  ( trap - EXIT; operation_stream_error "$log_path" <"${output_dir}/stderr" ) &
+  OPERATION_STDERR_PID=$!
+  # Readers are open before the action starts, so its output remains visible
+  # immediately while a separately redacted copy is appended to the log.
+  exec {OPERATION_SAVED_STDOUT_FD}>&1
+  exec {OPERATION_SAVED_STDERR_FD}>&2
+  # Keep the action in the current shell so application functions retain
+  # their normal shell semantics. The wrapper EXIT trap records an explicit
+  # `exit`, errexit termination, and ordinary non-zero returns alike.
+  "$function_name" >"${output_dir}/stdout" 2>"${output_dir}/stderr"
   status=$?
-  operation_replay_captured_output || true
-  trap - EXIT
+  operation_finish_output_streams || true
+  operation_restore_exit_trap "$previous_trap" || true
   if [[ "$status" -eq 0 ]]; then
     operation_step_finish execute succeeded || operation_finish 1 failed "failed to finish execute step"
     operation_finish 0 || return 1
