@@ -116,6 +116,10 @@ __deploy_i18n_message() {
     manager.description) echo "Central deployment scheduler for all bundled application scripts.|所有内置应用部署脚本的中央统一调度器。" ;;
     manager.invalid_app) echo "Unknown application: %s|未知应用：%s" ;;
     manager.selection_prompt) echo "Application [number/name/q]:|请输入应用 [序号/名称/q]：" ;;
+    manager.status_all) echo "all application status|全部应用状态" ;;
+    manager.problems) echo "problems only|仅查看异常" ;;
+    manager.check_updates) echo "check application updates|检查应用更新" ;;
+    manager.check_self_update) echo "check framework updates|检查中控更新" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
     manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;

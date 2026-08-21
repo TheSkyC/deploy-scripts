@@ -22,12 +22,23 @@ show_manager_menu() {
     printf '  %s) %-16s %s\n' "$index" "$app_id" "$app_name"
     index=$((index + 1))
   done
+  echo "  s) $(t manager.status_all)"
+  echo "  p) $(t manager.problems)"
+  echo "  u) $(t manager.check_updates)"
+  echo "  f) $(t manager.check_self_update)"
   echo "  q) $(t common.quit)"
   echo
 
   prompt "$(t manager.selection_prompt)"
   local choice app_id status
   read -r choice
+  case "${choice,,}" in
+    s|status-all) manager_status_main status-all; return ;;
+    p|problems) manager_status_main problems; return ;;
+    u|check-update) manager_update_main; return ;;
+    f|self-update) self_update_main --check; return ;;
+    q|quit|exit) exit 0 ;;
+  esac
   set +e
   app_id="$(deploy_app_id_from_selection "$choice")"
   status=$?
