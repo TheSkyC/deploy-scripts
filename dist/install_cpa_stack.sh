@@ -2519,6 +2519,43 @@ manager_update_execute_app() {
   dispatch_action update
 }
 
+manager_update_operation_log() {
+  [[ "${MANAGER_UPDATE_OPERATION_ACTIVE:-0}" == 1 ]] || return 0
+  local line="$1"
+  operation_redact_line "$line" >>"$OPERATION_LOG_PATH" || true
+}
+
+manager_update_operation_exit_handler() {
+  local status=$?
+  [[ "${MANAGER_UPDATE_OPERATION_ACTIVE:-0}" == 1 ]] || return 0
+  MANAGER_UPDATE_OPERATION_ACTIVE=0
+  operation_step_finish execute failed >/dev/null 2>&1 || true
+  operation_finish "$status" "" "update-all exited with status ${status}" >/dev/null 2>&1 || true
+}
+
+manager_update_operation_start() {
+  operation_start manager "" update-all || return 1
+  operation_step_start execute >/dev/null 2>&1 || {
+    operation_finish 1 failed "failed to start execute step" >/dev/null 2>&1 || true
+    return 1
+  }
+  MANAGER_UPDATE_OPERATION_ACTIVE=1
+  deploy_add_exit_handler manager_update_operation_exit_handler
+  manager_update_operation_log "update-all started planned=${MANAGER_UPDATE_PLANNED:-0}"
+}
+
+manager_update_operation_finish() {
+  local status="$1" summary="${2:-}"
+  [[ "${MANAGER_UPDATE_OPERATION_ACTIVE:-0}" == 1 ]] || return 0
+  MANAGER_UPDATE_OPERATION_ACTIVE=0
+  if (( status == 0 )); then
+    operation_step_finish execute succeeded >/dev/null 2>&1 || true
+  else
+    operation_step_finish execute failed >/dev/null 2>&1 || true
+  fi
+  operation_finish "$status" "" "$summary" >/dev/null 2>&1 || true
+}
+
 manager_update_execution_record() {
   local plan_record="$1" state="$2" status="$3" reason="$4" app_id app_name install_state version_json status_json
   app_id="$(state_json_field "$plan_record" app_id)"
@@ -2594,6 +2631,12 @@ manager_update_all_main() {
       echo 'Unable to acquire the manager update lock.' >&2
       return "$status"
     fi
+    MANAGER_UPDATE_PLANNED="$planned"
+    manager_update_operation_start || {
+      (( planned > 0 )) && manager_update_release_lock
+      echo 'Unable to start manager update operation record.' >&2
+      return 1
+    }
   fi
   for plan_record in "${plan_records[@]}"; do
     action="$(state_json_field "$plan_record" action)"
@@ -2611,12 +2654,19 @@ manager_update_all_main() {
     if (( status == 0 )); then
       updated=$((updated + 1))
       execution_records+=("$(manager_update_execution_record "$plan_record" succeeded "$status" "")")
+      manager_update_operation_log "app=${app_id} state=succeeded status=${status}"
     else
       failed=$((failed + 1))
       execution_records+=("$(manager_update_execution_record "$plan_record" failed "$status" "update_failed")")
+      manager_update_operation_log "app=${app_id} state=failed status=${status}"
     fi
   done
   (( planned > 0 )) && manager_update_release_lock
+  if (( failed == 0 )); then
+    manager_update_operation_finish 0 "update-all completed successfully"
+  else
+    manager_update_operation_finish 1 "update-all completed with ${failed} failed application(s)"
+  fi
 
   if (( json )); then
     first=1
