@@ -102,7 +102,7 @@ PY
     APP_ID=newapi
     APP_NAME="New API"
     error() { return 1; }
-    do_fail() { exit 7; }
+    do_fail() { printf "failure TOKEN=failed-secret\n"; exit 7; }
     operation_run_app_action update do_fail
   '
   status=$?
@@ -111,7 +111,7 @@ PY
     rm -rf "$temp_root"
     return 1
   fi
-  python - "${temp_root}/failure-state/state/newapi.json" <<'PY'
+  python - "${temp_root}/failure-state/state/newapi.json" "${temp_root}" <<'PY'
 import json
 import sys
 
@@ -123,6 +123,79 @@ assert record["exit_code"] == 7
 assert record["steps"][0]["name"] == "execute"
 assert record["steps"][0]["state"] == "failed"
 assert record["steps"][0]["finished_at"]
+log_path = record["log_path"]
+if sys.platform == "win32" and log_path.startswith("/"):
+    log_path = sys.argv[2] + log_path[log_path.find("/failure-log/"):]
+with open(log_path, encoding="utf-8") as handle:
+    log = handle.read()
+assert "failure TOKEN=[REDACTED]" in log
+assert "failed-secret" not in log
+PY
+  status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
+check_operation_failure_traps() {
+  local temp_root status
+  temp_root="$(mktemp -d)"
+  set +e
+  DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/lock.sh
+    source lib/operation.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    marker="$1"
+    error() { return 1; }
+    record_first() { printf "first:%s\n" "$?" >> "$marker"; }
+    record_second() { printf "second:%s\n" "$?" >> "$marker"; }
+    deploy_add_exit_handler record_first
+    deploy_add_exit_handler record_second
+    do_fail() { printf "return PASSWORD=failed-secret\n"; return 7; }
+    operation_run_app_action update do_fail
+    status=$?
+    exit "$status"
+  ' _ "${temp_root}/marker"
+  status=$?
+  set -e
+  if [[ "$status" -ne 7 ]] ||
+     ! grep -qx 'second:7' "${temp_root}/marker" 2>/dev/null ||
+     ! grep -qx 'first:7' "${temp_root}/marker" 2>/dev/null ||
+     [[ "$(wc -l < "${temp_root}/marker" 2>/dev/null)" -ne 2 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  set +e
+  DEPLOY_OPERATION_ROOT="${temp_root}/sete-state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/sete-log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/operation.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    error() { return 1; }
+    do_sete() { set -e; printf "set-e SECRET=failed-secret\n"; false; printf "unreachable\n"; }
+    operation_run_app_action update do_sete
+  '
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  python - "${temp_root}/sete-state/state/newapi.json" "${temp_root}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["state"] == "failed"
+assert record["exit_code"] != 0
+log_path = record["log_path"]
+if log_path.startswith("/") and sys.platform == "win32":
+    log_path = sys.argv[2] + log_path[log_path.find("/sete-log/"):]
+with open(log_path, encoding="utf-8") as handle:
+    log = handle.read()
+assert "set-e SECRET=[REDACTED]" in log
+assert "unreachable" not in log
 PY
   status=$?
   rm -rf "$temp_root"

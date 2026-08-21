@@ -347,6 +347,7 @@ main() {
       check_operation_records
       check_history_command
       check_app_action_operation_wrapping
+      check_operation_failure_traps
       check_backup_all_dry_run
       check_doctor_all_target
       echo "Operation verification passed"
@@ -608,6 +609,7 @@ main() {
       check_operation_records
       check_history_command
       check_app_action_operation_wrapping
+      check_operation_failure_traps
       check_backup_all_dry_run
       check_doctor_all_target
       check_update_version_cache_and_network_failures

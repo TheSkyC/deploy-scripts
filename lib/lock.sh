@@ -9,12 +9,21 @@ deploy_add_exit_handler() {
   trap '__deploy_run_exit_handlers' EXIT
 }
 
+__deploy_set_exit_status() {
+  return "$1"
+}
+
 __deploy_run_exit_handlers() {
-  local status=$? handler index
+  local status="${__DEPLOY_EXIT_STATUS:-$?}" handler index
+  unset __DEPLOY_EXIT_STATUS
   trap - EXIT
   for (( index=${#__DEPLOY_EXIT_HANDLERS[@]} - 1; index >= 0; index-- )); do
     handler="${__DEPLOY_EXIT_HANDLERS[$index]}"
-    "$handler" || true
+    if __deploy_set_exit_status "$status"; then
+      "$handler" || true
+    else
+      "$handler" || true
+    fi
   done
   exit "$status"
 }
