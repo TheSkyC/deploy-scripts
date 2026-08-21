@@ -559,3 +559,25 @@ check_newapi_health_checks_are_nonfatal_outside_install() {
       }
     ' impl/install_newapi.sh dist/install_newapi.sh
 }
+
+check_newapi_status_backup_projection() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    conf_file="${tmp_dir}/new-api.conf"
+    backup_dir="${tmp_dir}/backups"
+    mkdir -p "$backup_dir"
+    printf "BACKUP_DIR=\\\"%s\\\"\\n" "$backup_dir" > "$conf_file"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/new-api_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    APP_CONF_FILE="$conf_file"
+    app_conf_file() { printf "%s" "$APP_CONF_FILE"; }
+    source impl/install_newapi.sh
+    _newapi_status_backup
+    rm -rf "$tmp_dir"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert x["path"].endswith("new-api_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
+}

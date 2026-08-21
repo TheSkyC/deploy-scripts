@@ -296,6 +296,7 @@ main() {
       check_newapi_install_rollback_validates_binary_path_before_removal
       check_newapi_install_rollback_surfaces_service_file_removal_failures
       check_newapi_backup_lists_preserve_paths_with_spaces
+      check_newapi_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_uninstall_checks_file_removal_errors
