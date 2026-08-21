@@ -1146,6 +1146,13 @@ operation_run_app_action() {
   operation_is_valid_action "$action" || return 2
   [[ "$function_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || return 2
   declare -f "$function_name" >/dev/null 2>&1 || return 2
+  # A non-root invocation cannot create the framework's root-owned operation
+  # paths. Let the action's own root guard produce the established, actionable
+  # error instead of masking it with an operation-record setup failure.
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    "$function_name"
+    return $?
+  fi
   operation_start app "${APP_ID:-}" "$action" || error "Unable to start operation record for ${APP_NAME:-app} ${action}"
   if ! operation_step_start execute; then
     operation_finish 1 failed "failed to start execute step" || true
