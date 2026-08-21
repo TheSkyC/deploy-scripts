@@ -909,6 +909,29 @@ operation_safe_summary() {
   printf '%s' "$value"
 }
 
+operation_log_stream() {
+  local log_path="$1"
+  if command -v sed >/dev/null 2>&1; then
+    sed -E \
+      -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
+      -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
+      -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g' \
+      | tee -a "$log_path"
+  else
+    tee -a "$log_path"
+  fi
+}
+
+operation_replay_captured_output() {
+  local capture_dir="${OPERATION_CAPTURE_DIR:-}" log_path="${OPERATION_LOG_PATH:-}"
+  [[ -n "$capture_dir" && -d "$capture_dir" ]] || return 0
+  [[ -n "$log_path" ]] || return 1
+  operation_log_stream "$log_path" <"${capture_dir}/stdout" || true
+  operation_log_stream "$log_path" <"${capture_dir}/stderr" >&2 || true
+  rm -rf -- "$capture_dir"
+  unset OPERATION_CAPTURE_DIR
+}
+
 operation_set_owner_and_mode() {
   local path="$1" mode="$2"; chmod "$mode" "$path" || return 1
   if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then chown root:root "$path" || return 1; fi
@@ -940,7 +963,7 @@ operation_log_path_for() {
   printf '%s/%s.log\n' "$directory" "$run_id"
 }
 operation_new_run_id() { printf '%s-%s-%s-%04x%04x\n' "$(operation_run_timestamp)" "${2:-$1}" "$3" "$RANDOM" "$RANDOM"; }
-operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE; }
+operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID; }
 
 operation_steps_json() {
   local first=1 name state started_at finished_at; printf '['
@@ -993,6 +1016,7 @@ operation_action_exit_trap() {
   local status="$?" action="${OPERATION_ACTION:-unknown}"
   trap - EXIT
   if [[ "${OPERATION_ACTIVE:-0}" == 1 ]]; then
+    operation_replay_captured_output || true
     if [[ "$status" -eq 0 ]]; then
       operation_step_finish execute succeeded || true
     else
@@ -1014,8 +1038,27 @@ operation_run_app_action() {
     error "Unable to record operation step for ${APP_NAME:-app} ${action}"
   fi
   trap 'operation_action_exit_trap' EXIT
-  "$function_name"
+  OPERATION_CAPTURE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/deploy-operation-output.XXXXXX")" || {
+    trap - EXIT
+    operation_finish 1 failed 'failed to create operation output capture directory' || true
+    return 1
+  }
+  chmod 700 "$OPERATION_CAPTURE_DIR" || {
+    rm -rf -- "$OPERATION_CAPTURE_DIR"
+    unset OPERATION_CAPTURE_DIR
+    trap - EXIT
+    operation_finish 1 failed 'failed to secure operation output capture directory' || true
+    return 1
+  }
+  : >"${OPERATION_CAPTURE_DIR}/stdout" || return 1
+  : >"${OPERATION_CAPTURE_DIR}/stderr" || return 1
+  # Capture first so redaction and replay are synchronous and complete before
+  # the operation record is finalized. The captured output is replayed below.
+  "$function_name" \
+    >"${OPERATION_CAPTURE_DIR}/stdout" \
+    2>"${OPERATION_CAPTURE_DIR}/stderr"
   status=$?
+  operation_replay_captured_output || true
   trap - EXIT
   if [[ "$status" -eq 0 ]]; then
     operation_step_finish execute succeeded || operation_finish 1 failed "failed to finish execute step"

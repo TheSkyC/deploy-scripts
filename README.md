@@ -100,6 +100,53 @@ keeping data, config, install directories, and backups by default; add
 `DEPLOY_DELETE_DATA=1` or `DEPLOY_DELETE_BACKUP=1` only when those removals are
 intended.
 
+## Managed framework releases
+
+The framework self-update command uses verified release archives and only writes to an
+explicit managed installation. A repository checkout and a standalone `dist/deploy.sh`
+remain read-only for framework updates. Inspect the detected mode with:
+
+```bash
+bash deploy.sh self-version --json
+bash deploy.sh self-update --check --json
+```
+
+A managed installation uses this layout under `/opt/deploy-scripts`:
+
+```text
+/opt/deploy-scripts/
+  releases/<version>/
+  current -> releases/<version>
+  previous -> releases/<version>
+  state/
+```
+
+To migrate a standalone copy, do not run `self-update` in place. Instead, obtain a
+release archive and its manifest over HTTPS, verify the archive SHA-256 and internal
+`RELEASE.json`, install the complete archive as a new directory below
+`/opt/deploy-scripts/releases/`, then create or update the `current` and `previous`
+symlinks atomically. The stable operator entrypoint should point to
+`/opt/deploy-scripts/current/deploy.sh`. The repository intentionally does not
+automatically migrate checkout or standalone files.
+
+After a managed installation is prepared:
+
+```bash
+sudo bash /opt/deploy-scripts/current/deploy.sh self-version
+sudo bash /opt/deploy-scripts/current/deploy.sh self-update --check
+sudo bash /opt/deploy-scripts/current/deploy.sh self-update --dry-run
+sudo bash /opt/deploy-scripts/current/deploy.sh self-update --yes
+sudo bash /opt/deploy-scripts/current/deploy.sh self-update --list
+sudo bash /opt/deploy-scripts/current/deploy.sh self-update --rollback --yes
+```
+
+Self-update configuration is kept separately in
+`/etc/deploy-scripts/self-update.conf` and must be root-owned with mode `0600`.
+Only the documented allow-listed settings are loaded; release URLs must use HTTPS
+and must not contain credentials, queries, or fragments. Failed validation leaves
+`current` unchanged, and a post-activation smoke-check failure automatically restores
+the previous release.
+
 ## Localization
 
 English is the default language. Set `DEPLOY_LANG=zh` to use Chinese framework messages and localized application messages for the bundled scripts.

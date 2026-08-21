@@ -58,13 +58,17 @@ check_app_action_operation_wrapping() {
     APP_ID=newapi
     APP_NAME="New API"
     error() { return 1; }
-    do_succeed() { :; }
+    do_succeed() {
+      printf "stdout TOKEN=top-secret\n"
+      printf "stderr PASSWORD=secret-value\n" >&2
+      printf "https://user:password@example.invalid/private\n" >&2
+    }
     operation_run_app_action update do_succeed
   '; then
     rm -rf "$temp_root"
     return 1
   fi
-  if ! python - "${temp_root}/state/state/newapi.json" "${temp_root}/state/history/operations.jsonl" <<'PY'
+  if ! python - "${temp_root}/state/state/newapi.json" "${temp_root}/state/history/operations.jsonl" "$temp_root" <<'PY'
 import json
 import sys
 
@@ -75,6 +79,15 @@ assert record["state"] == "succeeded"
 assert record["exit_code"] == 0
 assert record["steps"] == [{"name": "execute", "state": "succeeded", "started_at": record["steps"][0]["started_at"], "finished_at": record["steps"][0]["finished_at"]}]
 assert record["steps"][0]["finished_at"]
+log_path = record["log_path"]
+if sys.platform == "win32" and log_path.startswith("/"):
+    log_path = sys.argv[3] + log_path[log_path.find("/log/"):]
+with open(log_path, encoding="utf-8") as handle:
+    log = handle.read()
+assert "stdout TOKEN=[REDACTED]" in log
+assert "stderr PASSWORD=[REDACTED]" in log
+assert "https://user:[REDACTED]@example.invalid/private" in log
+assert "top-secret" not in log and "secret-value" not in log and "user:password@" not in log
 with open(sys.argv[2], encoding="utf-8") as handle:
     assert len(handle.readlines()) == 1
 PY
