@@ -350,6 +350,8 @@ main() {
       check_app_action_operation_wrapping
       check_operation_failure_traps
       check_backup_all_dry_run
+      check_backup_all_executes_serially_and_records_manager_operation
+      check_batch_target_selection_is_local_only
       check_doctor_all_target
       echo "Operation verification passed"
       return 0
@@ -359,6 +361,8 @@ main() {
       check_check_update_target
       check_update_all_dry_run_target
       check_update_all_execution_is_serial_and_safe
+      check_update_target_selection_is_local_only
+      check_update_all_writes_manager_operation_record
       echo "Update verification passed"
       return 0
       ;;
@@ -613,11 +617,15 @@ main() {
       check_app_action_operation_wrapping
       check_operation_failure_traps
       check_backup_all_dry_run
+      check_backup_all_executes_serially_and_records_manager_operation
+      check_batch_target_selection_is_local_only
       check_doctor_all_target
       check_update_version_cache_and_network_failures
       check_check_update_target
       check_update_all_dry_run_target
       check_update_all_execution_is_serial_and_safe
+      check_update_target_selection_is_local_only
+      check_update_all_writes_manager_operation_record
       check_release_package_artifacts
       check_self_version_and_manifest_checks
       check_self_update_dry_run_validation
