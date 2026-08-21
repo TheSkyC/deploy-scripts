@@ -130,6 +130,10 @@ __deploy_i18n_message() {
     manager.description) echo "Central deployment scheduler for all bundled application scripts.|所有内置应用部署脚本的中央统一调度器。" ;;
     manager.invalid_app) echo "Unknown application: %s|未知应用：%s" ;;
     manager.selection_prompt) echo "Application [number/name/q]:|请输入应用 [序号/名称/q]：" ;;
+    manager.status_all) echo "all application status|全部应用状态" ;;
+    manager.problems) echo "problems only|仅查看异常" ;;
+    manager.check_updates) echo "check application updates|检查应用更新" ;;
+    manager.check_self_update) echo "check framework updates|检查中控更新" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
     manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;
@@ -6083,12 +6087,23 @@ show_manager_menu() {
     printf '  %s) %-16s %s\n' "$index" "$app_id" "$app_name"
     index=$((index + 1))
   done
+  echo "  s) $(t manager.status_all)"
+  echo "  p) $(t manager.problems)"
+  echo "  u) $(t manager.check_updates)"
+  echo "  f) $(t manager.check_self_update)"
   echo "  q) $(t common.quit)"
   echo
 
   prompt "$(t manager.selection_prompt)"
   local choice app_id status
   read -r choice
+  case "${choice,,}" in
+    s|status-all) manager_status_main status-all; return ;;
+    p|problems) manager_status_main problems; return ;;
+    u|check-update) manager_update_main; return ;;
+    f|self-update) self_update_main --check; return ;;
+    q|quit|exit) exit 0 ;;
+  esac
   set +e
   app_id="$(deploy_app_id_from_selection "$choice")"
   status=$?
