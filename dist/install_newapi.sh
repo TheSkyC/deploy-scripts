@@ -5660,6 +5660,46 @@ _NEWAPI_DERIVE_PATHS() {
   ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
 APP_CONFIG_DERIVE_HOOK=_NEWAPI_DERIVE_PATHS
+_newapi_status_backup() {
+  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
+  conf_file="$(app_conf_file)"
+  backup_dir="${BACKUP_DIR:-}"
+  if [[ -f "$conf_file" ]]; then
+    backup_dir="$(awk -F= '
+      /^[[:space:]]*BACKUP_DIR=/ {
+        value=$0
+        sub(/^[^=]*=[[:space:]]*/, "", value)
+        gsub(/^"|"$/, "", value)
+        gsub(/[[:space:]]+$/, "", value)
+        print value
+        exit
+      }
+    ' "$conf_file" 2>/dev/null)"
+    [[ -n "$backup_dir" ]] || backup_dir="${BACKUP_DIR:-}"
+  fi
+  if [[ ! -d "$backup_dir" ]]; then
+    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'new-api_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1)"; then
+    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  if [[ -z "$latest_archive" ]]; then
+    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  archive_name="${latest_archive#* }"
+  archive_mtime="${latest_archive%% *}"
+  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
+    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
+    return
+  fi
+  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
+    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+}
+
+APP_STATUS_BACKUP_FN=_newapi_status_backup
 _newapi_remove_dir_or_error() {
   local path="$1" name="$2" success_message="$3"
   if ! safe_rm_dir "$path" "$name"; then
