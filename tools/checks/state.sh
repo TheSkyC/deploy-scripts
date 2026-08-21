@@ -54,7 +54,7 @@ BASH
 check_state_operation_error_code_projection() {
   local temp_root output json_file
   temp_root="$(mktemp -d)"
-  output="(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/logs" STATUS_TEST_CONFIG="$temp_root/config" "$BASH_BIN" -c '
+  output="$(DEPLOY_OPERATION_ROOT="$temp_root/state" DEPLOY_OPERATION_LOG_ROOT="$temp_root/logs" STATUS_TEST_CONFIG="$temp_root/config" "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
     APP_ID=newapi
