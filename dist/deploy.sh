@@ -1983,7 +1983,7 @@ manager_status_main() {
   fi
   status=0
   if (( strict )); then
-    if [[ -s "${temp_dir}/errors" ]]; then
+    if grep -q "[^[:space:]]" "${temp_dir}/errors" 2>/dev/null; then
       status=1
     fi
     while IFS= read -r file; do
