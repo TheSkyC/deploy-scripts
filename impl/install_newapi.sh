@@ -45,10 +45,11 @@ _newapi_status_backup() {
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
     return
   fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'new-api_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1)"; then
+  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'new-api_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr)"; then
     printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
     return
   fi
+  latest_archive="${latest_archive%%$'\n'*}"
   if [[ -z "$latest_archive" ]]; then
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
     return
