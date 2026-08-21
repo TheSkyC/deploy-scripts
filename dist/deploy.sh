@@ -2352,7 +2352,10 @@ manager_update_collect() {
   for app_id in "${ids[@]}"; do
     app_name="$(deploy_app_name_for "$app_id")"
     state_file="$(mktemp)"; err_file="$(mktemp)"
-    if ! manager_status_collect_app_json "$app_id" "$state_file" "$err_file"; then
+    # Target selection must not trigger health probes or remote lookups. Version
+    # refresh, when requested, is handled separately by the version adapter.
+    if ! ( DEPLOY_STATUS_NO_PROBE=1 DEPLOY_STATUS_NO_NETWORK=1
+           manager_status_collect_app_json "$app_id" "$state_file" "$err_file" ); then
       collection_error="$(tr '\n' ' ' < "$err_file" 2>/dev/null || true)"
       version_json="$(version_check_emit_json "" "" "" check_failed config miss "$collection_error")"
       MANAGER_UPDATE_RECORDS+=("$(manager_update_record "$app_id" "$app_name" unknown error status_collection_failed "$version_json")")
