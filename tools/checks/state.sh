@@ -3,7 +3,7 @@
 check_state_json_contract() {
   local output
   set +e
-  output="$(DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh status-all --json --include newapi)"
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh status-all --json --include newapi)"
   local command_status=$?
   set -e
   [[ "$command_status" -eq 0 ]] || return "$command_status"
@@ -17,7 +17,7 @@ check_state_json_contract() {
 check_state_target_selection() {
   local output
   set +e
-  output="$(DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh status-all --json --include newapi,ntfy --exclude ntfy)"
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh status-all --json --include newapi,ntfy --exclude ntfy)"
   local command_status=$?
   set -e
   [[ "$command_status" -eq 0 ]] || return "$command_status"
@@ -136,7 +136,7 @@ check_state_no_network_locality() {
 
 check_state_problems_filtering() {
   local output json_file
-  output="$(DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh problems --json --include newapi)"
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh problems --json --include newapi)"
   json_file="$(mktemp)"
   printf '%s' "$output" > "$json_file"
   python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["apps"] == []; assert x["summary"]["registered"] == 16; assert x["summary"]["selected"] == 1' "$json_file"
@@ -146,7 +146,7 @@ check_state_problems_filtering() {
 
 check_health_all_target() {
   local output json_file
-  output="$(DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh health-all --json --include newapi)"
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh health-all --json --include newapi)"
   json_file="$(mktemp)"
   printf '%s' "$output" > "$json_file"
   python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert x["apps"] == []; assert x["summary"]["selected"] == 1' "$json_file"
