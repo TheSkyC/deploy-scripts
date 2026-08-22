@@ -24,6 +24,21 @@ _NEWAPI_DERIVE_PATHS() {
   ENV_FILE="/etc/${SERVICE_NAME}.env"
 }
 APP_CONFIG_DERIVE_HOOK=_NEWAPI_DERIVE_PATHS
+# Central check-update adapter: New API is a GitHub-release binary whose
+# recorded version lives in INSTALLED_VERSION, so the shared release checker
+# applies with the configured repository. Saved configuration is reloaded so
+# custom install repositories are honored without running an app action.
+_newapi_check_update_json() {
+  local installed="$1" refresh="${2:-0}" no_network="${3:-0}" conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  version_check_binary_release_json "newapi" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
+}
+APP_CHECK_UPDATE_FN=_newapi_check_update_json
+_newapi_status_version_json() {
+  version_check_cached_binary_release_json "newapi" "${INSTALLED_VERSION:-}"
+}
+APP_STATUS_VERSION_FN=_newapi_status_version_json
 _newapi_status_backup() {
   local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
   conf_file="$(app_conf_file)"

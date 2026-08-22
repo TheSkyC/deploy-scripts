@@ -39,6 +39,29 @@ _VW_DERIVE_PATHS() {
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
 APP_CONFIG_DERIVE_HOOK=_VW_DERIVE_PATHS
+# Central check-update adapter: the binary is extracted from the Docker image
+# tagged VW_IMAGE_TAG, which tracks the upstream dani-garcia/vaultwarden
+# release. Read the version out of the installed binary and hand both ends to
+# the shared release checker so the standard cache/stale handling applies.
+_vw_installed_version_for_update() {
+  local version=""
+  if [[ -x "${VW_BIN:-}" ]]; then
+    version="$("$VW_BIN" --version 2>/dev/null | awk 'NF >= 2 { print $2; exit }' || true)"
+  fi
+  printf '%s\n' "$version"
+}
+_vw_check_update_json() {
+  local installed conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  installed="$(_vw_installed_version_for_update)"
+  version_check_binary_release_json "vaultwarden" "dani-garcia/vaultwarden" "$installed" "${2:-0}" "${3:-0}"
+}
+APP_CHECK_UPDATE_FN=_vw_check_update_json
+_vw_status_version_json() {
+  version_check_cached_binary_release_json "vaultwarden" "$(_vw_installed_version_for_update)"
+}
+APP_STATUS_VERSION_FN=_vw_status_version_json
 _vw_doctor_service_name() {
   printf 'vaultwarden\n'
 }
