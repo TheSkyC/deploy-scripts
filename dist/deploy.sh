@@ -5316,7 +5316,8 @@ self_update_atomic_restore_current() {
 }
 
 self_update_restore_previous_target() {
-  local managed_root="$1" old_target="${2:-}" previous_path="${managed_root}/previous"
+  local managed_root="$1" old_target="${2:-}"
+  local previous_path="${managed_root}/previous"
   if [[ -n "$old_target" ]]; then
     atomic_symlink "$old_target" "$previous_path"
     return $?
