@@ -304,6 +304,7 @@ main() {
       check_sub2api_install_rollback_validates_binary_path_before_removal
       check_sub2api_install_rollback_surfaces_service_file_removal_failures
       check_sub2api_backup_lists_preserve_paths_with_spaces
+      check_vaultwarden_status_backup_projection
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
       check_vaultwarden_uninstall_checks_file_removal_errors
