@@ -5405,12 +5405,39 @@ PY
 }
 
 self_update_operation_begin() {
+  local previous_trap previous_int_trap previous_term_trap previous_hup_trap
   operation_start self_update "" self-update || return 1
   operation_step_start prepare || { operation_reset; return 1; }
+  if (( BASH_SUBSHELL == 0 )); then
+    previous_trap="$(trap -p EXIT)"
+    previous_int_trap="$(trap -p INT)"
+    previous_term_trap="$(trap -p TERM)"
+    previous_hup_trap="$(trap -p HUP)"
+  else
+    # EXIT traps from a command substitution belong to the parent shell. Do
+    # not reinstall them in this subshell or they would run during normal
+    # command-substitution teardown.
+    previous_trap=""
+    previous_int_trap=""
+    previous_term_trap=""
+    previous_hup_trap=""
+  fi
+  OPERATION_PREVIOUS_EXIT_TRAP="$previous_trap"
+  OPERATION_PREVIOUS_INT_TRAP="$previous_int_trap"
+  OPERATION_PREVIOUS_TERM_TRAP="$previous_term_trap"
+  OPERATION_PREVIOUS_HUP_TRAP="$previous_hup_trap"
+  trap 'operation_action_exit_trap' EXIT
+  trap 'operation_action_signal_trap INT' INT
+  trap 'operation_action_signal_trap TERM' TERM
+  trap 'operation_action_signal_trap HUP' HUP
 }
 
 self_update_operation_finish() {
-  local exit_code="$1" state="$2" summary="${3:-}"
+  local exit_code="$1" state="$2" summary="${3:-}" previous_trap="${OPERATION_PREVIOUS_EXIT_TRAP:-}"
+  if [[ "${OPERATION_ACTIVE:-0}" == 1 ]]; then
+    operation_restore_signal_traps || true
+    operation_restore_exit_trap "$previous_trap" || true
+  fi
   operation_finish "$exit_code" "$state" "$summary" || true
 }
 
