@@ -2,6 +2,28 @@
 # shellcheck source=../verify.sh
 # Verify checks for the cyberstrikeai app (apps/cyberstrikeai.sh).
 
+check_cyberstrikeai_status_backup_projection() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    backup_dir="$tmp_dir/cyber backups"
+    mkdir -p "$backup_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/cyberstrike-ai_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=cyberstrikeai
+    APP_NAME="CyberStrikeAI"
+    BACKUP_DIR="$backup_dir"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    source impl/install_cyberstrikeai.sh
+    _csai_status_backup
+    rm -rf "$tmp_dir"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "cyber backups" in x["path"]; assert x["path"].endswith("cyberstrike-ai_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
+  grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' dist/install_cyberstrikeai.sh
+}
+
 check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.cyberstrikeai\.prompt\.continue\)"/ { saw_continue_prompt=1 }

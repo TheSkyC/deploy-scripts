@@ -316,6 +316,7 @@ main() {
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_uninstall_supports_noninteractive_mode
       check_blog_install_surfaces_default_nginx_site_removal_failures
+      check_cyberstrikeai_status_backup_projection
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_checks_directory_removal_errors
       check_cyberstrikeai_uninstall_checks_file_removal_errors
