@@ -2,6 +2,27 @@
 # shellcheck source=../verify.sh
 # Verify checks for the tickflow app (apps/tickflow.sh).
 
+check_tickflow_status_backup_projection() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    install_dir="$tmp_dir/tickflow"
+    backup_dir="${install_dir}-backups"
+    mkdir -p "$backup_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/tickflow-data-20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=tickflow
+    APP_NAME="TickFlow"
+    TICKFLOW_INSTALL_DIR="$install_dir"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    source impl/install_tickflow.sh
+    _tickflow_status_backup
+    rm -rf "$tmp_dir"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert x["path"].endswith("tickflow-data-20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
+}
+
 check_tickflow_uninstall_supports_noninteractive_mode() {
   awk '
       /app\.tickflow\.prompt\.continue/ { saw_continue_msg=1 }
