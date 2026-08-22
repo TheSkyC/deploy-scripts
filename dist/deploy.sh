@@ -4017,7 +4017,7 @@ bapp_status_backup_json() {
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
     return
   fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name "${APP_ID}_*.tar.gz" -printf '%T@ %p\n' 2>/dev/null | sort -nr)"; then
+  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name "${APP_ID}_*.tar.gz" -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
     printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
     return
   fi
@@ -4026,8 +4026,8 @@ bapp_status_backup_json() {
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
     return
   fi
-  archive_name="${latest_archive#* }"
-  archive_mtime="${latest_archive%% *}"
+  archive_name="${latest_archive#*|}"
+  archive_mtime="${latest_archive%%|*}"
   if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
     printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
     return
