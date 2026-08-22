@@ -82,6 +82,61 @@ PY
   rm -rf "$first_dir" "$second_dir"
 }
 
+check_self_update_protects_checkout_and_standalone() {
+  local checkout_root standalone_root output status
+  checkout_root="$(mktemp -d)"
+  standalone_root="$(mktemp -d)"
+  mkdir -p "${checkout_root}/.git"
+
+  set +e
+  output="$(DEPLOY_ROOT_DIR="$checkout_root" DEPLOY_SELF_UPDATE_ROOT="$checkout_root" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    set +e
+    self_update_main --json
+    status=$?
+    set -e
+    [[ "$status" -eq 2 ]]
+  ')"
+  status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    rm -rf "$checkout_root" "$standalone_root"
+    return 1
+  fi
+  python - "$output" <<'PY'
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["mode"] == "checkout"
+assert payload["state"] == "blocked_mode"
+PY
+
+  set +e
+  output="$(DEPLOY_ROOT_DIR="$standalone_root" DEPLOY_SELF_UPDATE_ROOT="$standalone_root" DEPLOY_BUNDLED=1 "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    set +e
+    self_update_main --json
+    status=$?
+    set -e
+    [[ "$status" -eq 2 ]]
+  ')"
+  status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    rm -rf "$checkout_root" "$standalone_root"
+    return 1
+  fi
+  python - "$output" <<'PY'
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["mode"] == "standalone_dist"
+assert payload["state"] == "blocked_mode"
+PY
+  rm -rf "$checkout_root" "$standalone_root"
+}
 check_self_version_and_manifest_checks() {
   local managed_root fake_bin fixture output
   managed_root="$(mktemp -d)"

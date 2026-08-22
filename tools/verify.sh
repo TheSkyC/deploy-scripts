@@ -384,6 +384,7 @@ main() {
     self-update)
       check_release_package_artifacts
       check_self_version_and_manifest_checks
+      check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
       check_self_update_managed_rehearsal
       check_self_update_activation_and_rollback
@@ -655,6 +656,7 @@ main() {
       check_update_all_writes_manager_operation_record
       check_release_package_artifacts
       check_self_version_and_manifest_checks
+      check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
       check_self_update_managed_rehearsal
       check_self_update_activation_and_rollback
