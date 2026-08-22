@@ -192,3 +192,35 @@ version_check_binary_release_json() {
     version_check_emit_json "$installed" "" "" check_failed github_release miss "release check failed"
   fi
 }
+
+# Check one git-branch application. The comparison is the local checkout HEAD
+# against the remote branch head after a fetch; refs are not semver, so this
+# never touches the version cache and always performs the network round trip
+# unless no_network=1, which reports unknown without any fetch.
+version_check_git_branch_json() {
+  local repo_dir="$1" branch="$2" no_network="${3:-0}"
+  local local_rev="" remote_rev result
+  if [[ -n "$repo_dir" && -d "$repo_dir/.git" ]]; then
+    local_rev="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+  fi
+  if [[ "$no_network" == 1 ]]; then
+    version_check_emit_json "$local_rev" "" "" unknown git_branch miss
+    return 0
+  fi
+  if [[ -z "$repo_dir" || ! -d "$repo_dir/.git" ]]; then
+    version_check_emit_json "" "" "" check_failed git_branch miss "installation is not a git checkout"
+    return 0
+  fi
+  if ! git -C "$repo_dir" fetch --quiet --prune origin "$branch" 2>/dev/null; then
+    version_check_emit_json "$local_rev" "" "" check_failed git_branch miss "branch fetch failed"
+    return 0
+  fi
+  remote_rev="$(git -C "$repo_dir" rev-parse --short "origin/${branch}" 2>/dev/null || true)"
+  if [[ -z "$remote_rev" ]]; then
+    version_check_emit_json "$local_rev" "" "" check_failed git_branch miss "cannot resolve remote branch head"
+    return 0
+  fi
+  result=up_to_date
+  [[ "$local_rev" != "$remote_rev" ]] && result=update_available
+  version_check_emit_json "$local_rev" "$remote_rev" "$(state_now)" "$result" git_branch not_persisted
+}

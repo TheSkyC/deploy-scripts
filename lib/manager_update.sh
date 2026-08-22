@@ -22,9 +22,17 @@ manager_update_unsupported_version_json() {
 # All application loading happens in a subshell. Implementations set global
 # defaults and hooks, and isolation prevents one application's BA_* settings
 # from being mistaken for another application's capability.
+#
+# Applications outside the shared binary-app lifecycle opt in through
+# APP_CHECK_UPDATE_FN, which must emit the same single-line version JSON
+# contract as bapp_check_update_json (see version_check_emit_json).
 manager_update_check_app_version() {
   local app_id="$1" installed="$2" refresh="$3" no_network="$4"
   manager_load_app "$app_id" || return 1
+  if [[ -n "${APP_CHECK_UPDATE_FN:-}" ]] && declare -f "$APP_CHECK_UPDATE_FN" >/dev/null 2>&1; then
+    "$APP_CHECK_UPDATE_FN" "$installed" "$refresh" "$no_network"
+    return 0
+  fi
   if [[ -z "${BA_BIN_NAME:-}" ]] || ! declare -f bapp_check_update_json >/dev/null 2>&1; then
     manager_update_unsupported_version_json "$installed" "version checking is not supported"
     return 0
