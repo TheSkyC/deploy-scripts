@@ -383,6 +383,60 @@ SCRIPT
   rm -rf "$temp_root"
 }
 
+check_self_update_interruption_restores_activation() {
+  local temp_root status
+  temp_root="$(mktemp -d)"
+  mkdir -p "$temp_root/releases/v1.2.3" "$temp_root/releases/v1.3.0"
+  set +e
+  DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    managed_root="$1"
+    old_target="${managed_root}/releases/v1.2.3"
+    old_previous="${managed_root}/releases/v1.1.0"
+    release_path="${managed_root}/releases/v1.3.0"
+    mkdir -p "$old_previous"
+    printf "%s\n" "$old_target" > "${managed_root}/current"
+    printf "%s\n" "$old_previous" > "${managed_root}/previous"
+    atomic_symlink() {
+      local target="$1" link="$2"
+      printf "%s\n" "$target" > "$link"
+    }
+    self_update_operation_begin
+    SELF_UPDATE_MANAGED_ROOT="$managed_root"
+    SELF_UPDATE_OLD_TARGET="$old_target"
+    SELF_UPDATE_OLD_PREVIOUS_TARGET="$old_previous"
+    SELF_UPDATE_RELEASE_PATH="$release_path"
+    SELF_UPDATE_ACTIVATION_STARTED=1
+    SELF_UPDATE_CURRENT_CHANGED=1
+    atomic_symlink "$release_path" "${managed_root}/current"
+    kill -TERM "$$"
+  ' _ "$temp_root"
+  status=$?
+  set -e
+  if [[ "$status" -ne 143 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  [[ "$(cat "$temp_root/current")" == "$temp_root/releases/v1.2.3" ]] \
+    || { rm -rf "$temp_root"; return 1; }
+  [[ "$(cat "$temp_root/previous")" == "$temp_root/releases/v1.1.0" ]] \
+    || { rm -rf "$temp_root"; return 1; }
+  [[ ! -e "$temp_root/releases/v1.3.0" && ! -L "$temp_root/releases/v1.3.0" ]] \
+    || { rm -rf "$temp_root"; return 1; }
+  python - "${temp_root}/state/self-update.json" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["state"] == "interrupted"
+assert "current was restored" in record["error"]
+PY
+  status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
+
 check_self_update_signal_interruption() {
   local temp_root status
   temp_root="$(mktemp -d)"
