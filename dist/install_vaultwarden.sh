@@ -1851,6 +1851,38 @@ version_check_binary_release_json() {
   fi
 }
 
+# Check one git-branch application. The comparison is the local checkout HEAD
+# against the remote branch head after a fetch; refs are not semver, so this
+# never touches the version cache and always performs the network round trip
+# unless no_network=1, which reports unknown without any fetch.
+version_check_git_branch_json() {
+  local repo_dir="$1" branch="$2" no_network="${3:-0}"
+  local local_rev="" remote_rev result
+  if [[ -n "$repo_dir" && -d "$repo_dir/.git" ]]; then
+    local_rev="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+  fi
+  if [[ "$no_network" == 1 ]]; then
+    version_check_emit_json "$local_rev" "" "" unknown git_branch miss
+    return 0
+  fi
+  if [[ -z "$repo_dir" || ! -d "$repo_dir/.git" ]]; then
+    version_check_emit_json "" "" "" check_failed git_branch miss "installation is not a git checkout"
+    return 0
+  fi
+  if ! git -C "$repo_dir" fetch --quiet --prune origin "$branch" 2>/dev/null; then
+    version_check_emit_json "$local_rev" "" "" check_failed git_branch miss "branch fetch failed"
+    return 0
+  fi
+  remote_rev="$(git -C "$repo_dir" rev-parse --short "origin/${branch}" 2>/dev/null || true)"
+  if [[ -z "$remote_rev" ]]; then
+    version_check_emit_json "$local_rev" "" "" check_failed git_branch miss "cannot resolve remote branch head"
+    return 0
+  fi
+  result=up_to_date
+  [[ "$local_rev" != "$remote_rev" ]] && result=update_available
+  version_check_emit_json "$local_rev" "$remote_rev" "$(state_now)" "$result" git_branch not_persisted
+}
+
 # ----- lib/manager_status.sh -----
 
 MANAGER_STATUS_USAGE="Usage: deploy.sh status-all|overview|problems [--json] [--short] [--strict] [--errors-only] [--only-installed] [--no-probe] [--no-network] [--include id,id,...] [--exclude id,id,...]"
@@ -2517,9 +2549,17 @@ manager_update_unsupported_version_json() {
 # All application loading happens in a subshell. Implementations set global
 # defaults and hooks, and isolation prevents one application's BA_* settings
 # from being mistaken for another application's capability.
+#
+# Applications outside the shared binary-app lifecycle opt in through
+# APP_CHECK_UPDATE_FN, which must emit the same single-line version JSON
+# contract as bapp_check_update_json (see version_check_emit_json).
 manager_update_check_app_version() {
   local app_id="$1" installed="$2" refresh="$3" no_network="$4"
   manager_load_app "$app_id" || return 1
+  if [[ -n "${APP_CHECK_UPDATE_FN:-}" ]] && declare -f "$APP_CHECK_UPDATE_FN" >/dev/null 2>&1; then
+    "$APP_CHECK_UPDATE_FN" "$installed" "$refresh" "$no_network"
+    return 0
+  fi
   if [[ -z "${BA_BIN_NAME:-}" ]] || ! declare -f bapp_check_update_json >/dev/null 2>&1; then
     manager_update_unsupported_version_json "$installed" "version checking is not supported"
     return 0
@@ -5976,6 +6016,29 @@ _VW_DERIVE_PATHS() {
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
 APP_CONFIG_DERIVE_HOOK=_VW_DERIVE_PATHS
+# Central check-update adapter: the binary is extracted from the Docker image
+# tagged VW_IMAGE_TAG, which tracks the upstream dani-garcia/vaultwarden
+# release. Read the version out of the installed binary and hand both ends to
+# the shared release checker so the standard cache/stale handling applies.
+_vw_installed_version_for_update() {
+  local version=""
+  if [[ -x "${VW_BIN:-}" ]]; then
+    version="$("$VW_BIN" --version 2>/dev/null | awk 'NF >= 2 { print $2; exit }' || true)"
+  fi
+  printf '%s\n' "$version"
+}
+_vw_check_update_json() {
+  local installed conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  installed="$(_vw_installed_version_for_update)"
+  version_check_binary_release_json "vaultwarden" "dani-garcia/vaultwarden" "$installed" "${2:-0}" "${3:-0}"
+}
+APP_CHECK_UPDATE_FN=_vw_check_update_json
+_vw_status_version_json() {
+  version_check_cached_binary_release_json "vaultwarden" "$(_vw_installed_version_for_update)"
+}
+APP_STATUS_VERSION_FN=_vw_status_version_json
 _vw_doctor_service_name() {
   printf 'vaultwarden\n'
 }
