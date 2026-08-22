@@ -2,6 +2,28 @@
 # shellcheck source=../verify.sh
 # Verify checks for the sub2api app (apps/sub2api.sh, impl/install_sub2api.sh).
 
+check_sub2api_status_backup_projection() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    backup_dir="$tmp_dir/sub2api backups"
+    mkdir -p "$backup_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/sub2api_data_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=sub2api
+    APP_NAME="Sub2API"
+    BACKUP_DIR="$backup_dir"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    source impl/install_sub2api.sh
+    _sub2api_status_backup
+    rm -rf "$tmp_dir"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "sub2api backups" in x["path"]; assert x["path"].endswith("sub2api_data_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
+  grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' impl/install_sub2api.sh \
+    && grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' dist/install_sub2api.sh
+}
+
 check_sub2api_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.sub2api\.prompt\.continue\)"/ { saw_continue_prompt=1 }
