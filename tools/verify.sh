@@ -434,6 +434,7 @@ main() {
       check_config_write_failure_cleanup
       check_config_writes_are_centralized
       check_connectivity_helper_behavior
+      check_cpa_stack_status_backup_projection
       check_cpa_stack_layout
       check_cron_logrotate_are_atomic
       check_logrotate_writes_use_shared_helper
