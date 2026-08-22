@@ -3965,7 +3965,7 @@ bapp_validate_cfg() {
   require_safe_path "BIN_PATH" "$BIN_PATH"
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"
   for attr in INSTALL_DIR BIN_PATH DATA_DIR LOG_DIR BACKUP_DIR; do
     bapp_validate_no_whitespace "$attr" "${!attr}"
   done
