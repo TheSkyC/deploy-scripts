@@ -1057,7 +1057,7 @@ operation_log_path_for() {
   printf '%s/%s.log\n' "$directory" "$run_id"
 }
 operation_new_run_id() { printf '%s-%s-%s-%04x%04x\n' "$(operation_run_timestamp)" "${2:-$1}" "$3" "$RANDOM" "$RANDOM"; }
-operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD OPERATION_PREVIOUS_EXIT_TRAP OPERATION_PREVIOUS_INT_TRAP OPERATION_PREVIOUS_TERM_TRAP OPERATION_PREVIOUS_HUP_TRAP OPERATION_INTERRUPTED_SIGNAL; }
+operation_reset() { unset OPERATION_ACTIVE OPERATION_RUN_ID OPERATION_SCOPE OPERATION_APP_ID OPERATION_ACTION OPERATION_STARTED_AT OPERATION_FINISHED_AT OPERATION_STATE OPERATION_LAST_STEP OPERATION_EXIT_CODE OPERATION_ERROR_SUMMARY OPERATION_LOG_PATH OPERATION_STEPS_FILE OPERATION_CAPTURE_DIR OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD OPERATION_PREVIOUS_EXIT_TRAP OPERATION_PREVIOUS_INT_TRAP OPERATION_PREVIOUS_TERM_TRAP OPERATION_PREVIOUS_HUP_TRAP OPERATION_INTERRUPTED_SIGNAL OPERATION_INTERRUPTION_CLEANUP_FN OPERATION_INTERRUPTION_SUMMARY; }
 operation_restore_exit_trap() {
   local previous_trap="${1:-}"
   if [[ -n "$previous_trap" ]]; then
@@ -1179,6 +1179,10 @@ operation_action_exit_trap() {
   trap - EXIT
   if [[ "${OPERATION_ACTIVE:-0}" == 1 ]]; then
     operation_restore_signal_traps || true
+    if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" && -n "${OPERATION_INTERRUPTION_CLEANUP_FN:-}" ]] \
+      && declare -f "${OPERATION_INTERRUPTION_CLEANUP_FN}" >/dev/null 2>&1; then
+      "${OPERATION_INTERRUPTION_CLEANUP_FN}" "$status" || true
+    fi
     if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]]; then
       operation_discard_output_streams || true
     else
@@ -1190,7 +1194,7 @@ operation_action_exit_trap() {
       operation_step_finish execute failed || true
     fi
     if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]]; then
-      operation_finish "$status" interrupted "${action} interrupted by SIG${OPERATION_INTERRUPTED_SIGNAL}" || true
+      operation_finish "$status" interrupted "${OPERATION_INTERRUPTION_SUMMARY:-${action} interrupted by SIG${OPERATION_INTERRUPTED_SIGNAL}}" || true
     else
       operation_finish "$status" "" "${action} exited with status ${status}" || true
     fi
@@ -5345,22 +5349,54 @@ self_update_activate_candidate() {
     old_previous_target="$(self_update_previous_target_for "$managed_root")" || return 1
   fi
   [[ -d "$candidate_root" && ! -L "$candidate_root" ]] || return 1
-  mv -- "$candidate_root" "$release_path" || return 1
+  # Publish the rollback coordinates before the first filesystem mutation so a
+  # signal delivered between the atomic pointer operations can still restore
+  # the old layout from the EXIT trap.
+  SELF_UPDATE_OLD_TARGET="$old_target"
+  SELF_UPDATE_OLD_PREVIOUS_TARGET="$old_previous_target"
+  SELF_UPDATE_RELEASE_PATH="$release_path"
+  SELF_UPDATE_ACTIVATION_STARTED=1
+  mv -- "$candidate_root" "$release_path" || { SELF_UPDATE_ACTIVATION_STARTED=0; return 1; }
   if ! atomic_symlink "$old_target" "${managed_root}/previous"; then
     rm -rf -- "$release_path"
+    SELF_UPDATE_ACTIVATION_STARTED=0
+    SELF_UPDATE_RELEASE_PATH=""
     return 1
   fi
+  # Set this before switching current: Bash may dispatch a pending signal
+  # before executing the next assignment after atomic_symlink returns.
+  SELF_UPDATE_CURRENT_CHANGED=1
   if ! atomic_symlink "$release_path" "${managed_root}/current"; then
     self_update_atomic_restore_current "$managed_root" "$old_target" || true
     self_update_restore_previous_target "$managed_root" "$old_previous_target" || true
     rm -rf -- "$release_path"
+    SELF_UPDATE_CURRENT_CHANGED=0
+    SELF_UPDATE_ACTIVATION_STARTED=0
+    SELF_UPDATE_RELEASE_PATH=""
     return 1
   fi
-  SELF_UPDATE_OLD_TARGET="$old_target"
-  SELF_UPDATE_OLD_PREVIOUS_TARGET="$old_previous_target"
-  SELF_UPDATE_RELEASE_PATH="$release_path"
-  SELF_UPDATE_CURRENT_CHANGED=1
   printf '%s\n' "$release_path"
+}
+
+self_update_interrupted_cleanup() {
+  local status="${1:-1}" restored=1 release_path="${SELF_UPDATE_RELEASE_PATH:-}"
+  [[ "${SELF_UPDATE_ACTIVATION_STARTED:-0}" == 1 ]] || return 0
+  if [[ "${SELF_UPDATE_CURRENT_CHANGED:-0}" == 1 ]]; then
+    self_update_atomic_restore_current "$SELF_UPDATE_MANAGED_ROOT" "${SELF_UPDATE_OLD_TARGET:-}" || restored=0
+  fi
+  self_update_restore_previous_target "$SELF_UPDATE_MANAGED_ROOT" "${SELF_UPDATE_OLD_PREVIOUS_TARGET:-}" || restored=0
+  if [[ -n "$release_path" ]]; then
+    self_update_discard_failed_release "$SELF_UPDATE_MANAGED_ROOT" "$release_path" || restored=0
+  fi
+  if (( restored )); then
+    SELF_UPDATE_CURRENT_CHANGED=0
+    SELF_UPDATE_ACTIVATION_STARTED=0
+    SELF_UPDATE_RELEASE_PATH=""
+    OPERATION_INTERRUPTION_SUMMARY="self-update interrupted by SIG${OPERATION_INTERRUPTED_SIGNAL:-TERM}; current was restored"
+  else
+    OPERATION_INTERRUPTION_SUMMARY="self-update interrupted by SIG${OPERATION_INTERRUPTED_SIGNAL:-TERM}; current may require manual recovery"
+  fi
+  return 0
 }
 
 self_update_smoke_check() {
@@ -5426,6 +5462,7 @@ self_update_operation_begin() {
   OPERATION_PREVIOUS_INT_TRAP="$previous_int_trap"
   OPERATION_PREVIOUS_TERM_TRAP="$previous_term_trap"
   OPERATION_PREVIOUS_HUP_TRAP="$previous_hup_trap"
+  OPERATION_INTERRUPTION_CLEANUP_FN=self_update_interrupted_cleanup
   trap 'operation_action_exit_trap' EXIT
   trap 'operation_action_signal_trap INT' INT
   trap 'operation_action_signal_trap TERM' TERM
@@ -5476,6 +5513,8 @@ self_update_apply_main() {
   SELF_UPDATE_RELEASE_PATH=""
   SELF_UPDATE_OLD_TARGET=""
   SELF_UPDATE_OLD_PREVIOUS_TARGET=""
+  SELF_UPDATE_CURRENT_CHANGED=0
+  SELF_UPDATE_ACTIVATION_STARTED=0
   self_update_detect_mode
   if [[ "$SELF_UPDATE_MODE" != managed_release ]]; then
     if (( json )); then self_update_apply_json blocked_mode 'self-update requires managed_release mode'; else printf '%s\n' 'self-update requires managed_release mode; use --check in checkout or standalone mode' >&2; fi
@@ -5575,6 +5614,8 @@ self_update_apply_main() {
     SELF_UPDATE_VERSION="$SELF_UPDATE_MANIFEST_VERSION"
     operation_step_finish smoke_check succeeded || true
     self_update_cleanup_releases "$SELF_UPDATE_MANAGED_ROOT" || printf '%s\n' 'self-update: warning: release retention cleanup failed' >&2
+    SELF_UPDATE_CURRENT_CHANGED=0
+    SELF_UPDATE_ACTIVATION_STARTED=0
     self_update_operation_finish 0 succeeded
     self_update_release_coordination_locks
     if (( json )); then self_update_apply_json succeeded; else printf 'self-update activated %s\n' "$SELF_UPDATE_MANIFEST_VERSION"; fi
@@ -5587,6 +5628,9 @@ self_update_apply_main() {
     self_update_discard_failed_release "$SELF_UPDATE_MANAGED_ROOT" "$SELF_UPDATE_RELEASE_PATH" \
       || printf '%s\n' 'self-update: warning: could not remove failed release candidate' >&2
     operation_step_finish rollback succeeded || true
+    SELF_UPDATE_CURRENT_CHANGED=0
+    SELF_UPDATE_ACTIVATION_STARTED=0
+    SELF_UPDATE_RELEASE_PATH=""
     self_update_operation_finish 1 rolled_back 'new release smoke check failed; current was restored'
     self_update_release_coordination_locks
     if (( json )); then self_update_apply_json rolled_back 'new release smoke check failed; current was restored'; else printf '%s\n' 'new release smoke check failed; current was restored' >&2; fi
