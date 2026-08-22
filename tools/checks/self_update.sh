@@ -192,7 +192,7 @@ check_self_update_dry_run_validation() {
   tar -C "$stage_dir" -czf "$archive_path" deploy-scripts-v1.3.0
   local sha256 size_bytes
   sha256="$(sha256sum "$archive_path" | awk '{print $1}')"
-  size_bytes="$(wc -c <"$archive_path" | tr -d '[:space:]')"
+  size_bytes="$(wc -c <"$archive_path" | sed 's/[[:space:]]//g')"
   cat >"${fixture_dir}/manifest.json" <<JSON
 {"schema_version":1,"project":"deploy-scripts","channel":"stable","version":"v1.3.0","artifacts":{"source":{"name":"deploy-scripts-v1.3.0.tar.gz","url":"https://updates.invalid/v1.3.0/deploy-scripts-v1.3.0.tar.gz","sha256":"${sha256}","size_bytes":${size_bytes}}}}
 JSON
@@ -276,7 +276,7 @@ SCRIPT
       archive="${fixture_root}/deploy-scripts-${version}.tar.gz"
       tar -C "$stage" -czf "$archive" "deploy-scripts-${version}"
       sha256="$(sha256sum "$archive" | awk "{print \$1}")"
-      size_bytes="$(wc -c <"$archive" | tr -d '[:space:]')"
+      size_bytes="$(wc -c <"$archive" | sed 's/[[:space:]]//g')"
       printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"channel\":\"stable\",\"version\":\"${version}\",\"artifacts\":{\"source\":{\"name\":\"deploy-scripts-${version}.tar.gz\",\"url\":\"https://updates.invalid/${version}/deploy-scripts-${version}.tar.gz\",\"sha256\":\"${sha256}\",\"size_bytes\":${size_bytes}}}}" >"${fixture_root}/manifest-${version}.json"
     }
     make_release v1.3.0 0

@@ -256,7 +256,7 @@ check_batch_target_selection_is_local_only() {
     manager_status_collect_app_json() {
       [[ "${DEPLOY_STATUS_NO_PROBE:-0}" == 1 ]] || return 91
       [[ "${DEPLOY_STATUS_NO_NETWORK:-0}" == 1 ]] || return 92
-      printf '{"install_state":"not_installed"}' > "$2"
+      printf "%s" "{\"install_state\":\"not_installed\"}" > "$2"
       : > "$3"
     }
     manager_doctor_main --json --include newapi >/dev/null

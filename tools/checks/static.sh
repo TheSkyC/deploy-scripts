@@ -27,14 +27,26 @@ check_shellcheck() {
   #   SC2329: functions invoked indirectly (restore_framework_functions / exit handlers).
   #   SC2015: `A && B || C` assertion chains in checks are deliberate: every
   #           grep in the chain must pass before the failure branch runs.
-  local file
+  local file normalized status temp_dir
   local files=()
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-scripts-shellcheck.XXXXXX")" || return 1
   while IFS= read -r file; do
-    files+=("$file")
+    normalized="${temp_dir}/${file}"
+    mkdir -p "$(dirname -- "$normalized")" || { rm -rf "$temp_dir"; return 1; }
+    # Git preserves LF in the repository, but some Windows checkouts expose CRLF
+    # to Unix shellcheck. Normalize only the verification copy so diagnostics
+    # reflect the script instead of heredoc terminator carriage returns.
+    tr -d '\r' <"$file" >"$normalized" || { rm -rf "$temp_dir"; return 1; }
+    files+=("$normalized")
   done < <(find apps bin impl lib tools -name '*.sh' -type f | sort; printf '%s\n' deploy.sh)
+  set +e
   shellcheck --severity=style \
     --exclude=SC2034,SC1090,SC1091,SC1017,SC2016,SC2005,SC2059,SC2329,SC2015 \
     "${files[@]}"
+  status=$?
+  set -e
+  rm -rf "$temp_dir"
+  return "$status"
 }
 
 check_release_syntax() {
