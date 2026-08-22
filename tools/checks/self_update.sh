@@ -382,3 +382,35 @@ SCRIPT
   fi
   rm -rf "$temp_root"
 }
+
+check_self_update_signal_interruption() {
+  local temp_root status
+  temp_root="$(mktemp -d)"
+  set +e
+  DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    self_update_operation_begin
+    kill -TERM "$$"
+  '
+  status=$?
+  set -e
+  if [[ "$status" -ne 143 ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  python - "${temp_root}/state/self-update.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    record = json.load(handle)
+assert record["scope"] == "self_update"
+assert record["state"] == "interrupted"
+assert record["exit_code"] == 143
+assert "SIGTERM" in record["error"]
+PY
+  status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
