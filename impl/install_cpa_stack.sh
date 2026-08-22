@@ -42,6 +42,8 @@ CONFIG_KEYS=(
   CERTBOT_EMAIL
   CPA_STACK_BACKUP_DIR
   BACKUP_KEEP_DAYS
+  INSTALLED_CPA_VERSION
+  INSTALLED_CPAMP_VERSION
 )
 
 CONF_FILE="$(app_conf_file)"
@@ -55,6 +57,85 @@ _cpa_stack_doctor_services() {
 }
 APP_DOCTOR_SERVICE_FN=_cpa_stack_doctor_primary_service
 APP_DOCTOR_SERVICES_FN=_cpa_stack_doctor_services
+# Central check-update adapter: the stack ships two independently released
+# GitHub binaries, so both components are compared against their repository's
+# latest release through the shared checker and merged into one verdict.
+# Component versions are read straight from the deployment config because
+# central commands load definitions without running app actions.
+_cpa_stack_state_rank() {
+  case "$1" in
+    update_available) printf '4\n' ;;
+    check_failed) printf '3\n' ;;
+    stale) printf '2\n' ;;
+    unknown) printf '1\n' ;;
+    *) printf '0\n' ;;
+  esac
+}
+_cpa_stack_merge_version_json() {
+  local a="$1" b="$2" a_state b_state a_cache b_cache a_checked b_checked a_error b_error
+  local cache_state checked_at error_summary verdict_state
+  a_state="$(state_json_field "$a" update_state 2>/dev/null || printf up_to_date)"
+  b_state="$(state_json_field "$b" update_state 2>/dev/null || printf up_to_date)"
+  a_cache="$(state_json_field "$a" cache_state 2>/dev/null || printf miss)"
+  b_cache="$(state_json_field "$b" cache_state 2>/dev/null || printf miss)"
+  a_checked="$(state_json_field "$a" checked_at 2>/dev/null || true)"
+  b_checked="$(state_json_field "$b" checked_at 2>/dev/null || true)"
+  a_error="$(state_json_field "$a" error 2>/dev/null || true)"
+  b_error="$(state_json_field "$b" error 2>/dev/null || true)"
+  [[ "$a_checked" == null ]] && a_checked=""
+  [[ "$b_checked" == null ]] && b_checked=""
+  [[ "$a_error" == null ]] && a_error=""
+  [[ "$b_error" == null ]] && b_error=""
+  checked_at="$a_checked"
+  if [[ -z "$checked_at" ]]; then
+    checked_at="$b_checked"
+  elif [[ -n "$b_checked" && "$b_checked" > "$checked_at" ]]; then
+    checked_at="$b_checked"
+  fi
+  case ",$a_cache,$b_cache," in
+    *,stale,*) cache_state=stale ;;
+    *,fresh,*|*,refreshed,*|*,not_persisted,*) cache_state=refreshed ;;
+    *) cache_state=miss ;;
+  esac
+  error_summary="${a_error:+cpa: ${a_error}}"
+  if [[ -n "$error_summary" && -n "$b_error" ]]; then
+    error_summary+="; "
+  fi
+  error_summary+="${b_error:+cpamp: ${b_error}}"
+  if (( $( _cpa_stack_state_rank "$a_state" ) >= $( _cpa_stack_state_rank "$b_state" ) )); then
+    verdict_state="$a_state"
+  else
+    verdict_state="$b_state"
+  fi
+  # Component fields keep a stable cpa-then-cpamp order regardless of which
+  # side won the verdict, so consumers can always split on the same layout.
+  version_check_emit_json \
+    "$(state_json_field "$a" installed 2>/dev/null || printf null)/$(state_json_field "$b" installed 2>/dev/null || printf null)" \
+    "$(state_json_field "$a" latest 2>/dev/null || printf null)/$(state_json_field "$b" latest 2>/dev/null || printf null)" \
+    "$checked_at" "$verdict_state" github_release "$cache_state" "$error_summary"
+}
+_cpa_stack_load_installed_versions() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] || return 0
+  load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+}
+_cpa_stack_check_update_json() {
+  local refresh="${2:-0}" no_network="${3:-0}" a_json b_json
+  _cpa_stack_load_installed_versions
+  a_json="$(version_check_binary_release_json "cpa-stack-cpa" "$CPA_REPOSITORY" "${INSTALLED_CPA_VERSION:-}" "$refresh" "$no_network")"
+  b_json="$(version_check_binary_release_json "cpa-stack-cpamp" "$CPAMP_REPOSITORY" "${INSTALLED_CPAMP_VERSION:-}" "$refresh" "$no_network")"
+  _cpa_stack_merge_version_json "$a_json" "$b_json"
+}
+APP_CHECK_UPDATE_FN=_cpa_stack_check_update_json
+_cpa_stack_status_version_json() {
+  _cpa_stack_load_installed_versions
+  local a_json b_json
+  a_json="$(version_check_cached_binary_release_json "cpa-stack-cpa" "${INSTALLED_CPA_VERSION:-}")"
+  b_json="$(version_check_cached_binary_release_json "cpa-stack-cpamp" "${INSTALLED_CPAMP_VERSION:-}")"
+  _cpa_stack_merge_version_json "$a_json" "$b_json"
+}
+APP_STATUS_VERSION_FN=_cpa_stack_status_version_json
 _cpa_stack_status_backup() {
   local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
   conf_file="$(app_conf_file 2>/dev/null || true)"
@@ -313,13 +394,16 @@ cpa_stack_install_release() {
     binary="$(find "$extract_dir" -type f -name cli-proxy-api -print -quit)"
     [[ -n "$binary" ]] || { rm -f "$archive"; rm -rf "$extract_dir"; error "$(t app.cpa_stack.error.binary_missing "cli-proxy-api" "$asset")"; }
     cpa_stack_install_binary "$binary" "$CPA_BIN" "${CPA_SERVICE_USER}:${CPA_SERVICE_USER}"
+    INSTALLED_CPA_VERSION="$tag"
   else
     binary="$(find "$extract_dir" -type f -name cpa-manager-plus -print -quit)"
     [[ -n "$binary" ]] || { rm -f "$archive"; rm -rf "$extract_dir"; error "$(t app.cpa_stack.error.binary_missing "cpa-manager-plus" "$asset")"; }
     cpa_stack_install_binary "$binary" "$CPAMP_BIN" "${CPAMP_SERVICE_USER}:${CPAMP_SERVICE_USER}"
+    INSTALLED_CPAMP_VERSION="$tag"
   fi
   rm -f "$archive"
   rm -rf "$extract_dir"
+  app_save_config
 }
 
 cpa_stack_ensure_user() {
