@@ -54,7 +54,7 @@ check_update_version_cache_and_network_failures() {
 
 check_check_update_target() {
   local output json_file status
-  output="$($BASH_BIN deploy.sh check-update --json --include newapi)" || return 1
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 $BASH_BIN deploy.sh check-update --json --include newapi)" || return 1
   json_file="$(mktemp)"
   printf '%s' "$output" > "$json_file"
   python - "$json_file" <<'PY'
@@ -76,7 +76,7 @@ PY
 
 check_update_all_dry_run_target() {
   local output json_file status
-  output="$($BASH_BIN deploy.sh update-all --dry-run --json --include newapi)" || return 1
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 $BASH_BIN deploy.sh update-all --dry-run --json --include newapi)" || return 1
   json_file="$(mktemp)"
   printf '%s' "$output" > "$json_file"
   python - "$json_file" <<'PY'
