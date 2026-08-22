@@ -286,6 +286,7 @@ main() {
       check_doctor_dispatch
       check_app_help_dispatch
       check_status_json_dispatch
+      check_status_json_legacy_contract
       check_status_json_services_and_version
       check_port_conflict_is_warn_only
       check_doctor_validates_saved_config

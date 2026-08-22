@@ -58,6 +58,32 @@ check_status_json_dispatch() {
   expect_manager_success_output en dist/deploy.sh tickflow json-status '"service"'
 }
 
+check_status_json_legacy_contract() {
+  local output json_file status
+  output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 "$BASH_BIN" install_newapi.sh status-json)" || return 1
+  json_file="$(mktemp)"
+  printf '%s\n' "$output" > "$json_file"
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+# These top-level fields predate the central status model and remain the
+# compatibility surface for existing single-app automation.
+assert isinstance(payload["app_id"], str) and payload["app_id"] == "newapi"
+assert isinstance(payload["app_name"], str) and payload["app_name"] == "New API"
+assert "version" in payload
+assert "services" in payload and isinstance(payload["services"], list)
+assert "version_info" in payload and isinstance(payload["version_info"], dict)
+assert "health" in payload and isinstance(payload["health"], dict)
+PY
+  status=$?
+  rm -f "$json_file"
+  return "$status"
+}
+
 # status-json must expose a services array for multi-service apps and a
 # version field for automation consumers.
 check_status_json_services_and_version() {
