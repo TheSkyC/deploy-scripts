@@ -2,6 +2,28 @@
 # shellcheck source=../verify.sh
 # Verify checks for the blog app (apps/blog.sh, impl/install_hugo_blog.sh).
 
+check_blog_status_backup_projection() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    backup_dir="$tmp_dir/blog backups"
+    mkdir -p "$backup_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/blog_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=blog
+    APP_NAME="Hugo Blog"
+    BLOG_BACKUP_DIR="$backup_dir"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    source impl/install_hugo_blog.sh
+    _blog_status_backup
+    rm -rf "$tmp_dir"
+  ')"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "blog backups" in x["path"]; assert x["path"].endswith("blog_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
+  grep -Fq 'APP_STATUS_BACKUP_FN=_blog_status_backup' impl/install_hugo_blog.sh \
+    && grep -Fq 'APP_STATUS_BACKUP_FN=_blog_status_backup' dist/install_hugo_blog.sh
+}
+
 check_blog_uninstall_supports_noninteractive_mode() {
   awk '
       /prompt "\$\(t app\.blog\.uninstall\.continue_prompt\)"/ { saw_continue_prompt=1 }
