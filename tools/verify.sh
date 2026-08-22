@@ -379,6 +379,10 @@ main() {
       check_update_all_execution_is_serial_and_safe
       check_update_target_selection_is_local_only
       check_update_all_writes_manager_operation_record
+      check_update_adapter_hook_dispatch
+      check_update_adapter_fallback_stays_unsupported
+      check_update_git_branch_checker
+      check_update_cpa_stack_merge_verdicts
       echo "Update verification passed"
       return 0
       ;;

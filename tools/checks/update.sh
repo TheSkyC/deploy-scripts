@@ -218,3 +218,105 @@ PY
   rm -rf "$temp_root"
   return "$status"
 }
+
+check_update_adapter_hook_dispatch() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_load_app() { return 0; }
+    my_adapter() {
+      printf "%s" "{\"installed\":\"v1.0.0\",\"latest\":\"v1.1.0\",\"checked_at\":null,\"update_state\":\"update_available\",\"source\":\"test\",\"cache_state\":\"miss\",\"error\":null}"
+    }
+    APP_CHECK_UPDATE_FN=my_adapter
+    result="$(manager_update_check_app_version testapp v1.0.0 0 0)"
+    [[ "$(state_json_field "$result" update_state)" == update_available ]]
+    printf ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+check_update_adapter_fallback_stays_unsupported() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_load_app() { return 0; }
+    result="$(manager_update_check_app_version testapp v1.0.0 0 0)"
+    [[ "$(state_json_field "$result" update_state)" == unsupported ]]
+    printf ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+check_update_git_branch_checker() {
+  local temp_root origin work output status=0
+  temp_root="$(mktemp -d)"
+  origin="${temp_root}/origin.git"
+  work="${temp_root}/work"
+  export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+  git init -q --bare "$origin"
+  git clone -q "$origin" "$work" 2>/dev/null
+  git -C "$work" commit -q --allow-empty -m init
+  git -C "$work" push -q origin HEAD:refs/heads/main
+  output="$($BASH_BIN -c "
+    set -euo pipefail
+    source lib/core.sh
+    result=\"\$(version_check_git_branch_json '$work' main 0)\"
+    [[ \"\$(state_json_field \"\$result\" update_state)\" == up_to_date ]]
+    [[ \"\$(state_json_field \"\$result\" source)\" == git_branch ]]
+    printf ok
+  ")" || status=1
+  if [[ "$status" -eq 0 ]]; then
+    git -C "$work" commit -q --allow-empty -m two
+    git -C "$work" push -q origin HEAD:refs/heads/main
+    git -C "$work" reset -q --hard HEAD~1
+    output="$($BASH_BIN -c "
+      set -euo pipefail
+      source lib/core.sh
+      result=\"\$(version_check_git_branch_json '$work' main 0)\"
+      [[ \"\$(state_json_field \"\$result\" update_state)\" == update_available ]]
+      printf ok
+    ")" || status=1
+  fi
+  if [[ "$status" -eq 0 ]]; then
+    output="$($BASH_BIN -c "
+      set -euo pipefail
+      source lib/core.sh
+      git() {
+        if [[ \"\$2\" == -C && \"\$4\" == fetch ]]; then echo 'network must not be touched' >&2; return 97; fi
+        command git \"\$@\"
+      }
+      result=\"\$(version_check_git_branch_json '$work' main 1)\"
+      [[ \"\$(state_json_field \"\$result\" update_state)\" == unknown ]]
+      printf ok
+    ")" || status=1
+  fi
+  rm -rf "$temp_root"
+  [[ "$output" == ok ]] || return 1
+  return "$status"
+}
+
+check_update_cpa_stack_merge_verdicts() {
+  local output
+  output="$($BASH_BIN <<'CPATEST'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_cpa_stack.sh >/dev/null 2>&1
+fresh='{"installed":"v1","latest":"v9","checked_at":"2026-01-01T00:00:00Z","update_state":"up_to_date","source":"github_release","cache_state":"fresh","error":null}'
+available='{"installed":"v2","latest":"v8","checked_at":null,"update_state":"update_available","source":"github_release","cache_state":"refreshed","error":null}'
+merged="$(_cpa_stack_merge_version_json "$fresh" "$available")"
+[[ "$(state_json_field "$merged" update_state)" == update_available ]]
+[[ "$(state_json_field "$merged" cache_state)" == refreshed ]]
+[[ "$(state_json_field "$merged" installed)" == v1/v2 ]]
+[[ "$(state_json_field "$merged" latest)" == v9/v8 ]]
+failed='{"installed":"v1","latest":"v9","checked_at":"x","update_state":"check_failed","source":"github_release","cache_state":"miss","error":"boom"}'
+merged_failed="$(_cpa_stack_merge_version_json "$failed" "$fresh")"
+[[ "$(state_json_field "$merged_failed" update_state)" == check_failed ]]
+[[ "$(state_json_field "$merged_failed" error)" == "cpa: boom" ]]
+printf ok
+CPATEST
+  )"
+  [[ "$output" == ok ]]
+}
