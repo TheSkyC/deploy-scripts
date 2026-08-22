@@ -244,6 +244,136 @@ PY
 }
 
 
+
+check_self_update_managed_rehearsal() {
+  if ! "$BASH_BIN" -c '
+    set -euo pipefail
+    managed_root="$(mktemp -d)"
+    fixture_root="$(mktemp -d)"
+    trap "rm -rf \"$managed_root\" \"$fixture_root\"" EXIT
+    mkdir -p "${managed_root}/releases/v1.2.3" "${managed_root}/releases/v1.1.0"
+    printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"version\":\"v1.2.3\",\"build_commit\":\"0123456789012345678901234567890123456789\",\"built_at\":\"1970-01-01T00:00:00Z\"}" >"${managed_root}/releases/v1.2.3/RELEASE.json"
+    printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"version\":\"v1.1.0\",\"build_commit\":\"0123456789012345678901234567890123456789\",\"built_at\":\"1970-01-01T00:00:00Z\"}" >"${managed_root}/releases/v1.1.0/RELEASE.json"
+    printf "%s\n" "${managed_root}/releases/v1.2.3" >"${managed_root}/current"
+    printf "%s\n" "${managed_root}/releases/v1.1.0" >"${managed_root}/previous"
+
+    make_release() {
+      local version="$1" smoke_status="$2" stage archive sha256 size_bytes
+      stage="${fixture_root}/stage-${version}"
+      mkdir -p "${stage}/deploy-scripts-${version}/lib"
+      cat >"${stage}/deploy-scripts-${version}/deploy.sh" <<SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
+case "\${1:-}" in
+  list) printf "%s\\n" "fixture release" ;;
+  self-version) printf "%s\\n" "{\"schema_version\":1,\"mode\":\"managed_release\",\"version\":\"${version}\"}" ;;
+  status-all) [[ "${smoke_status}" -eq 0 ]] && printf "%s\n" "{\"schema_version\":1,\"apps\":[],\"errors\":[]}" || exit "${smoke_status}" ;;
+  *) exit 2 ;;
+esac
+SCRIPT
+      printf "%s\n" "#!/usr/bin/env bash" "set -euo pipefail" >"${stage}/deploy-scripts-${version}/lib/core.sh"
+      printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"version\":\"${version}\",\"build_commit\":\"0123456789012345678901234567890123456789\",\"built_at\":\"1970-01-01T00:00:00Z\"}" >"${stage}/deploy-scripts-${version}/RELEASE.json"
+      archive="${fixture_root}/deploy-scripts-${version}.tar.gz"
+      tar -C "$stage" -czf "$archive" "deploy-scripts-${version}"
+      sha256="$(sha256sum "$archive" | awk "{print \$1}")"
+      size_bytes="$(wc -c <"$archive" | tr -d '[:space:]')"
+      printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"channel\":\"stable\",\"version\":\"${version}\",\"artifacts\":{\"source\":{\"name\":\"deploy-scripts-${version}.tar.gz\",\"url\":\"https://updates.invalid/${version}/deploy-scripts-${version}.tar.gz\",\"sha256\":\"${sha256}\",\"size_bytes\":${size_bytes}}}}" >"${fixture_root}/manifest-${version}.json"
+    }
+    make_release v1.3.0 0
+    make_release v1.4.0 1
+
+    fake_bin="${fixture_root}/bin"
+    mkdir -p "$fake_bin"
+    cat >"${fake_bin}/curl" <<\SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
+output=""
+url=""
+while (($#)); do
+  case "$1" in
+    -o) output="$2"; shift 2 ;;
+    *) url="$1"; shift ;;
+  esac
+done
+version="$(basename "$(dirname "$url")")"
+if [[ "$(basename "$url")" == manifest.json ]]; then
+  cp "${SELF_UPDATE_FIXTURE}/manifest-${version}.json" "$output"
+else
+  cp "${SELF_UPDATE_FIXTURE}/deploy-scripts-${version}.tar.gz" "$output"
+fi
+SCRIPT
+    printf "%s\n" "#!/usr/bin/env bash" "exit 0" >"${fake_bin}/flock"
+    chmod 700 "${fake_bin}/curl" "${fake_bin}/flock"
+
+    export PATH="${fake_bin}:$PATH"
+    export SELF_UPDATE_FIXTURE="$fixture_root"
+    export DEPLOY_ROOT_DIR="${managed_root}/releases/v1.2.3"
+    export DEPLOY_SELF_UPDATE_ROOT="$managed_root"
+    export DEPLOY_SELF_UPDATE_ALLOW_NONROOT_TEST=1
+    export DEPLOY_OPERATION_ROOT="${managed_root}/operation"
+    export DEPLOY_OPERATION_LOG_ROOT="${managed_root}/logs"
+    export DEPLOY_SELF_UPDATE_LOCK_FILE="${managed_root}/self-update.lock"
+    export DEPLOY_SELF_UPDATE_URL="https://updates.invalid/v1.3.0"
+
+    source lib/core.sh
+    atomic_symlink() {
+      local target="$1" link="$2"
+      rm -f -- "$link"
+      printf "%s\n" "$target" >"$link"
+    }
+    self_update_current_target_for() {
+      local managed_root="$1" target
+      target="$(cat "${managed_root}/current")"
+      [[ -d "$target" ]] || return 1
+      printf "%s\n" "$target"
+    }
+    self_update_previous_target_for() {
+      local managed_root="$1" target
+      target="$(cat "${managed_root}/previous")"
+      [[ -d "$target" ]] || return 1
+      printf "%s\n" "$target"
+    }
+
+    self_update_detect_mode() {
+      SELF_UPDATE_MODE=managed_release
+      SELF_UPDATE_MANAGED_ROOT="$managed_root"
+      SELF_UPDATE_VERSION="v1.2.3"
+      SELF_UPDATE_ROOT="$managed_root"
+      SELF_UPDATE_CURRENT_PATH="${managed_root}/current"
+      SELF_UPDATE_PREVIOUS_PATH="${managed_root}/previous"
+    }
+    output="$(self_update_apply_main 1 1)"
+    python - "$output" <<\PY
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "succeeded"
+assert payload["latest_version"] == "v1.3.0"
+PY
+    [[ "$(cat "${managed_root}/current")" == "${managed_root}/releases/v1.3.0" ]]
+    [[ "$(cat "${managed_root}/previous")" == "${managed_root}/releases/v1.2.3" ]]
+
+    export DEPLOY_SELF_UPDATE_URL="https://updates.invalid/v1.4.0"
+    set +e
+    output="$(self_update_apply_main 1 1)"
+    status=$?
+    set -e
+    [[ "$status" -eq 1 ]]
+    python - "$output" <<\PY
+import json
+import sys
+payload = json.loads(sys.argv[1])
+assert payload["state"] == "rolled_back"
+assert payload["latest_version"] == "v1.4.0"
+PY
+    [[ "$(cat "${managed_root}/current")" == "${managed_root}/releases/v1.3.0" ]]
+    [[ "$(cat "${managed_root}/previous")" == "${managed_root}/releases/v1.2.3" ]]
+    [[ ! -e "${managed_root}/releases/v1.4.0" ]]
+  '; then
+    return 1
+  fi
+}
+
 check_self_update_activation_and_rollback() {
   if ! "$BASH_BIN" -c '
     set -euo pipefail
