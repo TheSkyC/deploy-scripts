@@ -32,6 +32,17 @@ _tickflow_doctor_service_name() {
   printf '%s\n' "$TICKFLOW_SERVICE_NAME"
 }
 APP_DOCTOR_SERVICE_FN=_tickflow_doctor_service_name
+# Central check-update adapter: TickFlow updates from a git branch, so the
+# shared git-branch checker compares the local HEAD with origin. Saved
+# configuration is reloaded so custom install paths are honored without
+# running an app action.
+_tickflow_check_update_json() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  version_check_git_branch_json "$TICKFLOW_INSTALL_DIR" "${TICKFLOW_BRANCH:-main}" "${3:-0}"
+}
+APP_CHECK_UPDATE_FN=_tickflow_check_update_json
 
 _tickflow_status_backup() {
   local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at

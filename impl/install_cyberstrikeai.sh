@@ -38,6 +38,17 @@ _CSAI_DERIVE_PATHS() {
   LOG_DIR="${INSTALL_DIR}/logs"
 }
 APP_CONFIG_DERIVE_HOOK=_CSAI_DERIVE_PATHS
+# Central check-update adapter: CyberStrikeAI updates from a git branch, so
+# the shared git-branch checker compares the local HEAD with origin. Saved
+# configuration is reloaded so custom install paths are honored without
+# running an app action.
+_csai_check_update_json() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  version_check_git_branch_json "$INSTALL_DIR" "${GITHUB_BRANCH:-main}" "${3:-0}"
+}
+APP_CHECK_UPDATE_FN=_csai_check_update_json
 _csai_status_backup() {
   local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
   conf_file="$(app_conf_file 2>/dev/null || true)"
