@@ -229,6 +229,36 @@ PY
   rm -rf "$temp_root"
   return "$status"
 }
+check_operation_scopes_are_distinct() {
+  local temp_root
+  temp_root="$(mktemp -d)"
+  if ! DEPLOY_OPERATION_ROOT="${temp_root}/state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/log" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/operation.sh
+    APP_ID=newapi
+    operation_start app newapi update
+    operation_finish 0
+    operation_start manager "" update-all
+    operation_finish 0
+    operation_start self_update "" self-update
+    operation_finish 0
+  '; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  python - "${temp_root}/state/state/newapi.json" "${temp_root}/state/state/manager.json" "${temp_root}/state/self-update.json" <<'PY'
+import json
+import sys
+
+app, manager, self_update = [json.load(open(path, encoding="utf-8")) for path in sys.argv[1:]]
+assert (app["scope"], app["app_id"], app["action"]) == ("app", "newapi", "update")
+assert (manager["scope"], manager["app_id"], manager["action"]) == ("manager", None, "update-all")
+assert (self_update["scope"], self_update["app_id"], self_update["action"]) == ("self_update", None, "self-update")
+PY
+  local status=$?
+  rm -rf "$temp_root"
+  return "$status"
+}
 check_history_command() {
   local temp_root output json_file
   temp_root="$(mktemp -d)"

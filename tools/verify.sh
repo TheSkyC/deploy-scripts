@@ -361,6 +361,7 @@ main() {
       check_operation_records
       check_operation_logrotate_policy
       check_history_command
+      check_operation_scopes_are_distinct
       check_app_action_operation_wrapping
       check_operation_failure_traps
       check_operation_signal_interruption
@@ -641,6 +642,7 @@ main() {
       check_operation_records
       check_operation_logrotate_policy
       check_history_command
+      check_operation_scopes_are_distinct
       check_app_action_operation_wrapping
       check_operation_failure_traps
       check_operation_signal_interruption
