@@ -341,6 +341,7 @@ main() {
       ;;
     state)
       check_state_json_contract
+      check_state_all_registered_apps_enumerated
       check_state_target_selection
       check_state_scalar_parser_and_severity
       check_state_operation_error_code_projection
@@ -622,6 +623,7 @@ main() {
       check_navidrome_release_asset_mapping
       check_navidrome_music_folder_is_prepared
       check_state_json_contract
+      check_state_all_registered_apps_enumerated
       check_state_target_selection
       check_state_scalar_parser_and_severity
       check_state_operation_error_code_projection

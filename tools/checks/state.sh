@@ -1,5 +1,64 @@
 # shellcheck shell=bash
 
+check_state_all_registered_apps_enumerated() {
+  local temp_root output status json_file
+  temp_root="$(mktemp -d)"
+  set +e
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    manager_status_collect_app_json() {
+      local app_id="$1" output_file="$2"
+      printf "%s\n" "{\"schema_version\":2,\"app_id\":$(app_json_string "$app_id"),\"app_name\":$(app_json_string "$(deploy_app_name_for "$app_id")"),\"install_state\":\"not_installed\",\"severity\":\"info\",\"health\":{\"state\":\"unsupported\"},\"service\":{\"state\":\"not_managed\"},\"version_info\":{\"installed\":null,\"latest\":null,\"update_state\":\"unknown\"}}" >"$output_file"
+      : >"$3"
+    }
+    manager_status_main status-all --json --no-network
+  ' 2>/dev/null)"
+  status=$?
+  set -e
+  [[ "$status" -eq 0 ]] || { rm -rf "$temp_root"; return "$status"; }
+  json_file="${temp_root}/status.json"
+  registry_ids="$($BASH_BIN -c 'source lib/core.sh; printf \"%s\\n\" \"${DEPLOY_APP_IDS[@]}\"' | paste -sd, -)"
+  printf '%s' "$output" >"$json_file"
+  set +e
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+expected = {
+    "newapi", "sub2api", "vaultwarden", "cyberstrikeai", "blog", "tickflow",
+    "cpa-stack", "ntfy", "meilisearch", "alist", "filebrowser", "navidrome",
+    "frps", "gitea", "gotify", "beszel",
+}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+assert payload["schema_version"] == 1
+assert payload["summary"]["registered"] == len(expected)
+assert payload["summary"]["selected"] == len(expected)
+apps = payload["apps"]
+errors = payload["errors"]
+assert isinstance(apps, list)
+assert isinstance(errors, list)
+app_ids = {app["app_id"] for app in apps}
+error_ids = {error["app_id"] for error in errors}
+assert app_ids.isdisjoint(error_ids)
+assert app_ids | error_ids == expected
+assert len(app_ids) + len(error_ids) == len(expected)
+for app in apps:
+    assert app["schema_version"] == 2
+    assert isinstance(app["app_id"], str) and app["app_id"]
+    assert app["install_state"] in {"not_installed", "installed", "install_failed", "unknown"}
+    assert app["health"]["state"] in {"not_checked", "healthy", "degraded", "unhealthy", "unsupported", "unknown"}
+for error in errors:
+    assert error["app_id"] in expected
+    assert isinstance(error["code"], int)
+    assert isinstance(error["summary"], str)
+PY
+  status=$?
+  set -e
+  rm -rf "$temp_root"
+  return "$status"
+}
 check_state_json_contract() {
   local output
   set +e
