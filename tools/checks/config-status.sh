@@ -364,12 +364,45 @@ check_status_port_matches_are_bounded() {
 }
 
 check_port_conflict_is_warn_only() {
+  # Without strict mode the helper always succeeds (warn-only contract), even
+  # when the caller passes an explicitly strict third argument.
   "$BASH_BIN" -c '
     set -euo pipefail
     source "$1/lib/logging.sh"
     source "$1/lib/i18n.sh"
     source "$1/lib/network.sh"
     app_check_port_conflict 59998 "TEST_PORT"
+    app_check_port_conflict 59998 "TEST_PORT" ""
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
+# Strict mode must turn an occupied port into a failing preflight so installs
+# abort cheaply instead of triggering heavyweight rollback at systemctl start.
+check_port_conflict_strict_mode_aborts() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/logging.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/network.sh"
+    # Stub the detection backend (platform-independent, mirrors
+    # check_port_listening_process_behavior): header line plus one LISTEN row,
+    # since port_is_listening strips the first line with tail -n +2.
+    ss() { printf "State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\nLISTEN 0 511 0.0.0.0:59995 0.0.0.0:* users:((\"nginx\",pid=123,fd=10))\n"; }
+
+    set +e
+    out1="$(app_check_port_conflict 59995 "TEST_PORT" 1 2>&1)"; rc1=$?
+    out2="$(DEPLOY_FAIL_ON_PORT_CONFLICT=1 app_check_port_conflict 59995 "TEST_PORT" "" 2>&1)"; rc2=$?
+    # Without any strict trigger the same occupied port still only warns.
+    out3="$(app_check_port_conflict 59995 "TEST_PORT" "" 2>&1)"; rc3=$?
+    set -e
+
+    [[ "$rc1" -ne 0 ]] || { echo "strict arg did not fail on occupied port: $out1" >&2; exit 1; }
+    [[ "$rc2" -ne 0 ]] || { echo "DEPLOY_FAIL_ON_PORT_CONFLICT=1 did not fail on occupied port: $out2" >&2; exit 1; }
+    [[ "$rc3" -eq 0 ]] || { echo "warn-only mode must succeed on occupied port: $out3" >&2; exit 1; }
+    [[ "$out1" == *"$(t warn.port_conflict_abort)"* ]] || { echo "strict abort hint missing: $out1" >&2; exit 1; }
+    [[ "$out3" != *"$(t warn.port_conflict_abort)"* ]] || { echo "warn-only mode must not print abort hint" >&2; exit 1; }
+    exit 0
   ' _ "$ROOT_DIR"
 }
 

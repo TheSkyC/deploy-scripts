@@ -133,6 +133,7 @@ __deploy_i18n_message() {
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
     warn.port_in_use) echo "Port %s is already in use by %s.|端口 %s 已被 %s 占用。" ;;
     warn.port_release_hint) echo "If this is not the application you are deploying, free the port first or the service will fail to bind.|若非你要部署的应用，请先释放端口，否则服务将无法绑定。" ;;
+    warn.port_conflict_abort) echo "Aborting before installation because DEPLOY_FAIL_ON_PORT_CONFLICT=1 is set. Free the port or unset the variable to proceed.|因已设置 DEPLOY_FAIL_ON_PORT_CONFLICT=1，将在安装前中止。请先释放端口，或取消该变量后继续。" ;;
     *) echo "$key|$key" ;;
   esac
 }

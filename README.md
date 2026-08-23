@@ -100,6 +100,17 @@ keeping data, config, install directories, and backups by default; add
 `DEPLOY_DELETE_DATA=1` or `DEPLOY_DELETE_BACKUP=1` only when those removals are
 intended.
 
+## Port conflict preflight
+
+Install and update preflights warn when the app port is already bound by
+another process. Set `DEPLOY_FAIL_ON_PORT_CONFLICT=1` to make that warning a
+hard preflight failure, so an occupied port aborts before downloads and service
+changes instead of failing at `systemctl start` (which triggers rollback):
+
+```bash
+sudo DEPLOY_FAIL_ON_PORT_CONFLICT=1 bash deploy.sh newapi install
+```
+
 ## Managed framework releases
 
 The framework self-update command uses verified release archives and only writes to an

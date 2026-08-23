@@ -289,6 +289,7 @@ main() {
       check_status_json_legacy_contract
       check_status_json_services_and_version
       check_port_conflict_is_warn_only
+      check_port_conflict_strict_mode_aborts
       check_doctor_validates_saved_config
       check_newapi_uninstall_supports_noninteractive_mode
       check_newapi_uninstall_checks_directory_removal_errors
@@ -348,6 +349,7 @@ main() {
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
       check_state_binary_backup_adapter
+      check_state_backup_config_trust_gate
       check_state_status_matrix
       check_state_load_failure_isolation
       check_state_no_network_locality
@@ -513,6 +515,8 @@ main() {
       check_optional_count_messages_are_nonfatal
       check_optional_directory_cleanup_is_nonfatal
       check_port_listening_process_behavior
+      check_port_conflict_strict_mode_aborts
+      check_port_conflict_is_warn_only
       check_preupdate_backup_logs_match_guidance
       check_preupdate_backup_warnings_include_followup_guidance
       check_random_head_pipelines_handle_sigpipe
@@ -637,6 +641,7 @@ main() {
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
       check_state_binary_backup_adapter
+      check_state_backup_config_trust_gate
       check_state_status_matrix
       check_state_load_failure_isolation
       check_state_no_network_locality

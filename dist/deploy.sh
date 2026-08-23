@@ -147,6 +147,7 @@ __deploy_i18n_message() {
     warn.config_unknown_key) echo "Ignoring unknown config key: %s|已忽略未知配置键：%s" ;;
     warn.port_in_use) echo "Port %s is already in use by %s.|端口 %s 已被 %s 占用。" ;;
     warn.port_release_hint) echo "If this is not the application you are deploying, free the port first or the service will fail to bind.|若非你要部署的应用，请先释放端口，否则服务将无法绑定。" ;;
+    warn.port_conflict_abort) echo "Aborting before installation because DEPLOY_FAIL_ON_PORT_CONFLICT=1 is set. Free the port or unset the variable to proceed.|因已设置 DEPLOY_FAIL_ON_PORT_CONFLICT=1，将在安装前中止。请先释放端口，或取消该变量后继续。" ;;
     *) echo "$key|$key" ;;
   esac
 }
@@ -742,20 +743,29 @@ port_listening_process() {
   return 0
 }
 
-# Warns when a port is already in use.  Does NOT abort — the caller
-# decides whether to proceed.  Pass an optional label for the port
-# (e.g. "Backend port").
+# Warns when a port is already in use; optionally fails the check so callers
+# can abort before heavyweight install work instead of at systemctl start.
 #
-# This helper only warns: it always returns 0 so callers may invoke it as a
-# bare command under `set -e` without aborting when the port is free.
+# Usage: app_check_port_conflict PORT [LABEL] [STRICT]
+# - Default (STRICT empty/0): warn only, always return 0, so callers may invoke
+#   it as a bare command under `set -e` when the port is free.
+# - STRICT=1 or DEPLOY_FAIL_ON_PORT_CONFLICT=1: return 1 while the port stays
+#   occupied. The warning is emitted in both modes; strict mode adds an abort
+#   hint naming the opt-in variable.
 app_check_port_conflict() {
   local port="$1"
   local label="${2:-Port $port}"
-  if port_is_listening "$port"; then
-    local owner
-    owner=$(port_listening_process "$port" 2>/dev/null || echo "unknown")
-    warn "$(t warn.port_in_use "$label" "$owner")"
-    warn "$(t warn.port_release_hint)"
+  local strict="${3:-}"
+  if ! port_is_listening "$port"; then
+    return 0
+  fi
+  local owner
+  owner=$(port_listening_process "$port" 2>/dev/null || echo "unknown")
+  warn "$(t warn.port_in_use "$label" "$owner")"
+  warn "$(t warn.port_release_hint)"
+  if [[ "$strict" == 1 || "${DEPLOY_FAIL_ON_PORT_CONFLICT:-0}" == 1 ]]; then
+    warn "$(t warn.port_conflict_abort)"
+    return 1
   fi
   return 0
 }
