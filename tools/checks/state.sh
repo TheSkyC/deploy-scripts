@@ -284,3 +284,72 @@ check_state_binary_backup_adapter() {
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert x["path"].endswith("ntfy_manual_20260820_123456.tar.gz"); assert x["last_success_at"]' "$output"
 }
+
+# The status-backup projection must only honor a BACKUP_DIR override from the
+# saved deployment config when that config is owned by root with mode 600/400.
+# A world-writable or foreign-owned config must never redirect the projection,
+# and its untrusted state has to be visible instead of silently ignored.
+check_state_backup_config_trust_gate() {
+  local tmp_dir conf stat_stub output
+  tmp_dir="$(mktemp -d)"
+  conf="${tmp_dir}/new-api.conf"
+  stat_stub="${tmp_dir}/stat"
+  cat > "$stat_stub" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) printf '%s\n' "${FAKE_CONF_OWNER:-root}" ;;
+  %a) printf '%s\n' "${FAKE_CONF_MODE:-600}" ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "$stat_stub"
+
+  # Trusted config (root, mode 600): configured override wins.
+  printf 'BACKUP_DIR="%s"\n' "${tmp_dir}/configured backups" > "$conf"
+  output="$(FAKE_CONF_OWNER=root FAKE_CONF_MODE=600 APP_CONF_FILE="$conf" PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    tmp_dir="$1"
+    configured_dir="${tmp_dir}/configured backups"
+    mkdir -p "$configured_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$configured_dir/new-api_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    app_conf_file() { printf "%s" "$APP_CONF_FILE"; }
+    app_status_backup_json "BACKUP_DIR" "${tmp_dir}/backups" \
+      "backup directory is unsafe or missing" "new-api_*.tar.gz"
+  ' _ "$tmp_dir")"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available", x; assert "configured backups" in x["path"], x' "$output"
+
+  # Untrusted owner: override must be refused with an explicit signal.
+  output="$(FAKE_CONF_OWNER=eviluser APP_CONF_FILE="$conf" PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    tmp_dir="$1"; backup_dir="$2"
+    mkdir -p "$backup_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/new-api_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    app_conf_file() { printf "%s" "$APP_CONF_FILE"; }
+    app_status_backup_json "BACKUP_DIR" "$backup_dir" \
+      "backup directory is unsafe or missing" "new-api_*.tar.gz"
+  ' _ "$tmp_dir" "${tmp_dir}/backups")"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "unknown", x; assert x["message"] == "configuration file is not trusted", x; assert x["path"] is None, x' "$output"
+
+  # Untrusted mode (world-readable 644): same explicit refusal.
+  output="$(FAKE_CONF_MODE=644 APP_CONF_FILE="$conf" PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    tmp_dir="$1"; backup_dir="$2"
+    mkdir -p "$backup_dir"
+    touch -d "2026-08-20 12:34:56 UTC" "$backup_dir/new-api_20260820123456.tar.gz"
+    source lib/core.sh
+    APP_ID=newapi
+    APP_NAME="New API"
+    app_conf_file() { printf "%s" "$APP_CONF_FILE"; }
+    app_status_backup_json "BACKUP_DIR" "$backup_dir" \
+      "backup directory is unsafe or missing" "new-api_*.tar.gz"
+  ' _ "$tmp_dir" "${tmp_dir}/backups")"
+  python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "unknown", x; assert x["message"] == "configuration file is not trusted", x' "$output"
+
+  rm -rf "$tmp_dir"
+}

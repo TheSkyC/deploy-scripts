@@ -561,11 +561,24 @@ check_newapi_health_checks_are_nonfatal_outside_install() {
 }
 
 check_newapi_status_backup_projection() {
-  local output
-  output="$($BASH_BIN -c '
+  local output tmp_dir
+  tmp_dir="$(mktemp -d)"
+  # Present a trusted config (root, mode 600) via the stat stub so the run is
+  # platform-independent; the shared projection must adopt the configured
+  # BACKUP_DIR only after the root/600/400 trust gate passes.
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+  output="$(PATH="${tmp_dir}:$PATH" APP_CONF_FILE="${tmp_dir}/new-api.conf" "$BASH_BIN" -c '
     set -euo pipefail
     tmp_dir="$(mktemp -d)"
-    conf_file="${tmp_dir}/new-api.conf"
+    conf_file="${APP_CONF_FILE}"
     backup_dir="${tmp_dir}/backups"
     mkdir -p "$backup_dir"
     printf "BACKUP_DIR=\\\"%s\\\"\\n" "$backup_dir" > "$conf_file"
@@ -573,11 +586,13 @@ check_newapi_status_backup_projection() {
     source lib/core.sh
     APP_ID=newapi
     APP_NAME="New API"
-    APP_CONF_FILE="$conf_file"
     app_conf_file() { printf "%s" "$APP_CONF_FILE"; }
     source impl/install_newapi.sh
     _newapi_status_backup
     rm -rf "$tmp_dir"
   ')"
+  local status=$?
+  rm -rf "$tmp_dir"
+  [[ "$status" -eq 0 ]] || return 1
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert x["path"].endswith("new-api_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
 }
