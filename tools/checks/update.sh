@@ -315,6 +315,16 @@ failed='{"installed":"v1","latest":"v9","checked_at":"x","update_state":"check_f
 merged_failed="$(_cpa_stack_merge_version_json "$failed" "$fresh")"
 [[ "$(state_json_field "$merged_failed" update_state)" == check_failed ]]
 [[ "$(state_json_field "$merged_failed" error)" == "cpa: boom" ]]
+# Both sides unknown must merge to JSON null, not the literal string "null/null":
+# the legacy status-json contract promises "version":null when nothing is known.
+missing='{"installed":null,"latest":null,"checked_at":null,"update_state":"unknown","source":"github_release","cache_state":"miss","error":null}'
+merged_missing="$(_cpa_stack_merge_version_json "$missing" "$missing")"
+[[ "$(state_json_field "$merged_missing" installed)" == null ]] || { printf "installed merged to %s\n" "$(state_json_field "$merged_missing" installed)"; exit 1; }
+[[ "$merged_missing" == *'"installed":null'* ]] || { printf "installed is not JSON null: %s\n" "$merged_missing"; exit 1; }
+[[ "$merged_missing" == *'"latest":null'* ]] || { printf "latest is not JSON null: %s\n" "$merged_missing"; exit 1; }
+# One known side keeps the combined x/y form.
+merged_partial="$(_cpa_stack_merge_version_json "$fresh" "$missing")"
+[[ "$(state_json_field "$merged_partial" installed)" == v1/null ]] || { printf "partial install merged to %s\n" "$(state_json_field "$merged_partial" installed)"; exit 1; }
 printf ok
 CPATEST
   )"
