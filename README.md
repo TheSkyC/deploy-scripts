@@ -111,6 +111,20 @@ changes instead of failing at `systemctl start` (which triggers rollback):
 sudo DEPLOY_FAIL_ON_PORT_CONFLICT=1 bash deploy.sh newapi install
 ```
 
+## China mirrors (opt-in)
+
+CyberStrikeAI builds from source and needs PyPI and Go module proxies. The
+global defaults are the official upstreams (`pypi.org`,
+`proxy.golang.org`). Set `DEPLOY_CN_MIRROR=1` to opt in to the China mirror
+endpoints (PyPI tuna, goproxy.cn) for servers inside mainland China:
+
+```bash
+sudo DEPLOY_CN_MIRROR=1 bash deploy.sh cyberstrikeai install
+```
+
+An explicit `PIP_INDEX_URL` or `GOPROXY` environment variable — or a value
+saved in the deployment config — always wins over both defaults.
+
 ## Managed framework releases
 
 The framework self-update command uses verified release archives and only writes to an

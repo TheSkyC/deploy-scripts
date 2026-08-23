@@ -200,6 +200,48 @@ check_cyberstrikeai_booleans_are_validated() {
     ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
 }
 
+# China mirror endpoints must be opt-in (DEPLOY_CN_MIRROR=1): the global
+# defaults are the official upstreams, so non-China users never inherit
+# tuna/goproxy endpoints, while explicit PIP_INDEX_URL/GOPROXY still win.
+check_cyberstrikeai_mirrors_are_opt_in() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/app.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/logging.sh"
+    # deploy_env_truthy drives the gate: truthy values select mirrors.
+    DEPLOY_CN_MIRROR=1 deploy_env_truthy DEPLOY_CN_MIRROR || { echo "truthy env must pass the gate" >&2; exit 1; }
+    ! deploy_env_truthy DEPLOY_CN_MIRROR || { echo "unset env must not pass the gate" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+  # The tuna/goproxy lines are only legal inside the DEPLOY_CN_MIRROR gate;
+  # a mirror default before the gate (or without a gate) is a regression.
+  awk '
+      /if deploy_env_truthy DEPLOY_CN_MIRROR; then/ { in_gate=1; saw_gate=1; next }
+      in_gate && /^fi$/ { in_gate=0; next }
+      /PIP_INDEX_URL="\$\{PIP_INDEX_URL:-https:\/\/pypi\.tuna\.tsinghua\.edu\.cn\/simple\}"/ {
+        if (!in_gate) { saw_unconditional_tuna=1 }
+        next
+      }
+      /GOPROXY="\$\{GOPROXY:-https:\/\/goproxy\.cn,direct\}"/ {
+        if (!in_gate) { saw_unconditional_goproxy=1 }
+        next
+      }
+      /PIP_INDEX_URL:-https:\/\/pypi\.org\/simple/ { saw_pypi_org=1 }
+      /GOPROXY:-https:\/\/proxy\.golang\.org,direct/ { saw_golang_org=1 }
+      END {
+        if (saw_unconditional_tuna || saw_unconditional_goproxy) {
+          print "CyberStrikeAI must not default PIP_INDEX_URL/GOPROXY to China mirrors unconditionally." > "/dev/stderr"
+          exit 1
+        }
+        if (!(saw_gate && saw_pypi_org && saw_golang_org)) {
+          print "CyberStrikeAI must gate China mirrors behind DEPLOY_CN_MIRROR with upstream defaults." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+}
+
 check_cyberstrikeai_go_version_parse_failures_are_explicit() {
   awk '
       /version=\$\(printf .*\| grep -oE .*go\[0-9\].*\| head -1 \| sed .* \|\| true\)/ { saw_safe_parse=1 }

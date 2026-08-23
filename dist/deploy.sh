@@ -15612,8 +15612,16 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 ENABLE_NGINX="${ENABLE_NGINX:-true}"
 CSAI_HTTPS="${CSAI_HTTPS:-true}"
 OPEN_FIREWALL="${OPEN_FIREWALL:-true}"
-PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
-GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+# Mirror defaults are opt-in (DEPLOY_CN_MIRROR=1): shipping China mirrors as
+# global defaults forced every non-China user through tuna/goproxy endpoints.
+# Explicit PIP_INDEX_URL/GOPROXY env or saved-config values still win.
+if deploy_env_truthy DEPLOY_CN_MIRROR; then
+  PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+  GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+else
+  PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}"
+  GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
+fi
 BIN_NAME="cyberstrike-ai"
 BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
 CONFIG_FILE="${INSTALL_DIR}/config.yaml"
