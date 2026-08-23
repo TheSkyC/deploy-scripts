@@ -3318,6 +3318,99 @@ app_config_installed_version() {
   printf '%s\n' "$value"
 }
 
+# Read one KEY=value entry from the deployment config file, but only when the
+# file is owned by root with mode 600/400. Status projections must not adopt
+# paths from a config an unprivileged user could have rewritten; callers get
+# empty output (exit 1) instead of a trusted value when the gate fails.
+app_conf_trusted_value() {
+  local conf_file="$1" key="$2" owner mode value
+  [[ -f "$conf_file" ]] || return 1
+  owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
+  mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
+  if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
+    return 1
+  fi
+  value="$(awk -F= -v key="$key" '
+    $0 ~ "^[[:space:]]*" key "=" {
+      value=$0
+      sub(/^[^=]*=[[:space:]]*/, "", value)
+      gsub(/^"|"$/, "", value)
+      gsub(/[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
+  ' "$conf_file" 2>/dev/null)" || return 1
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
+# Print the state JSON for the newest backup archive in backup_dir matching
+# one or more archive globs. Shared tail of every APP_STATUS_BACKUP_FN
+# projection: inspect failures report state=failed, an empty directory reports
+# state=missing, and an unreadable mtime reports state=unknown.
+app_backup_latest_archive_json() {
+  local backup_dir="$1" glob find_args=() latest_archive archive_name archive_mtime last_success_at
+  shift
+  # The name tests must stay inside explicit \( ... \): find's default
+  # precedence would otherwise bind -printf to the last -name only and let
+  # earlier OR clauses fall back to plain -print, corrupting the projection.
+  for glob in "$@"; do
+    [[ ${#find_args[@]} -eq 0 ]] || find_args+=(-o)
+    find_args+=(-name "$glob")
+  done
+  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f \( "${find_args[@]}" \) -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
+    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  latest_archive="${latest_archive%%$'\n'*}"
+  if [[ -z "$latest_archive" ]]; then
+    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  archive_name="${latest_archive#*|}"
+  archive_mtime="${latest_archive%%|*}"
+  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
+    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
+    return
+  fi
+  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
+    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+}
+
+# Full status-backup projection shared by every app: resolve the backup
+# directory from the default variable, override it from the saved config only
+# after the root/600/400 trust gate passes, then project the newest archive as
+# JSON. A config file that exists but fails the trust gate is reported
+# explicitly instead of being silently ignored. unsafe_dir_message customizes
+# the unsafe-path message text; remaining arguments are archive globs.
+# Locals deliberately avoid the name `conf_file`: Bash locals are dynamically
+# scoped, so an app_conf_file override reading `$conf_file` must still see the
+# caller's value, not this function's scratch copy.
+app_status_backup_json() {
+  local conf_key="$1" default_dir="$2" unsafe_dir_message="$3"
+  shift 3
+  local app_conf_path backup_dir configured_dir
+  backup_dir="$default_dir"
+  app_conf_path="$(app_conf_file 2>/dev/null || true)"
+  if [[ -f "$app_conf_path" ]]; then
+    if ! configured_dir="$(app_conf_trusted_value "$app_conf_path" "$conf_key")"; then
+      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
+      return
+    fi
+    [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
+  fi
+  if [[ -z "$backup_dir" ]] || ! is_safe_path "$backup_dir"; then
+    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":%s}' \
+      "$(app_json_string "$backup_dir")" "$(app_json_string "$unsafe_dir_message")"
+    return
+  fi
+  if [[ ! -d "$backup_dir" ]]; then
+    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
+    return
+  fi
+  app_backup_latest_archive_json "$backup_dir" "$@"
+}
+
 do_status_json() {
   app_status_collect_json
 }
@@ -4036,48 +4129,8 @@ binary_app_bootstrap() {
 # deliberately share only the GitHub-release binary lifecycle: applications
 # with custom update logic must opt in with their own adapter instead.
 bapp_status_backup_json() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  backup_dir="${BACKUP_DIR:-}"
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" == root && ( "$mode" == 600 || "$mode" == 400 ) ]]; then
-      configured_dir="$(awk -F= '
-        /^[[:space:]]*BACKUP_DIR=/ {
-          value=$0
-          sub(/^[^=]*=[[:space:]]*/, "", value)
-          gsub(/^"|"$/, "", value)
-          gsub(/[[:space:]]+$/, "", value)
-          print value
-          exit
-        }
-      ' "$conf_file" 2>/dev/null)"
-      [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
-    fi
-  fi
-  if [[ ! -d "$backup_dir" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name "${APP_ID}_*.tar.gz" -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#*|}"
-  archive_mtime="${latest_archive%%|*}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
+    "backup directory is unsafe or missing" "${APP_ID}_*.tar.gz"
 }
 bapp_status_version_json() {
   local conf_file installed
@@ -9418,6 +9471,9 @@ i18n_register_many \
   app.cyberstrikeai.success.update_complete \
   "Update complete: %s -> %s" \
   "更新完成：%s -> %s" \
+  app.cyberstrikeai.warn.update_health_failed \
+  "Update finished but the health check failed. The new version is running; verify backend and Nginx health before use. Inspect: journalctl -u %s -n 80 --no-pager" \
+  "更新已完成但健康检查失败。新版本正在运行，请先确认后端和 Nginx 健康后再使用。请检查：journalctl -u %s -n 80 --no-pager。" \
   app.cyberstrikeai.warn.update_start_failed \
   "Updated version failed to start. Rolling back binary and config." \
   "更新后的版本启动失败。正在回滚二进制与配置。" \
@@ -11093,43 +11149,8 @@ _newapi_status_version_json() {
 }
 APP_STATUS_VERSION_FN=_newapi_status_version_json
 _newapi_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  conf_file="$(app_conf_file)"
-  backup_dir="${BACKUP_DIR:-}"
-  if [[ -f "$conf_file" ]]; then
-    backup_dir="$(awk -F= '
-      /^[[:space:]]*BACKUP_DIR=/ {
-        value=$0
-        sub(/^[^=]*=[[:space:]]*/, "", value)
-        gsub(/^"|"$/, "", value)
-        gsub(/[[:space:]]+$/, "", value)
-        print value
-        exit
-      }
-    ' "$conf_file" 2>/dev/null)"
-    [[ -n "$backup_dir" ]] || backup_dir="${BACKUP_DIR:-}"
-  fi
-  if [[ ! -d "$backup_dir" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'new-api_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#* }"
-  archive_mtime="${latest_archive%% *}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
+    "backup directory is unsafe or missing" 'new-api_*.tar.gz'
 }
 
 APP_STATUS_BACKUP_FN=_newapi_status_backup
@@ -12163,54 +12184,8 @@ _sub2api_status_version_json() {
 }
 APP_STATUS_VERSION_FN=_sub2api_status_version_json
 _sub2api_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  backup_dir="${BACKUP_DIR:-}"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
-      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
-      return
-    fi
-    configured_dir="$(awk -F= '
-      /^[[:space:]]*BACKUP_DIR=/ {
-        value=$0
-        sub(/^[^=]*=[[:space:]]*/, "", value)
-        gsub(/^"|"$/, "", value)
-        gsub(/[[:space:]]+$/, "", value)
-        print value
-        exit
-      }
-    ' "$conf_file" 2>/dev/null)"
-    [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
-  fi
-  if [[ -z "$backup_dir" ]] || ! is_safe_path "$backup_dir"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"backup directory is unsafe or missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if [[ ! -d "$backup_dir" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f \( -name 'sub2api_*.tar.gz' -o -name 'sub2api_*.sql.gz' \) -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#*|}"
-  archive_mtime="${latest_archive%%|*}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
+    "backup directory is unsafe or missing" 'sub2api_*.tar.gz' 'sub2api_*.sql.gz'
 }
 APP_STATUS_BACKUP_FN=_sub2api_status_backup
 _sub2api_require_safe_bin_path() {
@@ -13929,54 +13904,8 @@ _vw_doctor_service_name() {
 }
 APP_DOCTOR_SERVICE_FN=_vw_doctor_service_name
 _vw_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  backup_dir="${VW_BACKUP_DIR:-}"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
-      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
-      return
-    fi
-    configured_dir="$(awk -F= '
-      /^[[:space:]]*VW_BACKUP_DIR=/ {
-        value=$0
-        sub(/^[^=]*=[[:space:]]*/, "", value)
-        gsub(/^"|"$/, "", value)
-        gsub(/[[:space:]]+$/, "", value)
-        print value
-        exit
-      }
-    ' "$conf_file" 2>/dev/null)"
-    [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
-  fi
-  if [[ -z "$backup_dir" ]] || ! is_safe_path "$backup_dir"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"backup directory is unsafe or missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if [[ ! -d "$backup_dir" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'vaultwarden_*.tar.gz' -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#*|}"
-  archive_mtime="${latest_archive%%|*}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "VW_BACKUP_DIR" "${VW_BACKUP_DIR:-}" \
+    "backup directory is unsafe or missing" 'vaultwarden_*.tar.gz'
 }
 APP_STATUS_BACKUP_FN=_vw_status_backup
 _vw_remove_dir_or_error() {
@@ -15709,50 +15638,8 @@ _csai_check_update_json() {
 }
 APP_CHECK_UPDATE_FN=_csai_check_update_json
 _csai_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  backup_dir="${BACKUP_DIR:-}"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
-      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
-      return
-    fi
-    configured_dir="$(awk -F= '
-        /^[[:space:]]*BACKUP_DIR=/ {
-          value=$0
-          sub(/^[^=]*=[[:space:]]*/, "", value)
-          gsub(/^"|"$/, "", value)
-          gsub(/[[:space:]]+$/, "", value)
-          print value
-          exit
-        }
-      ' "$conf_file" 2>/dev/null)"
-    [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
-  fi
-  if [[ -z "$backup_dir" ]] || ! is_safe_path "$backup_dir"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"backup directory is unsafe"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'cyberstrike-ai_*.tar.gz' -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#*|}"
-  archive_mtime="${latest_archive%%|*}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
+    "backup directory is unsafe" 'cyberstrike-ai_*.tar.gz'
 }
 APP_STATUS_BACKUP_FN=_csai_status_backup
 _csai_remove_dir_or_error() {
@@ -16627,8 +16514,11 @@ do_update() {
     step "$(t app.cyberstrikeai.step.restart_updated)"
     if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
       success "$(t app.cyberstrikeai.success.update_complete "$old_rev" "$new_rev")"
+      # A failed health probe must stay nonfatal (the binary did update and
+      # start) but never silent: surface the degraded state explicitly so
+      # "update succeeded" cannot hide an unhealthy service.
       if ! health_check; then
-        :
+        warn "$(t app.cyberstrikeai.warn.update_health_failed "$SERVICE_NAME")"
       fi
     else
       warn "$(t app.cyberstrikeai.warn.update_start_failed)"
@@ -16884,54 +16774,8 @@ _BLOG_DERIVE_PATHS() {
 }
 APP_CONFIG_DERIVE_HOOK=_BLOG_DERIVE_PATHS
 _blog_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  backup_dir="${BLOG_BACKUP_DIR:-}"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
-      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
-      return
-    fi
-    configured_dir="$(awk -F= '
-      /^[[:space:]]*BLOG_BACKUP_DIR=/ {
-        value=$0
-        sub(/^[^=]*=[[:space:]]*/, "", value)
-        gsub(/^"|"$/, "", value)
-        gsub(/[[:space:]]+$/, "", value)
-        print value
-        exit
-      }
-    ' "$conf_file" 2>/dev/null)"
-    [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
-  fi
-  if [[ -z "$backup_dir" ]] || ! is_safe_path "$backup_dir"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"backup directory is unsafe or missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if [[ ! -d "$backup_dir" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'blog_*.tar.gz' -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#*|}"
-  archive_mtime="${latest_archive%%|*}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "BLOG_BACKUP_DIR" "${BLOG_BACKUP_DIR:-}" \
+    "backup directory is unsafe or missing" 'blog_*.tar.gz'
 }
 APP_STATUS_BACKUP_FN=_blog_status_backup
 
@@ -18151,28 +17995,9 @@ _tickflow_check_update_json() {
 APP_CHECK_UPDATE_FN=_tickflow_check_update_json
 
 _tickflow_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  local install_dir="${TICKFLOW_INSTALL_DIR:-}"
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
-      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
-      return
-    fi
-    configured_dir="$(awk -F= '
-      /^[[:space:]]*TICKFLOW_INSTALL_DIR=/ {
-        value=$0
-        sub(/^[^=]*=[[:space:]]*/, "", value)
-        gsub(/^"|"$/, "", value)
-        gsub(/[[:space:]]+$/, "", value)
-        print value
-        exit
-      }
-    ' "$conf_file" 2>/dev/null)"
-    [[ -n "$configured_dir" ]] && install_dir="$configured_dir"
+  local install_dir="${TICKFLOW_INSTALL_DIR:-}" backup_dir configured_dir
+  if configured_dir="$(app_conf_trusted_value "$(app_conf_file 2>/dev/null || true)" "TICKFLOW_INSTALL_DIR")"; then
+    install_dir="$configured_dir"
   fi
   if [[ -z "$install_dir" ]] || ! is_safe_path "$install_dir"; then
     printf '{"state":"unknown","last_success_at":null,"path":null,"message":"install directory is unsafe or missing"}'
@@ -18187,23 +18012,7 @@ _tickflow_status_backup() {
     printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
     return
   fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'tickflow-data-*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#* }"
-  archive_mtime="${latest_archive%% *}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_backup_latest_archive_json "$backup_dir" 'tickflow-data-*.tar.gz'
 }
 APP_STATUS_BACKUP_FN=_tickflow_status_backup
 
@@ -18829,9 +18638,25 @@ _cpa_stack_merge_version_json() {
   fi
   # Component fields keep a stable cpa-then-cpamp order regardless of which
   # side won the verdict, so consumers can always split on the same layout.
+  # When both sides lack a value the merge must stay JSON null: the legacy
+  # status contract promises "version":null for uninstalled apps, and a
+  # literal "null/null" string would break that surface for automation.
+  local merged_installed merged_latest
+  if [[ "$(state_json_field "$a" installed 2>/dev/null || printf null)" == null &&
+        "$(state_json_field "$b" installed 2>/dev/null || printf null)" == null ]]; then
+    merged_installed=null
+  else
+    merged_installed="$(state_json_field "$a" installed 2>/dev/null || printf null)/$(state_json_field "$b" installed 2>/dev/null || printf null)"
+  fi
+  if [[ "$(state_json_field "$a" latest 2>/dev/null || printf null)" == null &&
+        "$(state_json_field "$b" latest 2>/dev/null || printf null)" == null ]]; then
+    merged_latest=null
+  else
+    merged_latest="$(state_json_field "$a" latest 2>/dev/null || printf null)/$(state_json_field "$b" latest 2>/dev/null || printf null)"
+  fi
   version_check_emit_json \
-    "$(state_json_field "$a" installed 2>/dev/null || printf null)/$(state_json_field "$b" installed 2>/dev/null || printf null)" \
-    "$(state_json_field "$a" latest 2>/dev/null || printf null)/$(state_json_field "$b" latest 2>/dev/null || printf null)" \
+    "$merged_installed" \
+    "$merged_latest" \
     "$checked_at" "$verdict_state" github_release "$cache_state" "$error_summary"
 }
 _cpa_stack_load_installed_versions() {
@@ -18857,54 +18682,8 @@ _cpa_stack_status_version_json() {
 }
 APP_STATUS_VERSION_FN=_cpa_stack_status_version_json
 _cpa_stack_status_backup() {
-  local conf_file backup_dir latest_archive archive_name archive_mtime last_success_at
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  backup_dir="${CPA_STACK_BACKUP_DIR:-}"
-  if [[ -f "$conf_file" ]]; then
-    local owner mode configured_dir
-    owner="$(stat -c '%U' "$conf_file" 2>/dev/null || printf unknown)"
-    mode="$(stat -c '%a' "$conf_file" 2>/dev/null || printf unknown)"
-    if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
-      printf '{"state":"unknown","last_success_at":null,"path":null,"message":"configuration file is not trusted"}'
-      return
-    fi
-    configured_dir="$(awk -F= '
-      /^[[:space:]]*CPA_STACK_BACKUP_DIR=/ {
-        value=$0
-        sub(/^[^=]*=[[:space:]]*/, "", value)
-        gsub(/^"|"$/, "", value)
-        gsub(/[[:space:]]+$/, "", value)
-        print value
-        exit
-      }
-    ' "$conf_file" 2>/dev/null)"
-    [[ -n "$configured_dir" ]] && backup_dir="$configured_dir"
-  fi
-  if [[ -z "$backup_dir" ]] || ! is_safe_path "$backup_dir"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"backup directory is unsafe or missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if [[ ! -d "$backup_dir" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"backup directory is missing"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  if ! latest_archive="$(find "$backup_dir" -maxdepth 1 -type f -name 'cpa-stack-*.tar.gz' -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"; then
-    printf '{"state":"failed","last_success_at":null,"path":%s,"message":"cannot inspect backup directory"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  latest_archive="${latest_archive%%$'\n'*}"
-  if [[ -z "$latest_archive" ]]; then
-    printf '{"state":"missing","last_success_at":null,"path":%s,"message":"no backup archive found"}' "$(app_json_string "$backup_dir")"
-    return
-  fi
-  archive_name="${latest_archive#*|}"
-  archive_mtime="${latest_archive%%|*}"
-  if ! last_success_at="$(date -d "@${archive_mtime%.*}" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null)"; then
-    printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
-    return
-  fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  app_status_backup_json "CPA_STACK_BACKUP_DIR" "${CPA_STACK_BACKUP_DIR:-}" \
+    "backup directory is unsafe or missing" 'cpa-stack-*.tar.gz'
 }
 APP_STATUS_BACKUP_FN=_cpa_stack_status_backup
 

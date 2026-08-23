@@ -926,8 +926,11 @@ do_update() {
     step "$(t app.cyberstrikeai.step.restart_updated)"
     if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 35; then
       success "$(t app.cyberstrikeai.success.update_complete "$old_rev" "$new_rev")"
+      # A failed health probe must stay nonfatal (the binary did update and
+      # start) but never silent: surface the degraded state explicitly so
+      # "update succeeded" cannot hide an unhealthy service.
       if ! health_check; then
-        :
+        warn "$(t app.cyberstrikeai.warn.update_health_failed "$SERVICE_NAME")"
       fi
     else
       warn "$(t app.cyberstrikeai.warn.update_start_failed)"

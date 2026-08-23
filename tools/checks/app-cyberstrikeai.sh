@@ -846,11 +846,12 @@ check_cyberstrikeai_nginx_health_probe_matches_server_name() {
 
 check_cyberstrikeai_health_checks_are_nonfatal_outside_install() {
   awk '
-      /success "\$\(t app\.cyberstrikeai\.success\.update_complete "\$old_rev" "\$new_rev"\)"/ { in_update=1; saw_health_if=0; next }
+      /success "\$\(t app\.cyberstrikeai\.success\.update_complete "\$old_rev" "\$new_rev"\)"/ { in_update=1; saw_health_if=0; saw_health_warn=0; next }
       in_update && /if ! health_check; then/ { saw_health_if=1 }
+      in_update && saw_health_if && /warn "\$\(t app\.cyberstrikeai\.warn\.update_health_failed "\$SERVICE_NAME"\)"/ { saw_health_warn=1 }
       in_update && /warn "\$\(t app\.cyberstrikeai\.warn\.update_start_failed\)"/ {
-        if (!saw_health_if) {
-          printf "%s CyberStrikeAI update must treat post-restart health warnings as nonfatal\n", FILENAME > "/dev/stderr"
+        if (!(saw_health_if && saw_health_warn)) {
+          printf "%s CyberStrikeAI update must treat post-restart health warnings as nonfatal and surface them explicitly\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_update=0

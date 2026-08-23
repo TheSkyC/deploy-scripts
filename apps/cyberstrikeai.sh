@@ -363,6 +363,9 @@ i18n_register_many \
   app.cyberstrikeai.success.update_complete \
   "Update complete: %s -> %s" \
   "更新完成：%s -> %s" \
+  app.cyberstrikeai.warn.update_health_failed \
+  "Update finished but the health check failed. The new version is running; verify backend and Nginx health before use. Inspect: journalctl -u %s -n 80 --no-pager" \
+  "更新已完成但健康检查失败。新版本正在运行，请先确认后端和 Nginx 健康后再使用。请检查：journalctl -u %s -n 80 --no-pager。" \
   app.cyberstrikeai.warn.update_start_failed \
   "Updated version failed to start. Rolling back binary and config." \
   "更新后的版本启动失败。正在回滚二进制与配置。" \
