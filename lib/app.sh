@@ -313,27 +313,10 @@ app_doctor_validate_saved_config() {
   )
 }
 
+# JSON string escaper: delegates to the shared core in operation.sh (loaded
+# before app.sh) so operation records and status JSON escape identically.
 app_json_string() {
-  local value="${1:-}"
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\b'/\\b}"
-  value="${value//$'\f'/\\f}"
-  value="${value//$'\n'/\\n}"
-  value="${value//$'\r'/\\r}"
-  value="${value//$'\t'/\\t}"
-  # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
-  # forbids literally. NUL (U+0000) cannot appear in bash strings. Do this
-  # unconditionally: Bash regex ranges over control bytes vary across builds.
-  local i byte hex octal
-  for ((i = 1; i < 32; i++)); do
-    case "$i" in 8|9|10|12|13) continue ;; esac
-    printf -v octal '%03o' "$i"
-    printf -v byte '%b' "\0$octal"
-    printf -v hex '%02x' "$i"
-    value="${value//"$byte"/"\u00${hex}"}"
-  done
-  printf '"%s"' "$value"
+  printf '"%s"' "$(__deploy_json_escape_unquoted "${1:-}")"
 }
 
 app_json_bool() {

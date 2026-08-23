@@ -911,14 +911,41 @@ operation_is_valid_action() { [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; }
 operation_timestamp() { date '+%Y-%m-%dT%H:%M:%S%:z'; }
 operation_run_timestamp() { date '+%Y%m%dT%H%M%S%z'; }
 
-operation_json_escape() {
+# Shared JSON string escaper core: escapes backslash, quote, and every C0
+# control character, printing the escaped text WITHOUT surrounding quotes.
+# Lives in operation.sh (loaded before app.sh by core.sh and the release
+# bundle, and usable standalone) so both operation_json_escape and
+# app_json_string delegate to one implementation — operation records and
+# status JSON can never disagree about escaping again.
+__deploy_json_escape_unquoted() {
   local value="${1:-}"
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
+  value="${value//$'\b'/\\b}"
+  value="${value//$'\f'/\\f}"
   value="${value//$'\n'/\\n}"
   value="${value//$'\r'/\\r}"
   value="${value//$'\t'/\\t}"
+  # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
+  # forbids literally. NUL (U+0000) cannot appear in bash strings. Do this
+  # unconditionally: Bash regex ranges over control bytes vary across builds.
+  local i byte hex octal
+  for ((i = 1; i < 32; i++)); do
+    case "$i" in 8|9|10|12|13) continue ;; esac
+    printf -v octal '%03o' "$i"
+    printf -v byte '%b' "\0$octal"
+    printf -v hex '%02x' "$i"
+    value="${value//"$byte"/"\u00${hex}"}"
+  done
   printf '%s' "$value"
+}
+
+# Delegate to the shared escaper core: operation records previously escaped
+# fewer characters than app_json_string (missing \b, \f, and most C0 controls),
+# so a step name containing a control byte produced invalid JSON here while
+# status JSON escaped it correctly.
+operation_json_escape() {
+  __deploy_json_escape_unquoted "${1:-}"
 }
 
 operation_json_nullable() {
@@ -3242,27 +3269,10 @@ app_doctor_validate_saved_config() {
   )
 }
 
+# JSON string escaper: delegates to the shared core in operation.sh (loaded
+# before app.sh) so operation records and status JSON escape identically.
 app_json_string() {
-  local value="${1:-}"
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\b'/\\b}"
-  value="${value//$'\f'/\\f}"
-  value="${value//$'\n'/\\n}"
-  value="${value//$'\r'/\\r}"
-  value="${value//$'\t'/\\t}"
-  # Escape the remaining C0 control characters (U+0001..U+001F), which JSON
-  # forbids literally. NUL (U+0000) cannot appear in bash strings. Do this
-  # unconditionally: Bash regex ranges over control bytes vary across builds.
-  local i byte hex octal
-  for ((i = 1; i < 32; i++)); do
-    case "$i" in 8|9|10|12|13) continue ;; esac
-    printf -v octal '%03o' "$i"
-    printf -v byte '%b' "\0$octal"
-    printf -v hex '%02x' "$i"
-    value="${value//"$byte"/"\u00${hex}"}"
-  done
-  printf '"%s"' "$value"
+  printf '"%s"' "$(__deploy_json_escape_unquoted "${1:-}")"
 }
 
 app_json_bool() {

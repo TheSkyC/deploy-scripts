@@ -361,6 +361,7 @@ main() {
     operation)
       check_version_helpers
       check_operation_records
+      check_operation_json_escape_matches_app_json_string
       check_operation_logrotate_policy
       check_history_command
       check_operation_scopes_are_distinct
@@ -650,6 +651,7 @@ main() {
       check_health_all_target
       check_version_helpers
       check_operation_records
+      check_operation_json_escape_matches_app_json_string
       check_operation_logrotate_policy
       check_history_command
       check_operation_scopes_are_distinct

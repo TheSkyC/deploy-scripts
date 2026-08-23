@@ -15,6 +15,31 @@ check_version_helpers() {
   '
 }
 
+# operation_json_escape and app_json_string must escape identically: the
+# escapers used to disagree (\b, \f, and C0 controls were unescaped in
+# operation records), letting a control byte in a step name or error summary
+# produce invalid JSON there while status JSON handled it correctly.
+check_operation_json_escape_matches_app_json_string() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    check_pair() {
+      local input="$1" a b
+      a="$(app_json_string "$input")"
+      a="${a:1:${#a}-2}"
+      b="$(operation_json_escape "$input")"
+      [[ "$a" == "$b" ]] || { printf "escaper mismatch for %q: app=[%s] op=[%s]\n" "$input" "$a" "$b" >&2; exit 1; }
+    }
+    check_pair "plain text"
+    check_pair "back\\slash"
+    check_pair "quote\"inside"
+    check_pair "$(printf "tab\there")"
+    check_pair "$(printf "bell\a vtab\x0b unit\x1f sep")"
+    check_pair ""
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
 check_operation_records() {
   local temp_root
   temp_root="$(mktemp -d)"
