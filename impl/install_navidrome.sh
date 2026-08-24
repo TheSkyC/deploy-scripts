@@ -95,6 +95,10 @@ do_verify() {
   bapp_verify
 }
 
+do_restore() {
+  bapp_restore
+}
+
 do_status() {
   bapp_status
 }
