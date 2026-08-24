@@ -104,5 +104,29 @@ Format per entry:
 - 定时自动更新 schedule、export/import 迁移、compose 支持层（较大特性，
   排在杂项与去重之后）
 
+## 2026-08-24（续 5）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D1（P0 备份可靠性第一阶段：完整性元数据 + verify 动作）：
+  1) 新增 lib/backup.sh 共享原语：原子写入 .sha256 sidecar 与单行
+     manifest.json（schema_version/app/archive/sha256/created_at/
+     installed_version），fail-closed 校验 backup_verify_archive，最新归档
+     JSON 判定 backup_verify_latest_json；sidecar 兼容裸摘要格式。
+  2) binary-app 生命周期 _ba_backup 与 blog do_backup 在归档发布后产出
+     sha256+manifest，失败仅告警不阻断备份本身。
+  3) 新增 per-app verify 动作：blog 自带 do_verify；9 个共享生命周期 impl
+     委托 bapp_verify；自定义备份应用（newapi/sub2api/cyberstrikeai/
+     vaultwarden/cpa-stack/tickflow）留待下一批次接入。
+  4) status-json 备份投影新增 integrity 字段（verified|failed|unverified）。
+  5) 4 个新守卫：行为级原语回路（损坏拒绝、跨版本兼容、unverified 上报）
+     + 结构级委托与元数据写入覆盖。
+- 验证 / Verified: check_backup_integrity_primitives /
+  check_binary_impls_have_verify_delegate /
+  check_blog_backup_writes_integrity_metadata /
+  check_binary_app_backup_writes_integrity_metadata 单独运行均通过；
+  check_i18n_keys_are_consistent 通过；改动文件 shellcheck 通过；
+  guards 全套仅剩已知预期 fail_check 探测输出。HEAD 上 verify all 结果
+  见下一条记录。
+- 提交 / Commit: a98c68f
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
