@@ -128,5 +128,22 @@ Format per entry:
   见下一条记录。
 - 提交 / Commit: a98c68f
 
+## 2026-08-24（续 6）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D2（P0 备份可靠性第二阶段：verify 全应用覆盖）：
+  1) 判定渲染逻辑从 bapp_verify 下沉为共享 app_verify_latest_backup
+     （lib/backup.sh）；bapp_verify 与 blog do_verify 均改为委托。
+  2) 6 个自定义备份 impl 补齐 do_verify：newapi / sub2api（含 .sql.gz 双
+     glob）/ cyberstrikeai / vaultwarden / cpa_stack / tickflow（安装目录
+     派生备份路径）。至此 16 个应用全部支持 verify 动作。
+  3) 新增守卫 check_custom_impls_have_verify_delegate 锁定委托契约。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；
+  check_custom_impls_have_verify_delegate /
+  check_binary_impls_have_verify_delegate /
+  check_backup_integrity_primitives / check_i18n_keys_are_consistent 通过；
+  verify guards 全套仅剩已知预期 fail_check 探测输出；HEAD 上 verify all
+  结果见下一条记录。
+- 提交 / Commit: e4b0c5b
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
