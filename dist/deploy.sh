@@ -65,12 +65,18 @@ __deploy_i18n_message() {
     action.status) echo "status|status" ;;
     action.uninstall) echo "uninstall|uninstall" ;;
     action.update) echo "update|update" ;;
+    action.verify) echo "verify|verify" ;;
+    backup.verify.step) echo "Verify backup integrity|校验备份完整性" ;;
+    backup.verify.verified) echo "Backup verified: %s (sha256 %s)|备份校验通过：%s（sha256 %s）" ;;
+    backup.verify.failed) echo "Backup verification FAILED: %s|备份校验失败：%s" ;;
+    backup.verify.unverified) echo "No integrity metadata for: %s (created before manifest support; run a new backup to upgrade it)|缺少完整性元数据：%s（创建于 manifest 支持之前；请重新备份以升级）" ;;
+    backup.verify.no_backups) echo "No backup archive found in %s|未在 %s 中找到备份归档" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
     common.quit) echo "quit|退出" ;;
     common.selection_prompt) echo "Selection [1-7/q]:|请输入选项 [1-7/q]：" ;;
-    common.usage) echo "Usage: sudo bash %s [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
+    common.usage) echo "Usage: sudo bash %s [install, update, backup, restore, verify, status, status-json, doctor, uninstall]|用法：sudo bash %s [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" ;;
     config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
     config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
@@ -135,7 +141,7 @@ __deploy_i18n_message() {
     manager.check_updates) echo "check application updates|检查应用更新" ;;
     manager.check_self_update) echo "check framework updates|检查中控更新" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
-    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
+    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
@@ -3409,8 +3415,14 @@ app_backup_latest_archive_json() {
     printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
     return
   fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  local integrity="unverified"
+  if backup_verify_archive "$latest_archive" 2>/dev/null; then
+    integrity="verified"
+  elif [[ -f "${latest_archive}.sha256" ]]; then
+    integrity="failed"
+  fi
+  printf '{"state":"available","last_success_at":%s,"path":%s,"integrity":"%s","message":null}' \
+    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")" "$integrity"
 }
 
 # Full status-backup projection shared by every app: resolve the backup
@@ -3932,6 +3944,9 @@ i18n_register_many \
   binary_app.warn.silent_backup_failed \
   "Backup failed; see %s for details." \
   "备份失败，详见 %s。" \
+  binary_app.warn.integrity_failed \
+  "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
+  "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
   binary_app.status.service \
   "Service: %s (%s)" \
   "服务：%s（%s）" \
@@ -4615,6 +4630,11 @@ _ba_backup() {
       sz="$(du -sh "$archive" 2>/dev/null | awk '{print $1}')"
       _ba_backup_log "$(t binary_app.success.backup_done "$archive" "$sz")"
       success "$(t binary_app.success.silent_backup "$archive" "$sz")"
+      if ! backup_write_sha256 "$archive" >/dev/null \
+         || ! backup_write_manifest "$archive" "$APP_ID" 1 "${INSTALLED_VERSION:-}"; then
+        warn "$(t binary_app.warn.integrity_failed "$archive")"
+        _ba_backup_log "$(t binary_app.warn.integrity_failed "$archive")"
+      fi
     else
       rm -f "$archive_tmp"
       _ba_backup_log "$(t binary_app.error.backup_failed)"
@@ -4667,6 +4687,37 @@ bapp_backup() {
   done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${APP_ID}_*.tar.gz" -type f \
            -printf '%T@ %f\n' 2>/dev/null | sort -rn | sed 's/^[0-9.]* //')
   echo ""
+}
+
+# Verify the newest backup archive of a shared-lifecycle app: load the saved
+# config (trust gate enforced), pick the latest archive by mtime and recompute
+# its checksum against the sidecar/manifest. Archives are mode 600 root:root,
+# so verification runs as root like backup itself. Read-only: no lock needed.
+bapp_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _binary_app_derive_paths
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  local verdict
+  verdict="$(backup_verify_latest_json "$BACKUP_DIR" "${APP_ID}_*.tar.gz")"
+  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
+    missing)
+      info "$(t backup.verify.no_backups "$BACKUP_DIR")"
+      return 0
+      ;;
+    unverified)
+      warn "$(t backup.verify.unverified "$(state_json_field "$verdict" archive)")"
+      return 0
+      ;;
+  esac
+  if [[ "$(state_json_field "$verdict" state 2>/dev/null || true)" == "verified" ]]; then
+    success "$(t backup.verify.verified \
+      "$(state_json_field "$verdict" archive)" \
+      "$(backup_read_sha256 "$BACKUP_DIR/$(state_json_field "$verdict" archive)".sha256)")"
+    return 0
+  fi
+  error "$(t backup.verify.failed "$(state_json_field "$verdict" archive)")"
 }
 _ba_prune_old_bins() {
   local -a old_bins=()
@@ -6382,6 +6433,13 @@ dispatch_action() {
           operation_run_app_action cert do_cert
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
+        fi
+        ;;
+      verify)
+        if declare -f do_verify >/dev/null 2>&1; then
+          operation_run_app_action verify do_verify
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" verify)"
         fi
         ;;
       status|5) do_status ;;
@@ -10286,6 +10344,9 @@ i18n_register_many \
   app.blog.backup.success \
   "Backup created: %s" \
   "备份已创建：%s" \
+  app.blog.backup.warn_integrity \
+  "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
+  "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
   app.blog.backup.cleaned \
   "Removed expired backup: %s" \
   "已删除过期备份：%s" \
@@ -17762,6 +17823,11 @@ do_backup() {
     rm -f "$archive_tmp"
     error "$(t app.blog.backup.error_archive "$archive")"
   fi
+  local digest installed_version=""
+  if ! digest="$(backup_write_sha256 "$archive")" \
+     || ! backup_write_manifest "$archive" "blog" 1 "$installed_version"; then
+    warn "$(t app.blog.backup.warn_integrity "$archive")"
+  fi
   success "$(t app.blog.backup.success "$archive")"
 
   local _keep_days="${BLOG_BACKUP_KEEP_DAYS}"
@@ -17788,6 +17854,31 @@ _blog_latest_backup_archive() {
     fi
   done < <(find "$backup_dir" -maxdepth 1 -name 'blog_*.tar.gz' -type f -print0 2>/dev/null)
   printf '%s' "$latest"
+}
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  _blog_load_config_if_root
+  step "$(t backup.verify.step)"
+  require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
+  [[ -d "$BLOG_BACKUP_DIR" ]] || error "$(t app.blog.restore.no_backups "$BLOG_BACKUP_DIR")"
+  local archive verdict
+  archive="$(_blog_latest_backup_archive "$BLOG_BACKUP_DIR")"
+  [[ -n "$archive" ]] || error "$(t app.blog.restore.no_backups "$BLOG_BACKUP_DIR")"
+  verdict="$(backup_verify_latest_json "$BLOG_BACKUP_DIR" 'blog_*.tar.gz')"
+  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
+    unverified)
+      warn "$(t backup.verify.unverified "$(basename "$archive")")"
+      return 0
+      ;;
+  esac
+  if backup_verify_archive "$archive"; then
+    success "$(t backup.verify.verified "$(basename "$archive")" \
+      "$(backup_read_sha256 "${archive}.sha256")")"
+    return 0
+  fi
+  error "$(t backup.verify.failed "$(basename "$archive")")"
 }
 
 _blog_archive_paths_are_safe() {
@@ -19660,6 +19751,10 @@ do_backup() {
   bapp_backup
 }
 
+do_verify() {
+  bapp_verify
+}
+
 do_status() {
   bapp_status
 }
@@ -19764,6 +19859,10 @@ do_backup() {
   bapp_backup
 }
 
+do_verify() {
+  bapp_verify
+}
+
 do_status() {
   bapp_status
 }
@@ -19845,6 +19944,10 @@ do_update() {
 do_backup() {
   acquire_lock
   bapp_backup
+}
+
+do_verify() {
+  bapp_verify
 }
 
 do_status() {
@@ -19942,6 +20045,10 @@ do_update() {
 do_backup() {
   acquire_lock
   bapp_backup
+}
+
+do_verify() {
+  bapp_verify
 }
 
 do_status() {
@@ -20048,6 +20155,10 @@ do_update() {
 do_backup() {
   acquire_lock
   bapp_backup
+}
+
+do_verify() {
+  bapp_verify
 }
 
 do_status() {
@@ -20181,6 +20292,10 @@ do_backup() {
   bapp_backup
 }
 
+do_verify() {
+  bapp_verify
+}
+
 do_status() {
   bapp_status
 }
@@ -20312,6 +20427,10 @@ do_backup() {
   bapp_backup
 }
 
+do_verify() {
+  bapp_verify
+}
+
 do_status() {
   bapp_status
 }
@@ -20416,6 +20535,10 @@ do_backup() {
   bapp_backup
 }
 
+do_verify() {
+  bapp_verify
+}
+
 do_status() {
   bapp_status
 }
@@ -20512,6 +20635,10 @@ do_update() {
 do_backup() {
   acquire_lock
   bapp_backup
+}
+
+do_verify() {
+  bapp_verify
 }
 
 do_status() {

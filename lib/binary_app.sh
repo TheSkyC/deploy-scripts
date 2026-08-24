@@ -271,6 +271,9 @@ i18n_register_many \
   binary_app.warn.silent_backup_failed \
   "Backup failed; see %s for details." \
   "备份失败，详见 %s。" \
+  binary_app.warn.integrity_failed \
+  "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
+  "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
   binary_app.status.service \
   "Service: %s (%s)" \
   "服务：%s（%s）" \
@@ -954,6 +957,11 @@ _ba_backup() {
       sz="$(du -sh "$archive" 2>/dev/null | awk '{print $1}')"
       _ba_backup_log "$(t binary_app.success.backup_done "$archive" "$sz")"
       success "$(t binary_app.success.silent_backup "$archive" "$sz")"
+      if ! backup_write_sha256 "$archive" >/dev/null \
+         || ! backup_write_manifest "$archive" "$APP_ID" 1 "${INSTALLED_VERSION:-}"; then
+        warn "$(t binary_app.warn.integrity_failed "$archive")"
+        _ba_backup_log "$(t binary_app.warn.integrity_failed "$archive")"
+      fi
     else
       rm -f "$archive_tmp"
       _ba_backup_log "$(t binary_app.error.backup_failed)"
@@ -1006,6 +1014,37 @@ bapp_backup() {
   done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${APP_ID}_*.tar.gz" -type f \
            -printf '%T@ %f\n' 2>/dev/null | sort -rn | sed 's/^[0-9.]* //')
   echo ""
+}
+
+# Verify the newest backup archive of a shared-lifecycle app: load the saved
+# config (trust gate enforced), pick the latest archive by mtime and recompute
+# its checksum against the sidecar/manifest. Archives are mode 600 root:root,
+# so verification runs as root like backup itself. Read-only: no lock needed.
+bapp_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _binary_app_derive_paths
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  local verdict
+  verdict="$(backup_verify_latest_json "$BACKUP_DIR" "${APP_ID}_*.tar.gz")"
+  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
+    missing)
+      info "$(t backup.verify.no_backups "$BACKUP_DIR")"
+      return 0
+      ;;
+    unverified)
+      warn "$(t backup.verify.unverified "$(state_json_field "$verdict" archive)")"
+      return 0
+      ;;
+  esac
+  if [[ "$(state_json_field "$verdict" state 2>/dev/null || true)" == "verified" ]]; then
+    success "$(t backup.verify.verified \
+      "$(state_json_field "$verdict" archive)" \
+      "$(backup_read_sha256 "$BACKUP_DIR/$(state_json_field "$verdict" archive)".sha256)")"
+    return 0
+  fi
+  error "$(t backup.verify.failed "$(state_json_field "$verdict" archive)")"
 }
 _ba_prune_old_bins() {
   local -a old_bins=()

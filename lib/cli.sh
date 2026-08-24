@@ -52,6 +52,13 @@ dispatch_action() {
           error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
         fi
         ;;
+      verify)
+        if declare -f do_verify >/dev/null 2>&1; then
+          operation_run_app_action verify do_verify
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" verify)"
+        fi
+        ;;
       status|5) do_status ;;
       status-json|json-status) do_status_json ;;
       doctor|6) do_doctor ;;

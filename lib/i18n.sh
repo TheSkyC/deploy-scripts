@@ -51,12 +51,18 @@ __deploy_i18n_message() {
     action.status) echo "status|status" ;;
     action.uninstall) echo "uninstall|uninstall" ;;
     action.update) echo "update|update" ;;
+    action.verify) echo "verify|verify" ;;
+    backup.verify.step) echo "Verify backup integrity|校验备份完整性" ;;
+    backup.verify.verified) echo "Backup verified: %s (sha256 %s)|备份校验通过：%s（sha256 %s）" ;;
+    backup.verify.failed) echo "Backup verification FAILED: %s|备份校验失败：%s" ;;
+    backup.verify.unverified) echo "No integrity metadata for: %s (created before manifest support; run a new backup to upgrade it)|缺少完整性元数据：%s（创建于 manifest 支持之前；请重新备份以升级）" ;;
+    backup.verify.no_backups) echo "No backup archive found in %s|未在 %s 中找到备份归档" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
     common.quit) echo "quit|退出" ;;
     common.selection_prompt) echo "Selection [1-7/q]:|请输入选项 [1-7/q]：" ;;
-    common.usage) echo "Usage: sudo bash %s [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
+    common.usage) echo "Usage: sudo bash %s [install, update, backup, restore, verify, status, status-json, doctor, uninstall]|用法：sudo bash %s [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" ;;
     config.loaded) echo "Loaded deployment config: %s|已加载部署记录：%s" ;;
     config.saved) echo "Saved deployment config: %s|部署配置已持久化：%s" ;;
     error.command_required) echo "Required command is missing: %s|缺少必要命令：%s" ;;
@@ -121,7 +127,7 @@ __deploy_i18n_message() {
     manager.check_updates) echo "check application updates|检查应用更新" ;;
     manager.check_self_update) echo "check framework updates|检查中控更新" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
-    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, status, status-json, doctor, uninstall]" ;;
+    manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;

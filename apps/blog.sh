@@ -576,6 +576,9 @@ i18n_register_many \
   app.blog.backup.success \
   "Backup created: %s" \
   "备份已创建：%s" \
+  app.blog.backup.warn_integrity \
+  "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
+  "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
   app.blog.backup.cleaned \
   "Removed expired backup: %s" \
   "已删除过期备份：%s" \
