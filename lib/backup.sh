@@ -148,6 +148,37 @@ backup_verify_latest_json() {
     "$digest_state" "$(app_json_string "$(basename "$archive")")" "$(app_json_string "$message")"
 }
 
+# Verify the newest archive in a backup directory and print the human verdict
+# (success message / warning / localized error) for a per-app verify action.
+# Caller must already have: shown banner, required root, loaded config, and
+# validated the directory with require_safe_path. Exits via error() on a
+# failed checksum; missing/unverified archives are informational only, so
+# pre-manifest backups stay visible without blocking the operator.
+app_verify_latest_backup() {
+  local backup_dir="$1"
+  shift
+  local verdict state archive_name sidecar_digest
+  verdict="$(backup_verify_latest_json "$backup_dir" "$@")"
+  state="$(state_json_field "$verdict" state 2>/dev/null || true)"
+  case "$state" in
+    missing)
+      info "$(t backup.verify.no_backups "$backup_dir")"
+      return 0
+      ;;
+    unverified)
+      warn "$(t backup.verify.unverified "$(state_json_field "$verdict" archive)")"
+      return 0
+      ;;
+  esac
+  archive_name="$(state_json_field "$verdict" archive)"
+  if [[ "$state" == "verified" ]]; then
+    sidecar_digest="$(backup_read_sha256 "${backup_dir}/${archive_name}.sha256")"
+    success "$(t backup.verify.verified "$archive_name" "$sidecar_digest")"
+    return 0
+  fi
+  error "$(t backup.verify.failed "$archive_name")"
+}
+
 # Extract one top-level string field from a manifest.json produced by
 # backup_write_manifest. Prints the raw (still escaped) value; returns nonzero
 # when the field is absent or the document is not the expected shape.

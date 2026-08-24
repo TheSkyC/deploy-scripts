@@ -977,3 +977,12 @@ do_uninstall() {
   fi
   success "$(t app.cpa_stack.success.removed)"
 }
+
+do_verify() {
+  cpa_stack_show_banner
+  require_root "verify"
+  app_load_config
+  step "$(t backup.verify.step)"
+  require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
+  app_verify_latest_backup "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz'
+}

@@ -4699,25 +4699,7 @@ bapp_verify() {
   app_load_config _binary_app_derive_paths
   step "$(t backup.verify.step)"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  local verdict
-  verdict="$(backup_verify_latest_json "$BACKUP_DIR" "${APP_ID}_*.tar.gz")"
-  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
-    missing)
-      info "$(t backup.verify.no_backups "$BACKUP_DIR")"
-      return 0
-      ;;
-    unverified)
-      warn "$(t backup.verify.unverified "$(state_json_field "$verdict" archive)")"
-      return 0
-      ;;
-  esac
-  if [[ "$(state_json_field "$verdict" state 2>/dev/null || true)" == "verified" ]]; then
-    success "$(t backup.verify.verified \
-      "$(state_json_field "$verdict" archive)" \
-      "$(backup_read_sha256 "$BACKUP_DIR/$(state_json_field "$verdict" archive)".sha256)")"
-    return 0
-  fi
-  error "$(t backup.verify.failed "$(state_json_field "$verdict" archive)")"
+  app_verify_latest_backup "$BACKUP_DIR" "${APP_ID}_*.tar.gz"
 }
 _ba_prune_old_bins() {
   local -a old_bins=()
@@ -12253,6 +12235,15 @@ do_uninstall() {
   fi
   echo ""
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _NEWAPI_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  app_verify_latest_backup "$BACKUP_DIR" 'new-api_*.tar.gz'
+}
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_sub2api_impl.sh
@@ -13946,6 +13937,15 @@ do_uninstall() {
   echo -e "    ${CYAN}sudo -u postgres psql -c 'DROP DATABASE ${PG_DB};'${NC}"
   echo -e "    ${CYAN}sudo -u postgres psql -c 'DROP USER ${PG_USER};'${NC}"
   echo ""
+}
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _SUB2API_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  app_verify_latest_backup "$BACKUP_DIR" 'sub2api_*.tar.gz' 'sub2api_db_*.sql.gz'
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
@@ -15697,6 +15697,15 @@ do_uninstall() {
   fi
   echo ""
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _VW_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  app_verify_latest_backup "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz'
+}
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_cyberstrikeai_impl.sh
@@ -16856,6 +16865,15 @@ do_uninstall() {
   echo ""
   success "$(t app.cyberstrikeai.success.uninstalled)"
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _CSAI_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  app_verify_latest_backup "$BACKUP_DIR" 'cyberstrike-ai_*.tar.gz'
+}
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_hugo_blog_impl.sh
@@ -17863,22 +17881,7 @@ do_verify() {
   step "$(t backup.verify.step)"
   require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
   [[ -d "$BLOG_BACKUP_DIR" ]] || error "$(t app.blog.restore.no_backups "$BLOG_BACKUP_DIR")"
-  local archive verdict
-  archive="$(_blog_latest_backup_archive "$BLOG_BACKUP_DIR")"
-  [[ -n "$archive" ]] || error "$(t app.blog.restore.no_backups "$BLOG_BACKUP_DIR")"
-  verdict="$(backup_verify_latest_json "$BLOG_BACKUP_DIR" 'blog_*.tar.gz')"
-  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
-    unverified)
-      warn "$(t backup.verify.unverified "$(basename "$archive")")"
-      return 0
-      ;;
-  esac
-  if backup_verify_archive "$archive"; then
-    success "$(t backup.verify.verified "$(basename "$archive")" \
-      "$(backup_read_sha256 "${archive}.sha256")")"
-    return 0
-  fi
-  error "$(t backup.verify.failed "$(basename "$archive")")"
+  app_verify_latest_backup "$BLOG_BACKUP_DIR" 'blog_*.tar.gz'
 }
 
 _blog_archive_paths_are_safe() {
@@ -18668,6 +18671,18 @@ do_uninstall() {
   fi
   tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.tickflow.success.removed)"
+}
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config
+  step "$(t backup.verify.step)"
+  local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  require_safe_path "TICKFLOW_BACKUP_DIR" "$backup_dir"
+  [[ -d "$backup_dir" ]] || error "$(t backup.verify.no_backups "$backup_dir")"
+  app_verify_latest_backup "$backup_dir" 'tickflow-data-*.tar.gz'
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
@@ -19650,6 +19665,15 @@ do_uninstall() {
     info "$(t app.cpa_stack.info.kept_data "$CPAMP_DATA_DIR")"
   fi
   success "$(t app.cpa_stack.success.removed)"
+}
+
+do_verify() {
+  cpa_stack_show_banner
+  require_root "verify"
+  app_load_config
+  step "$(t backup.verify.step)"
+  require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
+  app_verify_latest_backup "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz'
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
 

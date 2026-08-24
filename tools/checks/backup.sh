@@ -1212,6 +1212,25 @@ check_binary_impls_have_verify_delegate() {
   done
 }
 
+# Custom-backup implementations must also expose do_verify, delegating the
+# verdict rendering to app_verify_latest_backup with their own archive globs.
+check_custom_impls_have_verify_delegate() {
+  local impl
+  for impl in install_newapi.sh install_sub2api.sh install_cyberstrikeai.sh \
+      install_vaultwarden.sh install_cpa_stack.sh install_tickflow.sh \
+      install_hugo_blog.sh; do
+    awk -v file="impl/$impl" '
+      /^do_verify\(\) \{/ { in_fn=1; next }
+      in_fn && /app_verify_latest_backup/ { saw=1 }
+      in_fn && /^\}/ {
+        if (!saw) { printf "%s do_verify must delegate to app_verify_latest_backup\n", file > "/dev/stderr"; exit 1 }
+        in_fn=0; saw=0
+      }
+      END { if (in_fn) { printf "%s unterminated do_verify\n", file > "/dev/stderr"; exit 1 } }
+    ' "impl/$impl" || return 1
+  done
+}
+
 # The blog implementation must write integrity metadata after publishing the
 # archive and before reporting success, and must provide its own do_verify.
 check_blog_backup_writes_integrity_metadata() {

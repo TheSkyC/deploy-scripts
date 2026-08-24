@@ -571,3 +571,15 @@ do_uninstall() {
   tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.tickflow.success.removed)"
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config
+  step "$(t backup.verify.step)"
+  local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  require_safe_path "TICKFLOW_BACKUP_DIR" "$backup_dir"
+  [[ -d "$backup_dir" ]] || error "$(t backup.verify.no_backups "$backup_dir")"
+  app_verify_latest_backup "$backup_dir" 'tickflow-data-*.tar.gz'
+}
