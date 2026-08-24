@@ -27,6 +27,25 @@ for the framework release archives produced by `tools/build-release.sh`.
 
 ### Added
 
+- Backup integrity metadata: every binary-app and blog backup now publishes a
+  `.sha256` sidecar and a single-line `manifest.json` (schema version, app,
+  archive name, sha256, creation time, installed version) next to the archive,
+  written atomically after the archive lands. Metadata write failures warn
+  without failing the backup itself.
+- New per-app `verify` action: recomputes the newest archive's checksum
+  against its sidecar/manifest and reports verified / failed / unverified.
+  Supported on all 16 apps (shared-lifecycle apps delegate to `bapp_verify`;
+  custom-backup apps delegate to the shared verdict renderer with their own
+  archive globs).
+- Shared restore lifecycle for binary-app data directories (`bapp_restore`):
+  picks the newest backup (or `<APP>_RESTORE_ARCHIVE` path inside the trusted
+  backup dir), verifies its checksum, rejects unsafe tar members (absolute
+  paths, `..`, backslashes), stops the service before swapping `DATA_DIR`
+  atomically, restarts, and rolls the previous data back if the service cannot
+  start on restored data. All nine shared-lifecycle apps expose it via
+  `do_restore`.
+- `status-json` backup projection gains an `integrity` field
+  (`verified|failed|unverified`) computed from the newest archive's metadata.
 - Opt-in strict port-conflict preflight: set `DEPLOY_FAIL_ON_PORT_CONFLICT=1`
   (or pass strict mode to `app_check_port_conflict`) so an occupied port aborts
   before downloads and service changes rather than failing at

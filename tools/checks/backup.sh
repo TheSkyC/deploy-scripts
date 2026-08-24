@@ -1231,6 +1231,41 @@ check_custom_impls_have_verify_delegate() {
   done
 }
 
+# Shared-lifecycle apps must expose restore through the shared lifecycle, and
+# bapp_restore must verify the archive before touching data, refuse unsafe tar
+# members, stop the service before replacing DATA_DIR, and roll back when the
+# service cannot start on restored data.
+check_shared_impls_have_restore_delegate() {
+  local impl
+  for impl in install_alist.sh install_beszel.sh install_filebrowser.sh \
+      install_frps.sh install_gitea.sh install_gotify.sh \
+      install_meilisearch.sh install_navidrome.sh install_ntfy.sh; do
+    awk -v file="impl/$impl" '
+      /^do_restore\(\) \{/ { in_fn=1; next }
+      in_fn && /bapp_restore/ { saw=1 }
+      in_fn && /^\}/ {
+        if (!saw) { printf "%s do_restore must delegate to bapp_restore\n", file > "/dev/stderr"; exit 1 }
+        in_fn=0; saw=0
+      }
+      END { if (in_fn) { printf "%s unterminated do_restore\n", file > "/dev/stderr"; exit 1 } }
+    ' "impl/$impl" || return 1
+  done
+  awk '
+    /^bapp_restore\(\)/ { in_fn=1; saw_verify=0; saw_members=0; saw_stop=0; saw_rollback=0; next }
+    in_fn && /backup_verify_archive "\$archive"/ { saw_verify=1 }
+    in_fn && /\*\x27\/\.\.\/\x27|restore\.invalid_archive/ { saw_members=1 }
+    in_fn && /systemctl stop "\$SERVICE_NAME" \|\| error/ { saw_stop=1 }
+    in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
+    in_fn && /^}$/ {
+      if (!(saw_verify && saw_members && saw_stop && saw_rollback)) {
+        print "bapp_restore must verify archive, reject unsafe members, stop service first, and roll back on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/binary_app.sh
+}
+
 # The blog implementation must write integrity metadata after publishing the
 # archive and before reporting success, and must provide its own do_verify.
 check_blog_backup_writes_integrity_metadata() {

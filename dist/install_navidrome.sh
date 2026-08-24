@@ -70,6 +70,15 @@ __deploy_i18n_message() {
     backup.verify.failed) echo "Backup verification FAILED: %s|备份校验失败：%s" ;;
     backup.verify.unverified) echo "No integrity metadata for: %s (created before manifest support; run a new backup to upgrade it)|缺少完整性元数据：%s（创建于 manifest 支持之前；请重新备份以升级）" ;;
     backup.verify.no_backups) echo "No backup archive found in %s|未在 %s 中找到备份归档" ;;
+    backup.restore.step) echo "Restore from backup|从备份恢复" ;;
+    backup.restore.using) echo "Restoring from backup: %s|正在从备份恢复：%s" ;;
+    backup.restore.no_backups) echo "No backup archive found in %s|未在 %s 中找到备份归档" ;;
+    backup.restore.invalid_archive) echo "Invalid or unsafe backup archive: %s|备份归档无效或不安全：%s" ;;
+    backup.restore.stop_failed) echo "Could not stop service %s before restore; aborting without changes.|停止服务 %s 失败，已中止且未做任何更改。" ;;
+    backup.restore.restored) echo "Data restored from %s; service restarted.|数据已从 %s 恢复，服务已重启。" ;;
+    backup.restore.start_failed_rollback) echo "Service failed to start after restore; rolling back to previous data.|恢复后服务启动失败，正在回滚到先前数据。" ;;
+    backup.restore.rollback_done) echo "Rollback complete; the previous data directory is intact.|回滚完成，原数据目录保持不变。" ;;
+    backup.restore.rollback_failed) echo "Rollback FAILED; the staged data remains at %s for manual recovery.|回滚失败，暂存数据保留在 %s 以便手动恢复。" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
@@ -4700,6 +4709,100 @@ bapp_verify() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   app_verify_latest_backup "$BACKUP_DIR" "${APP_ID}_*.tar.gz"
 }
+
+# Shared restore lifecycle for binary-app data directories. Selects the newest
+# archive (override with <APP>_RESTORE_ARCHIVE env, path must live inside the
+# trusted BACKUP_DIR), verifies its checksum before touching anything, stops
+# the service, swaps DATA_DIR atomically with a timestamped aside copy, then
+# restarts and rolls the data back if the service cannot come up.
+bapp_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _binary_app_derive_paths
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  local archive restore_env="${APP_ID^^}_RESTORE_ARCHIVE"
+  archive="${!restore_env:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$BACKUP_DIR"/${APP_ID}_*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$BACKUP_DIR" "${APP_ID}_*.tar.gz" || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  fi
+  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
+    error "$(t backup.verify.failed "$(basename "$archive")")"
+  fi
+  info "$(t backup.restore.using "$archive")"
+  if ! tar -tzf "$archive" >/dev/null 2>&1; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  local member_list extract_dir
+  member_list="$(tar -tzf "$archive")"
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+        ;;
+    esac
+  done <<< "$member_list"
+
+  systemctl stop "$SERVICE_NAME" || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
+  local data_parent data_base staged_aside restored=false
+  data_parent="$(dirname "$DATA_DIR")"
+  data_base="$(basename "$DATA_DIR")"
+  staged_aside="${DATA_DIR}.restore.$(date +%Y%m%d%H%M%S)"
+  if ! mv "$DATA_DIR" "$staged_aside"; then
+    systemctl start "$SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
+    mv "$staged_aside" "$DATA_DIR"
+    systemctl start "$SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if tar -xzf "$archive" -C "$extract_dir"; then
+    # Archives store either the bare payload (tar -C stage .) or a single
+    # top-level directory named after DATA_DIR (binary_app tar -C parent).
+    local payload="$extract_dir"
+    if [[ -d "${extract_dir}/${data_base}" ]]; then
+      payload="${extract_dir}/${data_base}"
+    fi
+    if mv "$payload" "$DATA_DIR"; then
+      restored=true
+    fi
+  fi
+  rm -rf "$extract_dir"
+  if [[ "$restored" != "true" ]]; then
+    rm -rf "$DATA_DIR"
+    mv "$staged_aside" "$DATA_DIR"
+    systemctl start "$SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  chown -R root:root "$DATA_DIR" 2>/dev/null || true
+  if systemctl start "$SERVICE_NAME"; then
+    wait_for_service "$SERVICE_NAME" 20 || true
+  fi
+  if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    warn "$(t backup.restore.start_failed_rollback)"
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    rm -rf "$DATA_DIR"
+    if mv "$staged_aside" "$DATA_DIR"; then
+      success "$(t backup.restore.rollback_done)"
+    else
+      warn "$(t backup.restore.rollback_failed "$staged_aside")"
+    fi
+    systemctl start "$SERVICE_NAME" 2>/dev/null || \
+      error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    error "$(t binary_app.error.update_failed "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)")"
+  fi
+  rm -rf "$staged_aside"
+  success "$(t backup.restore.restored "$(basename "$archive")")"
+  bapp_health_probe || true
+}
 _ba_prune_old_bins() {
   local -a old_bins=()
   local entry
@@ -5330,6 +5433,10 @@ do_backup() {
 
 do_verify() {
   bapp_verify
+}
+
+do_restore() {
+  bapp_restore
 }
 
 do_status() {

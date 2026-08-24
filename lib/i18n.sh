@@ -57,6 +57,15 @@ __deploy_i18n_message() {
     backup.verify.failed) echo "Backup verification FAILED: %s|备份校验失败：%s" ;;
     backup.verify.unverified) echo "No integrity metadata for: %s (created before manifest support; run a new backup to upgrade it)|缺少完整性元数据：%s（创建于 manifest 支持之前；请重新备份以升级）" ;;
     backup.verify.no_backups) echo "No backup archive found in %s|未在 %s 中找到备份归档" ;;
+    backup.restore.step) echo "Restore from backup|从备份恢复" ;;
+    backup.restore.using) echo "Restoring from backup: %s|正在从备份恢复：%s" ;;
+    backup.restore.no_backups) echo "No backup archive found in %s|未在 %s 中找到备份归档" ;;
+    backup.restore.invalid_archive) echo "Invalid or unsafe backup archive: %s|备份归档无效或不安全：%s" ;;
+    backup.restore.stop_failed) echo "Could not stop service %s before restore; aborting without changes.|停止服务 %s 失败，已中止且未做任何更改。" ;;
+    backup.restore.restored) echo "Data restored from %s; service restarted.|数据已从 %s 恢复，服务已重启。" ;;
+    backup.restore.start_failed_rollback) echo "Service failed to start after restore; rolling back to previous data.|恢复后服务启动失败，正在回滚到先前数据。" ;;
+    backup.restore.rollback_done) echo "Rollback complete; the previous data directory is intact.|回滚完成，原数据目录保持不变。" ;;
+    backup.restore.rollback_failed) echo "Rollback FAILED; the staged data remains at %s for manual recovery.|回滚失败，暂存数据保留在 %s 以便手动恢复。" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
