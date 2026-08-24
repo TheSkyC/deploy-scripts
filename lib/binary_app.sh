@@ -1114,8 +1114,8 @@ bapp_restore() {
     else
       warn "$(t backup.restore.rollback_failed "$staged_aside")"
     fi
-    systemctl start "$SERVICE_NAME" 2>/dev/null || \
-      error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    systemctl start "$SERVICE_NAME" \
+      || error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
     error "$(t binary_app.error.update_failed "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)")"
   fi
   rm -rf "$staged_aside"
