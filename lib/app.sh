@@ -436,8 +436,14 @@ app_backup_latest_archive_json() {
     printf '{"state":"unknown","last_success_at":null,"path":%s,"message":"cannot read backup timestamp"}' "$(app_json_string "$archive_name")"
     return
   fi
-  printf '{"state":"available","last_success_at":%s,"path":%s,"message":null}' \
-    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")"
+  local integrity="unverified"
+  if backup_verify_archive "$latest_archive" 2>/dev/null; then
+    integrity="verified"
+  elif [[ -f "${latest_archive}.sha256" ]]; then
+    integrity="failed"
+  fi
+  printf '{"state":"available","last_success_at":%s,"path":%s,"integrity":"%s","message":null}' \
+    "$(app_json_string "$last_success_at")" "$(app_json_string "$archive_name")" "$integrity"
 }
 
 # Full status-backup projection shared by every app: resolve the backup

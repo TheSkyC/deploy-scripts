@@ -1,0 +1,108 @@
+# Progress Log — deploy-scripts continuous maintenance
+
+Format per entry:
+- 日期 / Date
+- 状态 / Status: completed | blocked | in_progress
+- 成果 / Change: <描述>
+- 验证 / Verified: <命令与结果>
+- 提交 / Commit: <hash>
+
+## 2026-08-23
+- 状态 / Status: completed
+- 成果 / Change: 批次 A（第一组漂移修复与去重，5 项）：
+  1) 备份状态投影共享原语下沉 lib/app.sh —— app_conf_trusted_value /
+     app_backup_latest_archive_json / app_status_backup_json；8 处重复合一；
+     newapi 缺失的配置信任门（owner=root & mode 600/400）补齐，binary_app
+     软门静默忽略统一为显式硬门信号。净 -113 行。
+  2) cpa-stack 版本合并修复：双组件均未知时 merged installed/latest 由
+     "null/null" 字符串改为 JSON null，恢复 status-json 遗留契约
+     "version":null。
+  3) cyberstrikeai do_update 健康检查失败不再静默：新增本地化 warning
+     update_health_failed（含 journal 排查指引），测试收紧要求该警告存在。
+  4) 端口冲突预检严格模式：app_check_port_conflict 第三参 strict +
+     DEPLOY_FAIL_ON_PORT_CONFLICT=1 环境触发；占用端口在下载/改服务前便宜
+     中止，默认行为不变（warn-only）。README 记录。
+  5) CN 镜像 opt-in：PIP_INDEX_URL/GOPROXY 全局默认改为官方上游
+     （pypi.org / proxy.golang.org），DEPLOY_CN_MIRROR=1 才使用
+     tuna/goproxy.cn；显式 env 与已保存配置仍优先。README 记录。
+- 验证 / Verified: tools/verify.sh state=passed, update=passed,
+  dispatch=passed, guards 中唯一失败项 "check failed: fail_check" 为
+  check_run_checks_parallel_cleans_tmpdir 的预期内部输出（单独运行该检查
+  EXIT=0）；新增检查 check_state_backup_config_trust_gate /
+  check_port_conflict_strict_mode_aborts /
+  check_cyberstrikeai_mirrors_are_opt_in 单独运行均通过；
+  check_i18n_keys_are_consistent 通过。
+- 提交 / Commit: def583b, 36a4c6a, cc1385b, 15cb7ae, fd4490b
+
+## 2026-08-24
+- 状态 / Status: completed
+- 成果 / Change: 批次 B（杂项清理，2 项提交）：
+  1) B1 JSON 转义器统一：共享核心 __deploy_json_escape_unquoted 下沉
+     lib/operation.sh（先于 app.sh 加载、可独立 source），两个转义器均委托；
+     operation 记录此前缺 \b/\f/C0 转义导致控制字节产生非法 JSON 的缺陷修复；
+     新增 check_operation_json_escape_matches_app_json_string 等价性回归。
+  2) B2/B3 锁清理与文档：删除 5 个 impl 共 10 处误导性显式 release_lock
+     （exit handler 已自动释放）；新增 check_no_explicit_release_lock_calls
+     防回归；lib/lock.sh 文档化 fd7/8/9 三级锁方案与释放纪律；设计文档
+     central-status-and-self-update-design.md 状态 提案→已实现。
+- 验证 / Verified: verify.sh operation=passed, state=passed,
+  guards="Guards verification passed" (RC=0)；锁释放路径单独验证：
+  acquire→exit 经 exit handler 释放、release_lock 直接解锁 fd9 均通过。
+  注：guards 输出中的 "check failed: fail_check" 是
+  check_run_checks_parallel_cleans_tmpdir 内部故意失败探测的预期输出，
+  不影响退出码（单独运行该检查 rc=0）。
+- 提交 / Commit: c15fe06, 8018d36
+
+## 2026-08-24（续）
+- 状态 / Status: completed
+- 成果 / Change: 批次 B4：DEPLOY_APP_SPECS 注册表新增 capabilities 列
+  （backup/restore 逗号分隔 token），新增 deploy_app_has_capability 访问器；
+  manager_backup_capability 从"加载 impl 后 grep do_backup 源码找
+  unsupported_action"改为纯注册表查询——批量备份规划不再加载任何实现，
+  探测不再依赖 stub 文案。新增 check_app_registry_capabilities 锁定契约：
+  每个应用必须声明列、当前全部含 backup、token 形状校验、探测结果来自注册表。
+  blog 额外声明 restore（现有 restore 能力）。
+- 验证 / Verified: verify.sh dispatch="Dispatch verification passed"；
+  check_app_registry_capabilities / check_backup_all_dry_run 单独运行通过。
+- 提交 / Commit: 3f429f7
+
+## 2026-08-24（续 2）
+- 状态 / Status: completed
+- 成果 / Change: 批次 C1：补齐社区文件——新增 MIT LICENSE（公开仓库此前无协议
+  即保留所有权利，使用者无法安全使用/分叉/回馈）并在 README 增加 License 章节；
+  新增 SECURITY.md（支持版本=master、GitHub 私密安全通告报告路径、按设计而非
+  漏洞处理的部署特性：root:600 明文配置与 root-only 操作日志、安全审查应对照
+  的设计不变量：配置信任门/路径安全/原子写入/三级锁/下载校验和）。
+- 验证 / Verified: 纯文档变更；git commit 成功，工作区无残留。
+- 提交 / Commit: f94fe43
+
+## 2026-08-24（续 3）
+- 状态 / Status: completed
+- 成果 / Change: 批次 C2：新增 CHANGELOG.md（Keep a Changelog 格式，Unreleased
+  段记录本维护周期全部变更：备份投影信任门修复、cpa-stack null 合并修复、
+  CyberStrikeAI 健康警告、JSON 转义器统一、严格端口预检、CN 镜像 opt-in、
+  注册表 capabilities 列、锁清理、设计文档状态、社区文件与 6 个新守卫检查）。
+- 验证 / Verified: 纯文档变更；git commit 成功。
+- 提交 / Commit: 818aae9
+
+## 2026-08-24（续 4）
+- 状态 / Status: completed
+- 成果 / Change: 批次 C3：全量验证当前 HEAD（11 个提交后）。
+- 验证 / Verified: bash tools/verify.sh all → ALL_RC=0,
+  "Verification passed"，无失败检查（~330 项守卫全过）。
+- 提交 / Commit: （验证性运行，无新提交）
+
+## 后续候选推进项（循环评估，按价值/成本排序）
+- 杂项清理批次 B：统一 operation_json_escape 与 app_json_string（C0 控制
+  字符转义差距）；删除误导性显式 release_lock 调用（lock.sh exit handler
+  已自动释放）；文档化 fd 7/8/9 锁方案；更新 central-status-and-self-update-design.md 提案→已实现状态
+- DEPLOY_APP_SPECS 增加 capability 列替代 manager_backup grep 源码探测
+- ELF 校验 / 健康探测 / preflight_check 去重下沉 lib
+- 通知集成（ntfy/gotify 自举）+ deploy.sh notify-config + 更新/备份/失败事件推送
+- 备份 manifest + sha256 + verify 动作 + 全应用通用 restore
+- 社区文件：LICENSE / CHANGELOG.md / SECURITY.md / issue·PR 模板
+- 定时自动更新 schedule、export/import 迁移、compose 支持层（较大特性，
+  排在杂项与去重之后）
+
+## 阻塞项
+- 无（当前无仅用户可解的阻塞）

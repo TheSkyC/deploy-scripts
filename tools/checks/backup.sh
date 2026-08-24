@@ -1133,3 +1133,117 @@ PY
   rm -rf "$temp_root"
   return "$status"
 }
+
+# Behavioral round-trip for the shared integrity primitives: write a sidecar
+# + manifest for a real file, verify passes; flip one archive byte and verify
+# fails closed; a bare-digest sidecar is still accepted (cross-version
+# compatibility); an archive without metadata reports unverified.
+check_backup_integrity_primitives() {
+  local output
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf \"$temp_dir\"" EXIT
+    archive="$temp_dir/app_manual_20260101_000000.tar.gz"
+    printf "payload-bytes" > "$archive"
+
+    digest="$(backup_write_sha256 "$archive")" || exit 3
+    [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || exit 3
+
+    backup_write_manifest "$archive" "app" 1 "1.2.3" || exit 4
+
+    backup_verify_archive "$archive" || exit 5
+    [[ "$(backup_read_sha256 "$archive.sha256")" == "$digest" ]] || exit 6
+
+    manifest_digest="$(backup_manifest_field "$archive.manifest.json" sha256)" || exit 7
+    [[ "$manifest_digest" == "$digest" ]] || exit 7
+    manifest_app="$(backup_manifest_field "$archive.manifest.json" app)" || exit 8
+    [[ "$manifest_app" == "app" ]] || exit 8
+    manifest_version="$(backup_manifest_field "$archive.manifest.json" installed_version)" || exit 9
+    [[ "$manifest_version" == "1.2.3" ]] || exit 9
+
+    # Corrupt the archive: verification must fail.
+    printf "X" | dd of="$archive" bs=1 seek=0 conv=notrunc status=none
+    backup_verify_archive "$archive" 2>/dev/null && exit 10
+
+    # Bare-digest sidecar (no filename) stays compatible.
+    printf "payload-bytes" > "$archive"
+    printf "%s\n" "$digest" > "$archive.sha256"
+    backup_verify_archive "$archive" || exit 11
+
+    # Archive without sidecar must not verify.
+    rm -f "$archive.sha256" "$archive.manifest.json"
+    backup_verify_archive "$archive" 2>/dev/null && exit 12
+
+    # Latest-selection JSON verdicts.
+    verdict_json="$(backup_verify_latest_json "$temp_dir" "*_manual_*.tar.gz")"
+    [[ "$verdict_json" == *"\"state\":\"unverified\""* ]] || exit 13
+    backup_write_sha256 "$archive" >/dev/null || exit 14
+    backup_write_manifest "$archive" "app" 1 "1.2.3" || exit 14
+    verdict_json="$(backup_verify_latest_json "$temp_dir" "*_manual_*.tar.gz")"
+    [[ "$verdict_json" == *"\"state\":\"verified\""* ]] || exit 15
+    printf corrupted >> "$archive"
+    printf "%s  %s\n" "$digest" "$(basename "$archive")" > "$archive.sha256"
+    verdict_json="$(backup_verify_latest_json "$temp_dir" "*_manual_*.tar.gz")"
+    [[ "$verdict_json" == *"\"state\":\"failed\""* ]] || exit 16
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+# Every shared binary-app implementation must expose do_verify delegating to
+# bapp_verify, so `verify` reaches every app that can create backups through
+# the shared lifecycle. Blog carries its own custom do_verify.
+check_binary_impls_have_verify_delegate() {
+  local impl
+  for impl in install_alist.sh install_beszel.sh install_filebrowser.sh \
+      install_frps.sh install_gitea.sh install_gotify.sh \
+      install_meilisearch.sh install_navidrome.sh install_ntfy.sh; do
+    awk -v file="impl/$impl" '
+      /^do_verify\(\) \{/ { in_fn=1; next }
+      in_fn && /bapp_verify/ { saw=1 }
+      in_fn && /^\}/ {
+        if (!saw) { printf "%s do_verify must delegate to bapp_verify\n", file > "/dev/stderr"; exit 1 }
+        in_fn=0; saw=0
+      }
+      END { if (in_fn) { printf "%s unterminated do_verify\n", file > "/dev/stderr"; exit 1 } }
+    ' "impl/$impl" || return 1
+  done
+}
+
+# The blog implementation must write integrity metadata after publishing the
+# archive and before reporting success, and must provide its own do_verify.
+check_blog_backup_writes_integrity_metadata() {
+  awk '
+    /do_backup\(\)/ { in_backup=1; saw_sidecar=0; saw_manifest=0; next }
+    in_backup && /backup_write_sha256 "\$archive"/ { saw_sidecar=1 }
+    in_backup && /backup_write_manifest "\$archive"/ { saw_manifest=1 }
+    in_backup && /^}/ {
+      if (!(saw_sidecar && saw_manifest)) {
+        print "blog do_backup must write sha256 sidecar and manifest" > "/dev/stderr"
+        exit 1
+      }
+      in_backup=0
+    }
+  ' impl/install_hugo_blog.sh || return 1
+  grep -q '^do_verify() {' impl/install_hugo_blog.sh
+}
+
+# _ba_backup must write integrity metadata after the archive lands and log a
+# warning when it cannot, so silent corruption never looks like success.
+check_binary_app_backup_writes_integrity_metadata() {
+  awk '
+    /_ba_backup\(\)/ { in_fn=1; saw_sidecar=0; saw_manifest=0; saw_warn=0; next }
+    in_fn && /backup_write_sha256 "\$archive"/ { saw_sidecar=1 }
+    in_fn && /backup_write_manifest "\$archive"/ { saw_manifest=1 }
+    in_fn && /warn\.integrity_failed/ { saw_warn=1 }
+    in_fn && /^}/ {
+      if (!(saw_sidecar && saw_manifest && saw_warn)) {
+        print "_ba_backup must write sha256+manifest and warn on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/binary_app.sh
+}

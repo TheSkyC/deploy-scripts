@@ -82,6 +82,10 @@ do_backup() {
   bapp_backup
 }
 
+do_verify() {
+  bapp_verify
+}
+
 do_status() {
   bapp_status
 }
