@@ -317,3 +317,7 @@ The verification script checks:
 - No temporary bundled implementation files are left in `dist/`.
 - Shellcheck static analysis on source scripts (skipped when shellcheck is not installed).
 - Release scripts in `dist/` match the current source tree.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
