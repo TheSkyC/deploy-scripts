@@ -145,5 +145,50 @@ Format per entry:
   结果见下一条记录。
 - 提交 / Commit: e4b0c5b
 
+## 2026-08-24（续 7）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D3（P0 备份可靠性第三阶段：通用 restore 生命周期）：
+  1) 新增 bapp_restore（lib/binary_app.sh）：默认最新归档或
+     <APP>_RESTORE_ARCHIVE 覆盖（路径限制在可信备份目录内）；改动任何数据
+     前先校验 sha256；拒绝绝对路径/../反斜杠 tar 成员；停服务后原子换
+     DATA_DIR（旧数据带时间戳挪走）；重启+健康探测；服务起不来时完整回滚
+     数据并重启原服务。
+  2) 9 个共享生命周期 impl 全部暴露 do_restore 委托。
+  3) 新增守卫 check_shared_impls_have_restore_delegate：同时锁定 per-impl
+     委托与 verify/reject/stop/rollback 四要素结构。
+  4) CHANGELOG Unreleased 段记录 D1–D3 全部能力。
+- 验证 / Verified: 确定性重建 dist 后 verify.sh guards 报告 0 个失败检查
+  （FAILED_CHECKS=0）；改动文件 bash -n + shellcheck 通过。
+- 提交 / Commit: c24b176
+
+## 2026-08-24（续 8）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D3 修复：bapp_restore 回滚路径的 systemctl start
+  去掉 2>/dev/null 抑制——check_cyberstrikeai_update_rollbacks_report_
+  restart_failures 扫描整个打包产物，禁止任何吞掉重启诊断的回滚路径；
+  恢复失败时操作者现在能看到服务起不来的真实原因。
+- 验证 / Verified: HEAD 上 bash tools/verify.sh all 通过（脚本确认
+  "Verification passed" 路径执行完毕）。
+- 提交 / Commit: 6ee89a3
+
+## P0 备份可靠性体系进度总览
+- [x] 为备份生成 manifest.json（D1）
+- [x] 为备份生成并保存 SHA-256（D1）
+- [x] 增加 verify 动作（D1 共享生命周期 + D2 全部 16 应用）
+- [x] 在 status-json 中显示备份校验状态（D1 integrity 字段）
+- [x] 建立通用 restore 生命周期（D3 bapp_restore，9 个共享应用）
+- [ ] 统一备份格式和目录规范（部分：新归档已带元数据；存量归档为
+      unverified 状态可见；cron 备份脚本尚未写 sidecar——下一批次）
+- [ ] 为所有支持备份的应用补齐恢复能力（6 个自定义备份应用的 restore
+      待逐个适配其数据布局——后续批次）
+- [ ] 增加 cross-version/损坏/路径穿越测试（原语行为检查已含损坏与兼容
+      用例；restore 行为级测试待补）
+- [x] 守卫：check_backup_integrity_primitives /
+      check_binary_impls_have_verify_delegate /
+      check_custom_impls_have_verify_delegate /
+      check_shared_impls_have_restore_delegate /
+      check_blog_backup_writes_integrity_metadata /
+      check_binary_app_backup_writes_integrity_metadata
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
