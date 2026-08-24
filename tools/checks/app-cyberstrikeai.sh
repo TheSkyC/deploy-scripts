@@ -206,6 +206,8 @@ check_cyberstrikeai_booleans_are_validated() {
 check_cyberstrikeai_mirrors_are_opt_in() {
   "$BASH_BIN" -c '
     set -euo pipefail
+    # operation.sh first: app.sh delegates its JSON escaper core there.
+    source "$1/lib/operation.sh"
     source "$1/lib/app.sh"
     source "$1/lib/i18n.sh"
     source "$1/lib/logging.sh"

@@ -416,6 +416,25 @@ app_binary_backup_current() {
 
 # ----- lib/lock.sh -----
 
+# Deployment locking uses dedicated file descriptors with flock:
+#
+#   fd 7 — framework self-update lock   (lib/self_update.sh)
+#   fd 8 — manager-level operation lock (lib/manager_update.sh, shared by
+#          update-all and backup-all through manager_update_acquire_lock)
+#   fd 9 — per-app deployment lock      (acquire_lock below; every do_* action)
+#
+# The three levels nest deliberately: a manager batch holds fd 8 for the whole
+# run while each app action takes and releases fd 9, and self-update refuses to
+# run while any of them is active. Distinct fds keep the scopes independent —
+# an app lock must never release the manager lock.
+#
+# Release discipline: acquire_lock registers release_lock on the shared exit
+# handler stack (deploy_add_exit_handler), so the lock is always freed on
+# normal exit, error, or signal — do NOT call release_lock explicitly at the
+# end of an action; that is dead code and releases early. manager_update.sh
+# and self_update.sh hold their locks across multiple app actions, so they
+# release explicitly via their own *_release_lock helpers when the batch ends.
+
 declare -ga __DEPLOY_EXIT_HANDLERS=()
 
 deploy_add_exit_handler() {
@@ -11929,7 +11948,6 @@ do_backup() {
     warn "$(t app.newapi.warn.no_backups)"
   fi
   echo ""
-  release_lock
 }
 do_status() {
   show_banner
@@ -13538,7 +13556,6 @@ do_backup() {
       info "$(t app.sub2api.info.cleaned_old_backups "$_cleaned" "$_keep_days")"
     fi
   fi
-  release_lock
   success "$(t app.sub2api.success.backup_done "$BACKUP_DIR")"
 }
 do_status() {
@@ -15386,7 +15403,6 @@ do_backup() {
   if [[ "$_backup_failed" -ne 0 ]]; then
     error "$(t app.vaultwarden.error.manual_backup_failed)"
   fi
-  release_lock
 }
 do_status() {
   local DB_SIZE CERT_PATH EXPIRY DAYS HTTP_CODE
@@ -16488,7 +16504,6 @@ do_install() {
     _install_summary_state="pending"
   fi
   print_summary "$_install_summary_state"
-  release_lock
 }
 do_backup() {
   show_banner
@@ -16505,7 +16520,6 @@ do_backup() {
     printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
   done < <(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\0' 2>/dev/null \
     | sort -z -rn | head -z -n 10) || true
-  release_lock
 }
 do_update() {
   show_banner
@@ -16584,7 +16598,6 @@ do_update() {
   if [[ $_cleaned_old -gt 0 ]]; then
     info "$(t app.cyberstrikeai.info.cleaned_old_binaries "$_cleaned_old")"
   fi
-  release_lock
 }
 do_status() {
   show_banner
@@ -16764,7 +16777,6 @@ do_uninstall() {
   fi
   echo ""
   success "$(t app.cyberstrikeai.success.uninstalled)"
-  release_lock
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
@@ -18377,7 +18389,6 @@ do_install() {
   fi
   app_save_config
   _print_summary "$state"
-  release_lock
 }
 
 do_update() {
@@ -18404,7 +18415,6 @@ do_update() {
   fi
   app_save_config
   _print_summary "$state"
-  release_lock
 }
 
 do_backup() {
@@ -18436,7 +18446,6 @@ do_backup() {
     error "$(t app.tickflow.backup.error_archive "$archive")"
   fi
   success "$(t app.tickflow.backup.success "$archive")"
-  release_lock
 }
 
 do_status() {

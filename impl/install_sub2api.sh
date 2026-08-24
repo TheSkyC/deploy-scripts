@@ -1376,7 +1376,6 @@ do_backup() {
       info "$(t app.sub2api.info.cleaned_old_backups "$_cleaned" "$_keep_days")"
     fi
   fi
-  release_lock
   success "$(t app.sub2api.success.backup_done "$BACKUP_DIR")"
 }
 do_status() {

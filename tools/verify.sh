@@ -490,6 +490,7 @@ main() {
       check_managed_paths_are_validated
       check_manual_backup_retention_is_normalized
       check_mutating_actions_acquire_locks
+      check_no_explicit_release_lock_calls
       check_netfilter_persistent_save_reports_failures
       check_newapi_dependency_failures_are_reported
       check_newapi_enable_failures_are_reported

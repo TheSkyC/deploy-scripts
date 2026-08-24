@@ -1,6 +1,6 @@
 # 中控状态中心与脚本自更新系统：详细设计
 
-- **状态**：提案
+- **状态**：已实现（原提案；状态中心 `status-all`/`problems`/`health-all`、操作记录、批量更新/备份与自更新流程均已落地，见 `lib/state.sh`、`lib/operation.sh`、`lib/manager_*.sh`、`lib/self_update.sh` 与对应 `tools/checks/` 验证）
 - **作者**：Codex
 - **日期**：2026-08-20
 - **适用仓库**：`deploy-scripts`

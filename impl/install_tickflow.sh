@@ -399,7 +399,6 @@ do_install() {
   fi
   app_save_config
   _print_summary "$state"
-  release_lock
 }
 
 do_update() {
@@ -426,7 +425,6 @@ do_update() {
   fi
   app_save_config
   _print_summary "$state"
-  release_lock
 }
 
 do_backup() {
@@ -458,7 +456,6 @@ do_backup() {
     error "$(t app.tickflow.backup.error_archive "$archive")"
   fi
   success "$(t app.tickflow.backup.success "$archive")"
-  release_lock
 }
 
 do_status() {

@@ -437,6 +437,9 @@ check_port_listening_process_behavior() {
 check_app_json_string_escapes_controls() {
   "$BASH_BIN" -c '
     set -euo pipefail
+    # app_json_string delegates its escaping to the shared core in operation.sh;
+    # source both exactly as lib/core.sh orders them.
+    source "$1/lib/operation.sh"
     source "$1/lib/app.sh"
     out="$(app_json_string "$(printf "a\tb\nc\rd\x08e\x0cf")")"
     [[ "$out" == "\"a\\tb\\nc\\rd\\be\\ff\"" ]] \

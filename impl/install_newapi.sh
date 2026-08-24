@@ -800,7 +800,6 @@ do_backup() {
     warn "$(t app.newapi.warn.no_backups)"
   fi
   echo ""
-  release_lock
 }
 do_status() {
   show_banner

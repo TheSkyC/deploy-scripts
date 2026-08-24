@@ -1529,7 +1529,6 @@ do_backup() {
   if [[ "$_backup_failed" -ne 0 ]]; then
     error "$(t app.vaultwarden.error.manual_backup_failed)"
   fi
-  release_lock
 }
 do_status() {
   local DB_SIZE CERT_PATH EXPIRY DAYS HTTP_CODE

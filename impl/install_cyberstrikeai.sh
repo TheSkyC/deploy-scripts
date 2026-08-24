@@ -880,7 +880,6 @@ do_install() {
     _install_summary_state="pending"
   fi
   print_summary "$_install_summary_state"
-  release_lock
 }
 do_backup() {
   show_banner
@@ -897,7 +896,6 @@ do_backup() {
     printf '  %-70s %s\n' "$(basename "$file")" "$(du -sh "$file" 2>/dev/null | awk '{print $1}' || t status.unknown)" >&2
   done < <(find "$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -printf '%T@ %p\0' 2>/dev/null \
     | sort -z -rn | head -z -n 10) || true
-  release_lock
 }
 do_update() {
   show_banner
@@ -976,7 +974,6 @@ do_update() {
   if [[ $_cleaned_old -gt 0 ]]; then
     info "$(t app.cyberstrikeai.info.cleaned_old_binaries "$_cleaned_old")"
   fi
-  release_lock
 }
 do_status() {
   show_banner
@@ -1156,5 +1153,4 @@ do_uninstall() {
   fi
   echo ""
   success "$(t app.cyberstrikeai.success.uninstalled)"
-  release_lock
 }

@@ -271,6 +271,18 @@ check_mutating_actions_acquire_locks() {
   }
 }
 
+# acquire_lock registers release_lock on the shared exit-handler stack, so an
+# explicit release_lock call at the end of a do_* action is dead code — and a
+# misleading one: it implies the lock would leak without it, and it releases
+# early if a caller ever adds a second phase after it. Locks are released only
+# by the exit handler.
+check_no_explicit_release_lock_calls() {
+  if grep -R -nE '^[[:space:]]*release_lock$' impl/*.sh apps/*.sh 2>/dev/null; then
+    echo "Explicit release_lock calls are dead code: acquire_lock registers release via deploy_add_exit_handler. Remove them." >&2
+    return 1
+  fi
+}
+
 check_update_backs_up_before_stop() {
   local file
   for file in impl/install_newapi.sh impl/install_sub2api.sh; do
