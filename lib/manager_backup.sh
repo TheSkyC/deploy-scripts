@@ -5,18 +5,15 @@ MANAGER_BACKUP_USAGE="Usage: deploy.sh backup-all [--dry-run] [--yes] [--json] [
 manager_backup_print_usage() { echo "$MANAGER_BACKUP_USAGE" >&2; }
 
 manager_backup_capability() {
-  local app_id="$1" body
-  manager_load_app "$app_id" || return 1
-  load_app_impl || return 1
-  if ! declare -f do_backup >/dev/null 2>&1; then
-    printf unsupported
-    return 0
-  fi
-  body="$(declare -f do_backup)"
-  if [[ "$body" == *unsupported_action* ]]; then
-    printf unsupported
-  else
+  local app_id="$1"
+  # The registry's capabilities column is the source of truth; consulting it
+  # avoids loading the app implementation just to plan a batch (the previous
+  # probe grepped do_backup's source for "unsupported_action", which broke
+  # whenever the stub wording changed and cost a full impl load per app).
+  if deploy_app_has_capability "$app_id" backup; then
     printf supported
+  else
+    printf unsupported
   fi
 }
 

@@ -336,6 +336,7 @@ main() {
       check_manager_list
       check_manager_menu_shortcuts
       check_app_registry_metadata
+      check_app_registry_capabilities
       check_blog_localized_defaults
       check_app_localized_descriptions
       echo "Dispatch verification passed"

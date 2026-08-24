@@ -179,6 +179,63 @@ check_manager_list() {
   expect_manager_list_output dist/deploy.sh " list "
 }
 
+# The registry's capabilities column is the source of truth for batch backup
+# planning: every registered app must declare its capabilities explicitly, and
+# manager_backup_capability must consult the registry instead of grepping the
+# implementation source for "unsupported_action".
+check_app_registry_capabilities() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    # manager_backup_capability needs the lib set below; registry first.
+    source "$1/lib/app_registry.sh"
+    source "$1/lib/i18n.sh"
+    source "$1/lib/logging.sh"
+    source "$1/lib/fs.sh"
+    source "$1/lib/operation.sh"
+    source "$1/lib/state.sh"
+    source "$1/lib/manager_backup.sh"
+
+    [[ "${#DEPLOY_APP_IDS[@]}" -eq "${#DEPLOY_APP_CAPABILITIES[@]}" ]] || {
+      echo "Registry must define a capabilities column for every app." >&2
+      exit 1
+    }
+
+    for app_id in "${DEPLOY_APP_IDS[@]}"; do
+      caps="$(deploy_app_metadata_for "$app_id" capabilities)" || {
+        echo "Missing capabilities for ${app_id}." >&2
+        exit 1
+      }
+      # Every app currently supports real backups; an empty column means the
+      # author forgot to declare it.
+      [[ -n "$caps" ]] || { echo "${app_id}: capabilities must be declared" >&2; exit 1; }
+      case ",${caps}," in
+        *,backup,*) : ;;
+        *) echo "${app_id}: missing backup capability" >&2; exit 1 ;;
+      esac
+      # Capability tokens must be lowercase identifiers.
+      IFS=","
+      for cap in $caps; do
+        [[ "$cap" =~ ^[a-z][a-z0-9_-]*$ ]] || {
+          echo "${app_id}: invalid capability token: ${cap}" >&2
+          exit 1
+        }
+      done
+    done
+
+    # Accessor semantics.
+    deploy_app_has_capability newapi backup || { echo "newapi must have backup" >&2; exit 1; }
+    deploy_app_has_capability blog restore || { echo "blog must have restore" >&2; exit 1; }
+    if deploy_app_has_capability newapi restore; then
+      echo "newapi must not declare restore yet" >&2
+      exit 1
+    fi
+
+    # manager_backup_capability must come from the registry, not source probing.
+    [[ "$(manager_backup_capability newapi)" == supported ]] || { echo "capability probe must report supported from registry" >&2; exit 1; }
+    exit 0
+  ' _ "$ROOT_DIR"
+}
+
 check_app_registry_metadata() {
   "$BASH_BIN" -c '
     source lib/app_registry.sh
