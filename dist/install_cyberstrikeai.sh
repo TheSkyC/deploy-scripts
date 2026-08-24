@@ -4698,25 +4698,7 @@ bapp_verify() {
   app_load_config _binary_app_derive_paths
   step "$(t backup.verify.step)"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  local verdict
-  verdict="$(backup_verify_latest_json "$BACKUP_DIR" "${APP_ID}_*.tar.gz")"
-  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
-    missing)
-      info "$(t backup.verify.no_backups "$BACKUP_DIR")"
-      return 0
-      ;;
-    unverified)
-      warn "$(t backup.verify.unverified "$(state_json_field "$verdict" archive)")"
-      return 0
-      ;;
-  esac
-  if [[ "$(state_json_field "$verdict" state 2>/dev/null || true)" == "verified" ]]; then
-    success "$(t backup.verify.verified \
-      "$(state_json_field "$verdict" archive)" \
-      "$(backup_read_sha256 "$BACKUP_DIR/$(state_json_field "$verdict" archive)".sha256)")"
-    return 0
-  fi
-  error "$(t backup.verify.failed "$(state_json_field "$verdict" archive)")"
+  app_verify_latest_backup "$BACKUP_DIR" "${APP_ID}_*.tar.gz"
 }
 _ba_prune_old_bins() {
   local -a old_bins=()
@@ -6926,4 +6908,13 @@ do_uninstall() {
   fi
   echo ""
   success "$(t app.cyberstrikeai.success.uninstalled)"
+}
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _CSAI_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  app_verify_latest_backup "$BACKUP_DIR" 'cyberstrike-ai_*.tar.gz'
 }

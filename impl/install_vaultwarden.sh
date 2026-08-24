@@ -1745,3 +1745,12 @@ do_uninstall() {
   fi
   echo ""
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _VW_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  app_verify_latest_backup "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz'
+}

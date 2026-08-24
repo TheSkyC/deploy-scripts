@@ -664,6 +664,7 @@ main() {
       check_backup_all_executes_serially_and_records_manager_operation
       check_backup_integrity_primitives
       check_binary_impls_have_verify_delegate
+      check_custom_impls_have_verify_delegate
       check_blog_backup_writes_integrity_metadata
       check_binary_app_backup_writes_integrity_metadata
       check_batch_target_selection_is_local_only

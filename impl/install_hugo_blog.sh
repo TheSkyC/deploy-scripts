@@ -1002,22 +1002,7 @@ do_verify() {
   step "$(t backup.verify.step)"
   require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
   [[ -d "$BLOG_BACKUP_DIR" ]] || error "$(t app.blog.restore.no_backups "$BLOG_BACKUP_DIR")"
-  local archive verdict
-  archive="$(_blog_latest_backup_archive "$BLOG_BACKUP_DIR")"
-  [[ -n "$archive" ]] || error "$(t app.blog.restore.no_backups "$BLOG_BACKUP_DIR")"
-  verdict="$(backup_verify_latest_json "$BLOG_BACKUP_DIR" 'blog_*.tar.gz')"
-  case "$(state_json_field "$verdict" state 2>/dev/null || true)" in
-    unverified)
-      warn "$(t backup.verify.unverified "$(basename "$archive")")"
-      return 0
-      ;;
-  esac
-  if backup_verify_archive "$archive"; then
-    success "$(t backup.verify.verified "$(basename "$archive")" \
-      "$(backup_read_sha256 "${archive}.sha256")")"
-    return 0
-  fi
-  error "$(t backup.verify.failed "$(basename "$archive")")"
+  app_verify_latest_backup "$BLOG_BACKUP_DIR" 'blog_*.tar.gz'
 }
 
 _blog_archive_paths_are_safe() {

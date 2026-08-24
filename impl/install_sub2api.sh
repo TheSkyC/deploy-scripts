@@ -1689,3 +1689,12 @@ do_uninstall() {
   echo -e "    ${CYAN}sudo -u postgres psql -c 'DROP USER ${PG_USER};'${NC}"
   echo ""
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _SUB2API_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  app_verify_latest_backup "$BACKUP_DIR" 'sub2api_*.tar.gz' 'sub2api_db_*.sql.gz'
+}

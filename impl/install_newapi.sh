@@ -1027,3 +1027,12 @@ do_uninstall() {
   fi
   echo ""
 }
+
+do_verify() {
+  show_banner
+  require_root "verify"
+  app_load_config _NEWAPI_DERIVE_PATHS
+  step "$(t backup.verify.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  app_verify_latest_backup "$BACKUP_DIR" 'new-api_*.tar.gz'
+}
