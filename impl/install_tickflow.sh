@@ -583,3 +583,100 @@ do_verify() {
   [[ -d "$backup_dir" ]] || error "$(t backup.verify.no_backups "$backup_dir")"
   app_verify_latest_backup "$backup_dir" 'tickflow-data-*.tar.gz'
 }
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
+  local backup_dir="${TICKFLOW_INSTALL_DIR}-backups"
+  require_safe_path "TICKFLOW_BACKUP_DIR" "$backup_dir"
+  [[ -d "$backup_dir" ]] || error "$(t backup.restore.no_backups "$backup_dir")"
+  local archive
+  archive="${TICKFLOW_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$backup_dir"/tickflow-data-*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$backup_dir" 'tickflow-data-*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$backup_dir")"
+  fi
+  # The archive holds exactly the three members do_backup stores: data/,
+  # tiers.yaml, .env — all relative to INSTALL_DIR.
+  local member_list member found_data=false found_env=false found_tiers=false
+  if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+        ;;
+      data|data/*) found_data=true ;;
+      .env) found_env=true ;;
+      tiers.yaml) found_tiers=true ;;
+    esac
+  done <<< "$member_list"
+  if ! [[ "$found_data" || "$found_env" || "$found_tiers" ]]; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+  fi
+  info "$(t backup.restore.using "$archive")"
+
+  systemctl stop "$TICKFLOW_SERVICE_NAME" \
+    || error "$(t backup.restore.stop_failed "$TICKFLOW_SERVICE_NAME")"
+  # Aside-copy each existing target so a failed extraction rolls back cleanly.
+  local aside_dir stamp target
+  stamp="$(date +%Y%m%d%H%M%S)"
+  if ! aside_dir=$(mktemp -d "${TICKFLOW_INSTALL_DIR}/.restore-aside.XXXXXX"); then
+    systemctl start "$TICKFLOW_SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  for target in data tiers.yaml .env; do
+    if [[ -e "${TICKFLOW_INSTALL_DIR}/${target}" ]]; then
+      mv "${TICKFLOW_INSTALL_DIR}/${target}" "${aside_dir}/${target}.restore.${stamp}" \
+        || { rm -rf "$aside_dir"; systemctl start "$TICKFLOW_SERVICE_NAME" || true; error "$(t backup.restore.invalid_archive "$archive")"; }
+    fi
+  done
+  local extract_ok=true
+  tar -xzf "$archive" -C "$TICKFLOW_INSTALL_DIR" >&2 || extract_ok=false
+  if [[ "$extract_ok" != "true" ]]; then
+    for target in data tiers.yaml .env; do
+      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
+        rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"
+        mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" 2>/dev/null || true
+      fi
+    done
+    rm -rf "$aside_dir"
+    systemctl start "$TICKFLOW_SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  chown -R root:root "$TICKFLOW_INSTALL_DIR/data" 2>/dev/null || true
+  rm -rf "$aside_dir"
+  if systemctl start "$TICKFLOW_SERVICE_NAME"; then
+    wait_for_service "$TICKFLOW_SERVICE_NAME" 20 || true
+  fi
+  if ! systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME"; then
+    warn "$(t backup.restore.start_failed_rollback)"
+    systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null || true
+    for target in data tiers.yaml .env; do
+      rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"
+    done
+    local rolled_back=false
+    for target in data tiers.yaml .env; do
+      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
+        mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" && rolled_back=true
+      fi
+    done
+    if [[ "$rolled_back" == "true" ]]; then
+      success "$(t backup.restore.rollback_done)"
+    else
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+    fi
+    systemctl start "$TICKFLOW_SERVICE_NAME" \
+      || error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
+    error "$(t binary_app.error.update_failed "$(systemctl is-active "$TICKFLOW_SERVICE_NAME" 2>/dev/null || echo unknown)")"
+  fi
+  success "$(t backup.restore.restored "$(basename "$archive")")"
+}
