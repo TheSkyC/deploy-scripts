@@ -256,5 +256,29 @@ Format per entry:
   已知预期 fail_check；HEAD verify all 见下一条。
 - 提交 / Commit: b9bdc45
 
+## 2026-08-25（续 4）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D8（P0 备份可靠性第八阶段：restore 行为级测试）：
+  新守卫 check_backup_restore_data_dir_lifecycle 用 stub systemctl 跑
+  backup_restore_data_dir 四场景：干净恢复（payload 替换+服务重启）、损坏
+  归档在任何改动前拒绝、绝对路径成员被扫描拒绝、服务无法启动触发完整数据
+  回滚。P0「跨版本/损坏/路径穿越测试」达成。
+- 验证 / Verified: 守卫单独运行通过（4 场景全过）；guards 全套仅剩已知
+  预期 fail_check；HEAD verify all 见下一条。
+- 提交 / Commit: f41b69f
+
+## P0 备份可靠性体系进度总览（更新于批次 D8 后）
+- [x] 为备份生成 manifest.json（D1）
+- [x] 为备份生成并保存 SHA-256（D1 手动 + D4 cron）
+- [x] 增加 verify 动作（D1/D2，16/16 应用）
+- [x] 在 status-json 中显示备份校验状态（D1 integrity 字段）
+- [x] 建立通用 restore 生命周期（D3 bapp_restore → D5 共享
+      backup_restore_data_dir）
+- [x] 为所有支持备份的应用补齐恢复能力（D3–D7，16/16 应用 do_restore）
+- [x] 增加跨版本/损坏/路径穿越测试（D1 原语回路 + D8 restore 行为级四场景）
+- [x] 统一备份格式和目录规范（新归档全部带 sha256+manifest 元数据；
+      存量归档以 unverified 状态可见）
+- P0 八项全部完成。
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
