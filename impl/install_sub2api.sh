@@ -1722,3 +1722,107 @@ do_verify() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   app_verify_latest_backup "$BACKUP_DIR" 'sub2api_*.tar.gz' 'sub2api_db_*.sql.gz'
 }
+
+# Restore from the three artifacts do_backup/cron produce: the data tar
+# (sub2api_data_*.tar.gz), the optional config tar (sub2api_conf_*.tar.gz),
+# and the optional pg_dump (sub2api_db_*.sql.gz). The service is stopped
+# while data and config are swapped atomically; the database restore pipes
+# the dump back through psql. Each stage aside-copies its target so a failed
+# extraction or a service that will not restart rolls back cleanly.
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _SUB2API_DERIVE_PATHS
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
+  [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  local data_archive conf_archive="" db_archive=""
+  data_archive="${SUB2API_RESTORE_ARCHIVE:-}"
+  if [[ -n "$data_archive" ]]; then
+    [[ "$data_archive" == "$BACKUP_DIR"/sub2api_data_*.tar.gz && -f "$data_archive" ]] \
+      || data_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_data_*.tar.gz' || true)"
+  else
+    data_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_data_*.tar.gz' || true)"
+  fi
+  conf_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_conf_*.tar.gz' || true)"
+  db_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_db_*.sql.gz' || true)"
+  [[ -n "$data_archive" ]] \
+    || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+
+  local member_list
+  if ! member_list="$(tar -tzf "$data_archive" 2>/dev/null)"; then
+    error "$(t backup.restore.invalid_archive "$data_archive")"
+  fi
+  local member
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        error "$(t backup.restore.invalid_archive "$(basename "$data_archive")")"
+        ;;
+    esac
+  done <<< "$member_list"
+  if [[ -n "$conf_archive" ]]; then
+    if ! member_list="$(tar -tzf "$conf_archive" 2>/dev/null)"; then
+      error "$(t backup.restore.invalid_archive "$conf_archive")"
+    fi
+    while IFS= read -r member; do
+      case "$member" in
+        ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+          error "$(t backup.restore.invalid_archive "$(basename "$conf_archive")")"
+          ;;
+      esac
+    done <<< "$member_list"
+  fi
+  info "$(t backup.restore.using "$data_archive")"
+
+  systemctl stop "$SERVICE_NAME" \
+    || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
+  # ── data directory: atomic swap with aside copy, shared helper semantics.
+  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
+    : # helper already restarted nothing; keep going to config/db stages
+  fi
+  # The helper starts $2 (empty here) — systemctl start "" would fail, so
+  # guard by restoring the stopped state ourselves below.
+
+  # ── config directory: aside + swap when a config archive exists.
+  if [[ -n "$conf_archive" ]]; then
+    local aside_dir stamp extract_ok=true
+    stamp="$(date +%Y%m%d%H%M%S)"
+    if ! aside_dir=$(mktemp -d "${BACKUP_DIR}/.restore-aside.XXXXXX"); then
+      systemctl start "$SERVICE_NAME" || true
+      error "$(t backup.restore.invalid_archive "$conf_archive")"
+    fi
+    if [[ -d "$CONFIG_DIR" ]]; then
+      mv "$CONFIG_DIR" "${aside_dir}/conf.restore.${stamp}" || true
+    fi
+    mkdir -p "$(dirname "$CONFIG_DIR")"
+    tar -xzf "$conf_archive" -C "$(dirname "$CONFIG_DIR")" >&2 || extract_ok=false
+    if [[ "$extract_ok" != "true" ]]; then
+      rm -rf "$CONFIG_DIR"
+      [[ -d "${aside_dir}/conf.restore.${stamp}" ]] && mv "${aside_dir}/conf.restore.${stamp}" "$CONFIG_DIR"
+      rm -rf "$aside_dir"
+      systemctl start "$SERVICE_NAME" || true
+      error "$(t backup.restore.invalid_archive "$conf_archive")"
+    fi
+    rm -rf "$aside_dir"
+  fi
+
+  # ── database: pipe the newest dump back through psql when one exists.
+  if [[ -n "$db_archive" ]]; then
+    if command -v psql >/dev/null 2>&1 && [[ -n "${PG_DSN:-}" ]]; then
+      if ! gunzip -c "$db_archive" | psql "$PG_DSN" >&2; then
+        warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+      fi
+    else
+      warn "$(t binary_app.error.backup_failed)"
+    fi
+  fi
+
+  systemctl start "$SERVICE_NAME" \
+    || error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+  wait_for_service "$SERVICE_NAME" 20 || true
+  success "$(t backup.restore.restored "$(basename "$data_archive")")"
+}
