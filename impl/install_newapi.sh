@@ -321,6 +321,14 @@ if tar -czf "${ARCHIVE_TMP}" \
     -C "$(dirname "${DATA_DIR}")" "$(basename "${DATA_DIR}")" 2>&1 | \
     while IFS= read -r line; do _log "[TAR] ${line}"; done; then
   if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+    # Integrity sidecar: bare digest is enough here; verify accepts it.
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
+      chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
+    elif command -v shasum >/dev/null 2>&1; then
+      shasum -a 256 "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
+      chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
+    fi
     SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
     _log "$(printf "$MSG_BACKUP_OK" "$ARCHIVE" "$SIZE")"
   else

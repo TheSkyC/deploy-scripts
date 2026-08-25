@@ -803,6 +803,14 @@ if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
       done
     ) | gzip > "${PG_DUMP_TMP}"; then
     if mv "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"; then
+      # Integrity sidecar for the database dump.
+      if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${PG_DUMP_FILE}" | awk '{print $1"  "$(NF)}' > "${PG_DUMP_FILE}.sha256" || true
+        chmod 600 "${PG_DUMP_FILE}.sha256" 2>/dev/null || true
+      elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "${PG_DUMP_FILE}" | awk '{print $1"  "$(NF)}' > "${PG_DUMP_FILE}.sha256" || true
+        chmod 600 "${PG_DUMP_FILE}.sha256" 2>/dev/null || true
+      fi
       DB_SIZE=$(du -sh "${PG_DUMP_FILE}" 2>/dev/null | awk '{print $1}')
       _log "$(printf "$MSG_PG_DUMP_OK" "$PG_DUMP_FILE" "$DB_SIZE")"
     else
@@ -834,6 +842,14 @@ if [[ -d "${CONFIG_DIR}" ]]; then
       -C "$(dirname "${CONFIG_DIR}")" "$(basename "${CONFIG_DIR}")" 2>&1 | \
       while IFS= read -r line; do _log "[TAR-CONF] ${line}"; done; then
     if mv "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"; then
+      # Integrity sidecar for the config archive.
+      if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${EXTRA_CONF_ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${EXTRA_CONF_ARCHIVE}.sha256" || true
+        chmod 600 "${EXTRA_CONF_ARCHIVE}.sha256" 2>/dev/null || true
+      elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "${EXTRA_CONF_ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${EXTRA_CONF_ARCHIVE}.sha256" || true
+        chmod 600 "${EXTRA_CONF_ARCHIVE}.sha256" 2>/dev/null || true
+      fi
       _log "$(printf "$MSG_CONFIG_OK" "$EXTRA_CONF_ARCHIVE")"
     else
       rm -f "${EXTRA_CONF_TMP}"
@@ -851,6 +867,14 @@ if [[ ${#TAR_ARGS[@]} -gt 0 ]]; then
       "${TAR_ARGS[@]}" 2>&1 | \
       while IFS= read -r line; do _log "[TAR] ${line}"; done; then
     if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+      # Integrity sidecar for the data archive.
+      if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
+        chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
+      elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
+        chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
+      fi
       SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
       _log "$(printf "$MSG_DATA_OK" "$ARCHIVE" "$SIZE")"
     else
