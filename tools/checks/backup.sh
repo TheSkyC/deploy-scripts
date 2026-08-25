@@ -1251,19 +1251,33 @@ check_shared_impls_have_restore_delegate() {
     ' "impl/$impl" || return 1
   done
   awk '
-    /^bapp_restore\(\)/ { in_fn=1; saw_verify=0; saw_members=0; saw_stop=0; saw_rollback=0; next }
-    in_fn && /backup_verify_archive "\$archive"/ { saw_verify=1 }
-    in_fn && /\*\x27\/\.\.\/\x27|restore\.invalid_archive/ { saw_members=1 }
-    in_fn && /systemctl stop "\$SERVICE_NAME" \|\| error/ { saw_stop=1 }
-    in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
+    /^bapp_restore\(\)/ { in_fn=1; saw_delegate=0; next }
+    in_fn && /backup_restore_data_dir "\$DATA_DIR" "\$SERVICE_NAME"/ { saw_delegate=1 }
     in_fn && /^}$/ {
-      if (!(saw_verify && saw_members && saw_stop && saw_rollback)) {
-        print "bapp_restore must verify archive, reject unsafe members, stop service first, and roll back on failure" > "/dev/stderr"
+      if (!saw_delegate) {
+        print "bapp_restore must delegate to backup_restore_data_dir" > "/dev/stderr"
         exit 1
       }
       in_fn=0
     }
-  ' lib/binary_app.sh
+  ' lib/binary_app.sh || return 1
+  # The shared helper carries the safety-critical structure: verify before
+  # touching data, unsafe-member rejection, service stop before the swap,
+  # rollback when the restored service will not start.
+  awk '
+    /^backup_restore_data_dir\(\)/ { in_fn=1; saw_verify=0; saw_members=0; saw_stop=0; saw_rollback=0; next }
+    in_fn && /backup_verify_archive "\$archive"/ { saw_verify=1 }
+    in_fn && index($0, "../*") > 0 { saw_members=1 }
+    in_fn && /systemctl stop "\$service_name" \|\| error/ { saw_stop=1 }
+    in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
+    in_fn && /^}$/ {
+      if (!(saw_verify && saw_members && saw_stop && saw_rollback)) {
+        print "backup_restore_data_dir must verify archive, reject unsafe members, stop service first, and roll back on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/backup.sh
 }
 
 # The blog implementation must write integrity metadata after publishing the
@@ -1322,4 +1336,23 @@ check_generated_backup_scripts_write_sidecars() {
     || { echo "sub2api data-archive sidecar missing" >&2; return 1; }
   grep -q 'sha256sum "\\$archive"' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai generated backup script must write a sha256 sidecar" >&2; return 1; }
+}
+
+# Registry restore capability must match reality: an app declares "restore"
+# only when its impl defines do_restore backed by the shared lifecycle.
+check_registry_restore_capability_matches_impl() {
+  # shellcheck disable=SC1091
+  [[ -v DEPLOY_APP_SPECS ]] || source lib/app_registry.sh
+  local app_id impl caps
+  while IFS='|' read -r app_id _ _ impl caps; do
+    [[ ",${caps}," == *",restore,"* ]] || continue
+    [[ -f "$impl" ]] || impl="impl/$impl"
+    grep -q '^do_restore() {' "$impl" \
+      || { echo "$app_id declares restore capability but $impl has no do_restore" >&2; return 1; }
+  done < <(printf '%s\n' "${DEPLOY_APP_SPECS[@]}")
+  # And the two custom apps restored via the shared data-dir helper this batch.
+  for app_id in newapi vaultwarden; do
+    grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for "$app_id")" \
+      || { echo "$app_id do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
+  done
 }

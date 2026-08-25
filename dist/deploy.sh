@@ -4734,74 +4734,7 @@ bapp_restore() {
     archive="$(backup_latest_archive "$BACKUP_DIR" "${APP_ID}_*.tar.gz" || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
-  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
-    error "$(t backup.verify.failed "$(basename "$archive")")"
-  fi
-  info "$(t backup.restore.using "$archive")"
-  if ! tar -tzf "$archive" >/dev/null 2>&1; then
-    error "$(t backup.restore.invalid_archive "$archive")"
-  fi
-  local member_list extract_dir
-  member_list="$(tar -tzf "$archive")"
-  while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
-        ;;
-    esac
-  done <<< "$member_list"
-
-  systemctl stop "$SERVICE_NAME" || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
-  local data_parent data_base staged_aside restored=false
-  data_parent="$(dirname "$DATA_DIR")"
-  data_base="$(basename "$DATA_DIR")"
-  staged_aside="${DATA_DIR}.restore.$(date +%Y%m%d%H%M%S)"
-  if ! mv "$DATA_DIR" "$staged_aside"; then
-    systemctl start "$SERVICE_NAME" || true
-    error "$(t backup.restore.invalid_archive "$archive")"
-  fi
-  if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
-    mv "$staged_aside" "$DATA_DIR"
-    systemctl start "$SERVICE_NAME" || true
-    error "$(t backup.restore.invalid_archive "$archive")"
-  fi
-  if tar -xzf "$archive" -C "$extract_dir"; then
-    # Archives store either the bare payload (tar -C stage .) or a single
-    # top-level directory named after DATA_DIR (binary_app tar -C parent).
-    local payload="$extract_dir"
-    if [[ -d "${extract_dir}/${data_base}" ]]; then
-      payload="${extract_dir}/${data_base}"
-    fi
-    if mv "$payload" "$DATA_DIR"; then
-      restored=true
-    fi
-  fi
-  rm -rf "$extract_dir"
-  if [[ "$restored" != "true" ]]; then
-    rm -rf "$DATA_DIR"
-    mv "$staged_aside" "$DATA_DIR"
-    systemctl start "$SERVICE_NAME" || true
-    error "$(t backup.restore.invalid_archive "$archive")"
-  fi
-  chown -R root:root "$DATA_DIR" 2>/dev/null || true
-  if systemctl start "$SERVICE_NAME"; then
-    wait_for_service "$SERVICE_NAME" 20 || true
-  fi
-  if ! systemctl is-active --quiet "$SERVICE_NAME"; then
-    warn "$(t backup.restore.start_failed_rollback)"
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    rm -rf "$DATA_DIR"
-    if mv "$staged_aside" "$DATA_DIR"; then
-      success "$(t backup.restore.rollback_done)"
-    else
-      warn "$(t backup.restore.rollback_failed "$staged_aside")"
-    fi
-    systemctl start "$SERVICE_NAME" \
-      || error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-    error "$(t binary_app.error.update_failed "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)")"
-  fi
-  rm -rf "$staged_aside"
-  success "$(t backup.restore.restored "$(basename "$archive")")"
+  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
   bapp_health_probe || true
 }
 _ba_prune_old_bins() {
@@ -6165,9 +6098,9 @@ self_update_main() {
 # (searching do_backup's body for unsupported_action) was fragile and required
 # sourcing every app just to plan a batch.
 DEPLOY_APP_SPECS=(
-  "newapi|New API|apps/newapi.sh|impl/install_newapi.sh|backup"
+  "newapi|New API|apps/newapi.sh|impl/install_newapi.sh|backup,restore"
   "sub2api|Sub2API|apps/sub2api.sh|impl/install_sub2api.sh|backup"
-  "vaultwarden|Vaultwarden|apps/vaultwarden.sh|impl/install_vaultwarden.sh|backup"
+  "vaultwarden|Vaultwarden|apps/vaultwarden.sh|impl/install_vaultwarden.sh|backup,restore"
   "cyberstrikeai|CyberStrikeAI|apps/cyberstrikeai.sh|impl/install_cyberstrikeai.sh|backup"
   "blog|Hugo Blog|apps/blog.sh|impl/install_hugo_blog.sh|backup,restore"
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh|backup"
@@ -12355,6 +12288,27 @@ do_verify() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   app_verify_latest_backup "$BACKUP_DIR" 'new-api_*.tar.gz'
 }
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _NEWAPI_DERIVE_PATHS
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  local archive
+  archive="${NEWAPI_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$BACKUP_DIR"/new-api_*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$BACKUP_DIR" 'new-api_*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  fi
+  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
+}
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_sub2api_impl.sh
@@ -15848,6 +15802,29 @@ do_verify() {
   step "$(t backup.verify.step)"
   require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
   app_verify_latest_backup "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz'
+}
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _VW_DERIVE_PATHS
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  [[ -d "$VW_BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$VW_BACKUP_DIR")"
+  local archive
+  archive="${VW_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$VW_BACKUP_DIR"/vaultwarden_*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$VW_BACKUP_DIR")"
+  fi
+  # The cron script archives DATA_BASE plus (when present) the absolute env
+  # file path, so accept both layouts via the shared payload resolution.
+  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive"
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
 

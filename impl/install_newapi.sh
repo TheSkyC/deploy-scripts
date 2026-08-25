@@ -1044,3 +1044,24 @@ do_verify() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   app_verify_latest_backup "$BACKUP_DIR" 'new-api_*.tar.gz'
 }
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _NEWAPI_DERIVE_PATHS
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  require_safe_path "DATA_DIR" "$DATA_DIR"
+  [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  local archive
+  archive="${NEWAPI_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$BACKUP_DIR"/new-api_*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$BACKUP_DIR" 'new-api_*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  fi
+  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
+}

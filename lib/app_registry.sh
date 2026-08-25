@@ -7,9 +7,9 @@
 # (searching do_backup's body for unsupported_action) was fragile and required
 # sourcing every app just to plan a batch.
 DEPLOY_APP_SPECS=(
-  "newapi|New API|apps/newapi.sh|impl/install_newapi.sh|backup"
+  "newapi|New API|apps/newapi.sh|impl/install_newapi.sh|backup,restore"
   "sub2api|Sub2API|apps/sub2api.sh|impl/install_sub2api.sh|backup"
-  "vaultwarden|Vaultwarden|apps/vaultwarden.sh|impl/install_vaultwarden.sh|backup"
+  "vaultwarden|Vaultwarden|apps/vaultwarden.sh|impl/install_vaultwarden.sh|backup,restore"
   "cyberstrikeai|CyberStrikeAI|apps/cyberstrikeai.sh|impl/install_cyberstrikeai.sh|backup"
   "blog|Hugo Blog|apps/blog.sh|impl/install_hugo_blog.sh|backup,restore"
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh|backup"
