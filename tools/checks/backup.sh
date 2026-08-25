@@ -1350,8 +1350,9 @@ check_registry_restore_capability_matches_impl() {
     grep -q '^do_restore() {' "$impl" \
       || { echo "$app_id declares restore capability but $impl has no do_restore" >&2; return 1; }
   done < <(printf '%s\n' "${DEPLOY_APP_SPECS[@]}")
-  # And the custom apps restored through the shared data-dir helper, plus
-  # tickflow's dedicated partial-member restore.
+  # Custom apps restored through the shared data-dir helper, plus the two
+  # bespoke multi-artifact restores (sub2api three artifacts, cpa_stack
+  # root-relative five paths).
   for app_id in newapi vaultwarden cyberstrikeai; do
     grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for "$app_id")" \
       || { echo "$app_id do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
@@ -1370,5 +1371,32 @@ check_registry_restore_capability_matches_impl() {
       }
       in_fn=0
     }
-  ' impl/install_tickflow.sh
+  ' impl/install_tickflow.sh || return 1
+  awk '
+    /^do_restore\(\)/ { in_fn=1; saw_members=0; saw_stop=0; saw_aside=0; next }
+    in_fn && index($0, "../*") > 0 { saw_members=1 }
+    in_fn && /systemctl stop "\$CPAMP_SERVICE_NAME"/ { saw_stop=1 }
+    in_fn && /restore-aside/ { saw_aside=1 }
+    in_fn && /^}$/ {
+      if (!(saw_members && saw_stop && saw_aside)) {
+        print "cpa_stack do_restore must reject unsafe members, stop CPAMP first, and aside-copy existing targets" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_cpa_stack.sh || return 1
+  awk '
+    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_conf=0; saw_db=0; saw_stop=0; next }
+    in_fn && /backup_restore_data_dir "\$DATA_DIR"/ { saw_data=1 }
+    in_fn && /sub2api_conf_\*\.tar\.gz/ { saw_conf=1 }
+    in_fn && /sub2api_db_\*\.sql\.gz/ { saw_db=1 }
+    in_fn && /systemctl stop "\$SERVICE_NAME"/ { saw_stop=1 }
+    in_fn && /^}$/ {
+      if (!(saw_data && saw_conf && saw_db && saw_stop)) {
+        print "sub2api do_restore must cover data tar, config tar, db dump, and stop the service first" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_sub2api.sh
 }

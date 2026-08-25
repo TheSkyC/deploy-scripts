@@ -986,3 +986,77 @@ do_verify() {
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   app_verify_latest_backup "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz'
 }
+
+# Restore the five root-relative paths captured by do_backup. The archive is
+# a tar -C / of etc/cpa-stack, etc/cli-proxy-api, opt/cpa-manager-plus/
+# config.json, var/lib/cpa-manager-plus, and var/lib/cli-proxy-api, so
+# extraction targets / directly. CPAMP is stopped for the swap (it holds the
+# sqlite data); CPA keeps running. Every existing target is set aside first,
+# enabling a clean rollback when extraction fails or services cannot return.
+do_restore() {
+  cpa_stack_show_banner
+  require_root "restore"
+  app_load_config
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
+  [[ -d "$CPA_STACK_BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$CPA_STACK_BACKUP_DIR")"
+  local archive
+  archive="${CPA_STACK_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$CPA_STACK_BACKUP_DIR"/cpa-stack-*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$CPA_STACK_BACKUP_DIR")"
+  fi
+  local member_list member found=false
+  if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+        ;;
+      etc/cpa-stack|etc/cpa-stack/*|etc/cli-proxy-api|etc/cli-proxy-api/* \
+      |opt/cpa-manager-plus/config.json|var/lib/cpa-manager-plus|var/lib/cpa-manager-plus/* \
+      |var/lib/cli-proxy-api|var/lib/cli-proxy-api/*) found=true ;;
+    esac
+  done <<< "$member_list"
+  [[ "$found" == "true" ]] || error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+  info "$(t backup.restore.using "$archive")"
+
+  systemctl stop "$CPAMP_SERVICE_NAME" \
+    || error "$(t backup.restore.stop_failed "$CPAMP_SERVICE_NAME")"
+  local aside_dir stamp target extract_ok=true had_aside=false
+  stamp="$(date +%Y%m%d%H%M%S)"
+  if ! aside_dir=$(mktemp -d "${CPA_STACK_BACKUP_DIR}/.restore-aside.XXXXXX"); then
+    systemctl start "$CPAMP_SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
+      var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
+    if [[ -e "/${target}" ]]; then
+      mkdir -p "${aside_dir}/$(dirname "$target")"
+      mv "/${target}" "${aside_dir}/${target}.restore.${stamp}" && had_aside=true
+    fi
+  done
+  tar -xzf "$archive" -C / >&2 || extract_ok=false
+  if [[ "$extract_ok" != "true" ]]; then
+    for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
+        var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
+      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
+        rm -rf "/${target:?}"
+        mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" 2>/dev/null || true
+      fi
+    done
+    rm -rf "$aside_dir"
+    systemctl start "$CPAMP_SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  rm -rf "$aside_dir"
+  systemctl start "$CPAMP_SERVICE_NAME" \
+    || error "$(t binary_app.error.install_start_failed "$CPAMP_SERVICE_NAME" "$CPAMP_SERVICE_NAME")"
+  success "$(t backup.restore.restored "$(basename "$archive")")"
+}
