@@ -1400,3 +1400,78 @@ check_registry_restore_capability_matches_impl() {
     }
   ' impl/install_sub2api.sh
 }
+
+# Behavioral lifecycle test for backup_restore_data_dir, run with a stubbed
+# systemctl: (1) clean restore replaces the data and the service restarts,
+# (2) a corrupted archive is refused before any change, (3) an archive with
+# absolute members is refused, (4) a service that cannot start on restored
+# data triggers a full rollback to the previous payload.
+check_backup_restore_data_dir_lifecycle() {
+  local output
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin" "$tmp/backups"
+    cat > "$tmp/bin/systemctl" <<'"'"'STUB'"'"'
+#!/bin/bash
+case "$1 $2" in
+  "stop "*) exit 0 ;;
+  "start "*)
+    mode=$(cat "$RESTART_STATE_FILE" 2>/dev/null || echo normal)
+    [[ "$mode" == "never_start" ]] && exit 1
+    exit 0 ;;
+  "is-active --quiet")
+    mode=$(cat "$RESTART_STATE_FILE" 2>/dev/null || echo normal)
+    [[ "$mode" == "normal" ]] && exit 0 || exit 3 ;;
+esac
+exit 0
+STUB
+    chmod +x "$tmp/bin/systemctl"
+    export PATH="$tmp/bin:$PATH"
+    export RESTART_STATE_FILE="$tmp/mode"
+    DATA_DIR="$tmp/data"
+    SERVICE_NAME=testsvc
+
+    # Case 1: clean restore.
+    mkdir -p "$DATA_DIR"
+    printf original > "$DATA_DIR/file.txt"
+    mkdir -p "$tmp/stage/data"
+    printf newdata > "$tmp/stage/data/newfile.txt"
+    tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" -C "$tmp/stage" data
+    backup_write_sha256 "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null
+    echo normal > "$tmp/mode"
+    backup_restore_data_dir "$DATA_DIR" testsvc \
+      "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null 2>&1
+    grep -q newdata "$DATA_DIR/newfile.txt" || exit 11
+
+    # Case 2: corruption refused before any change.
+    printf X | dd of="$tmp/backups/app_manual_20260101_000000.tar.gz" bs=1 seek=0 conv=notrunc status=none
+    if (backup_restore_data_dir "$DATA_DIR" testsvc \
+        "$tmp/backups/app_manual_20260101_000000.tar.gz") >/dev/null 2>&1; then exit 21; fi
+    grep -q newdata "$DATA_DIR/newfile.txt" || exit 22
+
+    # Case 3: absolute-member archive refused.
+    rm -f "$tmp/backups"/*.tar.gz "$tmp/backups"/*.sha256
+    mkdir -p "$tmp/absdir"; printf x > "$tmp/absdir/x.txt"
+    tar -czPf "$tmp/backups/app_manual_20260101_000000.tar.gz" \
+      "$tmp/absdir/x.txt" 2>/dev/null \
+      || tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" "$tmp/absdir/x.txt"
+    if (backup_restore_data_dir "$DATA_DIR" testsvc \
+        "$tmp/backups/app_manual_20260101_000000.tar.gz") >/dev/null 2>&1; then exit 31; fi
+
+    # Case 4: never-starting service rolls the previous data back.
+    rm -f "$tmp/backups"/*.tar.gz "$tmp/backups"/*.sha256
+    mkdir -p "$tmp/badstage/data"
+    printf broken-data > "$tmp/badstage/data/f.txt"
+    tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" -C "$tmp/badstage" data
+    backup_write_sha256 "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null
+    echo never_start > "$tmp/mode"
+    if (backup_restore_data_dir "$DATA_DIR" testsvc \
+        "$tmp/backups/app_manual_20260101_000000.tar.gz") >/dev/null 2>&1; then exit 41; fi
+    grep -rq newdata "$DATA_DIR" 2>/dev/null || exit 42
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
