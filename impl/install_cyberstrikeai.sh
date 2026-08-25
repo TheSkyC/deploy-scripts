@@ -736,6 +736,14 @@ if tar -czf "\$tmp" \
     rm -f "\$tmp"
     exit 1
   fi
+  # Integrity sidecar: bare digest is enough here; verify accepts it.
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "\$archive" | awk '{print \$1"  "\$(NF)}' > "\${archive}.sha256" || true
+    chmod 600 "\${archive}.sha256" 2>/dev/null || true
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "\$archive" | awk '{print \$1"  "\$(NF)}' > "\${archive}.sha256" || true
+    chmod 600 "\${archive}.sha256" 2>/dev/null || true
+  fi
 else
   rm -f "\$tmp"
   exit 1

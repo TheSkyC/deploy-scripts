@@ -1301,3 +1301,25 @@ check_binary_app_backup_writes_integrity_metadata() {
     }
   ' lib/binary_app.sh
 }
+
+# The four generated cron backup scripts must also publish a sha256 sidecar
+# right after the archive lands, so scheduled and manual backups carry the
+# same integrity metadata. Quoted heredocs (newapi, sub2api, vaultwarden)
+# reference shell vars directly; the unquoted cyberstrikeai heredoc escapes
+# them — accept both spellings.
+check_generated_backup_scripts_write_sidecars() {
+  for impl in install_newapi.sh install_vaultwarden.sh; do
+    grep -q 'sha256sum "${ARCHIVE}"' "impl/$impl" \
+      || { echo "$impl generated backup script must write a sha256 sidecar" >&2; return 1; }
+    grep -q 'chmod 600 "${ARCHIVE}.sha256"' "impl/$impl" \
+      || { echo "$impl sidecar must be written with mode 600" >&2; return 1; }
+  done
+  grep -q 'sha256sum "${PG_DUMP_FILE}"' impl/install_sub2api.sh \
+    || { echo "sub2api pg_dump sidecar missing" >&2; return 1; }
+  grep -q 'sha256sum "${EXTRA_CONF_ARCHIVE}"' impl/install_sub2api.sh \
+    || { echo "sub2api config-archive sidecar missing" >&2; return 1; }
+  grep -q 'sha256sum "${ARCHIVE}"' impl/install_sub2api.sh \
+    || { echo "sub2api data-archive sidecar missing" >&2; return 1; }
+  grep -q 'sha256sum "\\$archive"' impl/install_cyberstrikeai.sh \
+    || { echo "cyberstrikeai generated backup script must write a sha256 sidecar" >&2; return 1; }
+}
