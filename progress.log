@@ -239,5 +239,22 @@ Format per entry:
   已知预期 fail_check；HEAD 上 verify all 通过（后台任务退出码 0）。
 - 提交 / Commit: 8a1ce12
 
+## 2026-08-25（续 3）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D7（P0 备份可靠性第七阶段：最后两个应用恢复能力）：
+  1) sub2api do_restore：三产物布局恢复——最新 data tar 走共享
+     backup_restore_data_dir，conf tar aside 回滚，pg_dump 经 psql 管道
+     恢复；服务先停后启（wait）；SUB2API_RESTORE_ARCHIVE 钉定 data 产物。
+  2) cpa_stack do_restore：停 CPAMP 后将根相对五路径归档解回 /；所有已存
+     在目标先 aside，解包失败干净回滚；CPA_STACK_RESTORE_ARCHIVE 同约束。
+  3) 注册表为两者声明 restore capability。至此 16/16 应用全部具备
+     backup + verify + restore 完整闭环（P0「为所有支持备份的应用补齐
+     恢复能力」达成）。
+  4) capability-vs-impl 守卫扩展：sub2api 断言 data+config+db+stop 结构，
+     cpa_stack 断言成员检查+CPAMP 停止+aside。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；guards 全套仅剩
+  已知预期 fail_check；HEAD verify all 见下一条。
+- 提交 / Commit: b9bdc45
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
