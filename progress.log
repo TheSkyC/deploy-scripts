@@ -222,5 +222,22 @@ Format per entry:
   HEAD verify all 见下一条。
 - 提交 / Commit: a1c5b6b
 
+## 2026-08-25（续 2）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D6（P0 备份可靠性第六阶段：cyberstrikeai 与
+  tickflow 恢复能力）：
+  1) cyberstrikeai do_restore：整目录归档直接委托共享
+     backup_restore_data_dir 恢复 INSTALL_DIR（SERVICE_NAME），
+     CYBERSTRIKEAI_RESTORE_ARCHIVE 覆盖路径限制在可信备份目录内。
+  2) tickflow do_restore：专用部分成员恢复——成员安全扫描（拒绝绝对
+     路径/../反斜杠，且必须含 data//.env/tiers.yaml 至少其一）、compose
+     服务先停、逐目标 aside 副本支持解包失败与服务启动失败两种回滚，
+     TICKFLOW_RESTORE_ARCHIVE 覆盖同约束。
+  3) 注册表为两者声明 restore capability；capability-vs-impl 守卫扩展
+     覆盖 csai 共享助手委托与 tickflow stop/rollback 结构。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；guards 全套仅剩
+  已知预期 fail_check；HEAD 上 verify all 通过（后台任务退出码 0）。
+- 提交 / Commit: 8a1ce12
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
