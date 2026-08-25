@@ -204,5 +204,23 @@ Format per entry:
   见下一条记录。
 - 提交 / Commit: 02801f9
 
+## 2026-08-25（续）
+- 状态 / Status: completed
+- 成果 / Change: 批次 D5（P0 备份可靠性第五阶段：高风险应用恢复能力）：
+  1) bapp_restore 安全核心下沉为共享 backup_restore_data_dir
+     （lib/backup.sh，参数 data_dir/service/archive）：校验先行、危险成员
+     拒绝、先停服再原子换目录、失败完整回滚；bapp_restore 改为委托。
+  2) vaultwarden do_restore：恢复 VW_DATA_DIR（服务单元 vaultwarden），
+     VW_RESTORE_ARCHIVE 覆盖且路径限制在可信备份目录内。
+  3) newapi do_restore：恢复 DATA_DIR（SERVICE_NAME），NEWAPI_RESTORE_
+     ARCHIVE 覆盖同约束。
+  4) 注册表为两者声明 restore capability；新守卫
+     check_registry_restore_capability_matches_impl 保持能力声明与实现
+     同步；restore 结构守卫改查共享助手。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；新守卫与既有
+  restore 委托守卫单独运行通过；guards 全套仅剩已知预期 fail_check；
+  HEAD verify all 见下一条。
+- 提交 / Commit: a1c5b6b
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
