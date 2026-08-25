@@ -1762,3 +1762,26 @@ do_verify() {
   require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
   app_verify_latest_backup "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz'
 }
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _VW_DERIVE_PATHS
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
+  require_safe_path "VW_DATA_DIR" "$VW_DATA_DIR"
+  [[ -d "$VW_BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$VW_BACKUP_DIR")"
+  local archive
+  archive="${VW_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$VW_BACKUP_DIR"/vaultwarden_*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$VW_BACKUP_DIR")"
+  fi
+  # The cron script archives DATA_BASE plus (when present) the absolute env
+  # file path, so accept both layouts via the shared payload resolution.
+  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive"
+}

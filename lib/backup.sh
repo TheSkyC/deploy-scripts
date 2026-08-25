@@ -148,6 +148,85 @@ backup_verify_latest_json() {
     "$digest_state" "$(app_json_string "$(basename "$archive")")" "$(app_json_string "$message")"
 }
 
+# Restore one archive over a service's data directory, with full rollback.
+# Arguments: $1 data dir  $2 systemd unit name  $3 archive path.
+# Caller must already have: required root, taken the app lock, selected a
+# path-confined archive. Verifies the checksum before touching anything,
+# rejects unsafe tar members (absolute paths, "..", backslashes), stops the
+# service before swapping the directory atomically with a timestamped aside
+# copy, restarts, and rolls the previous data back when the service cannot
+# start on restored data.
+backup_restore_data_dir() {
+  local data_dir="$1" service_name="$2" archive="$3"
+  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
+    error "$(t backup.verify.failed "$(basename "$archive")")"
+  fi
+  info "$(t backup.restore.using "$archive")"
+  local member_list extract_dir
+  if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+        ;;
+    esac
+  done <<< "$member_list"
+
+  systemctl stop "$service_name" || error "$(t backup.restore.stop_failed "$service_name")"
+  local data_parent data_base staged_aside restored=false
+  data_parent="$(dirname "$data_dir")"
+  data_base="$(basename "$data_dir")"
+  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)"
+  if ! mv "$data_dir" "$staged_aside"; then
+    systemctl start "$service_name" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
+    mv "$staged_aside" "$data_dir"
+    systemctl start "$service_name" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if tar -xzf "$archive" -C "$extract_dir"; then
+    # Archives store either the bare payload (tar -C stage .) or a single
+    # top-level directory named after the data dir (tar -C parent).
+    local payload="$extract_dir"
+    if [[ -d "${extract_dir}/${data_base}" ]]; then
+      payload="${extract_dir}/${data_base}"
+    fi
+    if mv "$payload" "$data_dir"; then
+      restored=true
+    fi
+  fi
+  rm -rf "$extract_dir"
+  if [[ "$restored" != "true" ]]; then
+    rm -rf "$data_dir"
+    mv "$staged_aside" "$data_dir"
+    systemctl start "$service_name" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  chown -R root:root "$data_dir" 2>/dev/null || true
+  if systemctl start "$service_name"; then
+    wait_for_service "$service_name" 20 || true
+  fi
+  if ! systemctl is-active --quiet "$service_name"; then
+    warn "$(t backup.restore.start_failed_rollback)"
+    systemctl stop "$service_name" 2>/dev/null || true
+    rm -rf "$data_dir"
+    if mv "$staged_aside" "$data_dir"; then
+      success "$(t backup.restore.rollback_done)"
+    else
+      warn "$(t backup.restore.rollback_failed "$staged_aside")"
+    fi
+    systemctl start "$service_name" \
+      || error "$(t binary_app.error.install_start_failed "$service_name" "$service_name")"
+    error "$(t binary_app.error.update_failed "$(systemctl is-active "$service_name" 2>/dev/null || echo unknown)")"
+  fi
+  rm -rf "$staged_aside"
+  success "$(t backup.restore.restored "$(basename "$archive")")"
+}
+
 # Verify the newest archive in a backup directory and print the human verdict
 # (success message / warning / localized error) for a per-app verify action.
 # Caller must already have: shown banner, required root, loaded config, and

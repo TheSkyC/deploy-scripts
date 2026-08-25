@@ -669,6 +669,7 @@ main() {
       check_blog_backup_writes_integrity_metadata
       check_binary_app_backup_writes_integrity_metadata
       check_generated_backup_scripts_write_sidecars
+      check_registry_restore_capability_matches_impl
       check_batch_target_selection_is_local_only
       check_doctor_all_target
       check_update_version_cache_and_network_failures
