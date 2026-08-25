@@ -1171,3 +1171,24 @@ do_verify() {
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
   app_verify_latest_backup "$BACKUP_DIR" 'cyberstrike-ai_*.tar.gz'
 }
+
+do_restore() {
+  show_banner
+  require_root "restore"
+  app_load_config _CSAI_DERIVE_PATHS
+  acquire_lock
+  step "$(t backup.restore.step)"
+  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
+  [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  local archive
+  archive="${CYBERSTRIKEAI_RESTORE_ARCHIVE:-}"
+  if [[ -n "$archive" ]]; then
+    [[ "$archive" == "$BACKUP_DIR"/cyberstrike-ai_*.tar.gz && -f "$archive" ]] \
+      || error "$(t backup.restore.invalid_archive "$archive")"
+  else
+    archive="$(backup_latest_archive "$BACKUP_DIR" 'cyberstrike-ai_*.tar.gz' || true)"
+    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  fi
+  backup_restore_data_dir "$INSTALL_DIR" "$SERVICE_NAME" "$archive"
+}

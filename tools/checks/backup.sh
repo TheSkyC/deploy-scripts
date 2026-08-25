@@ -1350,9 +1350,25 @@ check_registry_restore_capability_matches_impl() {
     grep -q '^do_restore() {' "$impl" \
       || { echo "$app_id declares restore capability but $impl has no do_restore" >&2; return 1; }
   done < <(printf '%s\n' "${DEPLOY_APP_SPECS[@]}")
-  # And the two custom apps restored via the shared data-dir helper this batch.
-  for app_id in newapi vaultwarden; do
+  # And the custom apps restored through the shared data-dir helper, plus
+  # tickflow's dedicated partial-member restore.
+  for app_id in newapi vaultwarden cyberstrikeai; do
     grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for "$app_id")" \
       || { echo "$app_id do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
   done
+  grep -q '^do_restore() {' impl/install_tickflow.sh \
+    || { echo "tickflow declares restore capability but has no do_restore" >&2; return 1; }
+  awk '
+    /^do_restore\(\)/ { in_fn=1; saw_members=0; saw_stop=0; saw_rollback=0; next }
+    in_fn && index($0, "../*") > 0 { saw_members=1 }
+    in_fn && /systemctl stop "\$TICKFLOW_SERVICE_NAME"/ { saw_stop=1 }
+    in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
+    in_fn && /^}$/ {
+      if (!(saw_members && saw_stop && saw_rollback)) {
+        print "tickflow do_restore must reject unsafe members, stop compose service first, and roll back on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_tickflow.sh
 }
