@@ -190,5 +190,19 @@ Format per entry:
       check_blog_backup_writes_integrity_metadata /
       check_binary_app_backup_writes_integrity_metadata
 
+## 2026-08-25
+- 状态 / Status: completed
+- 成果 / Change: 批次 D4（P0 备份可靠性第四阶段：cron 备份脚本补齐
+  sidecar）：4 个生成的定时备份脚本（newapi / sub2api / cyberstrikeai /
+  vaultwarden）在归档原子落盘后写 <archive>.sha256（sha256sum 优先、
+  shasum 回退，best-effort 不阻断备份；umask 077 下 mode 600）；sub2api
+  覆盖全部三类产物（pg_dump / config tar / data tar）。新增守卫
+  check_generated_backup_scripts_write_sidecars 锁定全部 5 个写入点。
+- 验证 / Verified: newapi 与 cyberstrikeai 生成脚本端到端模拟运行成功且
+  digest 与归档一致；4 个 heredoc 体 bash -n 通过；改动文件 shellcheck
+  通过；verify.sh guards 仅剩已知预期 fail_check；HEAD 上 verify all
+  见下一条记录。
+- 提交 / Commit: 02801f9
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
