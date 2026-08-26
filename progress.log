@@ -280,5 +280,26 @@ Format per entry:
       存量归档以 unverified 状态可见）
 - P0 八项全部完成。
 
+## 2026-08-26
+- 状态 / Status: completed
+- 成果 / Change: 批次 N1（P1 通知集成第一阶段：后端与配置命令）：
+  1) 新增 lib/notify.sh：全局 /etc/deploy-notify.conf（root:600，与应用
+     配置同信任门）承载 NOTIFY_ENABLED/BACKEND/URL/TOPIC/TOKEN；
+     notify_send 经 curl 投递 ntfy（title 头+topic 路径）或 Gotify
+     （JSON）；所有失败路径（不信任配置、缺后端/URL、无 curl、非 2xx）
+     均降级为警告并 return 0，绝不阻断主流程。
+  2) 标题与正文出机前过 notify_redact：剥离 KEY=value 秘密、Bearer、
+     URL 凭据。
+  3) deploy.sh notify-config：--enable/--disable/--backend/--url/
+     --topic/--token 合并写入、--test 探针投递、--clear 删除；含 token
+     的文件走 atomic_write_file mode 600。
+  4) update-all 与 backup-all 在操作记录收尾后发送批量结果摘要（计数+
+     主机名）；DEPLOY_NOTIFY_SUPPRESS=1 可关闭。
+  5) 守卫 check_notification_fail_open_and_redaction 锁定结构不变量并
+     用 stub curl 行为验证脱敏。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；新守卫单独运行
+  通过；guards 全套仅剩已知预期 fail_check；HEAD verify all 通过。
+- 提交 / Commit: 4d44e83
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
