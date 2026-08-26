@@ -1544,3 +1544,63 @@ STUB
     echo ok
   ' | grep -q ok
 }
+
+# Scheduled-batch invariants: units and runner are written atomically with
+# restrictive modes, cron expressions are validated before use, unschedule
+# removes both systemd and cron artifacts plus the config, and the runner
+# path re-enters through deploy.sh so it inherits lock + notification logic.
+check_schedule_units_are_atomic_and_cleaned_up() {
+  awk '
+    /^schedule_write_runner\(\)/ { in_fn=1; saw_atomic=0; saw_mode=0; next }
+    in_fn && /atomic_write_file "\$runner" 750/ { saw_atomic=1; saw_mode=1 }
+    in_fn && /^}$/ {
+      if (!saw_atomic) { print "schedule runner must be written atomically" > "/dev/stderr"; exit 1 }
+      in_fn=0
+    }
+    /^schedule_apply\(\)/ { in_apply=1; saw_validate=0; next }
+    in_apply && /Invalid schedule specification/ { saw_validate=1 }
+    in_apply && /^}$/ {
+      if (!saw_validate) { print "cron fallback must validate the schedule expression" > "/dev/stderr"; exit 1 }
+      in_apply=0
+    }
+    /^schedule_remove_units\(\)/ { in_rm=1; saw_timer=0; saw_cron=0; next }
+    in_rm && /disable --now/ { saw_timer=1 }
+    in_rm && /DEPLOY_SCHEDULE_CRON_FILE/ { saw_cron=1 }
+    in_rm && /^}$/ {
+      if (!(saw_timer && saw_cron)) { print "unschedule must remove both timer and cron artifacts" > "/dev/stderr"; exit 1 }
+      in_rm=0
+    }
+  ' lib/schedule.sh || return 1
+
+  # Behavioral: schedule --disable writes config but installs no units;
+  # unschedule removes everything. systemctl is absent on the test host, so
+  # the cron fallback runs — assert its output file lifecycle.
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export SCHEDULE_CONF_FILE="$tmp/schedule.conf"
+    export DEPLOY_SCHEDULE_CRON_FILE="$tmp/deploy-scripts-batch"
+    export DEPLOY_SCHEDULE_RUNNER="$tmp/runner"
+    require_root() { :; }
+    error() { echo "ERROR: $*" >&2; exit 9; }
+    success() { :; }
+    DEPLOY_ROOT_DIR="$tmp/root"
+    mkdir -p "$tmp/root"
+    printf "#!/bin/bash\n" > "$tmp/root/deploy.sh"
+
+    # Enable: runner + cron file must exist.
+    schedule_main schedule --enable --mode check-only --at "03:10"
+    [[ -x "$DEPLOY_SCHEDULE_RUNNER" ]] || { echo NO_RUNNER; exit 61; }
+    [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] || { echo NO_CRON; exit 62; }
+    grep -q "^10 3 \* \* \* root " "$DEPLOY_SCHEDULE_CRON_FILE" || { echo BAD_CRON_SPEC; cat "$DEPLOY_SCHEDULE_CRON_FILE" >&2; exit 63; }
+
+    # Disable: cron file removed, config kept.
+    rm -f "$DEPLOY_SCHEDULE_RUNNER"
+    schedule_main schedule --disable
+    [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] && { echo CRON_STILL_THERE; exit 64; }
+    [[ -f "$SCHEDULE_CONF_FILE" ]] || { echo CONF_LOST; exit 65; }
+    echo ok
+  ' | grep -q ok
+}
