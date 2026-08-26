@@ -53,8 +53,10 @@ atomic_copy_file() {
     return 1
   fi
   if [[ -n "$owner" ]] && ! chown "$owner" "$target_tmp" 2>/dev/null; then
-    rm -f "$target_tmp"
-    return 1
+    # Owner normalization is best-effort: on hosts where the caller is not
+    # root (or the filesystem does not support chown) the copy itself is
+    # still valid, so keep going instead of failing the write.
+    :
   fi
   if ! mv "$target_tmp" "$target_path"; then
     rm -f "$target_tmp"
