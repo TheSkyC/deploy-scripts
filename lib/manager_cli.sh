@@ -105,6 +105,10 @@ manager_main() {
       shift || true
       manager_backup_main "$@"
       ;;
+    notify-config)
+      shift || true
+      notify_config_main "$@"
+      ;;
     check-update)
       shift || true
       manager_update_main "$@"

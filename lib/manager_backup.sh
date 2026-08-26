@@ -210,5 +210,11 @@ manager_backup_main() {
     printf '\nbackup-all: selected=%s planned=%s completed=%s failed=%s skipped=%s errors=%s\n' \
       "${#ids[@]}" "$planned" "$updated" "$failed" "$skipped" "$errors"
   fi
+  # Batch result notification: fail-open, redacted, never blocks the exit.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+    notify_send \
+      "deploy-scripts: backup-all $( [[ $failed == 0 && $errors == 0 ]] && echo succeeded || echo FAILED )" \
+      "backup-all finished: selected=${#ids[@]} planned=$planned completed=$updated failed=$failed skipped=$skipped errors=$errors on $(hostname 2>/dev/null || echo localhost)"
+  fi
   (( failed == 0 && errors == 0 )) || return 1
 }
