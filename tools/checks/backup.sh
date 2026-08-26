@@ -1475,3 +1475,72 @@ STUB
   ')"
   [[ "$output" == ok ]]
 }
+
+# Notification integration invariants: the config file is written through
+# atomic_write_file with mode 600, message bodies pass notify_redact before
+# leaving, and every failure path of notify_send degrades to a warning with
+# a zero exit so notifications can never block an operation.
+check_notification_fail_open_and_redaction() {
+  awk '
+    /^notify_send\(\)/ { in_send=1; saw_trust=0; saw_redact=0; saw_warn=0; next }
+    in_send && /notify_load_config \|\|/ { saw_trust=1 }
+    in_send && /notify_redact "\$title"/ { saw_redact=1 }
+    in_send && /warn "\$\(t notify\.warn\.send_failed/ { saw_warn=1 }
+    in_send && /^}$/ {
+      if (!(saw_trust && saw_redact && saw_warn)) {
+        print "notify_send must gate on trusted config, redact bodies, and warn (not fail) on delivery errors" > "/dev/stderr"
+        exit 1
+      }
+      in_send=0
+    }
+    /^notify_config_main\(\)/ { in_cfg=1; saw_atomic=0; saw_mode=0; next }
+    in_cfg && /atomic_write_file "\$conf_file" 600/ { saw_atomic=1; saw_mode=1 }
+    in_cfg && /^}$/ {
+      if (!saw_atomic) {
+        print "notify_config_main must persist the token-bearing config atomically with mode 600" > "/dev/stderr"
+        exit 1
+      }
+      in_cfg=0
+    }
+  ' lib/notify.sh || return 1
+
+  # Behavioral: send with no config is a silent no-op; disabled backend is a
+  # no-op; redaction strips KEY=value secrets from delivered bodies.
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export NOTIFY_CONF_FILE="$tmp/notify.conf"
+    # No config at all: must not fail.
+    notify_send "t" "b" >/dev/null 2>&1 || { echo NO_CONFIG_FAILED; exit 51; }
+
+    # Disabled: no-op.
+    printf "NOTIFY_ENABLED=\"false\"\nNOTIFY_BACKEND=\"ntfy\"\n" > "$NOTIFY_CONF_FILE"
+    chmod 600 "$NOTIFY_CONF_FILE"
+    notify_send "t" "b" >/dev/null 2>&1 || { echo DISABLED_FAILED; exit 52; }
+
+    # Enabled ntfy against a local stub server: body must be redacted.
+    # (Git Bash cannot chown root, so the trust gate is stubbed here; the
+    # structural guard above already asserts it is called.)
+    app_conf_trusted_value() { return 0; }
+    printf "NOTIFY_ENABLED=\"true\"\nNOTIFY_BACKEND=\"ntfy\"\nNOTIFY_URL=\"%s\"\nNOTIFY_TOPIC=\"topic\"\n" "$tmp/server" > "$NOTIFY_CONF_FILE"
+    mkdir -p "$tmp/bin"
+    export NOTIFY_BODY_FILE="$tmp/body"
+    cat > "$tmp/bin/curl" <<STUB
+#!/bin/bash
+while (( \$# )); do
+  if [[ "\$1" == "--data-binary" ]]; then shift; printf '%s' "\$1" > "\$NOTIFY_BODY_FILE"; fi
+  shift
+done
+echo 200
+STUB
+    chmod +x "$tmp/bin/curl"
+    PATH="$tmp/bin:$PATH" notify_send "title with API_KEY=supersecret inside" \
+      "body with DB_PASSWORD=hunter2 inside" >/dev/null 2>&1
+    body="$(cat "$NOTIFY_BODY_FILE")"
+    [[ "$body" == *DB_PASSWORD[=]*REDACTED* ]] || { echo BODY_NOT_REDACTED_KEY; echo "$body" >&2; exit 53; }
+    if [[ "$body" == *hunter2* ]]; then echo BODY_LEAKED_PASSWORD; exit 54; fi
+    echo ok
+  ' | grep -q ok
+}

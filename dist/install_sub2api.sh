@@ -79,6 +79,16 @@ __deploy_i18n_message() {
     backup.restore.start_failed_rollback) echo "Service failed to start after restore; rolling back to previous data.|恢复后服务启动失败，正在回滚到先前数据。" ;;
     backup.restore.rollback_done) echo "Rollback complete; the previous data directory is intact.|回滚完成，原数据目录保持不变。" ;;
     backup.restore.rollback_failed) echo "Rollback FAILED; the staged data remains at %s for manual recovery.|回滚失败，暂存数据保留在 %s 以便手动恢复。" ;;
+    notify.warn.untrusted_config) echo "Notification config failed the trust gate; notifications skipped.|通知配置未通过信任门检查，已跳过通知。" ;;
+    notify.warn.no_backend) echo "Notification backend is not set to ntfy or gotify; notification skipped.|通知后端不是 ntfy 或 gotify，已跳过通知。" ;;
+    notify.warn.no_url) echo "Notification URL is empty; notification skipped.|通知服务地址为空，已跳过通知。" ;;
+    notify.warn.curl_missing) echo "curl is not available; notification skipped.|curl 不可用，已跳过通知。" ;;
+    notify.info.sent) echo "Notification sent.|通知已发送。" ;;
+    notify.warn.send_failed) echo "Notification delivery failed (HTTP %s); continuing.|通知发送失败（HTTP %s），继续主流程。" ;;
+    notify.usage) echo "Usage: sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url URL] [--topic TOPIC] [--token TOKEN]|用法：sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url 地址] [--topic 主题] [--token 令牌]" ;;
+    notify.config.saved) echo "Notification configuration saved: %s|通知配置已保存：%s" ;;
+    notify.test.sent_ok) echo "Test notification delivered.|测试通知已送达。" ;;
+    notify.config.cleared) echo "Notification configuration removed: %s|通知配置已删除：%s" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
@@ -2590,6 +2600,12 @@ manager_backup_main() {
     printf '\nbackup-all: selected=%s planned=%s completed=%s failed=%s skipped=%s errors=%s\n' \
       "${#ids[@]}" "$planned" "$updated" "$failed" "$skipped" "$errors"
   fi
+  # Batch result notification: fail-open, redacted, never blocks the exit.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+    notify_send \
+      "deploy-scripts: backup-all $( [[ $failed == 0 && $errors == 0 ]] && echo succeeded || echo FAILED )" \
+      "backup-all finished: selected=${#ids[@]} planned=$planned completed=$updated failed=$failed skipped=$skipped errors=$errors on $(hostname 2>/dev/null || echo localhost)"
+  fi
   (( failed == 0 && errors == 0 )) || return 1
 }
 
@@ -2980,6 +2996,12 @@ manager_update_all_main() {
   else
     printf '\nupdate-all: selected=%s planned=%s updated=%s failed=%s skipped=%s check_failed=%s errors=%s\n' \
       "$MANAGER_UPDATE_SELECTED" "$planned" "$updated" "$failed" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
+  fi
+  # Batch result notification: fail-open, redacted, never blocks the exit.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+    notify_send \
+      "deploy-scripts: update-all $( [[ $failed == 0 ]] && echo succeeded || echo FAILED )" \
+      "update-all finished: selected=$MANAGER_UPDATE_SELECTED planned=$planned updated=$updated failed=$failed skipped=$skipped check_failed=$MANAGER_UPDATE_CHECK_FAILED on $(hostname 2>/dev/null || echo localhost)"
   fi
   (( failed == 0 )) || return 1
   manager_update_collect_status

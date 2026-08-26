@@ -386,6 +386,12 @@ manager_update_all_main() {
     printf '\nupdate-all: selected=%s planned=%s updated=%s failed=%s skipped=%s check_failed=%s errors=%s\n' \
       "$MANAGER_UPDATE_SELECTED" "$planned" "$updated" "$failed" "$skipped" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
   fi
+  # Batch result notification: fail-open, redacted, never blocks the exit.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+    notify_send \
+      "deploy-scripts: update-all $( [[ $failed == 0 ]] && echo succeeded || echo FAILED )" \
+      "update-all finished: selected=$MANAGER_UPDATE_SELECTED planned=$planned updated=$updated failed=$failed skipped=$skipped check_failed=$MANAGER_UPDATE_CHECK_FAILED on $(hostname 2>/dev/null || echo localhost)"
+  fi
   (( failed == 0 )) || return 1
   manager_update_collect_status
 }
