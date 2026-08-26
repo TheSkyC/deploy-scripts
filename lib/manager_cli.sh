@@ -109,6 +109,14 @@ manager_main() {
       shift || true
       notify_config_main "$@"
       ;;
+    schedule|unschedule)
+      shift || true
+      schedule_main "$command" "$@"
+      ;;
+    schedule-run)
+      shift || true
+      schedule_run_main "$@"
+      ;;
     check-update)
       shift || true
       manager_update_main "$@"

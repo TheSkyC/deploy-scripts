@@ -90,6 +90,9 @@ __deploy_i18n_message() {
     notify.config.saved) echo "Notification configuration saved: %s|通知配置已保存：%s" ;;
     notify.test.sent_ok) echo "Test notification delivered.|测试通知已送达。" ;;
     notify.config.cleared) echo "Notification configuration removed: %s|通知配置已删除：%s" ;;
+    schedule.usage) echo "Usage: sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at 'HH:MM' | OnCalendar | 'cron expr'] [--include app1,app2]; sudo bash %s unschedule|status|run|schedule-run|用法：sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at '时:分' | OnCalendar | cron 表达式] [--include 应用1,应用2]；sudo bash %s unschedule|status|run|schedule-run" ;;
+    schedule.info.saved) echo "Schedule configuration saved.|定时计划配置已保存。" ;;
+    schedule.info.removed) echo "Schedule removed (timer/cron and config cleaned up).|定时计划已移除（timer/cron 与配置已清理）。" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
@@ -6603,6 +6606,14 @@ manager_main() {
     notify-config)
       shift || true
       notify_config_main "$@"
+      ;;
+    schedule|unschedule)
+      shift || true
+      schedule_main "$command" "$@"
+      ;;
+    schedule-run)
+      shift || true
+      schedule_run_main "$@"
       ;;
     check-update)
       shift || true
