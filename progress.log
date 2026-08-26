@@ -301,5 +301,22 @@ Format per entry:
   通过；guards 全套仅剩已知预期 fail_check；HEAD verify all 通过。
 - 提交 / Commit: 4d44e83
 
+## 2026-08-26（续）
+- 状态 / Status: completed
+- 成果 / Change: 批次 N2（P1 定时更新与定时检查）：
+  1) 新增 lib/schedule.sh：deploy.sh schedule 持久化
+     /etc/deploy-schedule.conf（root:600），mode=update-all|check-only、
+     OnCalendar/HH:MM/原生 cron 表达式、--include 应用清单；systemd 可用
+     时装 service+timer，否则写校验过的 /etc/cron.d 条目；unschedule 移除
+     timer+cron+配置；status 报告安装状态。
+  2) 生成的 runner 经 deploy.sh schedule-run 重入：与交互式批次共用
+     manager 锁（不并发），结果走 N1 通知链路；check-only 默认工作日早上，
+     update-all 默认每日 04:30。
+  3) 守卫 check_schedule_units_are_atomic_and_cleaned_up：原子单元写入、
+     cron 表达式校验、双产物清理 + enable/disable 行为验证。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；新守卫单独运行
+  通过；guards 全套仅剩已知预期 fail_check；HEAD verify all 见下一条。
+- 提交 / Commit: 8d8310d
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
