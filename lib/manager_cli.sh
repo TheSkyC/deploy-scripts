@@ -117,6 +117,10 @@ manager_main() {
       shift || true
       schedule_run_main "$@"
       ;;
+    export|import)
+      shift || true
+      migrate_main "$command" "$@"
+      ;;
     check-update)
       shift || true
       manager_update_main "$@"

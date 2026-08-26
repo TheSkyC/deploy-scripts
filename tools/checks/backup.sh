@@ -1604,3 +1604,63 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     echo ok
   ' | grep -q ok
 }
+
+# Migration invariants: export refuses an empty tree, stamps the archive
+# with a sha256 sidecar, import verifies before touching /etc and installs
+# configs atomically at mode 600, and the manual-steps guidance is printed
+# so operators know binaries/data move via per-app restore.
+check_migration_export_import_roundtrip() {
+  awk '
+    /^migrate_main\(\)/ { in_fn=1; saw_verify=0; saw_atomic=0; saw_manual=0; next }
+    in_fn && /backup_verify_archive "\$input"/ { saw_verify=1 }
+    in_fn && /atomic_copy_file "\$f" "\$target" 600/ { saw_atomic=1 }
+    in_fn && /migrate\.info\.manual_steps/ { saw_manual=1 }
+    in_fn && /^}$/ {
+      if (!(saw_verify && saw_atomic && saw_manual)) {
+        print "migrate import must verify first, install atomically at mode 600, and print manual steps" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/migrate.sh || return 1
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd /e/workspace/deploy-scripts
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export MIGRATE_EXPORT_DIR="$tmp/etc"
+    export NOTIFY_CONF_FILE="$tmp/etc/deploy-notify.conf"
+    export SCHEDULE_CONF_FILE="$tmp/absent-schedule.conf"
+    # Test doubles: error() exits the process, which is exactly what the
+    # empty-tree assertion below checks for; the subshell isolates that exit.
+    require_root() { :; }
+    success() { :; }
+    info() { :; }
+    # Empty tree must be refused. Run in a subshell: the error() helper
+    # exits the process, and that is exactly what we assert on.
+    if ( error() { exit 9; }
+         migrate_main export --output "$tmp/out.tar.gz" ) >/dev/null 2>&1; then
+      echo EMPTY_EXPORT_ALLOWED; exit 71
+    fi
+    error() { echo "ERROR: $*" >&2; exit 9; }
+
+    mkdir -p "$MIGRATE_EXPORT_DIR"
+    printf "PORT=\"1234\"\nAPI_TOKEN=\"sekrit\"\n" > "$MIGRATE_EXPORT_DIR/myapp-deploy.conf"
+    printf "NOTIFY_ENABLED=\"false\"\nNOTIFY_BACKEND=\"ntfy\"\n" > "$NOTIFY_CONF_FILE"
+    migrate_main export --output "$tmp/out.tar.gz" --redact >/dev/null 2>&1 || { echo EXPORT_FAILED; exit 72; }
+    [[ -f "$tmp/out.tar.gz" && -f "$tmp/out.tar.gz.sha256" ]] || { echo NO_SIDECAR; exit 73; }
+    backup_verify_archive "$tmp/out.tar.gz" || { echo BAD_SIDECAR; exit 74; }
+    tar -tzf "$tmp/out.tar.gz" | grep -q "redacted-reference/myapp-deploy.conf.redacted.txt" \
+      || { echo NO_REDACTED_REFERENCE; exit 75; }
+
+    rm -f "$MIGRATE_EXPORT_DIR/myapp-deploy.conf" "$NOTIFY_CONF_FILE"
+    migrate_main import --input "$tmp/out.tar.gz" >/dev/null 2>&1 || { echo IMPORT_FAILED; exit 76; }
+    grep -q "^PORT=" "$MIGRATE_EXPORT_DIR/myapp-deploy.conf" || { echo CONF_NOT_RESTORED; exit 77; }
+    # (The mode-600 contract is asserted structurally above against
+    # atomic_copy_file; stat modes are unreliable under Windows permission
+    # emulation, so the behavioral half checks content only.)
+    echo ok
+  ' | grep -q ok
+}

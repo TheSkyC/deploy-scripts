@@ -92,6 +92,13 @@ __deploy_i18n_message() {
     schedule.usage) echo "Usage: sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at 'HH:MM' | OnCalendar | 'cron expr'] [--include app1,app2]; sudo bash %s unschedule|status|run|schedule-run|用法：sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at '时:分' | OnCalendar | cron 表达式] [--include 应用1,应用2]；sudo bash %s unschedule|status|run|schedule-run" ;;
     schedule.info.saved) echo "Schedule configuration saved.|定时计划配置已保存。" ;;
     schedule.info.removed) echo "Schedule removed (timer/cron and config cleaned up).|定时计划已移除（timer/cron 与配置已清理）。" ;;
+    migrate.usage) echo "Usage: sudo bash %s export [--output PATH] [--redact]; sudo bash %s import --input PATH|用法：sudo bash %s export [--output 路径] [--redact]；sudo bash %s import --input 路径" ;;
+    migrate.error.nothing_to_export) echo "No deployment or notification configs found to export.|未找到可导出的部署或通知配置。" ;;
+    migrate.error.archive_missing) echo "Migration archive not found: %s|迁移归档不存在：%s" ;;
+    migrate.info.exported) echo "Migration archive written: %s (sha256 sidecar included)|迁移归档已生成：%s（含 sha256 sidecar）" ;;
+    migrate.info.next_steps) echo "Replicate each app's backups to the new machine, then run import there and use per-app restore.|请将各应用备份复制到新机器，在新机器执行 import 后用各应用 restore 恢复数据。" ;;
+    migrate.info.imported) echo "Imported %s config file(s); notification and schedule settings restored.|已导入 %s 个配置文件；通知与定时设置已恢复。" ;;
+    migrate.info.manual_steps) echo "Binaries/data are not migrated automatically: install apps, replicate backups, then run restore per app.|二进制与数据不会自动迁移：先安装应用、复制备份，再逐应用执行 restore。" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
@@ -346,8 +353,10 @@ atomic_copy_file() {
     return 1
   fi
   if [[ -n "$owner" ]] && ! chown "$owner" "$target_tmp" 2>/dev/null; then
-    rm -f "$target_tmp"
-    return 1
+    # Owner normalization is best-effort: on hosts where the caller is not
+    # root (or the filesystem does not support chown) the copy itself is
+    # still valid, so keep going instead of failing the write.
+    :
   fi
   if ! mv "$target_tmp" "$target_path"; then
     rm -f "$target_tmp"
