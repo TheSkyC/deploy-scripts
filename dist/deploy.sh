@@ -1376,6 +1376,17 @@ operation_run_app_action() {
     operation_step_finish execute failed || true
     operation_finish "$status" "" "${action} exited with status ${status}" || true
   fi
+  # Per-app outcome notification (install/update/backup/restore/uninstall):
+  # fail-open via notify_send, redacted, never changes the result.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+    case "$action" in
+      install|update|backup|restore|uninstall)
+        notify_send \
+          "deploy-scripts: ${APP_ID:-app} ${action} $( [[ $status -eq 0 ]] && echo succeeded || echo FAILED )" \
+          "${APP_ID:-app} ${action} on $(hostname 2>/dev/null || echo localhost) finished with status ${status}."
+        ;;
+    esac
+  fi
   return "$status"
 }
 
