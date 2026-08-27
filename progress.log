@@ -471,5 +471,32 @@ Format per entry:
   通过；guards 全套 0 失败检查；HEAD verify all 见下一条。
 - 提交 / Commit: 6dc5e8c
 
+## 2026-08-27（续 5）
+- 状态 / Status: completed
+- 成果 / Change: 批次 N9 + 修复批次：
+  1) lib/fleet.sh：fleet 运行追加机器级 JSONL 操作历史
+     （/var/log/deploy-scripts/fleet-history.jsonl，best-effort 不阻断）。
+  2) README 增补中央管理命令面（notify-config/schedule/export/import/
+     fleet/verify/restore）；CHANGELOG Unreleased>Added 合并 P1 通知/定时/
+     迁移与 P2 compose/fleet 批次。
+  3) 修复批次（884e3c5）：tickflow restore 回滚路径 systemctl stop 不再
+     吞诊断（stop 失败→warn 并跳过替换，服务仍未激活→报激活状态而非
+     无条件 error）；删除已死 i18n 键 app.tickflow.error.docker_missing/
+     compose_missing；dispatch 探针改用 cert 作为 unsupported 样例
+     （newapi 已支持 restore）。dist 重建随提交（cb06280）。
+  4) 环境适配：Windows 主机缺 python，验证套件 JSON 断言经
+     .commandcode/bin/python shim 转发 py launcher（不入库的本地工具）。
+- 验证 / Verified: HEAD verify.sh all 通过（成功路径自动删日志，退出码 0）；
+  guards 全套 0 真实失败（唯一 fail_check 为已知预期内部探测）。
+- 提交 / Commit: fa8d3bc, 884e3c5, cb06280
+
+## 总览（截至 2026-08-27）
+- P0 备份可靠性体系：8/8 完成
+- P1 通知集成：8/8 完成
+- P1 定时更新与定时检查：9/9 完成
+- P1 迁移导出/导入：9/9 完成
+- P2 统一 Compose 支持层：8/8 完成（TickFlow 已迁移至共享层）
+- P2 Fleet/多机管理：8/8 完成
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
