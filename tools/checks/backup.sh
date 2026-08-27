@@ -1789,6 +1789,69 @@ check_compose_shared_layer_and_tickflow_delegation() {
   ' | grep -q ok
 }
 
+# Compose lifecycle + health contract: up/down/ps delegate to the shared
+# runner; compose_health reads `ps --format json` and fails closed when any
+# service is exited or restarting. TickFlow's unit template uses the shared
+# backend resolution instead of re-probing docker.
+check_compose_lifecycle_and_health() {
+  awk '
+    /^compose_up\(\)/ { in_fn=1; saw=0; next }
+    in_fn && /compose_run "\$1" "\$2" up -d --build/ { saw=1 }
+    in_fn && /^}$/ { if (!saw) { print "compose_up must delegate to compose_run" > "/dev/stderr"; exit 1 }; in_fn=0 }
+    /^compose_down\(\)/ { in_d=1; saw_d=0; next }
+    in_d && /compose_run "\$1" "\$2" down/ { saw_d=1 }
+    in_d && /^}$/ { if (!saw_d) { print "compose_down must delegate to compose_run" > "/dev/stderr"; exit 1 }; in_d=0 }
+    /^compose_health\(\)/ { in_h=1; saw_ps=0; saw_fail=0; next }
+    in_h && /ps --format json/ { saw_ps=1 }
+    in_h && index($0, "Exited") > 0 { saw_fail=1 }
+    in_h && /^}$/ {
+      if (!(saw_ps && saw_fail)) {
+        print "compose_health must parse ps json and fail on exited services" > "/dev/stderr"
+        exit 1
+      }
+      in_h=0
+    }
+  ' lib/compose.sh || return 1
+  awk '
+    /^_write_systemd_unit\(\)/ { in_fn=1; saw=0; next }
+    in_fn && /compose_cmd="\$\(compose_command\)"/ { saw=1 }
+    in_fn && /^}$/ { if (!saw) { print "tickflow unit template must use shared compose_command" > "/dev/stderr"; exit 1 }; in_fn=0 }
+  ' impl/install_tickflow.sh || return 1
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd /e/workspace/deploy-scripts
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin" "$tmp/project"
+    printf "services: []\n" > "$tmp/project/compose.yml"
+    # Stub docker so compose_command resolves; stub the compose binary
+    # itself to emit controlled `ps` output (args contain the base prefix,
+    # so match on the ps subcommand positionally).
+    cat > "$tmp/bin/docker" <<'"'"'STUB'"'"'
+#!/bin/bash
+if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+for a in "$@"; do
+  if [[ "$a" == "ps" ]]; then
+    printf "%s" "$COMPOSE_PS_OUTPUT"
+    exit 0
+  fi
+done
+exit 0
+STUB
+    chmod +x "$tmp/bin/docker"
+    export PATH="$tmp/bin:$PATH"
+    export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"running\"}"
+    compose_health "$tmp/project" "$tmp/project/compose.yml" || { echo HEALTH_RUNNING_FAILED; exit 111; }
+    export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"Exited\"}"
+    if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
+      echo HEALTH_EXITED_ACCEPTED; exit 112
+    fi
+    echo ok
+  ' | grep -q ok
+}
+
 # Migration invariants: export refuses an empty tree, stamps the archive
 # with a sha256 sidecar, import verifies before touching /etc and installs
 # configs atomically at mode 600, and the manual-steps guidance is printed

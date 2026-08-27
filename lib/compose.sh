@@ -43,7 +43,7 @@ compose_validate_project() {
 # and project file. Example: "docker compose --project-directory /opt/app -f /opt/app/compose.yml"
 compose_base_args() {
   local work_dir="$1" project_file="$2"
-  printf '--project-directory %q -f %q' "$work_dir" "$project_file"
+  printf -- '--project-directory %q -f %q' "$work_dir" "$project_file"
 }
 
 # Run one compose operation against the project, streaming output to stderr.
@@ -80,4 +80,40 @@ compose_try() {
     return 1
   }
   return 0
+}
+
+# Lifecycle helpers. Each validates and runs through compose_run, so output
+# streams to stderr and no formatting decisions leak into the caller.
+compose_up() {
+  compose_run "$1" "$2" up -d --build
+}
+
+compose_down() {
+  compose_run "$1" "$2" down
+}
+
+compose_ps() {
+  compose_run "$1" "$2" ps
+}
+
+# Health check: `compose ps --format json` lists one JSON line per service;
+# every service must report running/healthy. Accepts either docker compose
+# or docker-compose output shape; returns nonzero when any service is not
+# running, without printing anything (the caller renders the verdict).
+compose_health() {
+  local work_dir="$1" project_file="$2"
+  local compose_cmd out
+  compose_cmd="$(compose_command)"
+  [[ -n "$compose_cmd" ]] || return 1
+  compose_validate_project "$work_dir" "$project_file" || return 1
+  local -a base_args
+  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  # shellcheck disable=SC2086
+  out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || return 1
+  # Case-insensitive state scan: running/healthy pass; exited, dead, or
+  # restarting services fail the check. docker compose uses lowercase
+  # values ("running"), docker-compose uses title case ("Running").
+  printf '%s' "$out" | grep -qi '"running"\|"Running"\|"healthy"\|"Healthy"' \
+    && ! printf '%s' "$out" | grep -qi '"exited"\|"Exited"\|"dead"\|"Dead"\|"restarting"\|"Restarting"' \
+    || return 1
 }
