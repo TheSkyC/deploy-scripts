@@ -423,5 +423,22 @@ Format per entry:
 - [x] 新机器恢复路径明确（N3 manual steps 指引）
 - P1 全部完成。
 
+## 2026-08-27（续 2）
+- 状态 / Status: completed
+- 成果 / Change: 批次 N6（P2 统一 Compose 支持层第一阶段）：
+  1) 新增 lib/compose.sh：compose_command 解析 `docker compose` 插件与
+     传统 docker-compose 双后端；compose_require_runtime 门禁 docker+任一
+     后端；compose_validate_project 校验安全绝对路径与文件存在（仅 return，
+     适合探针）；compose_run/compose_try 执行操作，输出走 stderr，不产生
+     表格/彩色输出。
+  2) TickFlow 的 _compose_bin/_require_compose_runtime 改为委托共享层
+     （函数名保留，既有守卫与调用点不受影响）。
+  3) 守卫 check_compose_shared_layer_and_tickflow_delegation：双后端探测、
+     校验契约、stderr 输出、委托结构 + 行为验证（缺项目文件拒绝、不安全
+     路径拒绝）。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；新守卫单独运行
+  通过；guards 全套 0 失败检查；HEAD verify all 见下一条。
+- 提交 / Commit: 59ab58a
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
