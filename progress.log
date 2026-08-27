@@ -356,5 +356,39 @@ Format per entry:
 - [ ] 安装/健康检查失败/回滚的 per-app 事件通知（批量级已有；per-app 待接）
 - [ ] 失败重试配置（schedule 未含重试参数）
 
+## 2026-08-27
+- 状态 / Status: completed
+- 成果 / Change: 批次 N4（P1 定时任务补强：失败重试）：
+  1) schedule --retries N 持久化 SCHEDULE_RETRIES（数值校验）；runner 至多
+     重试 N+1 次，退避 SCHEDULE_RETRY_BACKOFF 基数逐次翻倍、上限 900s，
+     重试间输出本地化警告。
+  2) schedule-run 作为 schedule_main 子命令且透传退出码；runner 映射
+     update-all/check-update 真实批命令。
+  3) 守卫 check_schedule_retries_are_configurable：结构断言循环/退避/警告；
+     行为断言 0 重试=1 次调用、2 重试=3 次调用、--retries 落盘。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；新守卫单独运行
+  通过；guards 全套仅剩已知预期 fail_check；HEAD verify all 见下一条。
+- 提交 / Commit: 0e11d52
+
+## P1 进度总览（更新于批次 N4 后）
+- [x] notify-config 配置命令 + ntfy/Gotify 后端 + 开关/地址/Topic/Token（N1）
+- [x] 更新/备份成功失败通知（N1 批量摘要）
+- [x] 通知降级不阻塞主流程（N1 fail-open 契约 + 守卫）
+- [x] 通知内容脱敏（N1 notify_redact + 行为验证）
+- [x] schedule/unschedule 统一命令（N2）
+- [x] systemd timer / cron 双后端（N2）
+- [x] 定时版本检查 check-only 模式（N2）
+- [x] 定时 update-all（N2）
+- [x] 执行时间/应用选择配置（N2 --at/--include）
+- [x] 失败重试配置（N4 --retries + 指数退避）
+- [x] 定时与手动并发互斥（N2 共用 manager 锁）
+- [x] 定时接入通知系统（N2 runner 重入通知链路）
+- [x] 卸载清理 timer/cron（N2 unschedule）
+- [x] export/import 命令（N3）
+- [x] 导出应用配置/备份清单校验值（N3）
+- [x] 敏感配置脱敏选项（N3 --redact 参考副本）
+- [x] 新机器恢复路径明确（N3 manual steps 指引）
+- [ ] 安装/健康检查失败/回滚的 per-app 事件通知（批量级已有；per-app 待接）
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
