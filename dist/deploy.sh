@@ -93,6 +93,7 @@ __deploy_i18n_message() {
     schedule.usage) echo "Usage: sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at 'HH:MM' | OnCalendar | 'cron expr'] [--include app1,app2]; sudo bash %s unschedule|status|run|schedule-run|用法：sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at '时:分' | OnCalendar | cron 表达式] [--include 应用1,应用2]；sudo bash %s unschedule|status|run|schedule-run" ;;
     schedule.info.saved) echo "Schedule configuration saved.|定时计划配置已保存。" ;;
     schedule.info.removed) echo "Schedule removed (timer/cron and config cleaned up).|定时计划已移除（timer/cron 与配置已清理）。" ;;
+    schedule.warn.retry) echo "Scheduled batch failed (exit %s); retry %s of %s after backoff.|定时批次失败（退出码 %s），退避后进行第 %s/%s 次重试。" ;;
     migrate.usage) echo "Usage: sudo bash %s export [--output PATH] [--redact]; sudo bash %s import --input PATH|用法：sudo bash %s export [--output 路径] [--redact]；sudo bash %s import --input 路径" ;;
     migrate.error.nothing_to_export) echo "No deployment or notification configs found to export.|未找到可导出的部署或通知配置。" ;;
     migrate.error.archive_missing) echo "Migration archive not found: %s|迁移归档不存在：%s" ;;

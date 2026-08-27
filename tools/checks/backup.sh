@@ -1605,6 +1605,65 @@ check_schedule_units_are_atomic_and_cleaned_up() {
   ' | grep -q ok
 }
 
+# Scheduled-batch retry contract: schedule_run_main re-invokes the batch up
+# to SCHEDULE_RETRIES extra times with exponential backoff, and --retries
+# persists a numeric value into the schedule config.
+check_schedule_retries_are_configurable() {
+  awk '
+    /^schedule_run_main\(\)/ { in_fn=1; saw_loop=0; saw_backoff=0; saw_warn=0; next }
+    in_fn && /max_attempts=\$\(\( SCHEDULE_RETRIES \+ 1 \)\)/ { saw_loop=1 }
+    in_fn && /backoff=\$\(\( backoff \* 2 \)\)/ { saw_backoff=1 }
+    in_fn && /schedule\.warn\.retry/ { saw_warn=1 }
+    in_fn && /^}$/ {
+      if (!(saw_loop && saw_backoff && saw_warn)) {
+        print "schedule_run_main must retry with exponential backoff and warn between attempts" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/schedule.sh || return 1
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd /e/workspace/deploy-scripts
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export SCHEDULE_CONF_FILE="$tmp/schedule.conf"
+    export DEPLOY_SCHEDULE_RUNNER="$tmp/runner"
+    export DEPLOY_SCHEDULE_CRON_FILE="$tmp/cron"
+    require_root() { :; }
+    error() { exit 9; }
+    success() { :; }
+    DEPLOY_ROOT_DIR="$tmp/root"
+    mkdir -p "$tmp/root"
+    # A failing deploy.sh stub that counts invocations.
+    cat > "$tmp/root/deploy.sh" <<STUB
+#!/bin/bash
+echo x >> "\$INVOCATIONS"
+exit 3
+STUB
+    export INVOCATIONS="$tmp/invocations"
+    : > "$INVOCATIONS"
+    printf "SCHEDULE_ENABLED=\"true\"\nSCHEDULE_MODE=\"update-all\"\nSCHEDULE_RETRIES=\"0\"\n" > "$SCHEDULE_CONF_FILE"
+    # Backoff small so the test is fast.
+    SCHEDULE_RETRY_BACKOFF=0 schedule_main schedule-run >/dev/null 2>&1 || true
+    count=$(wc -l < "$INVOCATIONS")
+    [[ "$count" -eq 1 ]] || { echo EXPECTED_1_GOT_$count; exit 82; }
+
+    printf "SCHEDULE_ENABLED=\"true\"\nSCHEDULE_MODE=\"update-all\"\nSCHEDULE_RETRIES=\"2\"\n" > "$SCHEDULE_CONF_FILE"
+    : > "$INVOCATIONS"
+    SCHEDULE_RETRY_BACKOFF=0 schedule_main schedule-run >/dev/null 2>&1 || true
+    count=$(wc -l < "$INVOCATIONS")
+    [[ "$count" -eq 3 ]] || { echo EXPECTED_3_GOT_$count; exit 84; }
+
+    # --retries persists into the config.
+    schedule_main schedule --enable --mode check-only --at "03:10" --retries 4 >/dev/null 2>&1
+    grep -q "^SCHEDULE_RETRIES=\"4\"$" "$SCHEDULE_CONF_FILE" || { echo RETRIES_NOT_SAVED; exit 85; }
+    echo ok
+  ' | grep -q ok
+}
+
 # Migration invariants: export refuses an empty tree, stamps the archive
 # with a sha256 sidecar, import verifies before touching /etc and installs
 # configs atomically at mode 600, and the manual-steps guidance is printed
