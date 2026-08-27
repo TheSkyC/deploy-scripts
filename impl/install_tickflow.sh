@@ -101,18 +101,11 @@ _validate_config_values() {
 }
 
 _compose_bin() {
-  if docker compose version >/dev/null 2>&1; then
-    echo "docker compose"
-  else
-    echo "docker-compose"
-  fi
+  compose_command
 }
 
 _require_compose_runtime() {
-  command -v docker >/dev/null 2>&1 || error "$(t app.tickflow.error.docker_missing)"
-  if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
-    error "$(t app.tickflow.error.compose_missing)"
-  fi
+  compose_require_runtime
 }
 
 _env_value_from_file() {

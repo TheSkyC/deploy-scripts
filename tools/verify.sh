@@ -675,6 +675,7 @@ main() {
       check_schedule_units_are_atomic_and_cleaned_up
       check_schedule_retries_are_configurable
       check_per_app_event_notifications
+      check_compose_shared_layer_and_tickflow_delegation
       check_migration_export_import_roundtrip
       check_batch_target_selection_is_local_only
       check_doctor_all_target
