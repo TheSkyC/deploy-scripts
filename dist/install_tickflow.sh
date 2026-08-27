@@ -5819,11 +5819,7 @@ EOF
 _write_systemd_unit() {
   local unit_path="/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service"
   local compose_cmd install_dir_literal compose_file_literal
-  if docker compose version >/dev/null 2>&1; then
-    compose_cmd='docker compose'
-  else
-    compose_cmd='docker-compose'
-  fi
+  compose_cmd="$(compose_command)"
   printf -v install_dir_literal '%q' "$TICKFLOW_INSTALL_DIR"
   printf -v compose_file_literal '%q' "$TICKFLOW_COMPOSE_FILE"
   if ! systemd_write_unit "$unit_path" <<EOF
