@@ -677,6 +677,7 @@ main() {
       check_per_app_event_notifications
       check_compose_shared_layer_and_tickflow_delegation
       check_compose_lifecycle_and_health
+      check_fleet_host_validation_and_isolation
       check_migration_export_import_roundtrip
       check_batch_target_selection_is_local_only
       check_doctor_all_target

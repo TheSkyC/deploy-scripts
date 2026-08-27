@@ -121,6 +121,10 @@ manager_main() {
       shift || true
       migrate_main "$command" "$@"
       ;;
+    fleet)
+      shift || true
+      fleet_main "$@"
+      ;;
     check-update)
       shift || true
       manager_update_main "$@"
