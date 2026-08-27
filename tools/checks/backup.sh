@@ -1664,6 +1664,64 @@ STUB
   ' | grep -q ok
 }
 
+# Per-app outcome notifications fire after install/update/backup/restore/
+# uninstall actions complete, always through the fail-open notify_send, with
+# success/failure derived from the action status.
+check_per_app_event_notifications() {
+  awk '
+    /^operation_run_app_action\(\)/ { in_fn=1; saw_send=0; saw_status=0; saw_case=0; next }
+    in_fn && /notify_send/ { saw_send=1 }
+    in_fn && /\[\[ \$status -eq 0 \]\]/ { saw_status=1 }
+    in_fn && /install\|update\|backup\|restore\|uninstall/ { saw_case=1 }
+    in_fn && /^}$/ {
+      if (!(saw_send && saw_status && saw_case)) {
+        print "operation_run_app_action must notify per-app outcomes with status-derived verdict" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/operation.sh || return 1
+
+  # Behavioral: a stubbed action whose function name is provided must route
+  # the notification through notify_send (stubbed to capture), once for a
+  # success and once for a failure, without altering the exit status.
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd /e/workspace/deploy-scripts
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export DEPLOY_OPERATION_ROOT="$tmp/state"
+    export DEPLOY_OPERATION_LOG_ROOT="$tmp/log"
+    export DEPLOY_NOTIFY_SUPPRESS=""
+    APP_ID=testapp
+    APP_NAME="Test App"
+    notify_send() { printf "%s|%s\n" "$1" "$2" >> "$tmp/notifications"; }
+    operation_start() { export OPERATION_LOG_PATH="$tmp/log"; return 0; }
+    operation_step_start() { return 0; }
+    operation_step_finish() { return 0; }
+    operation_finish() { return 0; }
+    operation_is_valid_action() { return 0; }
+    operation_action_exit_trap() { :; }
+    operation_restore_signal_traps() { :; }
+    operation_restore_exit_trap() { :; }
+    do_ok() { return 0; }
+    do_bad() { return 42; }
+    set +e
+    operation_run_app_action backup do_ok >/dev/null 2>&1
+    rc_ok=$?
+    operation_run_app_action backup do_bad >/dev/null 2>&1
+    rc_bad=$?
+    set -e
+    [[ $rc_ok -eq 0 ]] || { echo RC_OK_WRONG_$rc_ok; exit 91; }
+    [[ $rc_bad -eq 42 ]] || { echo RC_BAD_WRONG_$rc_bad; exit 92; }
+    [[ -f "$tmp/notifications" ]] || { echo NO_NOTIFICATIONS; exit 93; }
+    grep -q "testapp backup succeeded" "$tmp/notifications" || { echo NO_SUCCESS_NOTE; cat "$tmp/notifications" >&2; exit 94; }
+    grep -q "testapp backup FAILED" "$tmp/notifications" || { echo NO_FAIL_NOTE; exit 95; }
+    echo ok
+  ' | grep -q ok
+}
+
 # Migration invariants: export refuses an empty tree, stamps the archive
 # with a sha256 sidecar, import verifies before touching /etc and installs
 # configs atomically at mode 600, and the manual-steps guidance is printed
