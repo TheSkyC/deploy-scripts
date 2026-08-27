@@ -22,6 +22,21 @@ sudo bash install_cyberstrikeai.sh backup
 sudo bash install_hugo_blog.sh install
 ```
 
+Central management commands (via `deploy.sh`):
+
+```bash
+sudo bash deploy.sh backup-all                 # batch backup every installed app
+sudo bash deploy.sh update-all                 # batch update every app
+sudo bash deploy.sh status-all --json          # machine-readable fleet-local status
+sudo bash deploy.sh newapi verify              # verify newest backup integrity
+sudo bash deploy.sh vaultwarden restore        # restore newest backup (or <APP>_RESTORE_ARCHIVE=...)
+sudo bash deploy.sh notify-config --enable --backend ntfy --url https://ntfy.example.com --topic deploy
+sudo bash deploy.sh schedule --enable --mode update-all --at "04:30" --retries 2
+sudo bash deploy.sh export --output /root/migration.tar.gz   # configs + backup inventory
+sudo bash deploy.sh import --input /root/migration.tar.gz    # restore configs on the new host
+sudo bash deploy.sh fleet status-all           # run status-all across /etc/deploy-hosts.conf
+```
+
 Run the central scheduler or an app script without arguments to open the interactive menu:
 
 ```bash

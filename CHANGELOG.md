@@ -8,25 +8,32 @@ for the framework release archives produced by `tools/build-release.sh`.
 
 ## [Unreleased]
 
-### Fixed
-
-- `status-json` backup projection: newapi now applies the same config trust
-  gate as every other app (root-owned, mode 600/400) before honoring a
-  `BACKUP_DIR` override from the saved deployment config; binary-app
-  projections surface an untrusted config explicitly instead of silently
-  ignoring it.
-- cpa-stack merged version fields collapse to JSON `null` when both components
-  are unknown, restoring the documented legacy `"version":null` contract that
-  a literal `"null/null"` string broke for automation consumers.
-- CyberStrikeAI update reports an explicit warning when the post-restart health
-  check fails, instead of printing only "Update complete" while the service is
-  unhealthy.
-- Operation-record JSON escaping now covers backslash, quote, and every C0
-  control character; step names or error summaries containing control bytes no
-  longer produce invalid JSON in operation state and history files.
-
 ### Added
 
+- Notifications: ntfy / Gotify backends configured via `deploy.sh
+  notify-config` (root:600 trust-gated config, `--test` probe), fail-open
+  delivery that can never block an operation, credential redaction before
+  messages leave the host, batch summaries for `update-all`/`backup-all`,
+  and per-app outcome notifications for install/update/backup/restore/
+  uninstall.
+- Scheduled batches: `deploy.sh schedule` installs a systemd timer (or
+  validated cron.d entry) for `update-all` or `check-only` modes with
+  `--at`/`--include`/`--retries` (exponential backoff); the runner re-enters
+  `deploy.sh schedule-run` so scheduled runs share the manager lock and the
+  notification path; `unschedule` removes timer, cron file, and config.
+- Machine migration: `deploy.sh export` bundles app/notification/schedule
+  configs plus a backup inventory into a sha256-stamped tarball (`--redact`
+  adds a sanitized reference copy); `import` verifies the sidecar and
+  installs configs atomically at mode 600.
+- Shared Docker Compose layer: `lib/compose.sh` resolves both `docker
+  compose` and `docker-compose`, validates project paths, and provides
+  `compose_run`/`compose_try`/`compose_up`/`compose_down`/`compose_ps`/
+  `compose_health` (fail-closed ps-json health scan); TickFlow delegates its
+  probes and unit template to it.
+- Fleet management: `deploy.sh fleet [status-all|update-all|backup-all]`
+  runs batches across an SSH host inventory with per-host timeouts, bounded
+  concurrency, failure isolation, merged JSON results, and a machine-level
+  JSONL operation history; the inventory format has no credential surface.
 - Backup integrity metadata: every binary-app and blog backup now publishes a
   `.sha256` sidecar and a single-line `manifest.json` (schema version, app,
   archive name, sha256, creation time, installed version) next to the archive,
@@ -51,16 +58,23 @@ for the framework release archives produced by `tools/build-release.sh`.
   before downloads and service changes rather than failing at
   `systemctl start` with heavyweight rollback. Default warn-only behavior is
   unchanged.
-- Opt-in China mirrors: CyberStrikeAI's PyPI/Go proxy defaults are the official
-  upstreams (`pypi.org`, `proxy.golang.org`); set `DEPLOY_CN_MIRROR=1` to use
-  the Tsinghua/goproxy.cn endpoints. Explicit env and saved-config values keep
-  precedence.
-- Registry capability column: `DEPLOY_APP_SPECS` entries declare capabilities
-  (`backup`, `restore`), exposed via `deploy_app_has_capability`; batch backup
-  planning reads the registry instead of loading implementations and grepping
-  source.
-- Community files: MIT LICENSE and SECURITY.md (supported versions, private
-  advisory reporting, security-relevant design invariants).
+
+### Fixed
+
+- `status-json` backup projection: newapi now applies the same config trust
+  gate as every other app (root-owned, mode 600/400) before honoring a
+  `BACKUP_DIR` override from the saved deployment config; binary-app
+  projections surface an untrusted config explicitly instead of silently
+  ignoring it.
+- cpa-stack merged version fields collapse to JSON `null` when both components
+  are unknown, restoring the documented legacy `"version":null` contract that
+  a literal `"null/null"` string broke for automation consumers.
+- CyberStrikeAI update reports an explicit warning when the post-restart health
+  check fails, instead of printing only "Update complete" while the service is
+  unhealthy.
+- Operation-record JSON escaping now covers backslash, quote, and every C0
+  control character; step names or error summaries containing control bytes no
+  longer produce invalid JSON in operation state and history files.
 
 ### Changed
 

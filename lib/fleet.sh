@@ -125,16 +125,25 @@ fleet_main() {
     wait "$pid" 2>/dev/null || true
   done
   local first=1 record
-  printf '{"schema_version":1,"action":"%s","concurrency":%s,"hosts":[' \
-    "$action" "$FLEET_CONCURRENCY"
+  local summary
+  summary="$(printf '{"schema_version":1,"action":"%s","concurrency":%s,"hosts":[' \
+    "$action" "$FLEET_CONCURRENCY")"
   for entry in "${FLEET_HOSTS[@]}"; do
     alias="${entry%%|*}"
     record="$(cat "$tmp_root/${alias}.json" 2>/dev/null || true)"
     [[ -n "$record" ]] || record="{\"host\":$(app_json_string "$alias"),\"ok\":false,\"error\":\"no result\"}"
-    (( first )) || printf ','
+    (( first )) || summary+=","
     first=0
-    printf '%s' "$record"
+    summary+="$record"
   done
-  printf ']}\n'
+  summary+="]}"
+  printf '%s\n' "$summary"
+  # Machine-level operation history: one JSON line per fleet run, appended
+  # under the framework log root. Best-effort; never fails the command.
+  local history_dir history_file
+  history_dir="${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}"
+  history_file="${history_dir}/fleet-history.jsonl"
+  mkdir -p "$history_dir" 2>/dev/null || true
+  printf '%s\n' "$summary" >> "$history_file" 2>/dev/null || true
   rm -rf "$tmp_root"
 }
