@@ -17,6 +17,12 @@ DEPLOY_SCHEDULE_SERVICE="${DEPLOY_SCHEDULE_SERVICE:-deploy-scripts-batch}"
 DEPLOY_SCHEDULE_CRON_FILE="${DEPLOY_SCHEDULE_CRON_FILE:-/etc/cron.d/deploy-scripts-batch}"
 DEPLOY_SCHEDULE_RUNNER="${DEPLOY_SCHEDULE_RUNNER:-/usr/local/bin/deploy-scripts-batch-runner}"
 
+# Retry knob for scheduled batches: how many times a failed run is retried
+# (default 0 = fire once), and the base backoff in seconds between attempts
+# (doubled each retry, capped at 900).
+SCHEDULE_RETRIES="${SCHEDULE_RETRIES:-0}"
+SCHEDULE_RETRY_BACKOFF="${SCHEDULE_RETRY_BACKOFF:-300}"
+
 schedule_load_config() {
   local conf_file="$SCHEDULE_CONF_FILE"
   SCHEDULE_ENABLED=false SCHEDULE_MODE="update-all" SCHEDULE_ON_CALENDAR="" SCHEDULE_INCLUDE=""
@@ -29,7 +35,7 @@ schedule_load_config() {
     value="${value%\"}"
     value="${value#\"}"
     case "$key" in
-      SCHEDULE_ENABLED|SCHEDULE_MODE|SCHEDULE_ON_CALENDAR|SCHEDULE_INCLUDE)
+      SCHEDULE_ENABLED|SCHEDULE_MODE|SCHEDULE_ON_CALENDAR|SCHEDULE_INCLUDE|SCHEDULE_RETRIES)
         printf -v "$key" '%s' "$value"
         ;;
     esac
@@ -58,6 +64,9 @@ RUNNER
 
 # Internal action executed by the runner. Reuses the manager lock so a
 # concurrent interactive update-all/backup-all makes this run skip cleanly.
+# Failed batches are retried SCHEDULE_RETRIES times with exponential backoff
+# (base SCHEDULE_RETRY_BACKOFF, doubled per attempt, capped at 900s) before
+# the run finally reports failure through the notification path.
 schedule_run_main() {
   require_root "schedule-run"
   schedule_load_config
@@ -66,18 +75,34 @@ schedule_run_main() {
   if [[ -n "${SCHEDULE_INCLUDE:-}" ]]; then
     read -r -a include_args <<< "--include $SCHEDULE_INCLUDE"
   fi
-  case "${SCHEDULE_MODE:-update-all}" in
-    check-only)
-      exec bash "$DEPLOY_ROOT_DIR/deploy.sh check-update" "${include_args[@]+"${include_args[@]}"}"
-      ;;
-    update-all)
-      exec bash "$DEPLOY_ROOT_DIR/deploy.sh update-all" "${include_args[@]+"${include_args[@]}"}"
-      ;;
+  local mode="${SCHEDULE_MODE:-update-all}" batch_cmd attempt=0 max_attempts backoff status=0
+  case "$mode" in
+    check-only) batch_cmd="check-update" ;;
+    update-all) batch_cmd="update-all" ;;
     *)
       echo "unknown schedule mode: $SCHEDULE_MODE" >&2
       return 2
       ;;
   esac
+  [[ "$SCHEDULE_RETRIES" =~ ^[0-9]+$ ]] || SCHEDULE_RETRIES=0
+  [[ "$SCHEDULE_RETRY_BACKOFF" =~ ^[0-9]+$ ]] || SCHEDULE_RETRY_BACKOFF=300
+  backoff="$SCHEDULE_RETRY_BACKOFF"
+  max_attempts=$(( SCHEDULE_RETRIES + 1 ))
+  while (( attempt < max_attempts )); do
+    if bash "$DEPLOY_ROOT_DIR/deploy.sh" "$batch_cmd" \
+        ${include_args[@]+"${include_args[@]}"}; then
+      return 0
+    fi
+    status=$?
+    attempt=$((attempt + 1))
+    if (( attempt < max_attempts )); then
+      warn "$(t schedule.warn.retry "$status" "$attempt" "$max_attempts")"
+      sleep "$backoff"
+      backoff=$(( backoff * 2 ))
+      (( backoff > 900 )) && backoff=900
+    fi
+  done
+  return "$status"
 }
 
 # Write or refresh the scheduling units. Prefers systemd timers; falls back
@@ -145,8 +170,9 @@ schedule_main() {
   local subcommand="${1:-status}"
   shift || true
   case "${subcommand,,}" in
-    run)
+    run|schedule-run)
       schedule_run_main "$@"
+      return $?
       ;;
     status)
       schedule_load_config
@@ -166,7 +192,7 @@ schedule_main() {
       success "$(t schedule.info.removed)"
       ;;
     schedule|enable|disable|*)
-      local enable="" mode="" calendar="" include=""
+      local enable="" mode="" calendar="" include="" retries=""
       [[ "${subcommand,,}" == "schedule" ]] && enable=true
       while (($#)); do
         case "$1" in
@@ -175,6 +201,7 @@ schedule_main() {
           --mode) mode="${2:-}"; shift 2 ;;
           --at) calendar="${2:-}"; shift 2 ;;
           --include) include="${2:-}"; shift 2 ;;
+          --retries) retries="${2:-}"; shift 2 ;;
           *)
             t schedule.usage "$0"
             return 2
@@ -189,12 +216,17 @@ schedule_main() {
       [[ -n "$mode" ]] && SCHEDULE_MODE="${mode,,}"
       [[ -n "$calendar" ]] && SCHEDULE_ON_CALENDAR="$calendar"
       [[ -n "$include" ]] && SCHEDULE_INCLUDE="$include"
+      if [[ -n "${retries:-}" ]]; then
+        [[ "$retries" =~ ^[0-9]+$ ]] || error "$(t common.invalid_choice "$retries")"
+        SCHEDULE_RETRIES="$retries"
+      fi
       [[ -n "$enable" ]] && SCHEDULE_ENABLED="$( [[ "$enable" == true ]] && echo true || echo false )"
       if ! atomic_write_file "$SCHEDULE_CONF_FILE" 600 <<CONF
 SCHEDULE_ENABLED="${SCHEDULE_ENABLED}"
 SCHEDULE_MODE="${SCHEDULE_MODE}"
 SCHEDULE_ON_CALENDAR="${SCHEDULE_ON_CALENDAR}"
 SCHEDULE_INCLUDE="${SCHEDULE_INCLUDE}"
+SCHEDULE_RETRIES="${SCHEDULE_RETRIES}"
 CONF
       then
         error "$(t error.config_write "$SCHEDULE_CONF_FILE")"

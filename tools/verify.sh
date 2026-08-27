@@ -673,6 +673,7 @@ main() {
       check_backup_restore_data_dir_lifecycle
       check_notification_fail_open_and_redaction
       check_schedule_units_are_atomic_and_cleaned_up
+      check_schedule_retries_are_configurable
       check_migration_export_import_roundtrip
       check_batch_target_selection_is_local_only
       check_doctor_all_target
