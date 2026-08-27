@@ -5325,12 +5325,6 @@ i18n_register_many \
   app.tickflow.error.runtime_dirs \
   "Cannot prepare TickFlow runtime directories: %s and %s. Check filesystem permissions and retry." \
   "无法准备 TickFlow 运行目录：%s 和 %s。请检查文件系统权限后重试。" \
-  app.tickflow.error.docker_missing \
-  "Docker is required but was not found." \
-  "需要 Docker，但当前未找到。" \
-  app.tickflow.error.compose_missing \
-  "Docker Compose is required but was not found." \
-  "需要 Docker Compose，但当前未找到。" \
   app.tickflow.error.compose_write \
   "Failed to write compose file: %s" \
   "写入 compose 文件失败：%s" \
@@ -6230,23 +6224,29 @@ do_restore() {
   fi
   if ! systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME"; then
     warn "$(t backup.restore.start_failed_rollback)"
-    systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null || true
-    for target in data tiers.yaml .env; do
-      rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"
-    done
-    local rolled_back=false
-    for target in data tiers.yaml .env; do
-      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
-        mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" && rolled_back=true
+    if systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
+      for target in data tiers.yaml .env; do
+        rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"
+      done
+      local rolled_back=false
+      for target in data tiers.yaml .env; do
+        if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
+          mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" && rolled_back=true
+        fi
+      done
+      if [[ "$rolled_back" == "true" ]]; then
+        success "$(t backup.restore.rollback_done)"
+      else
+        warn "$(t backup.restore.rollback_failed "$aside_dir")"
       fi
-    done
-    if [[ "$rolled_back" == "true" ]]; then
-      success "$(t backup.restore.rollback_done)"
     else
       warn "$(t backup.restore.rollback_failed "$aside_dir")"
     fi
-    systemctl start "$TICKFLOW_SERVICE_NAME" \
-      || error "$(t app.tickflow.error.service_start "$TICKFLOW_SERVICE_NAME")"
+    if systemctl start "$TICKFLOW_SERVICE_NAME" \
+      && systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME"; then
+      success "$(t backup.restore.restored "$(basename "$archive")")"
+      return 0
+    fi
     error "$(t binary_app.error.update_failed "$(systemctl is-active "$TICKFLOW_SERVICE_NAME" 2>/dev/null || echo unknown)")"
   fi
   success "$(t backup.restore.restored "$(basename "$archive")")"
