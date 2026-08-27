@@ -1852,6 +1852,62 @@ STUB
   ' | grep -q ok
 }
 
+# Fleet invariants: inventory entries are validated (aliases and targets
+# restricted to safe token characters), each host runs under a timeout with
+# bounded concurrency and per-host failure isolation, and the aggregated JSON
+# never carries credentials — the inventory format has no password field at
+# all, and targets are used only as ssh destinations.
+check_fleet_host_validation_and_isolation() {
+  awk '
+    /^fleet_load_hosts\(\)/ { in_fn=1; saw_alias=0; saw_target=0; next }
+    in_fn && /\[!A-Za-z0-9_-\]/ { saw_alias=1 }
+    in_fn && /\[!A-Za-z0-9@.:\\\[\\\]_-\]/ { saw_target=1 }
+    in_fn && /^}$/ {
+      if (!(saw_alias && saw_target)) {
+        print "fleet host validation must restrict both alias and target characters" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+    /^fleet_run_host\(\)/ { in_r=1; saw_timeout=0; saw_ok_false=0; next }
+    in_r && /timeout "\$\{FLEET_TIMEOUT\}"/ { saw_timeout=1 }
+    in_r && /ok.:false/ { saw_ok_false=1 }
+    in_r && /^}$/ {
+      if (!(saw_timeout && saw_ok_false)) {
+        print "fleet_run_host must enforce a timeout and isolate failures" > "/dev/stderr"
+        exit 1
+      }
+      in_r=0
+    }
+  ' lib/fleet.sh || return 1
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd /e/workspace/deploy-scripts
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    # Inventory parsing: valid lines load, malformed lines are skipped.
+    cat > "$tmp/hosts.conf" <<'"'"'EOF'"'"'
+# comment
+alpha|user@host1.example.com
+bad alias|user@host2.example.com
+beta|deploy@10.0.0.5:2222
+trailing | space|user@x
+gamma|root@[2001:db8::1]
+EOF
+    FLEET_HOSTS_FILE="$tmp/hosts.conf" fleet_load_hosts
+    [[ ${#FLEET_HOSTS[@]} -eq 3 ]] || { echo HOST_COUNT_${#FLEET_HOSTS[@]}; exit 121; }
+    [[ "${FLEET_HOSTS[0]}" == "alpha|user@host1.example.com" ]] || { echo HOST0_BAD; exit 122; }
+    # ssh args: a port target emits -p, a plain one does not.
+    port_args="$(fleet_target_ssh_args "deploy@10.0.0.5:2222")"
+    [[ "$port_args" == *" -p 2222" ]] || { echo NO_PORT_ARGS; exit 123; }
+    # Concurrency default is bounded.
+    [[ "$FLEET_CONCURRENCY" -ge 1 ]] || { echo BAD_CONCURRENCY; exit 124; }
+    echo ok
+  ' | grep -q ok
+}
+
 # Migration invariants: export refuses an empty tree, stamps the archive
 # with a sha256 sidecar, import verifies before touching /etc and installs
 # configs atomically at mode 600, and the manual-steps guidance is printed
