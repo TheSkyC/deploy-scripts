@@ -1722,6 +1722,73 @@ check_per_app_event_notifications() {
   ' | grep -q ok
 }
 
+# Shared compose layer invariants: both backends resolved, runtime required
+# before any run, project paths validated (safe + existing) before use, and
+# output streams to stderr so callers control their own formatting. TickFlow
+# delegates its probes to the shared layer instead of re-implementing them.
+check_compose_shared_layer_and_tickflow_delegation() {
+  awk '
+    /^compose_command\(\)/ { in_fn=1; saw_plugin=0; saw_legacy=0; next }
+    in_fn && /docker compose version/ { saw_plugin=1 }
+    in_fn && /docker-compose/ { saw_legacy=1 }
+    in_fn && /^}$/ {
+      if (!(saw_plugin && saw_legacy)) {
+        print "compose_command must probe both docker compose and docker-compose" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+    /^compose_validate_project\(\)/ { in_v=1; saw_safe=0; saw_exists=0; next }
+    in_v && /is_safe_path/ { saw_safe=1 }
+    in_v && /\[\[ -f "\$project_file" \]\]/ { saw_exists=1 }
+    in_v && /^}$/ {
+      if (!(saw_safe && saw_exists)) {
+        print "compose_validate_project must check path safety and file existence" > "/dev/stderr"
+        exit 1
+      }
+      in_v=0
+    }
+    /^compose_run\(\)/ { in_r=1; saw_require=0; saw_validate=0; saw_stderr=0; next }
+    in_r && /compose_require_runtime/ { saw_require=1 }
+    in_r && /compose_validate_project/ { saw_validate=1 }
+    in_r && />&2/ { saw_stderr=1 }
+    in_r && /^}$/ {
+      if (!(saw_require && saw_validate && saw_stderr)) {
+        print "compose_run must require+validate first and stream to stderr" > "/dev/stderr"
+        exit 1
+      }
+      in_r=0
+    }
+  ' lib/compose.sh || return 1
+  awk '
+    /^_compose_bin\(\)/ { in_fn=1; saw=0; next }
+    in_fn && /compose_command/ { saw=1 }
+    in_fn && /^}$/ { if (!saw) { print "tickflow _compose_bin must delegate to compose_command" > "/dev/stderr"; exit 1 }; in_fn=0 }
+    /^_require_compose_runtime\(\)/ { in_r=1; saw_r=0; next }
+    in_r && /compose_require_runtime/ { saw_r=1 }
+    in_r && /^}$/ { if (!saw_r) { print "tickflow _require_compose_runtime must delegate to compose_require_runtime" > "/dev/stderr"; exit 1 }; in_r=0 }
+  ' impl/install_tickflow.sh || return 1
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd /e/workspace/deploy-scripts
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    # Missing project file: compose_try must fail (validation precedes run).
+    if compose_try "$tmp" "$tmp/missing.yml" config >/dev/null 2>&1; then
+      echo TRY_SHOULD_FAIL; exit 102
+    fi
+    # compose_command returns a usable backend or empty — never fails.
+    compose_command >/dev/null 2>&1 || { echo COMMAND_FAILED; exit 103; }
+    # Path validation refuses unsafe inputs.
+    if compose_validate_project "$tmp" "/etc/passwd" >/dev/null 2>&1; then
+      echo UNSAFE_PROJECT_ACCEPTED; exit 104
+    fi
+    echo ok
+  ' | grep -q ok
+}
+
 # Migration invariants: export refuses an empty tree, stamps the archive
 # with a sha256 sidecar, import verifies before touching /etc and installs
 # configs atomically at mode 600, and the manual-steps guidance is printed

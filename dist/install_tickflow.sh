@@ -100,6 +100,9 @@ __deploy_i18n_message() {
     migrate.info.next_steps) echo "Replicate each app's backups to the new machine, then run import there and use per-app restore.|请将各应用备份复制到新机器，在新机器执行 import 后用各应用 restore 恢复数据。" ;;
     migrate.info.imported) echo "Imported %s config file(s); notification and schedule settings restored.|已导入 %s 个配置文件；通知与定时设置已恢复。" ;;
     migrate.info.manual_steps) echo "Binaries/data are not migrated automatically: install apps, replicate backups, then run restore per app.|二进制与数据不会自动迁移：先安装应用、复制备份，再逐应用执行 restore。" ;;
+    compose.error.docker_missing) echo "Docker is not installed; the compose stack cannot run.|未安装 Docker，无法运行 Compose 应用栈。" ;;
+    compose.error.runtime_missing) echo "Neither 'docker compose' nor 'docker-compose' is available.|'docker compose' 与 'docker-compose' 均不可用。" ;;
+    compose.error.project_missing) echo "Compose project file not found: %s|Compose 项目文件不存在：%s" ;;
     common.choose_action) echo "Choose an action:|请选择操作：" ;;
     common.invalid_choice) echo "Invalid choice: %s|无效选项：%s" ;;
     common.no_argument_menu) echo "No argument opens the interactive menu.|不带参数则打开交互式菜单。" ;;
@@ -5680,18 +5683,11 @@ _validate_config_values() {
 }
 
 _compose_bin() {
-  if docker compose version >/dev/null 2>&1; then
-    echo "docker compose"
-  else
-    echo "docker-compose"
-  fi
+  compose_command
 }
 
 _require_compose_runtime() {
-  command -v docker >/dev/null 2>&1 || error "$(t app.tickflow.error.docker_missing)"
-  if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
-    error "$(t app.tickflow.error.compose_missing)"
-  fi
+  compose_require_runtime
 }
 
 _env_value_from_file() {
