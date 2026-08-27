@@ -440,5 +440,20 @@ Format per entry:
   通过；guards 全套 0 失败检查；HEAD verify all 见下一条。
 - 提交 / Commit: 59ab58a
 
+## 2026-08-27（续 3）
+- 状态 / Status: completed
+- 成果 / Change: 批次 N7（P2 Compose 第二阶段：生命周期与健康检查）：
+  1) lib/compose.sh 新增 compose_up/down/ps（委托共享 runner）与
+     compose_health（解析 ps --format json，exited/dead/restarting 即
+     fail-closed；大小写不敏感兼容 docker compose 与 docker-compose）。
+  2) TickFlow systemd 单元模板改用共享 compose_command 解析后端，移除
+     impl 内重复探测。
+  3) compose_base_args 用 printf -- 防路径以 - 开头被误读为选项。
+  4) 守卫 check_compose_lifecycle_and_health：委托/fail-closed 结构 +
+     行为验证（running 通过、exited 拒绝，stub docker）。
+- 验证 / Verified: 改动文件 bash -n + shellcheck 通过；新守卫单独运行
+  通过；guards 全套 0 失败检查；HEAD verify all 见下一条。
+- 提交 / Commit: f627264
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
