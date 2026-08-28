@@ -4403,6 +4403,9 @@ i18n_register_many \
   binary_app.summary.title_ready \
   "Deployment Ready" \
   "部署完成" \
+  binary_app.summary.title_pending \
+  "Files installed; verify service health before use" \
+  "文件已安装；请先确认服务健康后再使用" \
   binary_app.summary.public \
   "Public:" \
   "公网地址：" \
@@ -4822,9 +4825,12 @@ ba_configure_ops() {
     "binary_app.error.logrotate" "binary_app.success.logrotate"
 }
 
-# Print the install summary box (localized, generic fields).
+# Print the install summary box (localized, generic fields). The second
+# argument is the health state: "ready" (default) or "pending" when the
+# service did not pass its HTTP health probe within the wait window.
 bapp_summary() {
   local version="$1"
+  local summary_state="${2:-ready}"
   local internal_ip
   local hostname_scan
   hostname_scan="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
@@ -4832,7 +4838,11 @@ bapp_summary() {
   echo ""
   echo -e "${BOLD}${GREEN}"
   echo "  =========================================================="
-  echo -e "  ${BOLD}$(t binary_app.summary.title_ready)${GREEN}"
+  if [[ "$summary_state" == "pending" ]]; then
+    echo -e "  ${BOLD}$(t binary_app.summary.title_pending)${GREEN}"
+  else
+    echo -e "  ${BOLD}$(t binary_app.summary.title_ready)${GREEN}"
+  fi
   echo "  =========================================================="
   if [[ -n "$DOMAIN" ]]; then
     echo -e "  $(t binary_app.summary.public)  ${CYAN}http://${DOMAIN}${GREEN}"
@@ -4963,8 +4973,11 @@ bapp_install() {
     error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
   fi
   step "$(t binary_app.step.health)"
-  bapp_health_probe || true
-  bapp_summary "$latest"
+  local _summary_state="ready"
+  if ! bapp_health_probe; then
+    _summary_state="pending"
+  fi
+  bapp_summary "$latest" "$_summary_state"
 }
 # Back up DATA_DIR to BACKUP_DIR as <app>_<label>_<timestamp>.tar.gz with
 # retention; logs progress to BACKUP_DIR/backup.log.  Returns 0 on success.
