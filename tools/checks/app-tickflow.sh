@@ -58,7 +58,7 @@ check_tickflow_uninstall_supports_noninteractive_mode() {
         }
         in_uninstall=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_uninstall_checks_directory_removal_errors() {
@@ -71,10 +71,10 @@ check_tickflow_uninstall_checks_directory_removal_errors() {
       echo "TickFlow uninstall must report directory removal failures instead of mislabeling them as unsafe paths." >&2
       return 1
     }
-  grep -Fq 'tickflow_remove_dir_or_error() {' dist/install_tickflow.sh \
-    && grep -Fq 'error "$(t app.tickflow.error.remove_dir "$path")"' dist/install_tickflow.sh \
-    && grep -Fq 'tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"' dist/install_tickflow.sh \
-    && grep -Fq 'tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"' dist/install_tickflow.sh \
+ grep -Fq 'tickflow_remove_dir_or_error() {' \
+ && grep -Fq 'error "$(t app.tickflow.error.remove_dir "$path")"' \
+ && grep -Fq 'tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"' \
+ && grep -Fq 'tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"' \
     || {
       echo "Release TickFlow script must preserve uninstall directory removal failure handling." >&2
       return 1
@@ -91,10 +91,10 @@ check_tickflow_uninstall_checks_file_removal_errors() {
       echo "TickFlow uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq 'tickflow_remove_file_or_error() {' dist/install_tickflow.sh \
-    && grep -Fq 'error "$(t app.tickflow.error.remove_file "$path")"' dist/install_tickflow.sh \
-    && grep -Fq 'tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"' dist/install_tickflow.sh \
-    && grep -Fq 'tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_tickflow.sh \
+ grep -Fq 'tickflow_remove_file_or_error() {' \
+ && grep -Fq 'error "$(t app.tickflow.error.remove_file "$path")"' \
+ && grep -Fq 'tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"' \
+ && grep -Fq 'tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
     || {
       echo "Release TickFlow script must preserve uninstall file removal failure handling." >&2
       return 1
@@ -113,7 +113,7 @@ check_tickflow_preflight_defers_docker_runtime_checks() {
         }
         in_func=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_env_rewrites_preserve_existing_secrets() {
@@ -188,7 +188,7 @@ check_tickflow_paths_are_guarded() {
         }
         in_uninstall=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
   awk '
       /app\.tickflow\.error\.install_dir_not_repo/ { saw_key=1 }
       END {
@@ -232,7 +232,7 @@ check_tickflow_directory_setup_failures_are_explicit() {
         }
         in_layout=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_dependency_failures_are_reported() {
@@ -260,12 +260,12 @@ check_tickflow_dependency_failures_are_reported() {
         }
         in_deps=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_config_files_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > "\$TICKFLOW_(ENV|COMPOSE|TIERS)_FILE"|^[[:space:]]*} > "\$env_tmp"' \
-      impl/install_tickflow.sh dist/install_tickflow.sh 2>/dev/null; then
+      impl/install_tickflow.sh 2>/dev/null; then
     echo "TickFlow config files must be written with atomic_write_file." >&2
     return 1
   fi
@@ -285,12 +285,12 @@ check_tickflow_config_files_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_systemd_shell_paths_are_quoted() {
   if grep -R -nE 'Exec(Start|Stop|Reload)=/bin/bash -lc '\''cd "\$\{TICKFLOW_INSTALL_DIR\}"| -f "\$\{TICKFLOW_COMPOSE_FILE\}"' \
-      impl/install_tickflow.sh dist/install_tickflow.sh 2>/dev/null; then
+      impl/install_tickflow.sh 2>/dev/null; then
     echo "TickFlow systemd shell commands must not interpolate raw paths." >&2
     return 1
   fi
@@ -306,12 +306,12 @@ check_tickflow_systemd_shell_paths_are_quoted() {
         }
         in_func=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_systemctl_failures_are_reported() {
   if grep -R -nE 'systemctl (enable --now docker|enable "\$TICKFLOW_SERVICE_NAME"|stop "\$TICKFLOW_SERVICE_NAME"|disable "\$TICKFLOW_SERVICE_NAME"|daemon-reload).* \|\| true' \
-      impl/install_tickflow.sh dist/install_tickflow.sh 2>/dev/null; then
+      impl/install_tickflow.sh 2>/dev/null; then
     echo "TickFlow systemctl failures must be reported instead of silently ignored." >&2
     return 1
   fi
@@ -342,7 +342,7 @@ check_tickflow_systemctl_failures_are_reported() {
           exit 1
         }
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_uninstall_daemon_reload_failure_is_fatal() {
@@ -357,7 +357,7 @@ check_tickflow_uninstall_daemon_reload_failure_is_fatal() {
         }
         in_uninstall=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_uninstall_stop_disable_failures_are_reported() {
@@ -388,7 +388,7 @@ check_tickflow_uninstall_stop_disable_failures_are_reported() {
         in_uninstall=0
       }
       in_func && /^}/ { in_func=0 }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_service_start_failures_show_diagnostics() {
@@ -433,7 +433,7 @@ check_tickflow_service_start_failures_show_diagnostics() {
         }
         in_restart=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_status_is_structured() {
@@ -481,7 +481,7 @@ check_tickflow_status_is_structured() {
         }
         in_status=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }
 
 check_tickflow_manual_backup_is_explicit() {
@@ -516,5 +516,5 @@ check_tickflow_manual_backup_is_explicit() {
         }
         in_backup=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
 }

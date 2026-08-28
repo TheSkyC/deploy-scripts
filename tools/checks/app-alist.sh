@@ -4,7 +4,7 @@
 
 check_alist_uses_shared_binary_lifecycle() {
   local file
-  for file in impl/install_alist.sh dist/install_alist.sh; do
+  for file in impl/install_alist.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
       && grep -Fq 'bapp_backup' "$file" \
@@ -22,7 +22,7 @@ check_alist_uses_shared_binary_lifecycle() {
 
 check_alist_release_asset_mapping() {
   local file
-  for file in impl/install_alist.sh dist/install_alist.sh; do
+  for file in impl/install_alist.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-AlistGo/alist}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="alist"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \

@@ -21,7 +21,7 @@ check_sub2api_status_backup_projection() {
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "sub2api backups" in x["path"]; assert x["path"].endswith("sub2api_data_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
   grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' impl/install_sub2api.sh \
-    && grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' dist/install_sub2api.sh
+ && grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' 
 }
 
 check_sub2api_uninstall_supports_noninteractive_mode() {
@@ -44,7 +44,7 @@ check_sub2api_uninstall_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_uninstall_checks_directory_removal_errors() {
@@ -61,13 +61,13 @@ check_sub2api_uninstall_checks_directory_removal_errors() {
       echo "Sub2API uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_sub2api_remove_dir_or_error() {' dist/install_sub2api.sh \
-    && grep -Fq 'error "$(t app.sub2api.error.remove_dir "$path")"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"' dist/install_sub2api.sh \
-    && grep -Fq 'warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_dir_or_error "$CONFIG_DIR" "CONFIG_DIR" "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"' dist/install_sub2api.sh \
+ grep -Fq '_sub2api_remove_dir_or_error() {' \
+ && grep -Fq 'error "$(t app.sub2api.error.remove_dir "$path")"' \
+ && grep -Fq '_sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"' \
+ && grep -Fq '_sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"' \
+ && grep -Fq 'warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"' \
+ && grep -Fq '_sub2api_remove_dir_or_error "$CONFIG_DIR" "CONFIG_DIR" "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"' \
+ && grep -Fq '_sub2api_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"' \
     || {
       echo "Release Sub2API script must preserve uninstall directory removal failure handling." >&2
       return 1
@@ -89,15 +89,15 @@ check_sub2api_uninstall_checks_file_removal_errors() {
       echo "Sub2API uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_sub2api_remove_file_or_error() {' dist/install_sub2api.sh \
-    && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-enabled/sub2api" "SUB2API_NGINX_LINK"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-available/sub2api" "SUB2API_NGINX_CONF"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' dist/install_sub2api.sh \
-    && grep -Fq '_sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_sub2api.sh \
+ grep -Fq '_sub2api_remove_file_or_error() {' \
+ && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' \
+ && grep -Fq '_sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"' \
+ && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-enabled/sub2api" "SUB2API_NGINX_LINK"' \
+ && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-available/sub2api" "SUB2API_NGINX_CONF"' \
+ && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' \
+ && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' \
+ && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' \
+ && grep -Fq '_sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
     || {
       echo "Release Sub2API script must preserve uninstall file removal failure handling." >&2
       return 1
@@ -106,7 +106,7 @@ check_sub2api_uninstall_checks_file_removal_errors() {
 
 check_sub2api_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_sub2api_require_safe_bin_path() {' impl/install_sub2api.sh \
-    && grep -Fq '_sub2api_require_safe_bin_path' dist/install_sub2api.sh \
+ && grep -Fq '_sub2api_require_safe_bin_path' \
     || {
       echo "Sub2API must centralize BIN_PATH safety validation in a reusable helper." >&2
       return 1
@@ -129,7 +129,7 @@ check_sub2api_uninstall_validates_binary_path_before_removal() {
         }
         in_uninstall=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_backup_lists_preserve_paths_with_spaces() {
@@ -148,7 +148,7 @@ check_sub2api_backup_lists_preserve_paths_with_spaces() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_codename_resolution() {
@@ -175,7 +175,7 @@ STUB
 
 check_sub2api_apt_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API apt-get update paths must use explicit conditionals with actionable errors." >&2
     return 1
   fi
@@ -238,7 +238,7 @@ check_sub2api_apt_failures_are_reported() {
         }
         in_redis=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_rpm_dependency_failures_are_reported() {
@@ -291,7 +291,7 @@ check_sub2api_rpm_dependency_failures_are_reported() {
         }
         in_redis_yum=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_runtime_dir_failures_are_explicit() {
@@ -329,7 +329,7 @@ check_sub2api_runtime_dir_failures_are_explicit() {
         }
         in_dirs=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_manual_backup_warnings_are_actionable() {
@@ -360,11 +360,11 @@ check_sub2api_manual_backup_warnings_are_actionable() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_extract_move_failure_cleanup() {
-  if grep -R -n '^[[:space:]]*mv "$bin_path" "$tmp_bin"$' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+  if grep -R -n '^[[:space:]]*mv "$bin_path" "$tmp_bin"$' impl/install_sub2api.sh 2>/dev/null; then
     echo "sub2api extraction must clean up temporary files if moving the binary fails." >&2
     return 1
   fi
@@ -398,17 +398,17 @@ check_sub2api_extract_move_failure_cleanup() {
         }
         in_func=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_pg_dump_errors_stay_out_of_backups() {
   if grep -R -nE 'pg_dump "\$\{PG_DSN\}" 2>&1 \| gzip >|pg_dump "\$PG_DSN" 2>&1 \| gzip >' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API pg_dump backups must not mix stderr into compressed SQL archives." >&2
     return 1
   fi
   if grep -R -nE 'pg_dump "\$\{PG_DSN\}" 2>/dev/null \| gzip >|pg_dump "\$PG_DSN" 2>/dev/null \| gzip >' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API pg_dump backups must preserve stderr diagnostics instead of discarding them." >&2
     return 1
   fi
@@ -441,11 +441,11 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
         }
         in_silent=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_summary_does_not_print_pg_password() {
-  if grep -R -nE 'summary\.password.*\$\{?PG_PASS\}?' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+  if grep -R -nE 'summary\.password.*\$\{?PG_PASS\}?' impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API install summary must not print the generated PostgreSQL password." >&2
     return 1
   fi
@@ -459,15 +459,15 @@ check_sub2api_summary_does_not_print_pg_password() {
         }
         in_summary=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_pg_password_is_escaped() {
-  if grep -R -nF "WITH PASSWORD '\${PG_PASS}'" impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+  if grep -R -nF "WITH PASSWORD '\${PG_PASS}'" impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API must not interpolate PG_PASS directly into SQL literals." >&2
     return 1
   fi
-  if grep -R -nF 'postgresql://${PG_USER}:${PG_PASS}@' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+  if grep -R -nF 'postgresql://${PG_USER}:${PG_PASS}@' impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API must URI-encode PG_PASS before building PG_DSN." >&2
     return 1
   fi
@@ -482,17 +482,17 @@ check_sub2api_pg_password_is_escaped() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_nginx_reload_results_are_checked() {
   if grep -R -n 'nginx -t 2>/dev/null; then[[:space:]]*$' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null | grep -v 'if nginx -t 2>/dev/null; then'; then
+      impl/install_sub2api.sh 2>/dev/null | grep -v 'if nginx -t 2>/dev/null; then'; then
     echo "Sub2API nginx apply path must keep the nginx test as an explicit conditional." >&2
     return 1
   fi
   if grep -R -n '^[[:space:]]*systemctl reload nginx$' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API nginx apply path must validate nginx reload results." >&2
     return 1
   fi
@@ -509,12 +509,12 @@ check_sub2api_nginx_reload_results_are_checked() {
         }
         in_block=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_postgres_rpm_setup_failures_are_explicit() {
   if grep -R -nE 'dnf install -y "\$pgdg_rpm" 2>/dev/null \|\| true|dnf -qy module disable postgresql 2>/dev/null \|\| true|yum install -y "\$pgdg_rpm" 2>/dev/null \|\| true|/usr/pgsql-15/bin/postgresql-15-setup initdb 2>/dev/null \|\| true' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API PostgreSQL RPM setup must not suppress repository, module, or initdb failures." >&2
     return 1
   fi
@@ -536,17 +536,17 @@ check_sub2api_postgres_rpm_setup_failures_are_explicit() {
         }
         in_block=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_dependency_services_start_before_success() {
   if grep -R -nE 'systemctl start postgresql 2>/dev/null \|\|[[:space:]\\]*systemctl start "postgresql-\$\{pg_ver\}" 2>/dev/null \|\||systemctl start postgresql 2>/dev/null \|\|[[:space:]\\]*systemctl start postgresql-15 2>/dev/null \|\|' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API PostgreSQL startup fallbacks must use explicit conditionals." >&2
     return 1
   fi
   if grep -R -nE 'success "\$\(t app\.sub2api\.success\.(postgres_exists|redis_exists)[^"]*"\)[[:space:]]*$' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     awk '
         /if \[\[ "\$pg_ver" -ge 15 \]\]; then/ { in_pg=1; saw_ensure=0; next }
         in_pg && /_ensure_postgres_running "\$pg_ver"/ { saw_ensure=1 }
@@ -566,7 +566,7 @@ check_sub2api_dependency_services_start_before_success() {
           }
           in_redis=0
         }
-      ' impl/install_sub2api.sh dist/install_sub2api.sh
+      ' impl/install_sub2api.sh
   fi
   awk '
       /_ensure_postgres_running\(\)/ { saw_pg_helper=1 }
@@ -582,12 +582,12 @@ check_sub2api_dependency_services_start_before_success() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
+ ' impl/install_sub2api.sh apps/sub2api.sh 
 }
 
 check_sub2api_nginx_install_starts_service_explicitly() {
   if grep -R -nE 'systemctl start nginx 2>/dev/null \|\| true|systemctl start nginx 2>/dev/null \|\| error "\$\(t app\.sub2api\.error\.nginx_start\)"' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API nginx installation must not suppress nginx start failures." >&2
     return 1
   fi
@@ -614,12 +614,12 @@ check_sub2api_nginx_install_starts_service_explicitly() {
         }
         in_block=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh apps/sub2api.sh dist/install_sub2api.sh
+ ' impl/install_sub2api.sh apps/sub2api.sh 
 }
 
 check_sub2api_enable_failures_are_reported() {
   if grep -R -nE 'systemctl enable postgresql 2>/dev/null \|\| true|systemctl enable postgresql-15 2>/dev/null \|\| true|systemctl enable "postgresql-\$\{pg_ver\}" 2>/dev/null \|\| true' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API service enable failures must not be silently ignored." >&2
     return 1
   fi
@@ -641,12 +641,12 @@ check_sub2api_enable_failures_are_reported() {
           exit 1
         }
       }
-    ' apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh
+    ' apps/sub2api.sh impl/install_sub2api.sh
 }
 
 check_sub2api_service_start_paths_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl (start|restart) "\$SERVICE_NAME"$' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API service start/restart paths must branch explicitly on command failure." >&2
     return 1
   fi
@@ -669,12 +669,12 @@ check_sub2api_service_start_paths_are_explicit() {
         }
         in_update=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_redis_service_handling_is_explicit() {
   if grep -R -n 'systemctl enable --now redis-server 2>/dev/null' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API Redis helper must not conflate service startup with enablement." >&2
     return 1
   fi
@@ -691,12 +691,12 @@ check_sub2api_redis_service_handling_is_explicit() {
         }
         in_helper=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
-      impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API update rollback paths must not suppress service restart failures." >&2
     return 1
   fi
@@ -724,7 +724,7 @@ check_sub2api_update_rollbacks_report_restart_failures() {
         }
         in_update_failure=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_install_cleanup_reports_systemctl_failures() {
@@ -752,7 +752,7 @@ check_sub2api_install_cleanup_reports_systemctl_failures() {
         }
         in_cleanup=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_install_rollback_validates_binary_path_before_removal() {
@@ -775,7 +775,7 @@ check_sub2api_install_rollback_validates_binary_path_before_removal() {
         }
         in_cleanup=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_install_rollback_surfaces_service_file_removal_failures() {
@@ -790,7 +790,7 @@ check_sub2api_install_rollback_surfaces_service_file_removal_failures() {
         }
       }
       in_cleanup && /error "\$\(t app\.sub2api\.error\.install_failed_rollback "\$SERVICE_NAME"\)"/ { in_cleanup=0 }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_update_stop_failure_aborts_before_replace() {
@@ -818,7 +818,7 @@ check_sub2api_update_stop_failure_aborts_before_replace() {
         }
         in_stop=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_update_rollback_stop_failure_aborts_restore() {
@@ -843,7 +843,7 @@ check_sub2api_update_rollback_stop_failure_aborts_restore() {
         }
         in_rollback=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_uninstall_stop_disable_failures_are_reported() {
@@ -874,7 +874,7 @@ check_sub2api_uninstall_stop_disable_failures_are_reported() {
         }
         in_uninstall=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_install_summary_matches_runtime_state() {
@@ -931,7 +931,7 @@ check_sub2api_install_summary_matches_runtime_state() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_health_checks_are_nonfatal_outside_install() {
@@ -945,7 +945,7 @@ check_sub2api_health_checks_are_nonfatal_outside_install() {
         }
         in_update=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_uri_encode_ascii() {

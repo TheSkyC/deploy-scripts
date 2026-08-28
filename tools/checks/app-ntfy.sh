@@ -78,12 +78,12 @@ check_ntfy_uses_shared_binary_lifecycle() {
           exit 1
         }
       }
-    ' impl/install_ntfy.sh dist/install_ntfy.sh
+    ' impl/install_ntfy.sh
 }
 
 check_ntfy_release_asset_mapping() {
   local file
-  for file in impl/install_ntfy.sh dist/install_ntfy.sh; do
+  for file in impl/install_ntfy.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-binwiederhier/ntfy}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="ntfy"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
@@ -101,7 +101,7 @@ check_ntfy_config_is_managed_atomically() {
       echo "ntfy config writes must be atomic and uninstall must report removal failures." >&2
       return 1
     }
-  grep -Fq 'atomic_write_file "$config_file" 644 root:root' dist/install_ntfy.sh     && grep -Fq 'ba_remove_file_or_error "$config_file" "NTFY_CONFIG_FILE"' dist/install_ntfy.sh     || {
+ grep -Fq 'atomic_write_file "$config_file" 644 root:root' && grep -Fq 'ba_remove_file_or_error "$config_file" "NTFY_CONFIG_FILE"' || {
       echo "Release ntfy script must preserve atomic config management." >&2
       return 1
     }

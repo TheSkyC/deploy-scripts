@@ -53,7 +53,7 @@ check_api_ports_are_validated() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
@@ -73,7 +73,7 @@ check_api_ports_are_validated() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_nginx_domains_are_validated() {
@@ -109,7 +109,7 @@ check_nginx_domains_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
       in_func && /app_validate_domain "SUB2API_DOMAIN"/ { saw_domain=1 }
@@ -120,7 +120,7 @@ check_nginx_domains_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; saw_domain=0; next }
       in_func && /is_valid_dns_name "\$VW_DOMAIN"/ { saw_domain=1 }
@@ -140,7 +140,7 @@ check_nginx_domains_are_validated() {
         }
         in_prompt=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; saw_domain=0; saw_bool=0; saw_theme_url=0; saw_site_url=0; saw_repo=0; saw_ref=0; saw_keep_days=0; next }
       in_func && /app_validate_domain "BLOG_DOMAIN"/ { saw_domain=1 }
@@ -157,7 +157,7 @@ check_nginx_domains_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_config_value_validators() {

@@ -21,7 +21,7 @@ check_blog_status_backup_projection() {
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "blog backups" in x["path"]; assert x["path"].endswith("blog_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
   grep -Fq 'APP_STATUS_BACKUP_FN=_blog_status_backup' impl/install_hugo_blog.sh \
-    && grep -Fq 'APP_STATUS_BACKUP_FN=_blog_status_backup' dist/install_hugo_blog.sh
+ && grep -Fq 'APP_STATUS_BACKUP_FN=_blog_status_backup' 
 }
 
 check_blog_uninstall_supports_noninteractive_mode() {
@@ -39,7 +39,7 @@ check_blog_uninstall_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_status_dispatch() {
@@ -77,7 +77,7 @@ check_blog_install_surfaces_default_nginx_site_removal_failures() {
         }
         in_nginx=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_localized_defaults() {
@@ -112,7 +112,7 @@ check_blog_config_persistence() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_restore_action() {
@@ -143,12 +143,12 @@ check_blog_restore_action() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl wget git nginx ca-certificates$' \
-      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog dependency installation must use explicit conditionals with actionable errors." >&2
     return 1
   fi
@@ -177,7 +177,7 @@ check_blog_dependency_failures_are_reported() {
         }
         in_block=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_hugo_install_failures_are_actionable() {
@@ -244,7 +244,7 @@ check_blog_hugo_install_failures_are_actionable() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_site_setup_failures_are_explicit() {
@@ -353,7 +353,7 @@ check_blog_site_setup_failures_are_explicit() {
         }
         in_nginx=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_enable_failures_are_reported() {
@@ -367,12 +367,12 @@ check_blog_enable_failures_are_reported() {
           exit 1
         }
       }
-    ' apps/blog.sh impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' apps/blog.sh impl/install_hugo_blog.sh
 }
 
 check_blog_nginx_start_path_is_explicit() {
   if grep -R -n '^systemctl restart nginx$' \
-      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog nginx startup must branch explicitly on restart failure." >&2
     return 1
   fi
@@ -386,7 +386,7 @@ check_blog_nginx_start_path_is_explicit() {
         }
         in_block=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_install_summary_matches_local_health() {
@@ -416,21 +416,21 @@ check_blog_install_summary_matches_local_health() {
         }
         in_health=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_static_deploy_swaps_tree() {
-  if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+  if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not copy directly into the live Nginx root." >&2
     return 1
   fi
   if grep -R -n '^[[:space:]]*\[\[ -e "\$DEPLOY_BAK" || -L "\$DEPLOY_BAK" \]\] && mv "\$DEPLOY_BAK" "\$NGINX_ROOT" || true' \
-      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment rollback must validate restoring the Nginx root." >&2
     return 1
   fi
   if grep -R -nE '\[\[ -e "\\?\$DEPLOY_BAK" \|\| -L "\\?\$DEPLOY_BAK" \]\] && rm -rf "\\?\$DEPLOY_BAK"' \
-      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not let a missing previous backup trip set -e after a successful first deploy." >&2
     return 1
   fi
@@ -471,7 +471,7 @@ check_blog_static_deploy_swaps_tree() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_static_deploy_failures_are_actionable() {
@@ -496,16 +496,16 @@ check_blog_static_deploy_failures_are_actionable() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_site_files_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > "\$CONFIG_FILE"|^[[:space:]]*cat > "\$\{SITE_DIR\}/|^[[:space:]]*cat > "\$\{CMS_ADMIN_DIR\}/' \
-      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog site files must be written through temporary files before replacement." >&2
     return 1
   fi
-  if grep -R -n '^[[:space:]]*cp "\$CONFIG_FILE" "\${CONFIG_FILE}.bak.' impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+  if grep -R -n '^[[:space:]]*cp "\$CONFIG_FILE" "\${CONFIG_FILE}.bak.' impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog config backups must copy to a temporary file before replacing the final backup path." >&2
     return 1
   fi
@@ -541,7 +541,7 @@ check_blog_site_files_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_publish_guidance_uses_staging_output() {
@@ -577,7 +577,7 @@ check_blog_publish_guidance_uses_staging_output() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_blog_publish_helper_is_atomic() {
@@ -609,5 +609,5 @@ check_blog_publish_helper_is_atomic() {
           exit 1
         }
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }

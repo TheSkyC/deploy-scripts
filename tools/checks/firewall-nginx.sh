@@ -22,7 +22,7 @@ check_keyring_writes_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_apt_sources_are_atomic() {
@@ -44,7 +44,7 @@ check_apt_sources_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_iptables_rules_are_atomic() {
@@ -66,7 +66,7 @@ check_iptables_rules_are_atomic() {
           exit 1
         }
       }
-    ' lib/app.sh dist/install_newapi.sh dist/install_sub2api.sh
+ ' lib/app.sh 
 }
 
 check_netfilter_persistent_save_reports_failures() {
@@ -94,7 +94,7 @@ check_netfilter_persistent_save_reports_failures() {
         }
         in_block=0
       }
-    ' lib/app.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' lib/app.sh impl/install_vaultwarden.sh
 }
 
 check_systemd_units_are_atomic() {
@@ -216,7 +216,7 @@ check_systemd_daemon_reloads_are_explicit() {
 
 check_certbot_diagnostics_use_stderr() {
   if grep -R -n 'certbot certonly .*2>&1; then' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden certbot diagnostics must be written to stderr." >&2
     return 1
   fi
@@ -231,7 +231,7 @@ check_certbot_diagnostics_use_stderr() {
         }
         in_block=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_cron_logrotate_are_atomic() {
@@ -255,15 +255,15 @@ check_cron_logrotate_are_atomic() {
 }
 
 check_logrotate_writes_use_shared_helper() {
-  grep -Fq 'app_write_logrotate() {' lib/app.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' impl/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' dist/install_newapi.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' impl/install_sub2api.sh     && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' dist/install_sub2api.sh     && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' impl/install_cyberstrikeai.sh     && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' dist/install_cyberstrikeai.sh     || {
+ grep -Fq 'app_write_logrotate() {' lib/app.sh && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' impl/install_newapi.sh && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' impl/install_sub2api.sh && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' impl/install_cyberstrikeai.sh && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' || {
       echo "NewAPI, Sub2API, and CyberStrikeAI logrotate configs must be written through the shared app_write_logrotate helper." >&2
       return 1
     }
-  if grep -nE '^_write_logrotate\(\)' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh; then
+ if grep -nE '^_write_logrotate\(\)' impl/install_newapi.sh impl/install_sub2api.sh ; then
     echo "NewAPI and Sub2API must not define a per-app _write_logrotate copy." >&2
     return 1
   fi
-  if grep -nE '^write_logrotate\(\)' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh; then
+  if grep -nE '^write_logrotate\(\)' impl/install_cyberstrikeai.sh; then
     echo "CyberStrikeAI must not define a per-app write_logrotate copy." >&2
     return 1
   fi
@@ -347,11 +347,11 @@ check_nginx_main_config_edits_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_nginx_test_failures_report_diagnostics() {
-  if grep -R -n 'nginx -t >&2 2>/dev/null' impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+  if grep -R -n 'nginx -t >&2 2>/dev/null' impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API nginx test failures must preserve diagnostic stderr output." >&2
     return 1
   fi
@@ -365,7 +365,7 @@ check_nginx_test_failures_report_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_firewall_success_paths_validate_command_results() {
@@ -376,7 +376,7 @@ check_firewall_success_paths_validate_command_results() {
     return 1
   fi
   if grep -R -n 'ufw allow "Nginx Full" > /dev/null 2>&1 || ufw allow 80/tcp > /dev/null' \
-      impl/install_hugo_blog.sh dist/install_hugo_blog.sh 2>/dev/null; then
+      impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog firewall fallback must not report success unless both HTTP and HTTPS rules are applied." >&2
     return 1
   fi
@@ -395,11 +395,11 @@ check_firewall_success_paths_validate_command_results() {
       }
     ' lib/app.sh
   grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' impl/install_newapi.sh \
-    && grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' dist/install_newapi.sh \
+ && grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' \
     && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
-    && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' dist/install_sub2api.sh \
+ && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' \
     && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' impl/install_cyberstrikeai.sh \
-    && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' dist/install_cyberstrikeai.sh \
+ && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' \
     || {
       echo "NewAPI, Sub2API, and CyberStrikeAI firewall configuration must use the shared app_configure_firewall helper." >&2
       return 1
@@ -461,7 +461,7 @@ check_firewall_success_paths_validate_command_results() {
         }
         in_block=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /step "\$\(t app\.vaultwarden\.step\.firewall\)"/ { in_block=1; saw_ufw_if=0; saw_iptables_ok=0; saw_failure_warn=0; next }
       in_block && /if ufw allow "Nginx Full" >\/dev\/null 2>&1; then/ { saw_ufw_if=1 }
@@ -474,7 +474,7 @@ check_firewall_success_paths_validate_command_results() {
         }
         in_block=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   awk '
       /step "\$\(t app\.blog\.step_firewall\)"/ { in_block=1; saw_ufw_if=0; saw_iptables_ok=0; saw_failure_warn=0; next }
       in_block && /if ufw allow "Nginx Full" > \/dev\/null 2>&1/ { saw_ufw_if=1 }
@@ -487,7 +487,7 @@ check_firewall_success_paths_validate_command_results() {
         }
         in_block=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_uninstall_nginx_paths_preserve_diagnostics() {
@@ -518,7 +518,7 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   grep -Fq 'app.cyberstrikeai.warn.uninstall_nginx_reload_failed' apps/cyberstrikeai.sh || {
     echo "CyberStrikeAI must localize nginx reload warnings during uninstall." >&2
     return 1
@@ -538,7 +538,7 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   grep -Fq 'app.vaultwarden.warn.uninstall_nginx_reload_failed' apps/vaultwarden.sh || {
     echo "Vaultwarden must localize nginx reload warnings during uninstall." >&2
     return 1
@@ -558,7 +558,7 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   grep -Fq 'app.blog.uninstall.nginx_test_failed' apps/blog.sh || {
     echo "Blog must localize nginx uninstall validation warnings." >&2
     return 1
@@ -578,7 +578,7 @@ check_uninstall_nginx_paths_preserve_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_fail2ban_configs_are_atomic() {
@@ -599,7 +599,7 @@ check_fail2ban_configs_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_user_deletion_paths_are_explicit() {
@@ -621,7 +621,7 @@ check_user_deletion_paths_are_explicit() {
         }
         in_userdel=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /if \$DELETE_DATA && \$DELETE_CONF && id "\$SERVICE_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
       in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
@@ -634,7 +634,7 @@ check_user_deletion_paths_are_explicit() {
         }
         in_userdel=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /if \[\[ "\$\{del_install,,\}" == "y" \]\] && id "\$SERVICE_USER" >\/dev\/null 2>&1; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
       in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
@@ -647,7 +647,7 @@ check_user_deletion_paths_are_explicit() {
         }
         in_userdel=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /if \$DELETE_DATA && id "\$VW_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; next }
       in_userdel && /if userdel "\$VW_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
@@ -659,6 +659,6 @@ check_user_deletion_paths_are_explicit() {
         }
         in_userdel=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 

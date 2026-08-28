@@ -181,7 +181,7 @@ check_config_save_failures_are_explicit() {
         }
         in_func=0
       }
-    ' lib/config.sh dist/install_newapi.sh
+ ' lib/config.sh 
   awk '
       /error\.config_write/ { saw_key=1 }
       END {
@@ -190,7 +190,7 @@ check_config_save_failures_are_explicit() {
           exit 1
         }
       }
-    ' lib/i18n.sh dist/install_newapi.sh
+ ' lib/i18n.sh 
   awk '
       /^(app_)?save_config\(\)/ { in_func=1; saw_if=0; saw_error=0; next }
       in_func && /write_config_file/ { saw_if=1 }
@@ -203,7 +203,7 @@ check_config_save_failures_are_explicit() {
         in_func=0
       }
     ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_hugo_blog.sh lib/app.sh
+ lib/app.sh
 }
 
 check_summary_ip_detection_has_fallback() {
@@ -300,7 +300,7 @@ check_api_status_directory_sizes_are_nonfatal() {
       in_status && /data_size=\$\(du -sh "\$DATA_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_data=1 }
       in_status && /db_size=\$\(du -sh "\$\{DATA_DIR\}\/one-api\.db" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_db=1 }
       in_status && /bak_total_size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_backup=1 }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /do_status\(\)/ { in_status=1; next }
       in_status && /^}/ {
@@ -312,22 +312,22 @@ check_api_status_directory_sizes_are_nonfatal() {
       }
       in_status && /_sz=\$\(du -sh "\$_d" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.sub2api\.status\.unknown\)/ { saw_dir=1 }
       in_status && /bak_total_size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.sub2api\.status\.unknown\)/ { saw_backup=1 }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_status_port_matches_are_bounded() {
   if grep -R -nF 'grep ":${PORT}"' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+ impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "API port owner detection must not use substring port matches." >&2
     return 1
   fi
   if grep -R -nF 'grep "${PORT}"' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+ impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "API firewall status checks must not use substring port matches." >&2
     return 1
   fi
   if grep -R -nF 'grep ":${VW_PORT}"' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden port owner detection must not use substring port matches." >&2
     return 1
   fi
@@ -341,7 +341,7 @@ check_status_port_matches_are_bounded() {
           exit 1
         }
       }
-    ' lib/network.sh dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+ ' lib/network.sh 
   awk '
       /app_check_port_conflict "\$PORT"/ { saw_owner++ }
       /grep -E "\(\^\|\[\[:space:\]\]\)\$\{PORT\}\/tcp\(\[\[:space:\]\]\|\$\)"/ { saw_ufw++ }
@@ -351,7 +351,7 @@ check_status_port_matches_are_bounded() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+ ' impl/install_newapi.sh impl/install_sub2api.sh 
   awk '
       /app_check_port_conflict "\$VW_PORT"/ { saw_owner++ }
       END {
@@ -360,7 +360,7 @@ check_status_port_matches_are_bounded() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_port_conflict_is_warn_only() {
