@@ -1399,6 +1399,299 @@ operation_run_app_action() {
   return "$status"
 }
 
+# ----- lib/backup.sh -----
+
+# Shared backup-integrity primitives: SHA-256 sidecar files, manifest.json
+# documents, and a verify action that checks archive integrity.
+#
+# Layout convention for every backup directory:
+#   <backup_dir>/<app>_*.tar.gz          the archive itself
+#   <backup_dir>/<archive>.sha256        64-hex digest of the archive bytes
+#   <backup_dir>/<archive>.manifest.json manifest describing the backup
+# The .tmp staging suffix is excluded from every listing helper so concurrent
+# writers never leak into verify results.
+
+# Print the sha256 of a file as 64 lowercase hex characters. Uses sha256sum
+# with a shasum fallback; returns nonzero when neither tool can hash the file.
+backup_sha256_file() {
+  local file="$1" digest=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest="$(sha256sum "$file" 2>/dev/null | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    digest="$(shasum -a 256 "$file" 2>/dev/null | awk '{print $1}')"
+  fi
+  [[ "${digest:-}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
+}
+
+# Write "<digest>  <name>" (two spaces, basename only) next to the archive and
+# return the digest on stdout. Sidecar is written through atomic_write_file
+# with mode 600; backups always run as root, so no explicit chown is needed.
+backup_write_sha256() {
+  local archive="$1"
+  local digest name sidecar
+  digest="$(backup_sha256_file "$archive")" || return 1
+  name="$(basename "$archive")"
+  sidecar="${archive}.sha256"
+  if ! printf '%s  %s\n' "$digest" "$name" | atomic_write_file "$sidecar" 600; then
+    return 1
+  fi
+  printf '%s\n' "$digest"
+}
+
+# Read a sidecar's expected digest, accepting both "digest  name" lines and a
+# bare digest. Prints the digest; returns nonzero on malformed content.
+backup_read_sha256() {
+  local sidecar="$1" line digest
+  [[ -f "$sidecar" ]] || return 1
+  IFS= read -r line < "$sidecar" || return 1
+  digest="${line%%[[:space:]]*}"
+  [[ "$digest" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
+}
+
+# Write a single-line manifest.json for an archive. Arguments:
+#   $1 archive path   $2 app id   $3 schema version of the backup format
+#   $4 installed version (may be empty -> null)
+# The sha256 sidecar must already exist; its digest is embedded so consumers
+# can cross-check manifest and sidecar for tampering. Written atomically with
+# mode 600 via the shared escaper, matching status-JSON conventions.
+backup_write_manifest() {
+  local archive="$1" app_id="$2" schema_version="$3" installed_version="${4:-}"
+  local digest name created_at
+  digest="$(backup_read_sha256 "${archive}.sha256")" || return 1
+  name="$(basename "$archive")"
+  created_at="$(date '+%Y-%m-%dT%H:%M:%S%:z')"
+  if ! atomic_write_file "${archive}.manifest.json" 600 <<MANIFEST
+{"schema_version":${schema_version},"app":$(app_json_string "$app_id"),"archive":$(app_json_string "$name"),"sha256":"$digest","created_at":$(app_json_string "$created_at"),"installed_version":$(app_json_string "$installed_version")}
+MANIFEST
+  then
+    return 1
+  fi
+}
+
+# Verify one archive: recompute the digest and compare against both the
+# sidecar and (when present) the manifest. Prints nothing; returns nonzero on
+# any mismatch or missing artifact. A missing sidecar fails closed — archives
+# without integrity metadata are reported by the caller as unverified instead.
+backup_verify_archive() {
+  local archive="$1" expected actual manifest_digest=""
+  [[ -f "$archive" ]] || return 1
+  expected="$(backup_read_sha256 "${archive}.sha256")" || return 1
+  actual="$(backup_sha256_file "$archive")" || return 1
+  [[ "$actual" == "$expected" ]] || return 1
+  if [[ -f "${archive}.manifest.json" ]]; then
+    manifest_digest="$(backup_manifest_field "${archive}.manifest.json" sha256)" || return 1
+    [[ "$manifest_digest" == "$expected" ]] || return 1
+  fi
+  return 0
+}
+
+# Print the newest archive path (by mtime) matching one or more globs in a
+# backup directory, or nothing when none exist. Mirrors the find/sort idiom of
+# app_backup_latest_archive_json so verify and status agree on "latest".
+backup_latest_archive() {
+  local backup_dir="$1" glob
+  local find_args=() latest=""
+  shift
+  for glob in "$@"; do
+    [[ ${#find_args[@]} -eq 0 ]] || find_args+=(-o)
+    find_args+=(-name "$glob")
+  done
+  latest="$(find "$backup_dir" -maxdepth 1 -type f \( "${find_args[@]}" \) -printf '%T@|%p\n' 2>/dev/null | sort -t'|' -k1,1nr)"
+  latest="${latest%%$'\n'*}"
+  [[ -z "$latest" ]] && return 1
+  printf '%s\n' "${latest#*|}"
+}
+
+# List every archive (absolute paths) matching the globs, oldest first, with
+# the staging suffix excluded.
+backup_list_archives() {
+  local backup_dir="$1" glob
+  local find_args=()
+  shift
+  for glob in "$@"; do
+    [[ ${#find_args[@]} -eq 0 ]] || find_args+=(-o)
+    find_args+=(-name "$glob")
+  done
+  find "$backup_dir" -maxdepth 1 -type f \( "${find_args[@]}" \) ! -name '*.tmp' -print 2>/dev/null | sort
+}
+
+# Verify the newest archive in a directory and print a single-line JSON
+# verdict consumable by status projections and batch summaries:
+#   {"state":"verified|failed|unverified","archive":...,"message":...}
+# unverified means no integrity metadata exists yet (pre-manifest backups).
+backup_verify_latest_json() {
+  local backup_dir="$1"
+  shift
+  local archive digest_state="unverified" message="no integrity metadata for this backup"
+  if ! is_safe_path "$backup_dir" || [[ ! -d "$backup_dir" ]]; then
+    printf '{"state":"unknown","archive":null,"message":"backup directory is missing or unsafe"}'
+    return
+  fi
+  archive="$(backup_latest_archive "$backup_dir" "$@")" || {
+    printf '{"state":"missing","archive":null,"message":"no backup archive found"}'
+    return
+  }
+  if [[ ! -f "${archive}.sha256" ]]; then
+    printf '{"state":"unverified","archive":%s,"message":%s}' \
+      "$(app_json_string "$(basename "$archive")")" "$(app_json_string "$message")"
+    return
+  fi
+  if backup_verify_archive "$archive"; then
+    digest_state="verified"
+    message="checksum and manifest match"
+  else
+    digest_state="failed"
+    message="checksum or manifest mismatch; backup may be corrupted"
+  fi
+  printf '{"state":"%s","archive":%s,"message":%s}' \
+    "$digest_state" "$(app_json_string "$(basename "$archive")")" "$(app_json_string "$message")"
+}
+
+# Restore one archive over a service's data directory, with full rollback.
+# Arguments: $1 data dir  $2 systemd unit name  $3 archive path.
+# Caller must already have: required root, taken the app lock, selected a
+# path-confined archive. Verifies the checksum before touching anything,
+# rejects unsafe tar members (absolute paths, "..", backslashes), stops the
+# service before swapping the directory atomically with a timestamped aside
+# copy, restarts, and rolls the previous data back when the service cannot
+# start on restored data.
+backup_restore_data_dir() {
+  local data_dir="$1" service_name="$2" archive="$3"
+  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
+    error "$(t backup.verify.failed "$(basename "$archive")")"
+  fi
+  info "$(t backup.restore.using "$archive")"
+  local member_list extract_dir
+  if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
+        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+        ;;
+    esac
+  done <<< "$member_list"
+
+  systemctl stop "$service_name" || error "$(t backup.restore.stop_failed "$service_name")"
+  local data_parent data_base staged_aside restored=false
+  data_parent="$(dirname "$data_dir")"
+  data_base="$(basename "$data_dir")"
+  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)"
+  if ! mv "$data_dir" "$staged_aside"; then
+    systemctl start "$service_name" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
+    mv "$staged_aside" "$data_dir"
+    systemctl start "$service_name" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if tar -xzf "$archive" -C "$extract_dir"; then
+    # Archives store either the bare payload (tar -C stage .) or a single
+    # top-level directory named after the data dir (tar -C parent).
+    local payload="$extract_dir"
+    if [[ -d "${extract_dir}/${data_base}" ]]; then
+      payload="${extract_dir}/${data_base}"
+    fi
+    if mv "$payload" "$data_dir"; then
+      restored=true
+    fi
+  fi
+  rm -rf "$extract_dir"
+  if [[ "$restored" != "true" ]]; then
+    rm -rf "$data_dir"
+    mv "$staged_aside" "$data_dir"
+    systemctl start "$service_name" || true
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  chown -R root:root "$data_dir" 2>/dev/null || true
+  if systemctl start "$service_name"; then
+    wait_for_service "$service_name" 20 || true
+  fi
+  if ! systemctl is-active --quiet "$service_name"; then
+    warn "$(t backup.restore.start_failed_rollback)"
+    systemctl stop "$service_name" 2>/dev/null || true
+    rm -rf "$data_dir"
+    if mv "$staged_aside" "$data_dir"; then
+      success "$(t backup.restore.rollback_done)"
+    else
+      warn "$(t backup.restore.rollback_failed "$staged_aside")"
+    fi
+    systemctl start "$service_name" \
+      || error "$(t binary_app.error.install_start_failed "$service_name" "$service_name")"
+    error "$(t binary_app.error.update_failed "$(systemctl is-active "$service_name" 2>/dev/null || echo unknown)")"
+  fi
+  rm -rf "$staged_aside"
+  success "$(t backup.restore.restored "$(basename "$archive")")"
+}
+
+# Verify the newest archive in a backup directory and print the human verdict
+# (success message / warning / localized error) for a per-app verify action.
+# Caller must already have: shown banner, required root, loaded config, and
+# validated the directory with require_safe_path. Exits via error() on a
+# failed checksum; missing/unverified archives are informational only, so
+# pre-manifest backups stay visible without blocking the operator.
+app_verify_latest_backup() {
+  local backup_dir="$1"
+  shift
+  local verdict state archive_name sidecar_digest
+  verdict="$(backup_verify_latest_json "$backup_dir" "$@")"
+  state="$(state_json_field "$verdict" state 2>/dev/null || true)"
+  case "$state" in
+    missing)
+      info "$(t backup.verify.no_backups "$backup_dir")"
+      return 0
+      ;;
+    unverified)
+      warn "$(t backup.verify.unverified "$(state_json_field "$verdict" archive)")"
+      return 0
+      ;;
+  esac
+  archive_name="$(state_json_field "$verdict" archive)"
+  if [[ "$state" == "verified" ]]; then
+    sidecar_digest="$(backup_read_sha256 "${backup_dir}/${archive_name}.sha256")"
+    success "$(t backup.verify.verified "$archive_name" "$sidecar_digest")"
+    return 0
+  fi
+  error "$(t backup.verify.failed "$archive_name")"
+}
+
+# Extract one top-level string field from a manifest.json produced by
+# backup_write_manifest. Prints the raw (still escaped) value; returns nonzero
+# when the field is absent or the document is not the expected shape.
+backup_manifest_field() {
+  local manifest="$1" field="$2"
+  [[ -f "$manifest" ]] || return 1
+  awk -v field="\"$field\":" '
+    BEGIN { found = 0 }
+    {
+      line = $0
+      while ((idx = index(line, field)) > 0) {
+        rest = substr(line, idx + length(field))
+        sub(/^[[:space:]]*/, "", rest)
+        if (substr(rest, 1, 1) == "\"") {
+          value = substr(rest, 2)
+          end = index(value, "\"")
+          if (end > 1 || length(value) == 0) {
+            print substr(value, 1, end - 1)
+            found = 1
+            exit
+          }
+        } else if (substr(rest, 1, 4) == "null") {
+          print ""
+          found = 1
+          exit
+        }
+        line = substr(line, idx + length(field))
+      }
+    }
+    END { exit found ? 0 : 1 }
+  ' "$manifest"
+}
+
 # ----- lib/state.sh -----
 
 DEPLOY_STATE_SCHEMA_VERSION=2
@@ -6282,6 +6575,1010 @@ deploy_app_id_from_selection() {
   return 1
 }
 
+# ----- lib/notify.sh -----
+
+# Global notification integration: ntfy / Gotify push backends with a
+# fail-open contract — notification failures are logged as warnings and can
+# never block the operation that triggered them.
+#
+# Configuration lives in /etc/deploy-notify.conf (root:600, same key=value
+# format and trust gate as app configs):
+#   NOTIFY_ENABLED=true|false
+#   NOTIFY_BACKEND=ntfy|gotify
+#   NOTIFY_URL=            service origin, e.g. https://ntfy.example.com
+#   NOTIFY_TOPIC=          ntfy topic (ntfy only)
+#   NOTIFY_TOKEN=          access token sent as Authorization: Bearer
+#   NOTIFY_USERNAME=       gotify basic-auth username (gotify only)
+#   NOTIFY_PASSWORD=       gotify basic-auth password (gotify only)
+
+NOTIFY_CONF_FILE="${NOTIFY_CONF_FILE:-/etc/deploy-notify.conf}"
+
+notify_load_config() {
+  local conf_file="$NOTIFY_CONF_FILE"
+  NOTIFY_ENABLED=false NOTIFY_BACKEND="" NOTIFY_URL="" NOTIFY_TOPIC=""
+  NOTIFY_TOKEN="" NOTIFY_USERNAME="" NOTIFY_PASSWORD=""
+  [[ -f "$conf_file" ]] || return 0
+  # Same trust gate as app configs: root-owned, mode 600/400, or ignored.
+  if ! app_conf_trusted_value "$conf_file" "NOTIFY_ENABLED" >/dev/null 2>&1; then
+    return 1
+  fi
+  local line key value
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[A-Z_]+= ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    value="${value%\"}"
+    value="${value#\"}"
+    case "$key" in
+      NOTIFY_ENABLED|NOTIFY_BACKEND|NOTIFY_URL|NOTIFY_TOPIC|NOTIFY_TOKEN|NOTIFY_USERNAME|NOTIFY_PASSWORD)
+        printf -v "$key" '%s' "$value"
+        ;;
+    esac
+  done < "$conf_file"
+}
+
+# Redact anything that looks like a credential from message bodies before
+# they leave the machine. Reuses the operation-log redaction patterns.
+notify_redact() {
+  local text="$1"
+  printf '%s' "$text" | sed -E \
+    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
+    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+}
+
+# Send one notification. Never fails the caller: every error path warns to
+# stderr (or silently no-ops when notifications are disabled/unconfigured)
+# and returns 0 unless explicitly asked to report failure via NOTIFY_STRICT.
+notify_send() {
+  local title="$1" body="${2:-}"
+  notify_load_config || { warn "$(t notify.warn.untrusted_config)"; return "${NOTIFY_STRICT:-0}"; }
+  [[ "${NOTIFY_ENABLED,,}" == true ]] || {
+    [[ "${NOTIFY_STRICT:-0}" == 1 ]] && warn "$(t notify.warn.disabled)"
+    return "${NOTIFY_STRICT:-0}"
+  }
+  case "${NOTIFY_BACKEND,,}" in
+    ntfy|gotify) ;;
+    *) warn "$(t notify.warn.no_backend)"; return "${NOTIFY_STRICT:-0}" ;;
+  esac
+  [[ -n "$NOTIFY_URL" ]] || { warn "$(t notify.warn.no_url)"; return "${NOTIFY_STRICT:-0}"; }
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "$(t notify.warn.curl_missing)"
+    return "${NOTIFY_STRICT:-0}"
+  fi
+  title="$(notify_redact "$title")"
+  body="$(notify_redact "$body")"
+  local args=(curl --max-time 10 -sS -o /dev/null -w '%{http_code}')
+  case "${NOTIFY_BACKEND,,}" in
+    ntfy)
+      if [[ -n "$NOTIFY_TOKEN" ]]; then
+        args+=(-H "Authorization: Bearer ${NOTIFY_TOKEN}")
+      fi
+      args+=(-H "Title: ${title}" -H "Tags: warning" --data-binary "$body" \
+        "${NOTIFY_URL%/}/${NOTIFY_TOPIC:-deploy-scripts}")
+      ;;
+    gotify)
+      if [[ -n "$NOTIFY_TOKEN" ]]; then
+        args+=(-H "Authorization: Bearer ${NOTIFY_TOKEN}")
+      elif [[ -n "$NOTIFY_USERNAME" && -n "$NOTIFY_PASSWORD" ]]; then
+        args+=(-u "${NOTIFY_USERNAME}:${NOTIFY_PASSWORD}")
+      fi
+      local gotify_payload
+      gotify_payload="{\"title\":$(app_json_string "$title"),\"message\":$(app_json_string "$body"),\"priority\":5}"
+      args+=(-H "Content-Type: application/json" \
+        --data "$gotify_payload" \
+        "${NOTIFY_URL%/}/message")
+      ;;
+  esac
+  local http_code
+  http_code="$("${args[@]}" 2>/dev/null)" || http_code="000"
+  case "$http_code" in
+    2*) info "$(t notify.info.sent)"; return 0 ;;
+    *)
+      warn "$(t notify.warn.send_failed "$http_code")"
+      [[ "${NOTIFY_STRICT:-0}" == 1 ]] && return 1
+      return 0
+      ;;
+  esac
+}
+
+# Interactive/CLI configuration for the notification backends. Values are
+# merged over the existing config so each flag can be set independently;
+# --disable flips NOTIFY_ENABLED while keeping the rest, and --test sends a
+# harmless probe message. The file is written root:600 via atomic_write_file.
+notify_config_main() {
+  require_root "notify-config"
+  local enable="" backend="" url="" topic="" token="" test_only=false clear_all=false
+  while (($#)); do
+    case "$1" in
+      --enable) enable=true; shift ;;
+      --disable) enable=false; shift ;;
+      --backend) backend="${2:-}"; shift 2 ;;
+      --url) url="${2:-}"; shift 2 ;;
+      --topic) topic="${2:-}"; shift 2 ;;
+      --token) token="${2:-}"; shift 2 ;;
+      --test) test_only=true; shift ;;
+      --clear) clear_all=true; shift ;;
+      -h|--help)
+        t notify.usage "$0"
+        return 0
+        ;;
+      *)
+        t notify.usage "$0"
+        return 2
+        ;;
+    esac
+  done
+  if [[ "$clear_all" == "true" ]]; then
+    rm -f "$NOTIFY_CONF_FILE"
+    success "$(t notify.config.cleared "$NOTIFY_CONF_FILE")"
+    return 0
+  fi
+  # Load current values as the merge base.
+  local conf_file="$NOTIFY_CONF_FILE"
+  NOTIFY_ENABLED=false NOTIFY_BACKEND="" NOTIFY_URL="" NOTIFY_TOPIC=""
+  NOTIFY_TOKEN="" NOTIFY_USERNAME="" NOTIFY_PASSWORD=""
+  if [[ -f "$conf_file" ]]; then
+    local line key value
+    while IFS= read -r line; do
+      [[ "$line" =~ ^[A-Z_]+= ]] || continue
+      key="${line%%=*}"
+      value="${line#*=}"
+      value="${value%\"}"
+      value="${value#\"}"
+      case "$key" in
+        NOTIFY_ENABLED|NOTIFY_BACKEND|NOTIFY_URL|NOTIFY_TOPIC|NOTIFY_TOKEN|NOTIFY_USERNAME|NOTIFY_PASSWORD)
+          printf -v "$key" '%s' "$value"
+          ;;
+      esac
+    done < "$conf_file"
+  fi
+  [[ -n "$backend" ]] || true
+  case "${backend,,}" in
+    ""|ntfy|gotify) : ;;
+    *) error "$(t error.url_invalid NOTIFY_BACKEND "$backend")" ;;
+  esac
+  [[ -n "$backend" ]] && NOTIFY_BACKEND="${backend,,}"
+  [[ -n "$url" ]] && NOTIFY_URL="$url"
+  [[ -n "$topic" ]] && NOTIFY_TOPIC="$topic"
+  [[ -n "$token" ]] && { NOTIFY_TOKEN="$token"; NOTIFY_USERNAME=""; NOTIFY_PASSWORD=""; }
+  [[ -n "$enable" ]] && NOTIFY_ENABLED="$( [[ "${enable}" == true ]] && echo true || echo false )"
+  if [[ "$test_only" == "true" ]]; then
+    # Probe with the merged values, not whatever the disk still holds:
+    # notify_send reloads the config file internally, so stage the merged
+    # values into a private probe file and point notify_send at it. A test
+    # without an enabled backend or a reachable URL must fail loudly instead
+    # of claiming success while silently skipping the send.
+    local probe_file probe_status
+    probe_file="$(mktemp "${TMPDIR:-/tmp}/deploy-notify-probe.XXXXXX")" || error "$(t error.tmpdir)"
+    if ! atomic_write_file "$probe_file" 600 <<PROBE
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+PROBE
+    then
+      rm -f "$probe_file"
+      error "$(t error.config_write "$probe_file")"
+    fi
+    NOTIFY_STRICT=1 NOTIFY_CONF_FILE="$probe_file" notify_send \
+      "deploy-scripts notification test" \
+      "If you can read this, notifications work. No secrets are included."
+    probe_status=$?
+    rm -f "$probe_file"
+    if [[ "$probe_status" -ne 0 ]]; then
+      error "$(t notify.test.failed)"
+    fi
+    # The probe succeeded with the merged values, so persist them so the
+    # tested configuration is exactly what later runs will use.
+    if ! atomic_write_file "$conf_file" 600 <<CONF
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+CONF
+    then
+      error "$(t error.config_write "$conf_file")"
+    fi
+    success "$(t notify.test.sent_ok)"
+    return 0
+  fi
+  if ! atomic_write_file "$conf_file" 600 <<CONF
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+CONF
+  then
+    error "$(t error.config_write "$conf_file")"
+  fi
+  success "$(t notify.config.saved "$conf_file")"
+}
+
+# ----- lib/schedule.sh -----
+
+# Scheduled update/check runs: `deploy.sh schedule` writes a systemd
+# service+timer pair (or a /etc/cron.d entry on non-systemd systems) that
+# invokes the runner script; `deploy.sh unschedule` removes both. The runner
+# takes the same manager lock as interactive batches, so scheduled and manual
+# runs can never overlap, and reports its result through notify_send.
+#
+# Config lives in /etc/deploy-schedule.conf (root:600):
+#   SCHEDULE_ENABLED=true|false
+#   SCHEDULE_MODE=update-all|check-only
+#   SCHEDULE_ON_CALENDAR=  systemd OnCalendar spec (default daily 04:30)
+#   SCHEDULE_INCLUDE=      optional --include list passed to the batch command
+
+SCHEDULE_CONF_FILE="${SCHEDULE_CONF_FILE:-/etc/deploy-schedule.conf}"
+DEPLOY_SCHEDULE_SERVICE="${DEPLOY_SCHEDULE_SERVICE:-deploy-scripts-batch}"
+DEPLOY_SCHEDULE_CRON_FILE="${DEPLOY_SCHEDULE_CRON_FILE:-/etc/cron.d/deploy-scripts-batch}"
+DEPLOY_SCHEDULE_RUNNER="${DEPLOY_SCHEDULE_RUNNER:-/usr/local/bin/deploy-scripts-batch-runner}"
+
+# Retry knob for scheduled batches: how many times a failed run is retried
+# (default 0 = fire once), and the base backoff in seconds between attempts
+# (doubled each retry, capped at 900).
+SCHEDULE_RETRIES="${SCHEDULE_RETRIES:-0}"
+SCHEDULE_RETRY_BACKOFF="${SCHEDULE_RETRY_BACKOFF:-300}"
+
+schedule_load_config() {
+  local conf_file="$SCHEDULE_CONF_FILE"
+  SCHEDULE_ENABLED=false SCHEDULE_MODE="update-all" SCHEDULE_ON_CALENDAR="" SCHEDULE_INCLUDE=""
+  [[ -f "$conf_file" ]] || return 0
+  # Same trust gate as app and notification configs: root-owned, mode
+  # 600/400, or the file is ignored entirely. A world-writable schedule
+  # file could otherwise inject --include tokens into the batch command.
+  if ! app_conf_trusted_value "$conf_file" "SCHEDULE_ENABLED" >/dev/null 2>&1; then
+    return 1
+  fi
+  local line key value
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[A-Z_]+= ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    value="${value%\"}"
+    value="${value#\"}"
+    case "$key" in
+      SCHEDULE_ENABLED|SCHEDULE_MODE|SCHEDULE_ON_CALENDAR|SCHEDULE_INCLUDE|SCHEDULE_RETRIES|SCHEDULE_RETRY_BACKOFF)
+        printf -v "$key" '%s' "$value"
+        ;;
+    esac
+  done < "$conf_file"
+}
+
+# The script invoked by systemd/cron. Takes the manager lock (fd8, shared
+# with interactive batches), runs the configured batch, and lets the batch's
+# own notification report the outcome. DEPLOY_NOTIFY_SUPPRESS is NOT set —
+# scheduled runs are exactly when notifications matter most.
+schedule_write_runner() {
+  local runner="$DEPLOY_SCHEDULE_RUNNER"
+  local root_dir_literal
+  printf -v root_dir_literal '%q' "$DEPLOY_ROOT_DIR"
+  if ! atomic_write_file "$runner" 750 <<RUNNER
+#!/bin/bash
+# Auto-generated by deploy.sh schedule. Do not edit manually.
+set -euo pipefail
+umask 077
+exec bash ${root_dir_literal}/deploy.sh schedule-run
+RUNNER
+  then
+    return 1
+  fi
+}
+
+# Internal action executed by the runner. Reuses the manager lock so a
+# concurrent interactive update-all/backup-all makes this run skip cleanly.
+# Failed batches are retried SCHEDULE_RETRIES times with exponential backoff
+# (base SCHEDULE_RETRY_BACKOFF, doubled per attempt, capped at 900s) before
+# the run finally reports failure through the notification path.
+schedule_run_main() {
+  require_root "schedule-run"
+  schedule_load_config || true
+  [[ "${SCHEDULE_ENABLED,,}" == true ]] || { echo "scheduled batch disabled; nothing to do." >&2; return 0; }
+  local include_args=()
+  if [[ -n "${SCHEDULE_INCLUDE:-}" ]]; then
+    read -r -a include_args <<< "--include $SCHEDULE_INCLUDE"
+  fi
+  local mode="${SCHEDULE_MODE:-update-all}" batch_cmd attempt=0 max_attempts backoff status=0
+  case "$mode" in
+    check-only) batch_cmd="check-update" ;;
+    update-all) batch_cmd="update-all" ;;
+    *)
+      echo "unknown schedule mode: $SCHEDULE_MODE" >&2
+      return 2
+      ;;
+  esac
+  [[ "$SCHEDULE_RETRIES" =~ ^[0-9]+$ ]] || SCHEDULE_RETRIES=0
+  [[ "$SCHEDULE_RETRY_BACKOFF" =~ ^[0-9]+$ ]] || SCHEDULE_RETRY_BACKOFF=300
+  backoff="$SCHEDULE_RETRY_BACKOFF"
+  max_attempts=$(( SCHEDULE_RETRIES + 1 ))
+  while (( attempt < max_attempts )); do
+    if bash "$DEPLOY_ROOT_DIR/deploy.sh" "$batch_cmd" \
+        ${include_args[@]+"${include_args[@]}"}; then
+      return 0
+    fi
+    status=$?
+    attempt=$((attempt + 1))
+    if (( attempt < max_attempts )); then
+      warn "$(t schedule.warn.retry "$status" "$attempt" "$max_attempts")"
+      sleep "$backoff"
+      backoff=$(( backoff * 2 ))
+      (( backoff > 900 )) && backoff=900
+    fi
+  done
+  return "$status"
+}
+
+# Validate a schedule specification before it reaches the unit files. On
+# systemd systems the authoritative check is `systemd-analyze calendar`;
+# when that tool is unavailable (or the spec is a plain HH:MM used by the
+# cron fallback) we fall back to a conservative shape check so a typo fails
+# loudly at `schedule` time instead of silently producing a never-firing
+# timer.
+schedule_validate_calendar() {
+  local calendar="$1"
+  if [[ "$calendar" =~ ^([0-9]+):([0-9]+)$ ]]; then
+    local hour minute
+    hour="$((10#${BASH_REMATCH[1]}))"
+    minute="$((10#${BASH_REMATCH[2]}))"
+    [[ "$hour" -le 23 && "$minute" -le 59 ]] || {
+      echo "Invalid schedule specification: $calendar" >&2
+      return 2
+    }
+    return 0
+  fi
+  if command -v systemd-analyze >/dev/null 2>&1; then
+    if systemd-analyze calendar "$calendar" >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "Invalid OnCalendar specification: $calendar" >&2
+    return 2
+  fi
+  # Conservative shape check without systemd-analyze: allow word-ish and
+  # *-* date/time patterns, but reject whitespace-padded or obviously broken
+  # values that would otherwise fail only when the timer is loaded.
+  if [[ "$calendar" =~ ^[^[:space:]]+(.*[^[:space:]])?$ ]] \
+      && [[ "$calendar" == *"/"* || "$calendar" == *:* || "$calendar" == *"-"* || "$calendar" == "*"* ]]; then
+    return 0
+  fi
+  echo "Invalid schedule specification: $calendar" >&2
+  return 2
+}
+
+# Write or refresh the scheduling units. Prefers systemd timers; falls back
+# to /etc/cron.d where systemd is unavailable.
+schedule_apply() {
+  local calendar="$1"
+  schedule_validate_calendar "$calendar" || return 2
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
+    local service_file="/etc/systemd/system/${DEPLOY_SCHEDULE_SERVICE}.service"
+    local timer_file="/etc/systemd/system/${DEPLOY_SCHEDULE_SERVICE}.timer"
+    atomic_write_file "$service_file" 644 <<SERVICE \
+      || return 1
+[Unit]
+Description=deploy-scripts scheduled batch (update-all / check-update)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${DEPLOY_SCHEDULE_RUNNER}
+SERVICE
+    atomic_write_file "$timer_file" 644 <<TIMER || return 1
+[Unit]
+Description=Run deploy-scripts scheduled batch
+
+[Timer]
+OnCalendar=${calendar}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+TIMER
+    systemctl daemon-reload || return 1
+    systemctl enable --now "${DEPLOY_SCHEDULE_SERVICE}.timer" >/dev/null 2>&1 || return 1
+  else
+    local cron_spec="${calendar}"
+    # Convert the common daily "HH:MM" systemd form to cron; anything more
+    # exotic must already be a valid 5-field crontab expression.
+    if [[ "$calendar" =~ ^([0-9]+):([0-9]+)$ ]]; then
+      cron_spec="$((10#${BASH_REMATCH[2]})) $((10#${BASH_REMATCH[1]})) * * *"
+    fi
+    if ! [[ "$cron_spec" =~ ^[0-9*,-/]+[[:space:]]+[0-9*,-/]+[[:space:]]+[0-9*,-/]+[[:space:]]+[0-9*,-/]+[[:space:]]+[0-9*,-/]+$ ]]; then
+      echo "Invalid schedule specification: $calendar" >&2
+      return 2
+    fi
+    atomic_write_file "$DEPLOY_SCHEDULE_CRON_FILE" 644 <<CRON || return 1
+# Auto-generated by deploy.sh schedule. Do not edit manually.
+${cron_spec} root ${DEPLOY_SCHEDULE_RUNNER}
+CRON
+    chmod 644 "$DEPLOY_SCHEDULE_CRON_FILE" 2>/dev/null || true
+  fi
+}
+
+schedule_remove_units() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now "${DEPLOY_SCHEDULE_SERVICE}.timer" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/${DEPLOY_SCHEDULE_SERVICE}.service" \
+          "/etc/systemd/system/${DEPLOY_SCHEDULE_SERVICE}.timer"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+  rm -f "$DEPLOY_SCHEDULE_CRON_FILE"
+}
+
+schedule_main() {
+  require_root "schedule"
+  local subcommand="${1:-status}"
+  shift || true
+  case "${subcommand,,}" in
+    run|schedule-run)
+      schedule_run_main "$@"
+      return $?
+      ;;
+    status)
+      schedule_load_config || true
+      echo "enabled=${SCHEDULE_ENABLED} mode=${SCHEDULE_MODE:-update-all} calendar=${SCHEDULE_ON_CALENDAR:-<default>} retries=${SCHEDULE_RETRIES:-0} backoff=${SCHEDULE_RETRY_BACKOFF:-300} include=${SCHEDULE_INCLUDE:-<all>}"
+      if command -v systemctl >/dev/null 2>&1 \
+          && systemctl list-timers --all 2>/dev/null | grep -q "$DEPLOY_SCHEDULE_SERVICE"; then
+        echo "systemd timer active"
+      elif [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]]; then
+        echo "cron entry present"
+      else
+        echo "no schedule installed"
+      fi
+      ;;
+    unschedule)
+      schedule_remove_units
+      rm -f "$SCHEDULE_CONF_FILE"
+      success "$(t schedule.info.removed)"
+      ;;
+    schedule|enable|disable|*)
+      local enable="" mode="" calendar="" include="" retries="" backoff=""
+      [[ "${subcommand,,}" == "schedule" ]] && enable=true
+      while (($#)); do
+        case "$1" in
+          --enable) enable=true; shift ;;
+          --disable) enable=false; shift ;;
+          --mode) mode="${2:-}"; shift 2 ;;
+          --at) calendar="${2:-}"; shift 2 ;;
+          --include) include="${2:-}"; shift 2 ;;
+          --retries) retries="${2:-}"; shift 2 ;;
+          --backoff) backoff="${2:-}"; shift 2 ;;
+          *)
+            t schedule.usage "$0"
+            return 2
+            ;;
+        esac
+      done
+      schedule_load_config || true
+      case "${mode,,}" in
+        ""|update-all|check-only) : ;;
+        *) error "$(t common.invalid_choice "$mode")" ;;
+      esac
+      [[ -n "$mode" ]] && SCHEDULE_MODE="${mode,,}"
+      [[ -n "$calendar" ]] && SCHEDULE_ON_CALENDAR="$calendar"
+      [[ -n "$include" ]] && SCHEDULE_INCLUDE="$include"
+      if [[ -n "${retries:-}" ]]; then
+        [[ "$retries" =~ ^[0-9]+$ ]] || error "$(t common.invalid_choice "$retries")"
+        SCHEDULE_RETRIES="$retries"
+      fi
+      if [[ -n "${backoff:-}" ]]; then
+        [[ "$backoff" =~ ^[0-9]+$ ]] || error "$(t common.invalid_choice "$backoff")"
+        SCHEDULE_RETRY_BACKOFF="$backoff"
+      fi
+      [[ -n "$enable" ]] && SCHEDULE_ENABLED="$( [[ "$enable" == true ]] && echo true || echo false )"
+      # Validate an explicit calendar before persisting it, so a typo can
+      # never leave a broken value in the config file.
+      if [[ -n "${SCHEDULE_ON_CALENDAR:-}" ]]; then
+        schedule_validate_calendar "$SCHEDULE_ON_CALENDAR" || return 2
+      fi
+      if ! atomic_write_file "$SCHEDULE_CONF_FILE" 600 <<CONF
+SCHEDULE_ENABLED="${SCHEDULE_ENABLED}"
+SCHEDULE_MODE="${SCHEDULE_MODE}"
+SCHEDULE_ON_CALENDAR="${SCHEDULE_ON_CALENDAR}"
+SCHEDULE_INCLUDE="${SCHEDULE_INCLUDE}"
+SCHEDULE_RETRIES="${SCHEDULE_RETRIES}"
+SCHEDULE_RETRY_BACKOFF="${SCHEDULE_RETRY_BACKOFF}"
+CONF
+      then
+        error "$(t error.config_write "$SCHEDULE_CONF_FILE")"
+      fi
+      if [[ "${SCHEDULE_ENABLED,,}" == true ]]; then
+        schedule_write_runner || error "$(t error.config_write "$DEPLOY_SCHEDULE_RUNNER")"
+        # The default calendar must be representable on both backends: the
+        # systemd weekday form Mon..Fri is meaningless in the /etc/cron.d
+        # fallback, which only converts plain HH:MM. Default to a plain
+        # HH:MM for check-only (09:00 daily) so a non-systemd host gets a
+        # working schedule instead of a rejection at apply time.
+        schedule_apply "${SCHEDULE_ON_CALENDAR:-$( [[ "${SCHEDULE_MODE}" == check-only ]] && echo '09:00' || echo '04:30' )}" \
+          || return 1
+      else
+        schedule_remove_units
+      fi
+      success "$(t schedule.info.saved)"
+      ;;
+  esac
+}
+
+# ----- lib/migrate.sh -----
+
+# Machine migration: `deploy.sh export` bundles every app deployment config,
+# the notification/schedule configs, and a backup manifest inventory into a
+# single sha256-stamped tarball; `deploy.sh import` verifies and unpacks it
+# on the new machine. App binaries/data themselves are NOT included — they
+# are recovered on the new host via each app's restore action against
+# replicated backups, which keeps the export small and secret-surface low.
+#
+# Layout inside <output>.tar.gz:
+#   manifest.json                     single-line inventory (sha256 stamped)
+#   etc/deploy-notify.conf
+#   etc/deploy-schedule.conf          (optional, when present)
+#   etc/<app>-deploy.conf             one per installed app
+#   backups-inventory.json            latest backup + integrity per app
+
+MIGRATE_EXPORT_DIR="${MIGRATE_EXPORT_DIR:-/etc}"
+
+migrate_conf_files() {
+  local f
+  for f in "$MIGRATE_EXPORT_DIR"/*-deploy.conf; do
+    [[ -f "$f" ]] && printf '%s\n' "$f"
+  done
+}
+
+# Build the staged tree under a mktemp dir and print its path. Fails when
+# nothing exportable exists rather than producing an empty archive.
+migrate_stage_tree() {
+  local stage="$1"
+  local staged_any=false f app_id conf_name
+  mkdir -p "$stage/etc"
+  if [[ -f "$NOTIFY_CONF_FILE" ]]; then
+    cp "$NOTIFY_CONF_FILE" "$stage/etc/deploy-notify.conf"
+    staged_any=true
+  fi
+  if [[ -f "$SCHEDULE_CONF_FILE" ]]; then
+    cp "$SCHEDULE_CONF_FILE" "$stage/etc/deploy-schedule.conf"
+    staged_any=true
+  fi
+  for f in $(migrate_conf_files); do
+    conf_name="$(basename "$f")"
+    cp "$f" "$stage/etc/$conf_name"
+    staged_any=true
+  done
+  [[ "$staged_any" == "true" ]] || return 1
+}
+
+# Single-line JSON: per-app latest archive name + integrity verdict, so the
+# new machine knows which backups to replicate before restoring.
+migrate_backups_inventory() {
+  local stage="$1"
+  local out first=1 app_id impl_file backup_dir_var backup_dir glob record
+  out="{\"schema_version\":1,\"apps\":["
+  for app_id in "${DEPLOY_APP_IDS[@]}"; do
+    impl_file="$(deploy_app_impl_file_for "$app_id")"
+    [[ -f "$impl_file" ]] || continue
+    record="$("${BASH_BIN:-bash}" -c '
+      source lib/core.sh 2>/dev/null
+      APP_ID="'"$app_id"'"
+      source "'"$(pwd)/$impl_file"'" >/dev/null 2>&1 || exit 0
+      app_load_config >/dev/null 2>&1 || true
+      dir=""
+      for candidate in BACKUP_DIR VW_BACKUP_DIR CPA_STACK_BACKUP_DIR; do
+        v="${!candidate:-}"
+        [[ -n "$v" ]] && { dir="$v"; break; }
+      done
+      [[ -n "$dir" && -d "$dir" ]] || exit 0
+      case '"$app_id"' in
+        blog) glob="blog_*.tar.gz" ;;
+        tickflow) glob="tickflow-data-*.tar.gz" ;;
+        cpa-stack) glob="cpa-stack-*.tar.gz" ;;
+        cyberstrikeai) glob="cyberstrike-ai_*.tar.gz" ;;
+        vaultwarden) glob="vaultwarden_*.tar.gz" ;;
+        newapi) glob="new-api_*.tar.gz" ;;
+        sub2api) glob="sub2api_*.tar.gz sub2api_db_*.sql.gz" ;;
+        *) glob="${APP_ID}_*.tar.gz" ;;
+      esac
+      backup_verify_latest_json "$dir" $glob
+    ' 2>/dev/null)" || record=""
+    [[ -n "$record" ]] || continue
+    (( first )) || out+=","
+    first=0
+    out+="{\"app\":$(app_json_string "$app_id"),\"latest\":$record}"
+  done
+  out+="]}"
+  printf '%s' "$out" > "${stage}/backups-inventory.json"
+}
+
+migrate_main() {
+  require_root "migrate"
+  local subcommand="${1:-}"
+  shift || true
+  case "${subcommand,,}" in
+    export)
+      local output="" redact=false
+      while (($#)); do
+        case "$1" in
+          --output) output="${2:-}"; shift 2 ;;
+          --redact) redact=true; shift ;;
+          *) t migrate.usage "$0"; return 2 ;;
+        esac
+      done
+      [[ -n "$output" ]] || output="/root/deploy-migration-$(date +%Y%m%d%H%M%S).tar.gz"
+      local stage
+      stage="$(mktemp -d "${output}.stage.XXXXXX")"
+      if ! migrate_stage_tree "$stage"; then
+        rm -rf "$stage"
+        error "$(t migrate.error.nothing_to_export)"
+      fi
+      migrate_backups_inventory "$stage"
+      # Redacted variant is an additional human-readable reference copy of
+      # every conf with secret values masked; the real values still ship in
+      # the plain files so import remains functional.
+      if [[ "$redact" == "true" ]]; then
+        local rf rf_out
+        mkdir -p "$stage/redacted-reference"
+        for rf in "$stage"/etc/*.conf; do
+          rf_out="$stage/redacted-reference/$(basename "$rf").redacted.txt"
+          sed -E 's/^((TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)[A-Za-z_]*=)".*"/\1"[REDACTED]"/I' \
+            "$rf" > "$rf_out"
+        done
+      fi
+      # Stamp the archive itself after creation.
+      if ! tar -czf "$output" -C "$stage" . >&2; then
+        rm -rf "$stage"
+        error "$(t error.config_write "$output")"
+      fi
+      chmod 600 "$output" 2>/dev/null || true
+      backup_write_sha256 "$output" >/dev/null || true
+      rm -rf "$stage"
+      success "$(t migrate.info.exported "$output")"
+      info "$(t migrate.info.next_steps)"
+      ;;
+    import)
+      local input=""
+      while (($#)); do
+        case "$1" in
+          --input) input="${2:-}"; shift 2 ;;
+          *) t migrate.usage "$0"; return 2 ;;
+        esac
+      done
+      [[ -n "$input" && -f "$input" ]] || error "$(t migrate.error.archive_missing "${input:-none}")"
+      # Integrity first: refuse a damaged bundle before touching /etc.
+      if [[ -f "${input}.sha256" ]]; then
+        backup_verify_archive "$input" || error "$(t backup.verify.failed "$(basename "$input")")"
+      fi
+      # Member safety: the sha256 sidecar proves the bundle is untampered,
+      # but a compromised export machine could have produced a bundle with
+      # traversal members. Reject absolute paths, `..`, and backslashes
+      # before any byte lands on disk.
+      if ! tar -tzf "$input" 2>/dev/null | awk '
+          /^\// || /\.\./ || /\\/ {
+            print "unsafe archive member: " $0 > "/dev/stderr"
+            exit 1
+          }'; then
+        error "$(t backup.restore.invalid_archive "$(basename "$input")")"
+      fi
+      local stage
+      stage="$(mktemp -d "${input}.import.XXXXXX")"
+      if ! tar -xzf "$input" -C "$stage" >&2; then
+        rm -rf "$stage"
+        error "$(t backup.restore.invalid_archive "$(basename "$input")")"
+      fi
+      local f target installed=0
+      for f in "$stage"/etc/*.conf; do
+        [[ -f "$f" ]] || continue
+        target="$MIGRATE_EXPORT_DIR/$(basename "$f")"
+        atomic_copy_file "$f" "$target" 600 root:root || {
+          rm -rf "$stage"
+          error "$(t error.config_write "$target")"
+        }
+        installed=$((installed + 1))
+      done
+      rm -rf "$stage"
+      success "$(t migrate.info.imported "$installed")"
+      info "$(t migrate.info.manual_steps)"
+      ;;
+    *)
+      t migrate.usage "$0"
+      return 2
+      ;;
+  esac
+}
+
+# ----- lib/fleet.sh -----
+
+# Fleet / multi-machine management: run status-all / update-all / backup-all
+# across a host inventory over SSH with per-host timeouts, bounded concurrency
+# and failure isolation, then merge the per-host JSON results. SSH credentials
+# are never written to logs: hosts connect through the local SSH agent / keys
+# only, and no password/token values are accepted in the inventory.
+#
+# Inventory format (/etc/deploy-hosts.conf, root:600, one host per line):
+#   alias|user@host[:port]
+# Blank lines and # comments are ignored; alias must be a simple token.
+
+FLEET_HOSTS_FILE="${FLEET_HOSTS_FILE:-/etc/deploy-hosts.conf}"
+FLEET_CONCURRENCY="${FLEET_CONCURRENCY:-4}"
+FLEET_TIMEOUT="${FLEET_TIMEOUT:-120}"
+FLEET_SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+
+fleet_load_hosts() {
+  FLEET_HOSTS=()
+  local line alias target
+  [[ -f "$FLEET_HOSTS_FILE" ]] || return 0
+  # Same trust gate as app/notify/schedule configs: a world-writable host
+  # inventory could redirect batch operations to an attacker-controlled
+  # host, so non-root-owned or loose-mode files are ignored entirely.
+  # (The inventory lines carry no key=value shape, so the owner/mode check
+  # is done inline rather than through app_conf_trusted_value.)
+  local owner mode
+  owner="$(stat -c '%U' "$FLEET_HOSTS_FILE" 2>/dev/null || printf unknown)"
+  mode="$(stat -c '%a' "$FLEET_HOSTS_FILE" 2>/dev/null || printf unknown)"
+  if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
+    echo "fleet: ignoring untrusted host inventory: $FLEET_HOSTS_FILE" >&2
+    return 0
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -n "$line" ]] || continue
+    alias="${line%%|*}"
+    target="${line#*|}"
+    case "$alias" in
+      *[!A-Za-z0-9_-]*|"") continue ;;
+    esac
+    case "$target" in
+      *[!A-Za-z0-9@.:\[\]_-]*|""|*" "*)
+        echo "fleet: skipping host with invalid target: $alias" >&2
+        continue
+        ;;
+    esac
+    FLEET_HOSTS+=("$alias|$target")
+  done < "$FLEET_HOSTS_FILE"
+}
+
+# SSH destination with an explicit -p port when the target carries one.
+fleet_target_ssh_args() {
+  local target="$1" port=""
+  if [[ "$target" == *:* ]]; then
+    port="${target##*:}"
+    target="${target%:*}"
+    [[ "$port" =~ ^[0-9]+$ ]] || port=""
+  fi
+  printf '%s' "$target"
+  [[ -n "$port" ]] && printf ' -p %s' "$port"
+}
+
+# Run one remote command for one host; prints a single-line JSON record.
+fleet_run_host() {
+  local alias="$1" target="$2" remote_script="$3"
+  local output record
+  # Each SSH opt is a single token (no spaces), and fleet_target_ssh_args
+  # emits space-separated "host [-p port]" pieces; expansion is deliberate.
+  # shellcheck disable=SC2046,SC2048,SC2086
+  output="$(timeout "${FLEET_TIMEOUT}" ssh ${FLEET_SSH_OPTS[*]} \
+    $(fleet_target_ssh_args "$target") \
+    "bash -s" <<REMOTE 2>/dev/null
+set -euo pipefail
+${remote_script}
+REMOTE
+  )" || {
+    printf '{"host":%s,"ok":false,"error":"ssh or remote command failed"}' \
+      "$(app_json_string "$alias")"
+    return 0
+  }
+  # The remote side is this same framework; keep its last non-empty line.
+  record="$(printf '%s\n' "$output" | tr -d '\r' | sed '/^[[:space:]]*$/d' | tail -n 1)"
+  # A polluted or non-JSON remote line would corrupt the merged summary, so
+  # validate the record is parseable JSON before embedding it.
+  if ! printf '%s' "$record" | grep -qE '^\{.*\}$'; then
+    record="{\"error\":$(app_json_string "$record")}"
+  fi
+  printf '{"host":%s,"ok":true,"result":%s}' \
+    "$(app_json_string "$alias")" "$record"
+}
+
+fleet_main() {
+  local subcommand="${1:-status-all}"
+  shift || true
+  case "${subcommand,,}" in
+    status-all|update-all|backup-all) ;;
+    *)
+      echo "Usage: sudo bash $0 fleet [status-all|update-all|backup-all] [--hosts FILE] [--concurrency N] [--timeout SEC]" >&2
+      return 2
+      ;;
+  esac
+  local action="${subcommand,,}"
+  while (($#)); do
+    case "$1" in
+      --hosts) FLEET_HOSTS_FILE="${2:-}"; shift 2 ;;
+      --concurrency) FLEET_CONCURRENCY="${2:-}"; shift 2 ;;
+      --timeout) FLEET_TIMEOUT="${2:-}"; shift 2 ;;
+      *) echo "fleet: unknown option: $1" >&2; return 2 ;;
+    esac
+  done
+  [[ "$FLEET_CONCURRENCY" =~ ^[0-9]+$ ]] && (( FLEET_CONCURRENCY >= 1 )) || FLEET_CONCURRENCY=4
+  [[ "$FLEET_TIMEOUT" =~ ^[0-9]+$ ]] && (( FLEET_TIMEOUT >= 10 )) || FLEET_TIMEOUT=120
+  fleet_load_hosts
+  if [[ ${#FLEET_HOSTS[@]} -eq 0 ]]; then
+    echo "fleet: no hosts configured in $FLEET_HOSTS_FILE" >&2
+    return 1
+  fi
+  local remote_script
+  remote_script="cd /opt/deploy-scripts 2>/dev/null && bash deploy.sh ${action} --json 2>/dev/null || echo '{\"state\":\"failed\"}'"
+  # Run with bounded concurrency; each host writes its JSON record to its
+  # own temp file, and failures are isolated per host.
+  local tmp_root alias target entry pid
+  tmp_root="$(mktemp -d)"
+  local -a pids=() running=()
+  for entry in "${FLEET_HOSTS[@]}"; do
+    alias="${entry%%|*}"
+    target="${entry#*|}"
+    out_file="$tmp_root/${alias}.json"
+    ( fleet_run_host "$alias" "$target" "$remote_script" > "$out_file" ) &
+    pids+=($!)
+    running+=("$alias")
+    if (( ${#pids[@]} >= FLEET_CONCURRENCY )); then
+      wait "${pids[0]}" 2>/dev/null || true
+      pids=("${pids[@]:1}")
+      running=("${running[@]:1}")
+    fi
+  done
+  for pid in "${pids[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
+  local first=1 record
+  local summary
+  summary="$(printf '{"schema_version":1,"action":"%s","concurrency":%s,"hosts":[' \
+    "$action" "$FLEET_CONCURRENCY")"
+  for entry in "${FLEET_HOSTS[@]}"; do
+    alias="${entry%%|*}"
+    record="$(cat "$tmp_root/${alias}.json" 2>/dev/null || true)"
+    [[ -n "$record" ]] || record="{\"host\":$(app_json_string "$alias"),\"ok\":false,\"error\":\"no result\"}"
+    (( first )) || summary+=","
+    first=0
+    summary+="$record"
+  done
+  summary+="]}"
+  printf '%s\n' "$summary"
+  # Machine-level operation history: one JSON line per fleet run, appended
+  # under the framework log root. Best-effort; never fails the command.
+  local history_dir history_file
+  history_dir="${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}"
+  history_file="${history_dir}/fleet-history.jsonl"
+  mkdir -p "$history_dir" 2>/dev/null || true
+  printf '%s\n' "$summary" >> "$history_file" 2>/dev/null || true
+  rm -rf "$tmp_root"
+}
+
+# ----- lib/compose.sh -----
+
+# Shared Docker Compose support layer: resolve the compose command binary,
+# validate the runtime, and run compose operations with strict path checks
+# on the project file and working directory. Handles both `docker compose`
+# (plugin) and the legacy `docker-compose` standalone binary.
+#
+# Never prints table/color output itself; callers format results.
+
+# Print the compose command as a single string ("docker compose" or
+# "docker-compose"), or empty when neither is usable.
+compose_command() {
+  if docker compose version >/dev/null 2>&1; then
+    printf '%s' "docker compose"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    printf '%s' "docker-compose"
+  fi
+}
+
+# Require a usable compose runtime; errors out when neither backend exists.
+compose_require_runtime() {
+  command -v docker >/dev/null 2>&1 \
+    || error "$(t compose.error.docker_missing)"
+  if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
+    error "$(t compose.error.runtime_missing)"
+  fi
+}
+
+# Validate the compose project file and working directory before any run:
+# both must be safe, absolute paths, and the project file must exist.
+# Returns nonzero (never exits) so probes can treat validation as a check;
+# compose_run escalates the failure with a localized error.
+compose_validate_project() {
+  local work_dir="$1" project_file="$2" work_name project_name
+  work_name="$(basename "$work_dir")"
+  project_name="$(basename "$project_file")"
+  is_safe_path "$work_dir" || return 1
+  is_safe_path "$project_file" || return 1
+  [[ -f "$project_file" ]] || return 1
+}
+
+# Echo an argv-ready compose invocation prefix given the working directory
+# and project file. Example: "docker compose --project-directory /opt/app -f /opt/app/compose.yml"
+compose_base_args() {
+  local work_dir="$1" project_file="$2"
+  printf -- '--project-directory %q -f %q' "$work_dir" "$project_file"
+}
+
+# Run one compose operation against the project, streaming output to stderr.
+# Arguments: work dir, project file, then the compose subcommand + args.
+compose_run() {
+  local work_dir="$1" project_file="$2"
+  shift 2
+  compose_require_runtime
+  compose_validate_project "$work_dir" "$project_file" \
+    || error "$(t compose.error.project_missing "$project_file")"
+  local compose_cmd
+  compose_cmd="$(compose_command)"
+  [[ -n "$compose_cmd" ]] || error "$(t compose.error.runtime_missing)"
+  local -a base_args
+  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  # shellcheck disable=SC2086
+  $compose_cmd "${base_args[@]}" "$@" >&2
+}
+
+# Run one compose operation capturing only its exit status, with output
+# suppressed unless the operation fails. Used by status-style probes.
+compose_try() {
+  local work_dir="$1" project_file="$2"
+  shift 2
+  local compose_cmd out
+  compose_cmd="$(compose_command)"
+  [[ -n "$compose_cmd" ]] || return 1
+  compose_validate_project "$work_dir" "$project_file" || return 1
+  local -a base_args
+  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  # shellcheck disable=SC2086
+  out="$($compose_cmd "${base_args[@]}" "$@" 2>&1)" || {
+    printf '%s\n' "$out" >&2
+    return 1
+  }
+  return 0
+}
+
+# Lifecycle helpers. Each validates and runs through compose_run, so output
+# streams to stderr and no formatting decisions leak into the caller.
+compose_up() {
+  compose_run "$1" "$2" up -d --build
+}
+
+compose_down() {
+  compose_run "$1" "$2" down
+}
+
+compose_ps() {
+  compose_run "$1" "$2" ps
+}
+
+# Health check: `compose ps --format json` lists one JSON line per service;
+# every service must report running/healthy. Accepts either docker compose
+# or docker-compose output shape; returns nonzero when any service is not
+# running, without printing anything (the caller renders the verdict).
+compose_health() {
+  local work_dir="$1" project_file="$2"
+  local compose_cmd out
+  compose_cmd="$(compose_command)"
+  [[ -n "$compose_cmd" ]] || return 1
+  compose_validate_project "$work_dir" "$project_file" || return 1
+  local -a base_args
+  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  # shellcheck disable=SC2086
+  out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || return 1
+  # Case-insensitive state scan: running/healthy pass; exited, dead, or
+  # restarting services fail the check. docker compose uses lowercase
+  # values ("running"), docker-compose uses title case ("Running").
+  printf '%s' "$out" | grep -qi '"running"\|"Running"\|"healthy"\|"Healthy"' \
+    && ! printf '%s' "$out" | grep -qi '"exited"\|"Exited"\|"dead"\|"Dead"\|"restarting"\|"Restarting"' \
+    || return 1
+}
+
 # ----- lib/app_loader.sh -----
 
 ensure_bundled_impl_dir() {
@@ -6421,6 +7718,13 @@ restore_framework_functions() {
           operation_run_app_action cert do_cert
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
+        fi
+        ;;
+      verify)
+        if declare -f do_verify >/dev/null 2>&1; then
+          operation_run_app_action verify do_verify
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" verify)"
         fi
         ;;
       status|5) do_status ;;
