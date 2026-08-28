@@ -1558,10 +1558,17 @@ check_schedule_units_are_atomic_and_cleaned_up() {
       in_fn=0
     }
     /^schedule_apply\(\)/ { in_apply=1; saw_validate=0; next }
-    in_apply && /Invalid schedule specification/ { saw_validate=1 }
+    in_apply && /schedule_validate_calendar/ { saw_validate=1 }
     in_apply && /^}$/ {
-      if (!saw_validate) { print "cron fallback must validate the schedule expression" > "/dev/stderr"; exit 1 }
+      if (!saw_validate) { print "schedule_apply must validate the calendar expression up front" > "/dev/stderr"; exit 1 }
       in_apply=0
+    }
+    /^schedule_validate_calendar\(\)/ { in_val=1; saw_range=0; saw_analyze=0; next }
+    in_val && /hour.*-le 23/ { saw_range=1 }
+    in_val && /systemd-analyze calendar/ { saw_analyze=1 }
+    in_val && /^}$/ {
+      if (!(saw_range && saw_analyze)) { print "calendar validation must bound HH:MM and defer to systemd-analyze" > "/dev/stderr"; exit 1 }
+      in_val=0
     }
     /^schedule_remove_units\(\)/ { in_rm=1; saw_timer=0; saw_cron=0; next }
     in_rm && /disable --now/ { saw_timer=1 }
@@ -1658,8 +1665,19 @@ STUB
     [[ "$count" -eq 3 ]] || { echo EXPECTED_3_GOT_$count; exit 84; }
 
     # --retries persists into the config.
-    schedule_main schedule --enable --mode check-only --at "03:10" --retries 4 >/dev/null 2>&1
+    schedule_main schedule --enable --mode check-only --at "03:10" --retries 4 --backoff 120 >/dev/null 2>&1
     grep -q "^SCHEDULE_RETRIES=\"4\"$" "$SCHEDULE_CONF_FILE" || { echo RETRIES_NOT_SAVED; exit 85; }
+    grep -q "^SCHEDULE_RETRY_BACKOFF=\"120\"$" "$SCHEDULE_CONF_FILE" || { echo BACKOFF_NOT_SAVED; exit 86; }
+
+    # A bad calendar is rejected before any unit file or config is written.
+    # Clear the cron file first so "nothing new written" is a meaningful
+    # assertion.
+    rm -f "$DEPLOY_SCHEDULE_CRON_FILE"
+    if schedule_main schedule --enable --mode check-only --at "25:99" >/dev/null 2>&1; then
+      echo BAD_CALENDAR_ACCEPTED; exit 87
+    fi
+    [[ -e "$DEPLOY_SCHEDULE_CRON_FILE" ]] && { echo CRON_WRITTEN_FOR_BAD_CALENDAR; exit 88; }
+    grep -q "SCHEDULE_ON_CALENDAR=\"25:99\"" "$SCHEDULE_CONF_FILE" && { echo CONF_WRITTEN_FOR_BAD_CALENDAR; exit 89; }
     echo ok
   ' | grep -q ok
 }

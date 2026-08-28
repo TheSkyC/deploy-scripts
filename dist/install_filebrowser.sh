@@ -89,7 +89,7 @@ __deploy_i18n_message() {
     notify.config.saved) echo "Notification configuration saved: %s|通知配置已保存：%s" ;;
     notify.test.sent_ok) echo "Test notification delivered.|测试通知已送达。" ;;
     notify.config.cleared) echo "Notification configuration removed: %s|通知配置已删除：%s" ;;
-    schedule.usage) echo "Usage: sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at 'HH:MM' | OnCalendar | 'cron expr'] [--include app1,app2]; sudo bash %s unschedule|status|run|schedule-run|用法：sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at '时:分' | OnCalendar | cron 表达式] [--include 应用1,应用2]；sudo bash %s unschedule|status|run|schedule-run" ;;
+    schedule.usage) echo "Usage: sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at 'HH:MM' | OnCalendar | 'cron expr'] [--include app1,app2] [--retries N] [--backoff SECONDS]; sudo bash %s unschedule|status|run|schedule-run|用法：sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at '时:分' | OnCalendar | cron 表达式] [--include 应用1,应用2] [--retries N] [--backoff 秒]；sudo bash %s unschedule|status|run|schedule-run" ;;
     schedule.info.saved) echo "Schedule configuration saved.|定时计划配置已保存。" ;;
     schedule.info.removed) echo "Schedule removed (timer/cron and config cleaned up).|定时计划已移除（timer/cron 与配置已清理）。" ;;
     schedule.warn.retry) echo "Scheduled batch failed (exit %s); retry %s of %s after backoff.|定时批次失败（退出码 %s），退避后进行第 %s/%s 次重试。" ;;
