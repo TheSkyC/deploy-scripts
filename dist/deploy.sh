@@ -7016,9 +7016,16 @@ schedule_remove_units() {
 
 schedule_main() {
   require_root "schedule"
-  local subcommand="${1:-status}"
+  # Default subcommand is the config branch: `deploy.sh schedule` (with no
+  # further argument) enables/edits the schedule. `deploy.sh schedule status`
+  # reaches the status branch by passing "status" as the first argument.
+  local subcommand="${1:-schedule}"
   shift || true
   case "${subcommand,,}" in
+    -h|--help)
+      t schedule.usage "$0"
+      return 0
+      ;;
     run|schedule-run)
       schedule_run_main "$@"
       return $?
@@ -7944,7 +7951,14 @@ manager_main() {
       ;;
     schedule|unschedule)
       shift || true
-      schedule_main "$command" "$@"
+      # schedule_main parses its own subcommand: `deploy.sh schedule` enables/
+      # edits, `deploy.sh schedule status|unschedule|run` dispatches to those
+      # branches. Only unschedule maps directly here.
+      if [[ "${command,,}" == "unschedule" ]]; then
+        schedule_main unschedule "$@"
+      else
+        schedule_main "$@"
+      fi
       ;;
     schedule-run)
       shift || true
