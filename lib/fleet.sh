@@ -71,6 +71,11 @@ REMOTE
   }
   # The remote side is this same framework; keep its last non-empty line.
   record="$(printf '%s\n' "$output" | tr -d '\r' | sed '/^[[:space:]]*$/d' | tail -n 1)"
+  # A polluted or non-JSON remote line would corrupt the merged summary, so
+  # validate the record is parseable JSON before embedding it.
+  if ! printf '%s' "$record" | grep -qE '^\{.*\}$'; then
+    record="{\"error\":$(app_json_string "$record")}"
+  fi
   printf '{"host":%s,"ok":true,"result":%s}' \
     "$(app_json_string "$alias")" "$record"
 }
