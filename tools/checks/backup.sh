@@ -1682,6 +1682,16 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     schedule_main schedule --disable
     if [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]]; then echo CRON_STILL_THERE; exit 64; fi
     if [[ ! -f "$SCHEDULE_CONF_FILE" ]]; then echo CONF_LOST; exit 65; fi
+
+    # CLI subcommand dispatch: `schedule status` must render the status line
+    # (not fall through to the config branch), and `--help` must print usage
+    # without touching the config file.
+    status_out="$(schedule_main status 2>&1)"
+    [[ "$status_out" == *enabled=* ]] || { echo STATUS_NOT_RENDERED; echo "$status_out" >&2; exit 68; }
+    mtime_before="$(stat -c %Y "$SCHEDULE_CONF_FILE" 2>/dev/null || echo 0)"
+    if schedule_main --help >/dev/null 2>&1; then :; fi
+    mtime_after="$(stat -c %Y "$SCHEDULE_CONF_FILE" 2>/dev/null || echo 0)"
+    [[ "$mtime_before" == "$mtime_after" ]] || { echo HELP_MODIFIED_CONFIG; exit 69; }
     echo ok
   ' | grep -q ok
 }

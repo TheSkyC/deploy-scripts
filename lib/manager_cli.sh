@@ -112,7 +112,14 @@ manager_main() {
       ;;
     schedule|unschedule)
       shift || true
-      schedule_main "$command" "$@"
+      # schedule_main parses its own subcommand: `deploy.sh schedule` enables/
+      # edits, `deploy.sh schedule status|unschedule|run` dispatches to those
+      # branches. Only unschedule maps directly here.
+      if [[ "${command,,}" == "unschedule" ]]; then
+        schedule_main unschedule "$@"
+      else
+        schedule_main "$@"
+      fi
       ;;
     schedule-run)
       shift || true

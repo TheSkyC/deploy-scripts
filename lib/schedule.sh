@@ -210,9 +210,16 @@ schedule_remove_units() {
 
 schedule_main() {
   require_root "schedule"
-  local subcommand="${1:-status}"
+  # Default subcommand is the config branch: `deploy.sh schedule` (with no
+  # further argument) enables/edits the schedule. `deploy.sh schedule status`
+  # reaches the status branch by passing "status" as the first argument.
+  local subcommand="${1:-schedule}"
   shift || true
   case "${subcommand,,}" in
+    -h|--help)
+      t schedule.usage "$0"
+      return 0
+      ;;
     run|schedule-run)
       schedule_run_main "$@"
       return $?
