@@ -1931,21 +1931,40 @@ EOF
 # configs atomically at mode 600, and the manual-steps guidance is printed
 # so operators know binaries/data move via per-app restore.
 check_migration_export_import_roundtrip() {
+  # A bundle with a traversal member must be refused even when the sidecar
+  # checks out. GNU tar strips leading ../ when creating archives, so the
+  # malicious member is built here (outside the single-quoted bash -c
+  # below, where nested quoting would otherwise collide) with python's
+  # tarfile, and its path is handed to the behavioral half.
+  local evil_bundle evil_tmp
+  evil_tmp="$(mktemp -d)"
+  evil_bundle="${evil_tmp}/evil.tar.gz"
+  if command -v python >/dev/null 2>&1; then
+    python - "$evil_bundle" <<'PY'
+import sys, tarfile, io
+with tarfile.open(sys.argv[1], "w:gz") as t:
+    data = b'PORT="1337"\n'
+    info = tarfile.TarInfo("../escape.conf")
+    info.size = len(data)
+    t.addfile(info, io.BytesIO(data))
+PY
+  fi
   awk '
-    /^migrate_main\(\)/ { in_fn=1; saw_verify=0; saw_atomic=0; saw_manual=0; next }
+    /^migrate_main\(\)/ { in_fn=1; saw_verify=0; saw_atomic=0; saw_manual=0; saw_members=0; next }
     in_fn && /backup_verify_archive "\$input"/ { saw_verify=1 }
     in_fn && /atomic_copy_file "\$f" "\$target" 600/ { saw_atomic=1 }
     in_fn && /migrate\.info\.manual_steps/ { saw_manual=1 }
+    in_fn && /unsafe archive member/ { saw_members=1 }
     in_fn && /^}$/ {
-      if (!(saw_verify && saw_atomic && saw_manual)) {
-        print "migrate import must verify first, install atomically at mode 600, and print manual steps" > "/dev/stderr"
+      if (!(saw_verify && saw_atomic && saw_manual && saw_members)) {
+        print "migrate import must verify first, scan members, install atomically at mode 600, and print manual steps" > "/dev/stderr"
         exit 1
       }
       in_fn=0
     }
-  ' lib/migrate.sh || return 1
+  ' lib/migrate.sh || { rm -rf "$evil_tmp"; return 1; }
 
-  "$BASH_BIN" -c '
+  EVIL_BUNDLE="$evil_bundle" "$BASH_BIN" -c '
     set -euo pipefail
     cd /e/workspace/deploy-scripts
     source lib/core.sh
@@ -1982,6 +2001,20 @@ check_migration_export_import_roundtrip() {
     # (The mode-600 contract is asserted structurally above against
     # atomic_copy_file; stat modes are unreliable under Windows permission
     # emulation, so the behavioral half checks content only.)
+
+    # Traversal bundle: import must refuse it even with a valid sidecar.
+    # The bundle path arrives via EVIL_BUNDLE (set by the outer function)
+    # to keep the single-quoted body free of nested quoting.
+    evil="${EVIL_BUNDLE:-}"
+    if [[ -n "$evil" && -f "$evil" ]]; then
+      rm -f "$evil.sha256"
+      backup_write_sha256 "$evil" >/dev/null
+      if migrate_main import --input "$evil" >/dev/null 2>&1; then
+        echo TRAVERSAL_IMPORT_ACCEPTED; exit 78
+      fi
+      [[ -e "$MIGRATE_EXPORT_DIR/escape.conf" ]] && { echo TRAVERSAL_WROTE_FILE; exit 79; }
+    fi
     echo ok
   ' | grep -q ok
+  rm -rf "$evil_tmp"
 }

@@ -144,6 +144,17 @@ migrate_main() {
       if [[ -f "${input}.sha256" ]]; then
         backup_verify_archive "$input" || error "$(t backup.verify.failed "$(basename "$input")")"
       fi
+      # Member safety: the sha256 sidecar proves the bundle is untampered,
+      # but a compromised export machine could have produced a bundle with
+      # traversal members. Reject absolute paths, `..`, and backslashes
+      # before any byte lands on disk.
+      if ! tar -tzf "$input" 2>/dev/null | awk '
+          /^\// || /\.\./ || /\\/ {
+            print "unsafe archive member: " $0 > "/dev/stderr"
+            exit 1
+          }'; then
+        error "$(t backup.restore.invalid_archive "$(basename "$input")")"
+      fi
       local stage
       stage="$(mktemp -d "${input}.import.XXXXXX")"
       if ! tar -xzf "$input" -C "$stage" >&2; then
