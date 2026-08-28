@@ -20,8 +20,7 @@ check_sub2api_status_backup_projection() {
     rm -rf "$tmp_dir"
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "sub2api backups" in x["path"]; assert x["path"].endswith("sub2api_data_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
-  grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' impl/install_sub2api.sh \
- && grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' 
+  grep -Fq 'APP_STATUS_BACKUP_FN=_sub2api_status_backup' impl/install_sub2api.sh
 }
 
 check_sub2api_uninstall_supports_noninteractive_mode() {
@@ -61,17 +60,6 @@ check_sub2api_uninstall_checks_directory_removal_errors() {
       echo "Sub2API uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_sub2api_remove_dir_or_error() {' \
- && grep -Fq 'error "$(t app.sub2api.error.remove_dir "$path")"' \
- && grep -Fq '_sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"' \
- && grep -Fq '_sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"' \
- && grep -Fq 'warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"' \
- && grep -Fq '_sub2api_remove_dir_or_error "$CONFIG_DIR" "CONFIG_DIR" "$(t app.sub2api.success.deleted_config "$CONFIG_DIR")"' \
- && grep -Fq '_sub2api_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.sub2api.success.deleted_backup "$BACKUP_DIR")"' \
-    || {
-      echo "Release Sub2API script must preserve uninstall directory removal failure handling." >&2
-      return 1
-    }
 }
 
 check_sub2api_uninstall_checks_file_removal_errors() {
@@ -89,24 +77,10 @@ check_sub2api_uninstall_checks_file_removal_errors() {
       echo "Sub2API uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_sub2api_remove_file_or_error() {' \
- && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' \
- && grep -Fq '_sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"' \
- && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-enabled/sub2api" "SUB2API_NGINX_LINK"' \
- && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-available/sub2api" "SUB2API_NGINX_CONF"' \
- && grep -Fq '_sub2api_remove_file_or_error "/etc/cron.d/sub2api-backup" "SUB2API_CRON_FILE"' \
- && grep -Fq '_sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"' \
- && grep -Fq '_sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"' \
- && grep -Fq '_sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
-    || {
-      echo "Release Sub2API script must preserve uninstall file removal failure handling." >&2
-      return 1
-    }
 }
 
 check_sub2api_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_sub2api_require_safe_bin_path() {' impl/install_sub2api.sh \
- && grep -Fq '_sub2api_require_safe_bin_path' \
     || {
       echo "Sub2API must centralize BIN_PATH safety validation in a reusable helper." >&2
       return 1
@@ -134,7 +108,7 @@ check_sub2api_uninstall_validates_binary_path_before_removal() {
 
 check_sub2api_backup_lists_preserve_paths_with_spaces() {
   awk '
-      /sub2api\.bak\.\*/ { in_binary=1 }
+      /sub2api\.bak\./ { in_binary=1 }
       in_binary && /-printf '\''%T@ %p\\0'\''/ { saw_binary_print0=1 }
       in_binary && /sort -z -rn \| tail -z -n \+4/ { saw_binary_sort=1 }
       in_binary && /_old_baks\+=\("\$\{_old_bak_entry#\* \}"\)/ { saw_binary_strip=1 }

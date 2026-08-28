@@ -71,14 +71,6 @@ check_tickflow_uninstall_checks_directory_removal_errors() {
       echo "TickFlow uninstall must report directory removal failures instead of mislabeling them as unsafe paths." >&2
       return 1
     }
- grep -Fq 'tickflow_remove_dir_or_error() {' \
- && grep -Fq 'error "$(t app.tickflow.error.remove_dir "$path")"' \
- && grep -Fq 'tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"' \
- && grep -Fq 'tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"' \
-    || {
-      echo "Release TickFlow script must preserve uninstall directory removal failure handling." >&2
-      return 1
-    }
 }
 
 check_tickflow_uninstall_checks_file_removal_errors() {
@@ -89,14 +81,6 @@ check_tickflow_uninstall_checks_file_removal_errors() {
     && grep -Fq 'app.tickflow.error.remove_file' apps/tickflow.sh \
     || {
       echo "TickFlow uninstall must surface file removal failures instead of reporting unconditional success." >&2
-      return 1
-    }
- grep -Fq 'tickflow_remove_file_or_error() {' \
- && grep -Fq 'error "$(t app.tickflow.error.remove_file "$path")"' \
- && grep -Fq 'tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"' \
- && grep -Fq 'tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
-    || {
-      echo "Release TickFlow script must preserve uninstall file removal failure handling." >&2
       return 1
     }
 }

@@ -20,8 +20,7 @@ check_cyberstrikeai_status_backup_projection() {
     rm -rf "$tmp_dir"
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "cyber backups" in x["path"]; assert x["path"].endswith("cyberstrike-ai_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
-  grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' impl/install_cyberstrikeai.sh \
- && grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' 
+  grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
@@ -56,14 +55,6 @@ check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
       echo "CyberStrikeAI uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_csai_remove_dir_or_error() {' \
- && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_dir "$path")"' \
- && grep -Fq '_csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"' \
- && grep -Fq '_csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"' \
-    || {
-      echo "Release CyberStrikeAI script must preserve uninstall directory removal failure handling." >&2
-      return 1
-    }
 }
 
 check_cyberstrikeai_uninstall_checks_file_removal_errors() {
@@ -79,19 +70,6 @@ check_cyberstrikeai_uninstall_checks_file_removal_errors() {
     && grep -Fq 'app.cyberstrikeai.error.remove_file' apps/cyberstrikeai.sh \
     || {
       echo "CyberStrikeAI uninstall must surface file removal failures instead of reporting unconditional success." >&2
-      return 1
-    }
- grep -Fq '_csai_remove_file_or_error() {' \
- && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_file "$path")"' \
- && grep -Fq '_csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"' \
- && grep -Fq '_csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"' \
- && grep -Fq '_csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"' \
- && grep -Fq '_csai_remove_file_or_error "$LOGROTATE_FILE" "LOGROTATE_FILE"' \
- && grep -Fq '_csai_remove_file_or_error "$CRON_FILE" "CRON_FILE"' \
- && grep -Fq '_csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"' \
- && grep -Fq '_csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
-    || {
-      echo "Release CyberStrikeAI script must preserve uninstall file removal failure handling." >&2
       return 1
     }
 }

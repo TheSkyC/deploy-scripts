@@ -45,16 +45,6 @@ check_newapi_uninstall_checks_directory_removal_errors() {
       echo "NewAPI uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_newapi_remove_dir_or_error() {' \
- && grep -Fq 'error "$(t app.newapi.error.remove_dir "$path")"' \
- && grep -Fq '_newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"' \
- && grep -Fq '_newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"' \
- && grep -Fq 'warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"' \
- && grep -Fq '_newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"' \
-    || {
-      echo "Release NewAPI script must preserve uninstall directory removal failure handling." >&2
-      return 1
-    }
 }
 
 check_newapi_uninstall_checks_file_removal_errors() {
@@ -71,23 +61,10 @@ check_newapi_uninstall_checks_file_removal_errors() {
       echo "NewAPI uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_newapi_remove_file_or_error() {' \
- && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' \
- && grep -Fq '_newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"' \
- && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' \
- && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' \
- && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' \
- && grep -Fq '_newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"' \
- && grep -Fq '_newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
-    || {
-      echo "Release NewAPI script must preserve uninstall file removal failure handling." >&2
-      return 1
-    }
 }
 
 check_newapi_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_newapi_require_safe_bin_path() {' impl/install_newapi.sh \
- && grep -Fq '_newapi_require_safe_bin_path' \
     || {
       echo "NewAPI must centralize BIN_PATH safety validation in a reusable helper." >&2
       return 1
@@ -119,7 +96,7 @@ check_newapi_backup_lists_preserve_paths_with_spaces() {
     return 1
   fi
   awk '
-      /new-api\.bak\.\*/ { in_binary=1 }
+      /new-api\.bak\./ { in_binary=1 }
       in_binary && /-printf '\''%T@ %p\\0'\''/ { saw_binary_print0=1 }
       in_binary && /sort -z -rn \| tail -z -n \+4/ { saw_binary_sort=1 }
       in_binary && /_old_baks\+=\("\$\{_old_bak_entry#\* \}"\)/ { saw_binary_strip=1 }

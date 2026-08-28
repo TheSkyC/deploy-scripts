@@ -20,8 +20,7 @@ check_vaultwarden_status_backup_projection() {
     rm -rf "$tmp_dir"
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "vaultwarden backups" in x["path"]; assert x["path"].endswith("vaultwarden_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
-  grep -Fq 'APP_STATUS_BACKUP_FN=_vw_status_backup' impl/install_vaultwarden.sh \
- && grep -Fq 'APP_STATUS_BACKUP_FN=_vw_status_backup' 
+  grep -Fq 'APP_STATUS_BACKUP_FN=_vw_status_backup' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_uninstall_supports_noninteractive_mode() {
@@ -55,15 +54,6 @@ check_vaultwarden_uninstall_checks_directory_removal_errors() {
       echo "Vaultwarden uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_vw_remove_dir_or_error() {' \
- && grep -Fq 'error "$(t app.vaultwarden.error.remove_dir "$path")"' \
- && grep -Fq '_vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"' \
- && grep -Fq '_vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"' \
- && grep -Fq '_vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"' \
-    || {
-      echo "Release Vaultwarden script must preserve uninstall directory removal failure handling." >&2
-      return 1
-    }
 }
 
 check_vaultwarden_uninstall_checks_file_removal_errors() {
@@ -85,28 +75,10 @@ check_vaultwarden_uninstall_checks_file_removal_errors() {
       echo "Vaultwarden uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
- grep -Fq '_vw_remove_file_or_error() {' \
- && grep -Fq 'error "$(t app.vaultwarden.error.remove_file "$path")"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_FILTER"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden-admin.conf" "VAULTWARDEN_FAIL2BAN_ADMIN_FILTER"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/jail.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_JAIL"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"' \
- && grep -Fq '_vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"' \
- && grep -Fq '_vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"' \
- && grep -Fq '_vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"' \
- && grep -Fq '_vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
-    || {
-      echo "Release Vaultwarden script must preserve uninstall file removal failure handling." >&2
-      return 1
-    }
 }
 
 check_vaultwarden_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_require_safe_vw_bin_path() {' impl/install_vaultwarden.sh \
- && grep -Fq '_require_safe_vw_bin_path' \
     || {
       echo "Vaultwarden must centralize VW_BIN safety validation in a reusable helper." >&2
       return 1

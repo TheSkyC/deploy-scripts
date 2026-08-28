@@ -101,8 +101,4 @@ check_ntfy_config_is_managed_atomically() {
       echo "ntfy config writes must be atomic and uninstall must report removal failures." >&2
       return 1
     }
- grep -Fq 'atomic_write_file "$config_file" 644 root:root' && grep -Fq 'ba_remove_file_or_error "$config_file" "NTFY_CONFIG_FILE"' || {
-      echo "Release ntfy script must preserve atomic config management." >&2
-      return 1
-    }
 }

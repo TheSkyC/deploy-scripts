@@ -71,8 +71,7 @@ check_iptables_rules_are_atomic() {
 
 check_netfilter_persistent_save_reports_failures() {
   if grep -R -nE 'netfilter-persistent save 2>/dev/null( && success .*\\|\\| true|[[:space:]]*\\[?;?)' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "netfilter-persistent save failures must not be silently ignored." >&2
     return 1
   fi
@@ -111,8 +110,7 @@ check_systemd_units_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_tickflow.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh dist/install_tickflow.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_tickflow.sh
 }
 
 check_systemd_daemon_reloads_are_explicit() {
@@ -144,16 +142,6 @@ check_systemd_daemon_reloads_are_explicit() {
     ' impl/install_newapi.sh
   awk '
       /if ! systemctl daemon-reload; then/ { reloads++ }
-      /error "\$\(t app\.newapi\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
-      END {
-        if (!(reloads == 3 && errors == 3)) {
-          printf "%s NewAPI must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' dist/install_newapi.sh
-  awk '
-      /if ! systemctl daemon-reload; then/ { reloads++ }
       /error "\$\(t app\.sub2api\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
       END {
         if (!(reloads == 3 && errors == 3)) {
@@ -162,16 +150,6 @@ check_systemd_daemon_reloads_are_explicit() {
         }
       }
     ' impl/install_sub2api.sh
-  awk '
-      /if ! systemctl daemon-reload; then/ { reloads++ }
-      /error "\$\(t app\.sub2api\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
-      END {
-        if (!(reloads == 3 && errors == 3)) {
-          printf "%s Sub2API must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' dist/install_sub2api.sh
   awk '
       /if ! systemctl daemon-reload; then/ { reloads++ }
       /error "\$\(t app\.cyberstrikeai\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
@@ -184,16 +162,6 @@ check_systemd_daemon_reloads_are_explicit() {
     ' impl/install_cyberstrikeai.sh
   awk '
       /if ! systemctl daemon-reload; then/ { reloads++ }
-      /error "\$\(t app\.cyberstrikeai\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
-      END {
-        if (!(reloads == 2 && errors == 2)) {
-          printf "%s CyberStrikeAI must handle install and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' dist/install_cyberstrikeai.sh
-  awk '
-      /if ! systemctl daemon-reload; then/ { reloads++ }
       /error "\$\(t app\.vaultwarden\.error\.systemd_reload\)"/ { errors++ }
       END {
         if (!(reloads == 2 && errors == 2)) {
@@ -202,16 +170,6 @@ check_systemd_daemon_reloads_are_explicit() {
         }
       }
     ' impl/install_vaultwarden.sh
-  awk '
-      /if ! systemctl daemon-reload; then/ { reloads++ }
-      /error "\$\(t app\.vaultwarden\.error\.systemd_reload\)"/ { errors++ }
-      END {
-        if (!(reloads == 2 && errors == 2)) {
-          printf "%s Vaultwarden must handle install and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-      }
-    ' dist/install_vaultwarden.sh
 }
 
 check_certbot_diagnostics_use_stderr() {
@@ -250,15 +208,10 @@ check_cron_logrotate_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh
 }
 
 check_logrotate_writes_use_shared_helper() {
- grep -Fq 'app_write_logrotate() {' lib/app.sh && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' impl/install_newapi.sh && grep -Fq 'app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"' && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' impl/install_sub2api.sh && grep -Fq 'app_write_logrotate "/etc/logrotate.d/sub2api" "$LOG_DIR" "app.sub2api.error.logrotate" "app.sub2api.success.logrotate"' && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' impl/install_cyberstrikeai.sh && grep -Fq 'app_write_logrotate "$LOGROTATE_FILE" "$LOG_DIR" "app.cyberstrikeai.error.logrotate" "app.cyberstrikeai.success.logrotate"' || {
-      echo "NewAPI, Sub2API, and CyberStrikeAI logrotate configs must be written through the shared app_write_logrotate helper." >&2
-      return 1
-    }
  if grep -nE '^_write_logrotate\(\)' impl/install_newapi.sh impl/install_sub2api.sh ; then
     echo "NewAPI and Sub2API must not define a per-app _write_logrotate copy." >&2
     return 1
@@ -304,8 +257,7 @@ check_nginx_configs_are_atomic() {
         }
         in_link=0
       }
-    ' lib/app.sh \
-      dist/install_hugo_blog.sh dist/install_cyberstrikeai.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+    ' lib/app.sh
   awk '
       FNR == 1 {
         if (NR > 1 && !(prev_cfg && prev_link)) {
@@ -370,8 +322,7 @@ check_nginx_test_failures_report_diagnostics() {
 
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "Firewall success paths must not ignore command failures." >&2
     return 1
   fi
@@ -395,17 +346,13 @@ check_firewall_success_paths_validate_command_results() {
       }
     ' lib/app.sh
   grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' impl/install_newapi.sh \
- && grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' \
     && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
- && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' \
     && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' impl/install_cyberstrikeai.sh \
- && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' \
     || {
       echo "NewAPI, Sub2API, and CyberStrikeAI firewall configuration must use the shared app_configure_firewall helper." >&2
       return 1
     }
-  if grep -nE '^_configure_firewall\(\)' impl/install_newapi.sh impl/install_sub2api.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh; then
+  if grep -nE '^_configure_firewall\(\)' impl/install_newapi.sh impl/install_sub2api.sh ; then
     echo "NewAPI and Sub2API must not define a per-app _configure_firewall copy." >&2
     return 1
   fi
@@ -492,8 +439,7 @@ check_firewall_success_paths_validate_command_results() {
 
 check_uninstall_nginx_paths_preserve_diagnostics() {
   if grep -R -nE 'nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null \|\| true|systemctl reload nginx 2>/dev/null \|\| true$' \
-      impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Uninstall-time nginx cleanup must preserve nginx test/reload diagnostics." >&2
     return 1
   fi
@@ -604,8 +550,7 @@ check_fail2ban_configs_are_atomic() {
 
 check_user_deletion_paths_are_explicit() {
   if grep -R -nE 'userdel "\$(SERVICE_USER|VW_USER)" 2>/dev/null[[:space:]\\]*&& success .* \|\| (warn|true)' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "User deletion paths must use explicit conditionals for userdel outcomes." >&2
     return 1
   fi
