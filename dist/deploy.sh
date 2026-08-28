@@ -87,7 +87,7 @@ __deploy_i18n_message() {
     notify.warn.disabled) echo "Notifications are disabled; test skipped.|通知已禁用，测试已跳过。" ;;
     notify.info.sent) echo "Notification sent.|通知已发送。" ;;
     notify.warn.send_failed) echo "Notification delivery failed (HTTP %s); continuing.|通知发送失败（HTTP %s），继续主流程。" ;;
-    notify.usage) echo "Usage: sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url URL] [--topic TOPIC] [--token TOKEN]|用法：sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url 地址] [--topic 主题] [--token 令牌]" ;;
+    notify.usage) echo "Usage: sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url URL] [--topic TOPIC] [--token TOKEN] [--test] [--clear]|用法：sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url 地址] [--topic 主题] [--token 令牌] [--test] [--clear]" ;;
     notify.config.saved) echo "Notification configuration saved: %s|通知配置已保存：%s" ;;
     notify.test.sent_ok) echo "Test notification delivered; configuration saved.|测试通知已送达，配置已保存。" ;;
     notify.test.failed) echo "Test notification failed; configuration not saved.|测试通知发送失败，配置未保存。" ;;
@@ -178,6 +178,7 @@ __deploy_i18n_message() {
     manager.check_self_update) echo "check framework updates|检查中控更新" ;;
     manager.title) echo "Deployment Scheduler|部署调度器" ;;
     manager.usage) echo "Usage: sudo bash %s <app> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]|用法：sudo bash %s <应用> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" ;;
+    manager.usage_central) echo "Central commands: status-all, backup-all, update-all, check-update, notify-config, schedule, unschedule, export, import, fleet, list, self-version, self-update|中央命令：status-all、backup-all、update-all、check-update、notify-config、schedule、unschedule、export、import、fleet、list、self-version、self-update" ;;
     manager.usage_examples) echo "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list|示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list" ;;
     status.active) echo "active|运行中" ;;
     status.inactive) echo "inactive|未运行" ;;
@@ -6529,6 +6530,7 @@ dispatch_action() {
 
 manager_usage() {
   echo "$(t manager.usage "$0")" >&2
+  echo "$(t manager.usage_central)" >&2
   echo "$(t manager.usage_examples "$0" "$0" "$0")" >&2
   echo "$(t manager.available_apps "$(deploy_app_ids | tr '\n' ' ' | sed 's/[[:space:]]*$//')")" >&2
 }

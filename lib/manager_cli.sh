@@ -2,6 +2,7 @@
 
 manager_usage() {
   echo "$(t manager.usage "$0")" >&2
+  echo "$(t manager.usage_central)" >&2
   echo "$(t manager.usage_examples "$0" "$0" "$0")" >&2
   echo "$(t manager.available_apps "$(deploy_app_ids | tr '\n' ' ' | sed 's/[[:space:]]*$//')")" >&2
 }
