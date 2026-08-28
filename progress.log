@@ -608,3 +608,34 @@ Format per entry:
   check_schedule_retries_are_configurable、check_i18n_keys_are_consistent 等）；
   守卫改动不进 dist，无重建需求。
 - 提交 / Commit: 49f8f03
+
+## 2026-08-28（自主演进批次 O12）
+- 状态 / Status: completed
+- 成果 / Change:
+  1) 8f9fa56 + 96be3b2（dist 打包缺陷修复）：发布版单文件脚本存在两个
+     真实不可用缺陷——
+     a. lib/app_loader.sh 的 restore_framework_functions 重新定义
+        dispatch_action 时用的是 D1/D2 之前的旧副本（无 verify 分支），
+        per-app dist 脚本（dist/install_*.sh）在加载 app 定义后被覆盖，
+        `verify` 动作报 "Invalid choice"。已同步 verify 分支。
+     b. tools/build-release.sh 从未把 lib/backup.sh、notify.sh、
+        schedule.sh、migrate.sh、fleet.sh、compose.sh 打进 dist/deploy.sh，
+        manager 发布版的中央命令（notify-config/schedule/unschedule/
+        export/import/fleet/backup 完整性原语）全部 "command not found"。
+        backup.sh 加入 COMMON_RELEASE_LIB_FILES（per-app 也需要），
+        其余五个库作为 MANAGER_ONLY_RELEASE_LIB_FILES 进 manager bundle。
+     修复后 dist/deploy.sh 含全部 6 个中央命令函数，dist/install_*.sh
+     的 verify 动作正确路由到 root 门禁。
+  2) 848d7e9（schedule CLI 分派修复）：
+     a. `deploy.sh schedule status` 此前落入配置分支（manager_cli 把
+        字面 "schedule" 强塞为 schedule_main 首参）；改为把用户参数
+        原样传给 schedule_main，unschedule 单独映射。
+     b. `deploy.sh schedule --help` 此前把 --help 当子命令并写入配置；
+        schedule_main 新增 -h/--help 分支。
+     c. schedule status 输出补 retries/backoff/include 字段。
+     守卫扩展：status 渲染状态行、--help 不改动配置文件。
+- 验证 / Verified: verify all 通过（"Verification passed"）；受影响守卫
+  全部 PASS；dist/deploy.sh 含 6 个中央命令函数且 bash -n 通过；
+  dist/install_newapi.sh verify 正确识别；schedule status/--help/-h 经
+  stub-root CLI 验证行为正确。
+- 提交 / Commit: 8f9fa56, 96be3b2, 848d7e9
