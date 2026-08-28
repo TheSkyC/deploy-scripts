@@ -35,7 +35,7 @@ schedule_load_config() {
     value="${value%\"}"
     value="${value#\"}"
     case "$key" in
-      SCHEDULE_ENABLED|SCHEDULE_MODE|SCHEDULE_ON_CALENDAR|SCHEDULE_INCLUDE|SCHEDULE_RETRIES)
+      SCHEDULE_ENABLED|SCHEDULE_MODE|SCHEDULE_ON_CALENDAR|SCHEDULE_INCLUDE|SCHEDULE_RETRIES|SCHEDULE_RETRY_BACKOFF)
         printf -v "$key" '%s' "$value"
         ;;
     esac
@@ -105,10 +105,47 @@ schedule_run_main() {
   return "$status"
 }
 
+# Validate a schedule specification before it reaches the unit files. On
+# systemd systems the authoritative check is `systemd-analyze calendar`;
+# when that tool is unavailable (or the spec is a plain HH:MM used by the
+# cron fallback) we fall back to a conservative shape check so a typo fails
+# loudly at `schedule` time instead of silently producing a never-firing
+# timer.
+schedule_validate_calendar() {
+  local calendar="$1"
+  if [[ "$calendar" =~ ^([0-9]+):([0-9]+)$ ]]; then
+    local hour minute
+    hour="$((10#${BASH_REMATCH[1]}))"
+    minute="$((10#${BASH_REMATCH[2]}))"
+    [[ "$hour" -le 23 && "$minute" -le 59 ]] || {
+      echo "Invalid schedule specification: $calendar" >&2
+      return 2
+    }
+    return 0
+  fi
+  if command -v systemd-analyze >/dev/null 2>&1; then
+    if systemd-analyze calendar "$calendar" >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "Invalid OnCalendar specification: $calendar" >&2
+    return 2
+  fi
+  # Conservative shape check without systemd-analyze: allow word-ish and
+  # *-* date/time patterns, but reject whitespace-padded or obviously broken
+  # values that would otherwise fail only when the timer is loaded.
+  if [[ "$calendar" =~ ^[^[:space:]]+(.*[^[:space:]])?$ ]] \
+      && [[ "$calendar" == *"/"* || "$calendar" == *:* || "$calendar" == *"-"* || "$calendar" == "*"* ]]; then
+    return 0
+  fi
+  echo "Invalid schedule specification: $calendar" >&2
+  return 2
+}
+
 # Write or refresh the scheduling units. Prefers systemd timers; falls back
 # to /etc/cron.d where systemd is unavailable.
 schedule_apply() {
   local calendar="$1"
+  schedule_validate_calendar "$calendar" || return 2
   if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
     local service_file="/etc/systemd/system/${DEPLOY_SCHEDULE_SERVICE}.service"
     local timer_file="/etc/systemd/system/${DEPLOY_SCHEDULE_SERVICE}.timer"
@@ -192,7 +229,7 @@ schedule_main() {
       success "$(t schedule.info.removed)"
       ;;
     schedule|enable|disable|*)
-      local enable="" mode="" calendar="" include="" retries=""
+      local enable="" mode="" calendar="" include="" retries="" backoff=""
       [[ "${subcommand,,}" == "schedule" ]] && enable=true
       while (($#)); do
         case "$1" in
@@ -202,6 +239,7 @@ schedule_main() {
           --at) calendar="${2:-}"; shift 2 ;;
           --include) include="${2:-}"; shift 2 ;;
           --retries) retries="${2:-}"; shift 2 ;;
+          --backoff) backoff="${2:-}"; shift 2 ;;
           *)
             t schedule.usage "$0"
             return 2
@@ -220,21 +258,33 @@ schedule_main() {
         [[ "$retries" =~ ^[0-9]+$ ]] || error "$(t common.invalid_choice "$retries")"
         SCHEDULE_RETRIES="$retries"
       fi
+      if [[ -n "${backoff:-}" ]]; then
+        [[ "$backoff" =~ ^[0-9]+$ ]] || error "$(t common.invalid_choice "$backoff")"
+        SCHEDULE_RETRY_BACKOFF="$backoff"
+      fi
       [[ -n "$enable" ]] && SCHEDULE_ENABLED="$( [[ "$enable" == true ]] && echo true || echo false )"
+      # Validate an explicit calendar before persisting it, so a typo can
+      # never leave a broken value in the config file.
+      if [[ -n "${SCHEDULE_ON_CALENDAR:-}" ]]; then
+        schedule_validate_calendar "$SCHEDULE_ON_CALENDAR" || return 2
+      fi
       if ! atomic_write_file "$SCHEDULE_CONF_FILE" 600 <<CONF
 SCHEDULE_ENABLED="${SCHEDULE_ENABLED}"
 SCHEDULE_MODE="${SCHEDULE_MODE}"
 SCHEDULE_ON_CALENDAR="${SCHEDULE_ON_CALENDAR}"
 SCHEDULE_INCLUDE="${SCHEDULE_INCLUDE}"
 SCHEDULE_RETRIES="${SCHEDULE_RETRIES}"
+SCHEDULE_RETRY_BACKOFF="${SCHEDULE_RETRY_BACKOFF}"
 CONF
       then
         error "$(t error.config_write "$SCHEDULE_CONF_FILE")"
       fi
       if [[ "${SCHEDULE_ENABLED,,}" == true ]]; then
         schedule_write_runner || error "$(t error.config_write "$DEPLOY_SCHEDULE_RUNNER")"
+        # schedule_apply reports its own diagnostics (invalid calendar, unit
+        # write failure); a non-zero return is enough to abort the command.
         schedule_apply "${SCHEDULE_ON_CALENDAR:-$( [[ "${SCHEDULE_MODE}" == check-only ]] && echo 'Mon..Fri *-*-* 09:00' || echo '*-*-* 04:30' )}" \
-          || error "$(t error.config_write "$DEPLOY_SCHEDULE_SERVICE")"
+          || return 1
       else
         schedule_remove_units
       fi
