@@ -63,18 +63,10 @@ _csai_status_backup() {
 }
 APP_STATUS_BACKUP_FN=_csai_status_backup
 _csai_remove_dir_or_error() {
-  local path="$1" name="$2" success_message="$3"
-  if ! safe_rm_dir "$path" "$name"; then
-    error "$(t app.cyberstrikeai.error.remove_dir "$path")"
-  fi
-  success "$success_message"
+  app_remove_dir_or_error "$1" "$2" "$3" "app.cyberstrikeai.error.remove_dir"
 }
 _csai_remove_file_or_error() {
-  local path="$1" name="$2"
-  require_safe_path "$name" "$path"
-  if ! rm -f "$path"; then
-    error "$(t app.cyberstrikeai.error.remove_file "$path")"
-  fi
+  app_remove_file_or_error "$1" "$2" "app.cyberstrikeai.error.remove_file"
 }
 _bool_true() {
   case "${1,,}" in

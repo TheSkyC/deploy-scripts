@@ -45,7 +45,7 @@ check_vaultwarden_uninstall_supports_noninteractive_mode() {
 
 check_vaultwarden_uninstall_checks_directory_removal_errors() {
   grep -Fq '_vw_remove_dir_or_error() {' impl/install_vaultwarden.sh \
-    && grep -Fq 'error "$(t app.vaultwarden.error.remove_dir "$path")"' impl/install_vaultwarden.sh \
+    && grep -Fq 'app_remove_dir_or_error "$1" "$2" "$3" "app.vaultwarden.error.remove_dir"' impl/install_vaultwarden.sh \
     && grep -Fq '_vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"' impl/install_vaultwarden.sh \
     && grep -Fq '_vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"' impl/install_vaultwarden.sh \
     && grep -Fq '_vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"' impl/install_vaultwarden.sh \
@@ -58,7 +58,7 @@ check_vaultwarden_uninstall_checks_directory_removal_errors() {
 
 check_vaultwarden_uninstall_checks_file_removal_errors() {
   grep -Fq '_vw_remove_file_or_error() {' impl/install_vaultwarden.sh \
-    && grep -Fq 'error "$(t app.vaultwarden.error.remove_file "$path")"' impl/install_vaultwarden.sh \
+    && grep -Fq 'app_remove_file_or_error "$1" "$2" "app.vaultwarden.error.remove_file"' impl/install_vaultwarden.sh \
     && grep -Fq '_vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"' impl/install_vaultwarden.sh \
     && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"' impl/install_vaultwarden.sh \
     && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"' impl/install_vaultwarden.sh \
