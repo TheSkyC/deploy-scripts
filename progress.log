@@ -563,3 +563,29 @@ Format per entry:
   check_migration_export_import_roundtrip / check_i18n_keys_are_consistent）；
   改动文件 bash -n 通过；dist 随 build-release.sh 重建。
 - 提交 / Commit: 6060b97, 24f3bf1
+
+## 2026-08-28（自主演进批次 O8–O10）
+- 状态 / Status: completed
+- 成果 / Change:
+  1) O8（df930a7）：修复 check_app_registry_capabilities 过期否定断言——
+     B4 批次写的 "newapi must not declare restore yet" 在 D5 给 newapi
+     实现 restore 后变成坏断言，导致每次 verify all 失败（工作区遗留的
+     verify_final.log 即证据）。反转为必须声明 restore，与
+     check_registry_restore_capability_matches_impl 一致。这是继
+     migration 守卫后第二个被 progress.log 乐观记录掩盖的坏守卫；
+     修复后 verify all 首次真正全绿。
+  2) O9（3384f8d）：deploy.sh help 补中央命令面——manager_usage 此前只
+     列 per-app 动作，`deploy.sh help` 看不到 backup-all/update-all/
+     notify-config/schedule/export/import/fleet 等中央命令；新增
+     manager.usage_central 行；notify.usage 补 --test/--clear。
+  3) O10（13d1d04）：CHANGELOG Unreleased 段补齐 O1–O7 全部修复记录
+     （schedule 校验/import traversal/信任门/notify --test 硬化/schedule
+     cron 回退默认日历/operation 钩子守卫/两个守卫修复）；.gitignore 忽略
+     .commandcode/ 会话工具目录；清理工作区垃圾文件（${ARCHIVE}.sha256
+     空文件、过期的 verify_final.log 失败记录）。
+- 验证 / Verified: verify all 通过（"Verification passed"）；
+  guards 292 个守卫逐个扫描全部通过（scan-head 1–273 + scan-tail
+  274–292 均 ALL_PASS；完整 guards target 顺序执行约 5–6 分钟属预期
+  设计——CI 的 guards job 无超时问题，本地验证走 verify all 并行快路径）；
+  i18n/dispatch 相关守卫单独运行通过；dist 随 build-release.sh 重建。
+- 提交 / Commit: df930a7, 3384f8d, 13d1d04
