@@ -525,6 +525,7 @@ main() {
       check_preupdate_backup_warnings_include_followup_guidance
       check_random_head_pipelines_handle_sigpipe
       check_release_build_outputs_are_atomic
+      check_app_loader_dispatch_matches_cli
       check_root_wrappers_match_bin_loaders
       check_run_checks_parallel_cleans_tmpdir
       check_safe_path_guard
