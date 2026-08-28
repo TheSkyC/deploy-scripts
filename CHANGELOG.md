@@ -61,6 +61,36 @@ for the framework release archives produced by `tools/build-release.sh`.
 
 ### Fixed
 
+- `notify-config --test` now probes the merged in-memory values through a
+  staged private config file instead of silently re-reading the stale
+  on-disk config; a disabled backend or unreachable URL fails loudly
+  (via `NOTIFY_STRICT`) rather than claiming "test delivered", and a
+  successful probe persists the merged config so what was tested is
+  exactly what later runs use.
+- Schedule default calendar for `check-only` mode changed from the
+  systemd-only `Mon..Fri *-*-* 09:00` form to a plain `HH:MM` that the
+  `/etc/cron.d` fallback can convert, so non-systemd hosts get a working
+  schedule instead of an apply-time rejection.
+- `operation_run_app_action`'s per-app notification hook now guards on
+  `declare -F notify_send`, so isolated/embedded sources of
+  `lib/operation.sh` skip the hook instead of hitting `command not found`.
+- `deploy.sh schedule` rejects out-of-range `HH:MM` values (e.g. `25:99`)
+  before writing the config, validates OnCalendar specs with
+  `systemd-analyze calendar` where available, and no longer wraps
+  `schedule_apply` failures in a misleading config-write error.
+- `deploy.sh import` scans archive members with `tar -tzf` and refuses
+  absolute paths, `..`, and backslashes before any byte lands on disk;
+  the sha256 sidecar proves integrity but not safety.
+- Schedule and fleet configs now use the same root:600/400 trust gate as
+  app and notification configs; untrusted files are ignored entirely and
+  callers tolerate the refusal.
+- Fleet remote records that are not parseable JSON are wrapped as
+  `{"error": ...}` instead of corrupting the merged summary.
+- Guard fixes: the migration traversal test runs `migrate_main import` in
+  a subshell so its `error()` exit cannot kill the whole test process
+  (the guard previously never passed), and the registry capabilities
+  check now asserts newapi declares `restore` instead of the stale
+  pre-D5 negation.
 - `status-json` backup projection: newapi now applies the same config trust
   gate as every other app (root-owned, mode 600/400) before honoring a
   `BACKUP_DIR` override from the saved deployment config; binary-app
