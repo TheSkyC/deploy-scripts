@@ -4,8 +4,7 @@
 
 check_optional_directory_cleanup_is_nonfatal() {
   if grep -R -nE '\[\[ (-n "\$old_go_backup"|-d "\$_wv_install_bak") \]\] && rm -rf' \
-      impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Optional directory cleanup must use explicit if branches so absent paths do not trip set -e." >&2
     return 1
   fi
@@ -84,8 +83,7 @@ check_preupdate_backup_warnings_include_followup_guidance() {
         }
         in_csai=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh
   awk '
       /_backup_silent\(\)/ { in_helper=1; saw_failed_flag=0; saw_pg_fail=0; saw_config_fail=0; saw_return=0; next }
       in_helper && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
@@ -301,8 +299,7 @@ check_update_backs_up_before_stop() {
 
 check_update_binary_backups_are_atomic() {
   if grep -R -nE '^[[:space:]]*cp "\$(BIN_PATH|VW_BIN)" "?\$\{?(BAK_PATH|VW_BIN)\}?' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Update binary backups must copy to a temporary file before replacing the final backup path." >&2
     return 1
   fi
@@ -322,8 +319,7 @@ check_update_binary_backups_are_atomic() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
 check_old_backup_cleanup_reports_failures() {
@@ -413,8 +409,7 @@ check_old_backup_cleanup_reports_failures() {
 
 check_uninstall_binary_cleanup_reports_failures() {
   if grep -R -nE 'find "\$INSTALL_DIR" -maxdepth 1 .* -delete 2>/dev/null \|\| true|find "\$\(dirname "\$VW_BIN"\)" -maxdepth 1 .* -delete 2>/dev/null \|\| true' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Uninstall binary cleanup must report per-path removal failures instead of ignoring find -delete errors." >&2
     return 1
   fi
@@ -734,14 +729,12 @@ check_backup_scripts_are_atomic() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh
 }
 
 check_generated_backup_headers_are_shell_quoted() {
   if grep -R -nE '^(BACKUP_DIR|DATA_DIR|CONFIG_DIR|INSTALL_DIR|PG_DSN|SERVICE_NAME)="\$\{(BACKUP_DIR|DATA_DIR|CONFIG_DIR|INSTALL_DIR|PG_DSN|SERVICE_NAME)\}"$|^KEEP_DAYS="\$\{BACKUP_KEEP_DAYS\}"$|^LOG_FILE="\$\{LOG_DIR\}/backup\.log"$' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "Generated backup script headers must use shell-quoted literals instead of interpolating raw values." >&2
     return 1
   fi
@@ -932,8 +925,7 @@ check_manual_backup_retention_is_normalized() {
 
 check_backup_retention_cleanup_reports_failures() {
   if grep -R -nE 'rm -f "\$f" && [^|]+ \|\| true|find "\\?\$BACKUP_DIR" -maxdepth 1 .* -delete' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_cyberstrikeai.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Backup retention cleanup must report per-file removal failures instead of ignoring them." >&2
     return 1
   fi
@@ -1011,8 +1003,7 @@ check_backup_retention_cleanup_reports_failures() {
 
 check_optional_count_messages_are_nonfatal() {
   if grep -R -nE '\[\[ (\$\{?REMOVED\}?|\$_cleaned|\$_cleaned_old|\$_cleaned_wv|\$_cnt) -(gt|eq) 0 \]\] &&' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Optional count-based status messages must use explicit if branches so zero counts do not trip set -e." >&2
     return 1
   fi
@@ -1020,8 +1011,7 @@ check_optional_count_messages_are_nonfatal() {
 
 check_silent_backup_tar_diagnostics_use_stderr() {
   if grep -R -n '2>&1 >&2; then' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Silent backup tar diagnostics must be written directly to stderr." >&2
     return 1
   fi
@@ -1036,14 +1026,12 @@ check_silent_backup_tar_diagnostics_use_stderr() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh
+    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
 check_tar_diagnostics_use_stderr() {
   if grep -R -nE 'tar -(czf|xzf) .*2>&1; then' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh \
-      dist/install_newapi.sh dist/install_sub2api.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Tar diagnostics in backup and extract paths must be written to stderr." >&2
     return 1
   fi

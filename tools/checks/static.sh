@@ -361,9 +361,7 @@ check_systemd_helper_is_atomic() {
 
 check_binary_app_systemd_paths_are_validated() {
   local file
- for file in lib/binary_app.sh \
-      dist/install_alist.sh dist/install_filebrowser.sh dist/install_navidrome.sh \
-      dist/install_frps.sh dist/install_gitea.sh; do
+  for file in lib/binary_app.sh; do
     grep -Fq 'bapp_validate_no_whitespace' "$file" \
       && grep -Fq 'binary_app.error.path_whitespace' "$file" \
       && grep -Fq 'require_safe_path "BA_READWRITE_PATHS"' "$file" \

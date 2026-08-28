@@ -20,8 +20,7 @@ check_cpa_stack_status_backup_projection() {
     rm -rf "$tmp_dir"
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "cpa backups" in x["path"]; assert x["path"].endswith("cpa-stack-20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
-  grep -Fq 'APP_STATUS_BACKUP_FN=_cpa_stack_status_backup' impl/install_cpa_stack.sh \
- && grep -Fq 'APP_STATUS_BACKUP_FN=_cpa_stack_status_backup' 
+  grep -Fq 'APP_STATUS_BACKUP_FN=_cpa_stack_status_backup' impl/install_cpa_stack.sh
 }
 
 check_cpa_stack_layout() {
