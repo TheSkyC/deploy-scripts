@@ -272,7 +272,10 @@ i18n_register_many \
   "创建备份归档失败：%s" \
   app.tickflow.backup.success \
   "Backup created: %s" \
-  "备份已创建：%s"
+  "备份已创建：%s" \
+  app.tickflow.warn.integrity_failed \
+  "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
+  "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s"
 
 APP_DESCRIPTION="$(t app.tickflow.description)"
 APP_IMPL_SCRIPT="impl/install_tickflow.sh"

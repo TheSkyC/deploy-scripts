@@ -5891,7 +5891,10 @@ i18n_register_many \
   "创建备份归档失败：%s" \
   app.tickflow.backup.success \
   "Backup created: %s" \
-  "备份已创建：%s"
+  "备份已创建：%s" \
+  app.tickflow.warn.integrity_failed \
+  "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
+  "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s"
 
 APP_DESCRIPTION="$(t app.tickflow.description)"
 APP_IMPL_SCRIPT="impl/install_tickflow.sh"
@@ -6347,6 +6350,13 @@ do_backup() {
     rm -f "$archive_tmp"
     error "$(t app.tickflow.backup.error_archive "$archive")"
   fi
+  # Integrity metadata: a sha256 sidecar plus a manifest, so do_verify and the
+  # shared status projection can confirm the archive instead of reporting it
+  # as unverified forever. Best-effort on failure — the archive itself exists.
+  if ! backup_write_sha256 "$archive" >/dev/null \
+     || ! backup_write_manifest "$archive" "$APP_ID" 1 "${INSTALLED_VERSION:-}"; then
+    warn "$(t app.tickflow.warn.integrity_failed "$archive")"
+  fi
   success "$(t app.tickflow.backup.success "$archive")"
 }
 
@@ -6494,6 +6504,11 @@ do_restore() {
   else
     archive="$(backup_latest_archive "$backup_dir" 'tickflow-data-*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$backup_dir")"
+  fi
+  # Verify integrity metadata before touching anything; archives without a
+  # sidecar (created before manifests were written) fail closed with guidance.
+  if ! backup_verify_archive "$archive"; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
   fi
   # The archive holds exactly the three members do_backup stores: data/,
   # tiers.yaml, .env — all relative to INSTALL_DIR.
