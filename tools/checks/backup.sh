@@ -1562,6 +1562,48 @@ STUB2
     echo ok
   ' | grep -q ok
 }
+  # notify-config --test end-to-end: probe the merged values (not stale disk
+  # state), fail loudly when delivery fails without persisting anything, and
+  # persist the tested configuration only on a successful delivery. Run in a
+  # subshell so the stub error() exit cannot terminate the guard process.
+  (
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    export NOTIFY_CONF_FILE="$tmp/notify.conf"
+    require_root() { :; }
+    app_conf_trusted_value() { return 0; }
+    error() { exit 9; }
+    success() { :; }
+    info() { :; }
+    warn() { :; }
+    mkdir -p "$tmp/bin"
+    cat > "$tmp/bin/curl" <<'STUB'
+#!/bin/bash
+c="$(cat "${NOTIFY_COUNT_FILE:-/dev/null}" 2>/dev/null || echo 0)"
+c=$((c + 1))
+echo "$c" > "${NOTIFY_COUNT_FILE:-/dev/null}"
+(( c <= 1 )) && { echo 500; exit 0; }
+echo 200
+STUB
+    chmod +x "$tmp/bin/curl"
+    export NOTIFY_COUNT_FILE="$tmp/count"
+    : > "$NOTIFY_COUNT_FILE"
+
+    # Fresh config + failing delivery: --test must fail and not persist.
+    if ( PATH="$tmp/bin:$PATH" notify_config_main --enable --backend ntfy --url http://example.invalid --topic t --test ) >/dev/null 2>&1; then
+      echo TEST_DELIVERY_FAIL_OK; exit 71
+    fi
+    [[ -e "$NOTIFY_CONF_FILE" ]] && { echo TEST_PERSISTED_ON_FAILURE; exit 72; }
+
+    # Succeeding delivery: --test must persist the merged config.
+    PATH="$tmp/bin:$PATH" notify_config_main --enable --backend ntfy --url http://example.invalid --topic t --test >/dev/null 2>&1 \
+      || { echo TEST_OK_FAILED; exit 73; }
+    [[ -f "$NOTIFY_CONF_FILE" ]] || { echo TEST_OK_NO_PERSIST; exit 74; }
+    grep -q '^NOTIFY_ENABLED="true"$' "$NOTIFY_CONF_FILE" || { echo TEST_OK_NOT_ENABLED; exit 75; }
+    grep -q '^NOTIFY_TOPIC="t"$' "$NOTIFY_CONF_FILE" || { echo TEST_OK_NOT_MERGED; exit 76; }
+  ) || return 1
 
 # Scheduled-batch invariants: units and runner are written atomically with
 # restrictive modes, cron expressions are validated before use, unschedule
