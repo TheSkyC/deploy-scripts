@@ -219,7 +219,7 @@ schedule_main() {
       ;;
     status)
       schedule_load_config || true
-      echo "enabled=${SCHEDULE_ENABLED} mode=${SCHEDULE_MODE:-update-all} calendar=${SCHEDULE_ON_CALENDAR:-<default>}"
+      echo "enabled=${SCHEDULE_ENABLED} mode=${SCHEDULE_MODE:-update-all} calendar=${SCHEDULE_ON_CALENDAR:-<default>} retries=${SCHEDULE_RETRIES:-0} backoff=${SCHEDULE_RETRY_BACKOFF:-300} include=${SCHEDULE_INCLUDE:-<all>}"
       if command -v systemctl >/dev/null 2>&1 \
           && systemctl list-timers --all 2>/dev/null | grep -q "$DEPLOY_SCHEDULE_SERVICE"; then
         echo "systemd timer active"
