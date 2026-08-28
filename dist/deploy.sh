@@ -84,11 +84,13 @@ __deploy_i18n_message() {
     notify.warn.no_backend) echo "Notification backend is not set to ntfy or gotify; notification skipped.|通知后端不是 ntfy 或 gotify，已跳过通知。" ;;
     notify.warn.no_url) echo "Notification URL is empty; notification skipped.|通知服务地址为空，已跳过通知。" ;;
     notify.warn.curl_missing) echo "curl is not available; notification skipped.|curl 不可用，已跳过通知。" ;;
+    notify.warn.disabled) echo "Notifications are disabled; test skipped.|通知已禁用，测试已跳过。" ;;
     notify.info.sent) echo "Notification sent.|通知已发送。" ;;
     notify.warn.send_failed) echo "Notification delivery failed (HTTP %s); continuing.|通知发送失败（HTTP %s），继续主流程。" ;;
     notify.usage) echo "Usage: sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url URL] [--topic TOPIC] [--token TOKEN]|用法：sudo bash %s notify-config [--enable|--disable] [--backend ntfy|gotify] [--url 地址] [--topic 主题] [--token 令牌]" ;;
     notify.config.saved) echo "Notification configuration saved: %s|通知配置已保存：%s" ;;
-    notify.test.sent_ok) echo "Test notification delivered.|测试通知已送达。" ;;
+    notify.test.sent_ok) echo "Test notification delivered; configuration saved.|测试通知已送达，配置已保存。" ;;
+    notify.test.failed) echo "Test notification failed; configuration not saved.|测试通知发送失败，配置未保存。" ;;
     notify.config.cleared) echo "Notification configuration removed: %s|通知配置已删除：%s" ;;
     schedule.usage) echo "Usage: sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at 'HH:MM' | OnCalendar | 'cron expr'] [--include app1,app2] [--retries N] [--backoff SECONDS]; sudo bash %s unschedule|status|run|schedule-run|用法：sudo bash %s schedule [--enable|--disable] [--mode update-all|check-only] [--at '时:分' | OnCalendar | cron 表达式] [--include 应用1,应用2] [--retries N] [--backoff 秒]；sudo bash %s unschedule|status|run|schedule-run" ;;
     schedule.info.saved) echo "Schedule configuration saved.|定时计划配置已保存。" ;;
@@ -116,6 +118,7 @@ __deploy_i18n_message() {
     error.config_permission) echo "Refusing to load unsafe config permissions: %s|拒绝加载权限不安全的配置文件：%s" ;;
     error.config_owner) echo "Refusing to load config not owned by root: %s|拒绝加载非 root 拥有的配置文件：%s" ;;
     error.config_write) echo "Failed to save deployment config: %s|部署配置保存失败：%s" ;;
+    error.tmpdir) echo "Failed to create a private temporary file; aborting.|无法创建私有临时文件，已中止。" ;;
     error.lock_failed) echo "Another deployment process is running: %s|已有部署进程正在运行：%s" ;;
     error.root_required) echo "Please run as root: sudo bash %s %s|请使用 root 权限运行：sudo bash %s %s" ;;
     error.unsupported_action) echo "%s does not support %s yet.|%s 暂不支持 %s。" ;;
@@ -1380,8 +1383,10 @@ operation_run_app_action() {
     operation_finish "$status" "" "${action} exited with status ${status}" || true
   fi
   # Per-app outcome notification (install/update/backup/restore/uninstall):
-  # fail-open via notify_send, redacted, never changes the result.
-  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+  # fail-open via notify_send, redacted, never changes the result. When the
+  # notification library is not loaded (isolated/embedded use), the hook is
+  # skipped silently — a missing notifier must not fail the action.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]] && declare -F notify_send >/dev/null 2>&1; then
     case "$action" in
       install|update|backup|restore|uninstall)
         notify_send \

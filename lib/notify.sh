@@ -55,16 +55,19 @@ notify_redact() {
 # and returns 0 unless explicitly asked to report failure via NOTIFY_STRICT.
 notify_send() {
   local title="$1" body="${2:-}"
-  notify_load_config || { warn "$(t notify.warn.untrusted_config)"; return 0; }
-  [[ "${NOTIFY_ENABLED,,}" == true ]] || return 0
+  notify_load_config || { warn "$(t notify.warn.untrusted_config)"; return "${NOTIFY_STRICT:-0}"; }
+  [[ "${NOTIFY_ENABLED,,}" == true ]] || {
+    [[ "${NOTIFY_STRICT:-0}" == 1 ]] && warn "$(t notify.warn.disabled)"
+    return "${NOTIFY_STRICT:-0}"
+  }
   case "${NOTIFY_BACKEND,,}" in
     ntfy|gotify) ;;
-    *) warn "$(t notify.warn.no_backend)"; return 0 ;;
+    *) warn "$(t notify.warn.no_backend)"; return "${NOTIFY_STRICT:-0}" ;;
   esac
-  [[ -n "$NOTIFY_URL" ]] || { warn "$(t notify.warn.no_url)"; return 0; }
+  [[ -n "$NOTIFY_URL" ]] || { warn "$(t notify.warn.no_url)"; return "${NOTIFY_STRICT:-0}"; }
   if ! command -v curl >/dev/null 2>&1; then
     warn "$(t notify.warn.curl_missing)"
-    return 0
+    return "${NOTIFY_STRICT:-0}"
   fi
   title="$(notify_redact "$title")"
   body="$(notify_redact "$body")"
@@ -93,10 +96,13 @@ notify_send() {
   local http_code
   http_code="$("${args[@]}" 2>/dev/null)" || http_code="000"
   case "$http_code" in
-    2*) info "$(t notify.info.sent)" ;;
-    *) warn "$(t notify.warn.send_failed "$http_code")" ;;
+    2*) info "$(t notify.info.sent)"; return 0 ;;
+    *)
+      warn "$(t notify.warn.send_failed "$http_code")"
+      [[ "${NOTIFY_STRICT:-0}" == 1 ]] && return 1
+      return 0
+      ;;
   esac
-  return 0
 }
 
 # Interactive/CLI configuration for the notification backends. Values are
@@ -161,8 +167,48 @@ notify_config_main() {
   [[ -n "$token" ]] && { NOTIFY_TOKEN="$token"; NOTIFY_USERNAME=""; NOTIFY_PASSWORD=""; }
   [[ -n "$enable" ]] && NOTIFY_ENABLED="$( [[ "${enable}" == true ]] && echo true || echo false )"
   if [[ "$test_only" == "true" ]]; then
-    notify_send "deploy-scripts notification test" \
+    # Probe with the merged values, not whatever the disk still holds:
+    # notify_send reloads the config file internally, so stage the merged
+    # values into a private probe file and point notify_send at it. A test
+    # without an enabled backend or a reachable URL must fail loudly instead
+    # of claiming success while silently skipping the send.
+    local probe_file probe_status
+    probe_file="$(mktemp "${TMPDIR:-/tmp}/deploy-notify-probe.XXXXXX")" || error "$(t error.tmpdir)"
+    if ! atomic_write_file "$probe_file" 600 <<PROBE
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+PROBE
+    then
+      rm -f "$probe_file"
+      error "$(t error.config_write "$probe_file")"
+    fi
+    NOTIFY_STRICT=1 NOTIFY_CONF_FILE="$probe_file" notify_send \
+      "deploy-scripts notification test" \
       "If you can read this, notifications work. No secrets are included."
+    probe_status=$?
+    rm -f "$probe_file"
+    if [[ "$probe_status" -ne 0 ]]; then
+      error "$(t notify.test.failed)"
+    fi
+    # The probe succeeded with the merged values, so persist them so the
+    # tested configuration is exactly what later runs will use.
+    if ! atomic_write_file "$conf_file" 600 <<CONF
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+CONF
+    then
+      error "$(t error.config_write "$conf_file")"
+    fi
     success "$(t notify.test.sent_ok)"
     return 0
   fi
