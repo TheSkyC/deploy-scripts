@@ -50,18 +50,10 @@ _sub2api_require_safe_bin_path() {
   require_safe_path "BIN_PATH" "$BIN_PATH"
 }
 _sub2api_remove_dir_or_error() {
-  local path="$1" name="$2" success_message="$3"
-  if ! safe_rm_dir "$path" "$name"; then
-    error "$(t app.sub2api.error.remove_dir "$path")"
-  fi
-  success "$success_message"
+  app_remove_dir_or_error "$1" "$2" "$3" "app.sub2api.error.remove_dir"
 }
 _sub2api_remove_file_or_error() {
-  local path="$1" name="$2"
-  require_safe_path "$name" "$path"
-  if ! rm -f "$path"; then
-    error "$(t app.sub2api.error.remove_file "$path")"
-  fi
+  app_remove_file_or_error "$1" "$2" "app.sub2api.error.remove_file"
 }
 app_conf_register_legacy "/etc/sub2api-deploy.conf"
 CONF_FILE="$(app_conf_file)"

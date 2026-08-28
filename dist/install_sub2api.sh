@@ -3849,6 +3849,29 @@ LOGR
   success "$(t "$success_key")"
 }
 
+# Remove one file with a safe-path guard, surfacing removal failures through
+# the app-supplied localized error key. Shared replacement for the per-app
+# `_*_remove_file_or_error` clones.
+app_remove_file_or_error() {
+  local path="$1" name="$2" error_key="$3"
+  require_safe_path "$name" "$path"
+  if ! rm -f "$path"; then
+    error "$(t "$error_key" "$path")"
+  fi
+}
+
+# Remove one directory with a safe-path guard, printing the app-supplied
+# success message on success and surfacing failures through the localized
+# error key. Shared replacement for the per-app `_*_remove_dir_or_error`
+# clones.
+app_remove_dir_or_error() {
+  local path="$1" name="$2" success_message="$3" error_key="$4"
+  if ! safe_rm_dir "$path" "$name"; then
+    error "$(t "$error_key" "$path")"
+  fi
+  success "$success_message"
+}
+
 # Opens the service port through the active firewall manager: ufw first, then
 # optionally firewalld (opt-in for apps that support it), then iptables with
 # persistence. Localized keys are addressed through the app key prefix and the
@@ -6584,18 +6607,10 @@ _sub2api_require_safe_bin_path() {
   require_safe_path "BIN_PATH" "$BIN_PATH"
 }
 _sub2api_remove_dir_or_error() {
-  local path="$1" name="$2" success_message="$3"
-  if ! safe_rm_dir "$path" "$name"; then
-    error "$(t app.sub2api.error.remove_dir "$path")"
-  fi
-  success "$success_message"
+  app_remove_dir_or_error "$1" "$2" "$3" "app.sub2api.error.remove_dir"
 }
 _sub2api_remove_file_or_error() {
-  local path="$1" name="$2"
-  require_safe_path "$name" "$path"
-  if ! rm -f "$path"; then
-    error "$(t app.sub2api.error.remove_file "$path")"
-  fi
+  app_remove_file_or_error "$1" "$2" "app.sub2api.error.remove_file"
 }
 app_conf_register_legacy "/etc/sub2api-deploy.conf"
 CONF_FILE="$(app_conf_file)"

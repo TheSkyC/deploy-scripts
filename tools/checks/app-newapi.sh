@@ -34,7 +34,7 @@ check_newapi_uninstall_supports_noninteractive_mode() {
 
 check_newapi_uninstall_checks_directory_removal_errors() {
   grep -Fq '_newapi_remove_dir_or_error() {' impl/install_newapi.sh \
-    && grep -Fq 'error "$(t app.newapi.error.remove_dir "$path")"' impl/install_newapi.sh \
+    && grep -Fq 'app_remove_dir_or_error "$1" "$2" "$3" "app.newapi.error.remove_dir"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"' impl/install_newapi.sh \
     && grep -Fq 'warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"' impl/install_newapi.sh \
@@ -49,7 +49,7 @@ check_newapi_uninstall_checks_directory_removal_errors() {
 
 check_newapi_uninstall_checks_file_removal_errors() {
   grep -Fq '_newapi_remove_file_or_error() {' impl/install_newapi.sh \
-    && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' impl/install_newapi.sh \
+    && grep -Fq 'app_remove_file_or_error "$1" "$2" "app.newapi.error.remove_file"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' impl/install_newapi.sh \
     && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' impl/install_newapi.sh \

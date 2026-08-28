@@ -47,7 +47,7 @@ check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
 
 check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
   grep -Fq '_csai_remove_dir_or_error() {' impl/install_cyberstrikeai.sh \
-    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_dir "$path")"' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'app_remove_dir_or_error "$1" "$2" "$3" "app.cyberstrikeai.error.remove_dir"' impl/install_cyberstrikeai.sh \
     && grep -Fq '_csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"' impl/install_cyberstrikeai.sh \
     && grep -Fq '_csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"' impl/install_cyberstrikeai.sh \
     && grep -Fq 'app.cyberstrikeai.error.remove_dir' apps/cyberstrikeai.sh \
@@ -59,7 +59,7 @@ check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
 
 check_cyberstrikeai_uninstall_checks_file_removal_errors() {
   grep -Fq '_csai_remove_file_or_error() {' impl/install_cyberstrikeai.sh \
-    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_file "$path")"' impl/install_cyberstrikeai.sh \
+    && grep -Fq 'app_remove_file_or_error "$1" "$2" "app.cyberstrikeai.error.remove_file"' impl/install_cyberstrikeai.sh \
     && grep -Fq '_csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"' impl/install_cyberstrikeai.sh \
     && grep -Fq '_csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"' impl/install_cyberstrikeai.sh \
     && grep -Fq '_csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"' impl/install_cyberstrikeai.sh \

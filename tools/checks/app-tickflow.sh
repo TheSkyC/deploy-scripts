@@ -63,7 +63,7 @@ check_tickflow_uninstall_supports_noninteractive_mode() {
 
 check_tickflow_uninstall_checks_directory_removal_errors() {
   grep -Fq 'tickflow_remove_dir_or_error() {' impl/install_tickflow.sh \
-    && grep -Fq 'error "$(t app.tickflow.error.remove_dir "$path")"' impl/install_tickflow.sh \
+    && grep -Fq 'app_remove_dir_or_error "$1" "$2" "$3" "app.tickflow.error.remove_dir"' impl/install_tickflow.sh \
     && grep -Fq 'tickflow_remove_dir_or_error "$TICKFLOW_INSTALL_DIR" "TICKFLOW_INSTALL_DIR" "$(t app.tickflow.success.deleted_install "$TICKFLOW_INSTALL_DIR")"' impl/install_tickflow.sh \
     && grep -Fq 'tickflow_remove_dir_or_error "$backup_dir" "TICKFLOW_BACKUP_DIR" "$(t app.tickflow.success.deleted_backup "$backup_dir")"' impl/install_tickflow.sh \
     && grep -Fq 'app.tickflow.error.remove_dir' apps/tickflow.sh \
@@ -75,7 +75,7 @@ check_tickflow_uninstall_checks_directory_removal_errors() {
 
 check_tickflow_uninstall_checks_file_removal_errors() {
   grep -Fq 'tickflow_remove_file_or_error() {' impl/install_tickflow.sh \
-    && grep -Fq 'error "$(t app.tickflow.error.remove_file "$path")"' impl/install_tickflow.sh \
+    && grep -Fq 'app_remove_file_or_error "$1" "$2" "app.tickflow.error.remove_file"' impl/install_tickflow.sh \
     && grep -Fq 'tickflow_remove_file_or_error "/etc/systemd/system/${TICKFLOW_SERVICE_NAME}.service" "TICKFLOW_SERVICE_FILE"' impl/install_tickflow.sh \
     && grep -Fq 'tickflow_remove_file_or_error "$CONF_FILE" "CONF_FILE"' impl/install_tickflow.sh \
     && grep -Fq 'app.tickflow.error.remove_file' apps/tickflow.sh \

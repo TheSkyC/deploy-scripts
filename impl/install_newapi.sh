@@ -48,18 +48,10 @@ _newapi_status_backup() {
 
 APP_STATUS_BACKUP_FN=_newapi_status_backup
 _newapi_remove_dir_or_error() {
-  local path="$1" name="$2" success_message="$3"
-  if ! safe_rm_dir "$path" "$name"; then
-    error "$(t app.newapi.error.remove_dir "$path")"
-  fi
-  success "$success_message"
+  app_remove_dir_or_error "$1" "$2" "$3" "app.newapi.error.remove_dir"
 }
 _newapi_remove_file_or_error() {
-  local path="$1" name="$2"
-  require_safe_path "$name" "$path"
-  if ! rm -f "$path"; then
-    error "$(t app.newapi.error.remove_file "$path")"
-  fi
+  app_remove_file_or_error "$1" "$2" "app.newapi.error.remove_file"
 }
 _newapi_require_safe_bin_path() {
   require_safe_path "BIN_PATH" "$BIN_PATH"

@@ -21,9 +21,9 @@ check_framework_validator_errors_are_actionable() {
       }
     ' lib/app.sh
   awk '
-      /error\.port_invalid\)/ && /between 1 and 65535/ { saw_port=1 }
-      /error\.bool_invalid\)/ && /true\/false, yes\/no, on\/off, or 1\/0/ { saw_bool=1 }
-      /error\.domain_invalid\)/ && /DNS name/ { saw_domain=1 }
+      /i18n_register error\.port_invalid/ && /between 1 and 65535/ { saw_port=1 }
+      /i18n_register error\.bool_invalid/ && /true\/false, yes\/no, on\/off, or 1\/0/ { saw_bool=1 }
+      /i18n_register error\.domain_invalid/ && /DNS name/ { saw_domain=1 }
       END {
         if (!(saw_port && saw_bool && saw_domain)) {
           print "Framework fallback messages must give actionable guidance for invalid port, boolean, and domain values." > "/dev/stderr"

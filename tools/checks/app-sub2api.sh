@@ -48,7 +48,7 @@ check_sub2api_uninstall_supports_noninteractive_mode() {
 
 check_sub2api_uninstall_checks_directory_removal_errors() {
   grep -Fq '_sub2api_remove_dir_or_error() {' impl/install_sub2api.sh \
-    && grep -Fq 'error "$(t app.sub2api.error.remove_dir "$path")"' impl/install_sub2api.sh \
+    && grep -Fq 'app_remove_dir_or_error "$1" "$2" "$3" "app.sub2api.error.remove_dir"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.sub2api.success.deleted_log "$LOG_DIR")"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.sub2api.success.deleted_data "$DATA_DIR")"' impl/install_sub2api.sh \
     && grep -Fq 'warn "$(t app.sub2api.warn.cleanup_install_failed "$INSTALL_DIR")"' impl/install_sub2api.sh \
@@ -64,7 +64,7 @@ check_sub2api_uninstall_checks_directory_removal_errors() {
 
 check_sub2api_uninstall_checks_file_removal_errors() {
   grep -Fq '_sub2api_remove_file_or_error() {' impl/install_sub2api.sh \
-    && grep -Fq 'error "$(t app.sub2api.error.remove_file "$path")"' impl/install_sub2api.sh \
+    && grep -Fq 'app_remove_file_or_error "$1" "$2" "app.sub2api.error.remove_file"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "SUB2API_SERVICE_FILE"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-enabled/sub2api" "SUB2API_NGINX_LINK"' impl/install_sub2api.sh \
     && grep -Fq '_sub2api_remove_file_or_error "/etc/nginx/sites-available/sub2api" "SUB2API_NGINX_CONF"' impl/install_sub2api.sh \
