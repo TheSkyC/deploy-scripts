@@ -30,7 +30,11 @@ schedule_load_config() {
   # Same trust gate as app and notification configs: root-owned, mode
   # 600/400, or the file is ignored entirely. A world-writable schedule
   # file could otherwise inject --include tokens into the batch command.
+  # Unlike notify (which already warns), the runner call sites surface the
+  # untrusted state explicitly so an attacker-writable schedule config can
+  # never silently disable or alter a batch run.
   if ! app_conf_trusted_value "$conf_file" "SCHEDULE_ENABLED" >/dev/null 2>&1; then
+    echo "schedule: ignoring untrusted schedule config: $conf_file" >&2
     return 1
   fi
   local line key value
