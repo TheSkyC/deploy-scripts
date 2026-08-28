@@ -639,3 +639,16 @@ Format per entry:
   dist/install_newapi.sh verify 正确识别；schedule status/--help/-h 经
   stub-root CLI 验证行为正确。
 - 提交 / Commit: 8f9fa56, 96be3b2, 848d7e9
+
+## 2026-08-28（自主演进批次 O13）
+- 状态 / Status: completed
+- 成果 / Change:
+  O13（de9a904）：新增 check_app_loader_dispatch_matches_cli 守卫——锁定
+  lib/app_loader.sh restore_framework_functions 里的 dispatch_action 副本
+  与 lib/cli.sh 动作分支集合一致（归一化后对比，缩进不敏感）。这是 O12
+  发现缺陷（D1/D2 给 cli.sh 加 verify 但漏了 app_loader 副本）的防回归：
+  未来给 dispatch_action 加动作必须两处同步。用删除 verify 分支的方式
+  验证守卫确实能捕获漂移（diff 报告 verify 缺失）。
+- 验证 / Verified: verify all 通过（"Verification passed"）；守卫单独运行
+  PASS（含故意漂移的失败验证与恢复后通过）；受影响守卫全部 PASS。
+- 提交 / Commit: de9a904
