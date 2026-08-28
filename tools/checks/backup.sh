@@ -2063,12 +2063,14 @@ PY
 
     # Traversal bundle: import must refuse it even with a valid sidecar.
     # The bundle path arrives via EVIL_BUNDLE (set by the outer function)
-    # to keep the single-quoted body free of nested quoting.
+    # to keep the single-quoted body free of nested quoting. The import is
+    # run in a subshell because migrate_main reports refusal through error()
+    # (exit), which would otherwise terminate this whole test process.
     evil="${EVIL_BUNDLE:-}"
     if [[ -n "$evil" && -f "$evil" ]]; then
       rm -f "$evil.sha256"
       backup_write_sha256 "$evil" >/dev/null
-      if migrate_main import --input "$evil" >/dev/null 2>&1; then
+      if ( migrate_main import --input "$evil" >/dev/null 2>&1 ); then
         echo TRAVERSAL_IMPORT_ACCEPTED; exit 78
       fi
       [[ -e "$MIGRATE_EXPORT_DIR/escape.conf" ]] && { echo TRAVERSAL_WROTE_FILE; exit 79; }
