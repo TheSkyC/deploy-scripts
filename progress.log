@@ -589,3 +589,22 @@ Format per entry:
   设计——CI 的 guards job 无超时问题，本地验证走 verify all 并行快路径）；
   i18n/dispatch 相关守卫单独运行通过；dist 随 build-release.sh 重建。
 - 提交 / Commit: df930a7, 3384f8d, 13d1d04
+
+## 2026-08-28（自主演进批次 O11）
+- 状态 / Status: completed
+- 成果 / Change:
+  O11（49f8f03）：check_notification_fail_open_and_redaction 新增
+  notify-config --test 端到端行为锁定——stub curl + 全新配置场景下，
+  投递失败必须 error 且不持久化任何配置；投递成功必须持久化合并后的
+  配置（enabled=true/topic=t），保证"测的就是以后用的"。测试用子 shell
+  （而非嵌套 bash -c）承载 stub error() 的 exit，引号与隔离都更可靠；
+  用故意破坏 grep 模式验证过测试确实生效（失败→守卫失败）。
+  另确认：此前尝试用 bash -c 嵌套加同样测试失败，是转义/环境隔离问题
+  而非实现缺陷；notify_config_main --test 三个场景（失败拒绝/成功持久化/
+  纯探针）经独立 e2e 脚本全部验证行为正确。
+- 验证 / Verified: verify all 通过（"Verification passed"）；受影响守卫
+  全部 PASS（check_notification_fail_open_and_redaction 含新 --test 场景、
+  check_schedule_units_are_atomic_and_cleaned_up、
+  check_schedule_retries_are_configurable、check_i18n_keys_are_consistent 等）；
+  守卫改动不进 dist，无重建需求。
+- 提交 / Commit: 49f8f03
