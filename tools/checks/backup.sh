@@ -1479,25 +1479,29 @@ STUB
 # Notification integration invariants: the config file is written through
 # atomic_write_file with mode 600, message bodies pass notify_redact before
 # leaving, and every failure path of notify_send degrades to a warning with
-# a zero exit so notifications can never block an operation.
+# a zero exit so notifications can never block an operation. notify-config
+# --test must probe the merged values (not the stale disk state) and fail
+# loudly instead of claiming success when the probe cannot be delivered.
 check_notification_fail_open_and_redaction() {
   awk '
     /^notify_send\(\)/ { in_send=1; saw_trust=0; saw_redact=0; saw_warn=0; next }
     in_send && /notify_load_config \|\|/ { saw_trust=1 }
     in_send && /notify_redact "\$title"/ { saw_redact=1 }
     in_send && /warn "\$\(t notify\.warn\.send_failed/ { saw_warn=1 }
+    in_send && /NOTIFY_STRICT/ { saw_strict=1 }
     in_send && /^}$/ {
-      if (!(saw_trust && saw_redact && saw_warn)) {
-        print "notify_send must gate on trusted config, redact bodies, and warn (not fail) on delivery errors" > "/dev/stderr"
+      if (!(saw_trust && saw_redact && saw_warn && saw_strict)) {
+        print "notify_send must gate on trusted config, redact bodies, warn (not fail) on delivery errors, and honor NOTIFY_STRICT" > "/dev/stderr"
         exit 1
       }
       in_send=0
     }
-    /^notify_config_main\(\)/ { in_cfg=1; saw_atomic=0; saw_mode=0; next }
+    /^notify_config_main\(\)/ { in_cfg=1; saw_atomic=0; saw_mode=0; saw_probe=0; next }
     in_cfg && /atomic_write_file "\$conf_file" 600/ { saw_atomic=1; saw_mode=1 }
+    in_cfg && /NOTIFY_CONF_FILE="\$probe_file"/ { saw_probe=1 }
     in_cfg && /^}$/ {
-      if (!saw_atomic) {
-        print "notify_config_main must persist the token-bearing config atomically with mode 600" > "/dev/stderr"
+      if (!(saw_atomic && saw_probe)) {
+        print "notify_config_main must persist atomically with mode 600 and probe --test against a staged merged config" > "/dev/stderr"
         exit 1
       }
       in_cfg=0
@@ -1505,7 +1509,8 @@ check_notification_fail_open_and_redaction() {
   ' lib/notify.sh || return 1
 
   # Behavioral: send with no config is a silent no-op; disabled backend is a
-  # no-op; redaction strips KEY=value secrets from delivered bodies.
+  # no-op; redaction strips KEY=value secrets from delivered bodies; --test
+  # with the backend disabled must fail instead of claiming success.
   "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
@@ -1519,6 +1524,9 @@ check_notification_fail_open_and_redaction() {
     printf "NOTIFY_ENABLED=\"false\"\nNOTIFY_BACKEND=\"ntfy\"\n" > "$NOTIFY_CONF_FILE"
     chmod 600 "$NOTIFY_CONF_FILE"
     notify_send "t" "b" >/dev/null 2>&1 || { echo DISABLED_FAILED; exit 52; }
+
+    # Strict mode with a disabled backend must fail.
+    NOTIFY_STRICT=1 notify_send "t" "b" >/dev/null 2>&1 && { echo DISABLED_STRICT_OK; exit 55; }
 
     # Enabled ntfy against a local stub server: body must be redacted.
     # (Git Bash cannot chown root, so the trust gate is stubbed here; the
@@ -1541,6 +1549,16 @@ STUB
     body="$(cat "$NOTIFY_BODY_FILE")"
     [[ "$body" == *DB_PASSWORD[=]*REDACTED* ]] || { echo BODY_NOT_REDACTED_KEY; echo "$body" >&2; exit 53; }
     if [[ "$body" == *hunter2* ]]; then echo BODY_LEAKED_PASSWORD; exit 54; fi
+
+    # Strict delivery failure (curl stub exits non-zero) must fail the send.
+    cat > "$tmp/bin/curl" <<STUB2
+#!/bin/bash
+exit 7
+STUB2
+    chmod +x "$tmp/bin/curl"
+    if PATH="$tmp/bin:$PATH" NOTIFY_STRICT=1 notify_send "t" "b" >/dev/null 2>&1; then
+      echo STRICT_DELIVERY_OK; exit 56
+    fi
     echo ok
   ' | grep -q ok
 }
@@ -1609,6 +1627,13 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     [[ -x "$DEPLOY_SCHEDULE_RUNNER" ]] || { echo NO_RUNNER; exit 61; }
     [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] || { echo NO_CRON; exit 62; }
     grep -q "^10 3 \* \* \* root " "$DEPLOY_SCHEDULE_CRON_FILE" || { echo BAD_CRON_SPEC; cat "$DEPLOY_SCHEDULE_CRON_FILE" >&2; exit 63; }
+
+    # Default calendar (no --at) must be representable on the cron fallback:
+    # the default for check-only is a plain HH:MM that converts cleanly.
+    rm -f "$DEPLOY_SCHEDULE_CRON_FILE" "$DEPLOY_SCHEDULE_RUNNER"
+    schedule_main schedule --enable --mode check-only
+    [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] || { echo NO_DEFAULT_CRON; exit 66; }
+    grep -qE "^0 9 \* \* \* root " "$DEPLOY_SCHEDULE_CRON_FILE" || { echo BAD_DEFAULT_CRON; cat "$DEPLOY_SCHEDULE_CRON_FILE" >&2; exit 67; }
 
     # Disable: cron file removed, config kept.
     rm -f "$DEPLOY_SCHEDULE_RUNNER"

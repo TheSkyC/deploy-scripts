@@ -423,8 +423,10 @@ operation_run_app_action() {
     operation_finish "$status" "" "${action} exited with status ${status}" || true
   fi
   # Per-app outcome notification (install/update/backup/restore/uninstall):
-  # fail-open via notify_send, redacted, never changes the result.
-  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]]; then
+  # fail-open via notify_send, redacted, never changes the result. When the
+  # notification library is not loaded (isolated/embedded use), the hook is
+  # skipped silently — a missing notifier must not fail the action.
+  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]] && declare -F notify_send >/dev/null 2>&1; then
     case "$action" in
       install|update|backup|restore|uninstall)
         notify_send \

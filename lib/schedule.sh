@@ -287,9 +287,12 @@ CONF
       fi
       if [[ "${SCHEDULE_ENABLED,,}" == true ]]; then
         schedule_write_runner || error "$(t error.config_write "$DEPLOY_SCHEDULE_RUNNER")"
-        # schedule_apply reports its own diagnostics (invalid calendar, unit
-        # write failure); a non-zero return is enough to abort the command.
-        schedule_apply "${SCHEDULE_ON_CALENDAR:-$( [[ "${SCHEDULE_MODE}" == check-only ]] && echo 'Mon..Fri *-*-* 09:00' || echo '*-*-* 04:30' )}" \
+        # The default calendar must be representable on both backends: the
+        # systemd weekday form Mon..Fri is meaningless in the /etc/cron.d
+        # fallback, which only converts plain HH:MM. Default to a plain
+        # HH:MM for check-only (09:00 daily) so a non-systemd host gets a
+        # working schedule instead of a rejection at apply time.
+        schedule_apply "${SCHEDULE_ON_CALENDAR:-$( [[ "${SCHEDULE_MODE}" == check-only ]] && echo '09:00' || echo '04:30' )}" \
           || return 1
       else
         schedule_remove_units
