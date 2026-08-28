@@ -39,7 +39,7 @@ source tools/checks/validators.sh
 
 usage() {
   cat >&2 <<'EOF'
-Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|state|operation|update|self-update|help]
+Usage: bash tools/verify.sh [all|syntax|shellcheck|release|dispatch|guards|state|operation|update|self-update|prove|help]
 
 Targets:
   all       Run the full repository verification suite. This is the default.
@@ -53,6 +53,8 @@ Targets:
   operation Run version and operation-record checks.
   update    Run cached application version-check and check-update checks.
   self-update  Run release package and self-update foundation checks.
+  prove     Run behavioral feature proofs (backup integrity/restore, notify,
+            schedule, migrate, compose, fleet) with stub backends.
 EOF
 }
 
@@ -401,6 +403,12 @@ main() {
       check_self_update_interruption_restores_activation
       check_self_update_signal_interruption
       echo "Self-update foundation verification passed"
+      return 0
+      ;;
+    prove)
+      check_shell_syntax
+      "$BASH_BIN" tools/prove-features.sh
+      echo "Feature proofs verification passed"
       return 0
       ;;
     guards)
