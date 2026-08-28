@@ -1367,6 +1367,7 @@ check_registry_restore_capability_matches_impl() {
     app="${app%.sh}"
     case "${app}" in
       hugo_blog) app="blog" ;;
+      cpa_stack) app="cpa-stack" ;;
     esac
     case " ${declared_ids[*]} " in
       *" $app "*) : ;;
