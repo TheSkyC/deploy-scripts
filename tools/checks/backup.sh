@@ -1897,12 +1897,13 @@ check_fleet_host_validation_and_isolation() {
       }
       in_fn=0
     }
-    /^fleet_run_host\(\)/ { in_r=1; saw_timeout=0; saw_ok_false=0; next }
+    /^fleet_run_host\(\)/ { in_r=1; saw_timeout=0; saw_ok_false=0; saw_record_check=0; next }
     in_r && /timeout "\$\{FLEET_TIMEOUT\}"/ { saw_timeout=1 }
     in_r && /ok.:false/ { saw_ok_false=1 }
+    in_r && /grep -qE/ { saw_record_check=1 }
     in_r && /^}$/ {
-      if (!(saw_timeout && saw_ok_false)) {
-        print "fleet_run_host must enforce a timeout and isolate failures" > "/dev/stderr"
+      if (!(saw_timeout && saw_ok_false && saw_record_check)) {
+        print "fleet_run_host must enforce a timeout, isolate failures, and validate remote JSON" > "/dev/stderr"
         exit 1
       }
       in_r=0
