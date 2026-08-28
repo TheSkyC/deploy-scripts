@@ -19,6 +19,18 @@ fleet_load_hosts() {
   FLEET_HOSTS=()
   local line alias target
   [[ -f "$FLEET_HOSTS_FILE" ]] || return 0
+  # Same trust gate as app/notify/schedule configs: a world-writable host
+  # inventory could redirect batch operations to an attacker-controlled
+  # host, so non-root-owned or loose-mode files are ignored entirely.
+  # (The inventory lines carry no key=value shape, so the owner/mode check
+  # is done inline rather than through app_conf_trusted_value.)
+  local owner mode
+  owner="$(stat -c '%U' "$FLEET_HOSTS_FILE" 2>/dev/null || printf unknown)"
+  mode="$(stat -c '%a' "$FLEET_HOSTS_FILE" 2>/dev/null || printf unknown)"
+  if [[ "$owner" != root || ( "$mode" != 600 && "$mode" != 400 ) ]]; then
+    echo "fleet: ignoring untrusted host inventory: $FLEET_HOSTS_FILE" >&2
+    return 0
+  fi
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%%#*}"
     line="${line#"${line%%[![:space:]]*}"}"

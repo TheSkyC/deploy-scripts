@@ -1887,12 +1887,13 @@ STUB
 # all, and targets are used only as ssh destinations.
 check_fleet_host_validation_and_isolation() {
   awk '
-    /^fleet_load_hosts\(\)/ { in_fn=1; saw_alias=0; saw_target=0; next }
+    /^fleet_load_hosts\(\)/ { in_fn=1; saw_alias=0; saw_target=0; saw_trust=0; next }
     in_fn && /\[!A-Za-z0-9_-\]/ { saw_alias=1 }
     in_fn && /\[!A-Za-z0-9@.:\\\[\\\]_-\]/ { saw_target=1 }
+    in_fn && /stat -c .%U./ { saw_trust=1 }
     in_fn && /^}$/ {
-      if (!(saw_alias && saw_target)) {
-        print "fleet host validation must restrict both alias and target characters" > "/dev/stderr"
+      if (!(saw_alias && saw_target && saw_trust)) {
+        print "fleet host validation must restrict alias/target characters and trust-gate the inventory" > "/dev/stderr"
         exit 1
       }
       in_fn=0
@@ -1916,6 +1917,16 @@ check_fleet_host_validation_and_isolation() {
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
+    # The trust gate is asserted structurally (and behaviorally below); the
+    # parsing tests run against a file that stat reports as root:600.
+    # (No single quotes inside: the whole body lives in an outer bash -c.)
+    stat() {
+      case "$2" in
+        %U) printf "root\\n" ;;
+        %a) printf "600\\n" ;;
+        *) printf "root\\n" ;;
+      esac
+    }
     # Inventory parsing: valid lines load, malformed lines are skipped.
     cat > "$tmp/hosts.conf" <<'"'"'EOF'"'"'
 # comment
@@ -1933,6 +1944,18 @@ EOF
     [[ "$port_args" == *" -p 2222" ]] || { echo NO_PORT_ARGS; exit 123; }
     # Concurrency default is bounded.
     [[ "$FLEET_CONCURRENCY" -ge 1 ]] || { echo BAD_CONCURRENCY; exit 124; }
+    # An untrusted inventory (stat reports non-root) is ignored entirely.
+    unset -f stat 2>/dev/null || true
+    stat() {
+      case "$2" in
+        %U) printf "nobody\\n" ;;
+        %a) printf "644\\n" ;;
+        *) printf "nobody\\n" ;;
+      esac
+    }
+    printf "sneaky|user@evil.example.com\\n" > "$tmp/untrusted.conf"
+    FLEET_HOSTS_FILE="$tmp/untrusted.conf" fleet_load_hosts
+    [[ ${#FLEET_HOSTS[@]} -eq 0 ]] || { echo UNTRUSTED_LOADED; exit 125; }
     echo ok
   ' | grep -q ok
 }
