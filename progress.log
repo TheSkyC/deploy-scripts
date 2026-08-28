@@ -652,3 +652,31 @@ Format per entry:
 - 验证 / Verified: verify all 通过（"Verification passed"）；守卫单独运行
   PASS（含故意漂移的失败验证与恢复后通过）；受影响守卫全部 PASS。
 - 提交 / Commit: de9a904
+
+## 2026-08-28（自主演进批次 O14）
+- 状态 / Status: completed
+- 成果 / Change:
+  1) 9ee6682 + 412a256 + 1f46dc6（registry restore 能力修复）：行为级
+     验证 P0/P1/P2 各功能时发现——9 个共享生命周期二进制应用（ntfy/
+     meilisearch/alist/filebrowser/navidrome/frps/gitea/gotify/beszel）
+     D3 起就实现了 do_restore（委托 bapp_restore），但 registry
+     capabilities 列只声明 backup 未声明 restore，导致批量/状态规划误报
+     这些应用不支持 restore。修复：
+     a. registry 给 9 个二进制应用补 restore（16/16 全部 backup,restore）
+     b. check_registry_restore_capability_matches_impl 增加反向断言——
+        任何 impl 定义了 do_restore 而 registry 未声明 restore 必须失败
+        （防止再次漂移）；守卫首次运行即捕获 cpa_stack→cpa-stack 的
+        impl 文件名映射遗漏，已修正（hugo_blog→blog 同理）。
+  2) P0/P1/P2 全部功能的行为级验证证据（独立脚本，见下）。
+- 验证 / Verified:
+  - verify all 通过（"Verification passed"）
+  - P0 行为：backup_write_sha256/manifest 写入+篡改检测+verify 判定；
+    backup_restore_data_dir 干净恢复+损坏拒绝（子 shell 隔离 error）；
+    status-json integrity 字段 verified；16 应用 do_verify/do_restore
+    全覆盖；registry restore 16/16
+  - P1 行为：notify_send ntfy 投递+脱敏+fail-open；schedule 校验/应用/
+    status/unschedule 全链路；migrate export+sha256+import 恢复
+  - P2 行为：compose_validate_project 安全路径+存在性；compose_health
+    running 通过/exited fail-closed；fleet 信任门+token 校验+端口目标+
+    非 JSON 记录包装+历史 JSONL
+- 提交 / Commit: 9ee6682, 412a256, 1f46dc6
