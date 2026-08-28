@@ -225,10 +225,7 @@ check_app_registry_capabilities() {
     # Accessor semantics.
     deploy_app_has_capability newapi backup || { echo "newapi must have backup" >&2; exit 1; }
     deploy_app_has_capability blog restore || { echo "blog must have restore" >&2; exit 1; }
-    if deploy_app_has_capability newapi restore; then
-      echo "newapi must not declare restore yet" >&2
-      exit 1
-    fi
+    deploy_app_has_capability newapi restore || { echo "newapi must have restore" >&2; exit 1; }
 
     # manager_backup_capability must come from the registry, not source probing.
     [[ "$(manager_backup_capability newapi)" == supported ]] || { echo "capability probe must report supported from registry" >&2; exit 1; }
