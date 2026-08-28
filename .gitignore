@@ -1,3 +1,5 @@
 dist/*_impl.sh
 .claude/
 .commandcode/
+# Work-in-progress logs are not tracked; keep historical progress archives in docs/.
+progress.log

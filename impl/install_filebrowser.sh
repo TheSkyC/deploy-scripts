@@ -8,8 +8,11 @@ umask 077
 # this file configures it and adds Filebrowser-specific hooks.
 # See PLAN.md section 2 for the verified release asset mapping.
 
+# Default port 8084: 8081 is taken by vaultwarden, and 8080/8082/8083 by
+# newapi/sub2api/cyberstrikeai. Override with PORT=... if you deploy on a
+# host where these do not collide.
 DOMAIN="${DOMAIN:-}"
-PORT="${PORT:-8081}"
+PORT="${PORT:-8084}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/filebrowser}"
 DATA_DIR="${DATA_DIR:-/var/lib/filebrowser}"
 LOG_DIR="${LOG_DIR:-/var/log/filebrowser}"

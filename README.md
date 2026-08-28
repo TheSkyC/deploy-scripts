@@ -87,11 +87,11 @@ with `install`, `update`, `backup`, `status`, and safe `uninstall` actions:
 | ntfy | 2586 | Push notification server; config at `/etc/ntfy/server.yml`. |
 | Meilisearch | 7700 | Search engine; admin key in `/etc/meilisearch.env` (`MEILI_MASTER_KEY`). |
 | Alist | 5244 | File listing service; data under `/var/lib/alist`. |
-| Filebrowser | 8081 | Web file manager; served root defaults to `/srv/filebrowser` (`FB_ROOT`). |
+| Filebrowser | 8084 | Web file manager; served root defaults to `/srv/filebrowser` (`FB_ROOT`). |
 | Navidrome | 4533 | Music server; music folder defaults to `/srv/music` (`MUSIC_DIR`). |
 | frps | 7000 | frp server; config at `/etc/frps/frps.toml` (client auth token preserved). |
 | Gitea | 3000 | Git hosting; config at `/etc/gitea/app.ini`; installs the system `git` package. |
-| Gotify | 8080 | Push notification server; generated admin password in `/etc/gotify.env` (user: `admin`). |
+| Gotify | 8085 | Push notification server; generated admin password in `/etc/gotify.env` (user: `admin`). |
 | Beszel | 8090 | Monitoring hub; data under `/var/lib/beszel`; open `/api/health` for health checks. |
 
 These apps can be managed through the central scheduler or directly:

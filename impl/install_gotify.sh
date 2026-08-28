@@ -8,8 +8,11 @@ umask 077
 # this file configures it and adds Gotify-specific hooks.
 # See PLAN.md section 2 for the verified release asset mapping.
 
+# Default port 8085: 8080 is taken by newapi, and 8081-8084 by
+# vaultwarden/filebrowser/sub2api/cyberstrikeai. Override with PORT=... if
+# you deploy on a host where these do not collide.
 DOMAIN="${DOMAIN:-}"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8085}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/gotify}"
 DATA_DIR="${DATA_DIR:-/var/lib/gotify}"
 LOG_DIR="${LOG_DIR:-/var/log/gotify}"

@@ -4075,6 +4075,9 @@ i18n_register_many \
   binary_app.error.path_whitespace \
   "Path for %s must not contain whitespace: %s" \
   "%s 的路径不能包含空白字符：%s" \
+  binary_app.error.backup_keep_days \
+  "BACKUP_KEEP_DAYS is invalid: '%s'. Use a non-negative integer (0 disables retention pruning)." \
+  "BACKUP_KEEP_DAYS 无效：'%s'。请输入非负整数（0 表示不做保留期清理）。" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -4515,6 +4518,11 @@ bapp_validate_cfg() {
       require_safe_path "BA_READWRITE_PATHS" "$rw_path"
       bapp_validate_no_whitespace "BA_READWRITE_PATHS" "$rw_path"
     done
+  fi
+  # Retention must be a non-negative integer so pruning never removes the
+  # whole backup directory via a malformed `-mtime` argument.
+  if ! [[ "${BACKUP_KEEP_DAYS:-0}" =~ ^[0-9]+$ ]]; then
+    error "$(t binary_app.error.backup_keep_days "${BACKUP_KEEP_DAYS:-unset}")"
   fi
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
@@ -5901,6 +5909,12 @@ i18n_register_many \
   app.newapi.error.cron \
   "Scheduled backup config write failed: /etc/cron.d/new-api-backup" \
   "定时备份配置写入失败：/etc/cron.d/new-api-backup。" \
+  app.newapi.error.cron_invalid \
+  "BACKUP_CRON is invalid: '%s'. Use a crontab(5) schedule like '30 3 * * *' without shell metacharacters." \
+  "BACKUP_CRON 无效：'%s'。请使用 crontab(5) 格式（如 '30 3 * * *'），且不含 shell 特殊字符。" \
+  app.newapi.error.tz_invalid \
+  "TZ is invalid: '%s'. Use an IANA timezone name like Asia/Shanghai or UTC." \
+  "TZ 无效：'%s'。请使用 IANA 时区名（如 Asia/Shanghai 或 UTC）。" \
   app.newapi.step.start \
   "Step 10  Start service" \
   "Step 10  启动服务" \
@@ -6319,12 +6333,14 @@ SERVICE_USER="${SERVICE_USER:-newapi}"
 GITHUB_REPO="${GITHUB_REPO:-QuantumNous/new-api}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/new-api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+BACKUP_CRON="${BACKUP_CRON:-30 3 * * *}"
+TZ="${TZ:-Asia/Shanghai}"
 BIN_PATH="${INSTALL_DIR}/new-api"
 LOG_FILE="${LOG_DIR}/new-api.log"
 ENV_FILE="/etc/${SERVICE_NAME}.env"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CRON TZ INSTALLED_VERSION
 )
 _NEWAPI_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/new-api"
@@ -6398,6 +6414,22 @@ _validate_config_values() {
   require_safe_path "LOG_FILE" "$LOG_FILE"
   require_safe_path "ENV_FILE" "$ENV_FILE"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  # BACKUP_CRON is a crontab(5) schedule; reject newlines, quotes, or shell
+  # metacharacters so the generated /etc/cron.d line stays well-formed.
+  if [[ -z "$BACKUP_CRON" || "$BACKUP_CRON" == *$'\n'* || "$BACKUP_CRON" == *$'\r'* ]] \
+      || [[ "$BACKUP_CRON" == *'&'* || "$BACKUP_CRON" == *'|'* || "$BACKUP_CRON" == *';'* \
+      || "$BACKUP_CRON" == *'$'* || "$BACKUP_CRON" == *'`'* || "$BACKUP_CRON" == *'"'* \
+      || "$BACKUP_CRON" == *"'"* ]]; then
+    error "$(t app.newapi.error.cron_invalid "$BACKUP_CRON")"
+  fi
+  # TZ must be a bare IANA timezone name like Asia/Shanghai or UTC; reject
+  # spaces, newlines, or shell metacharacters.
+  if [[ -z "$TZ" || "$TZ" == *[[:space:]]* || "$TZ" == *$'\n'* || "$TZ" == *$'\r'* ]] \
+      || [[ "$TZ" == *'&'* || "$TZ" == *'|'* || "$TZ" == *';'* || "$TZ" == *'$'* \
+      || "$TZ" == *'`'* || "$TZ" == *'"'* || "$TZ" == *"'"* || "$TZ" == *'..'* \
+      || "$TZ" == /* ]]; then
+    error "$(t app.newapi.error.tz_invalid "$TZ")"
+  fi
 }
 check_connectivity() {
   app_check_connectivity app.newapi.error.github_unreachable \
@@ -6475,7 +6507,7 @@ _write_env_file() {
 # Managed by deploy-scripts.
 PORT=${PORT}
 SESSION_SECRET=${session_secret}
-TZ=Asia/Shanghai
+TZ=${TZ}
 SQLITE_BUSY_TIMEOUT=3000
 GODEBUG=netdns=go
 EOF
@@ -6862,7 +6894,7 @@ do_install() {
   if ! cron_tmp=$(mktemp "${cron_file}.XXXXXX"); then
     error "$(t app.newapi.error.cron)"
   fi
-  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
+  if ! printf '%s\n' "${BACKUP_CRON} root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
       || ! chmod 644 "$cron_tmp" \
       || ! chown root:root "$cron_tmp" \
       || ! mv "$cron_tmp" "$cron_file"; then
