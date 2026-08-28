@@ -532,3 +532,34 @@ Format per entry:
 
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
+
+## 2026-08-28（自主演进批次 O6–O7）
+- 状态 / Status: completed
+- 成果 / Change:
+  1) O6（6060b97）：通知/定时/操作三处硬化——
+     a. notify-config --test 修复：此前 notify_send 内部重载磁盘配置覆盖
+        内存合并值，--test 在未启用/未配置时静默跳过却报"测试已送达"。
+        现改为把合并值写入私有 probe 配置文件并以 NOTIFY_CONF_FILE 指向
+        它真实投递；NOTIFY_STRICT=1 让失败路径返回非零（fail-open 默认
+        契约不变），测试失败时 error 且不保存配置，成功则持久化——
+        保证"测的就是以后用的"。
+     b. schedule 默认日历修复：check-only 默认 'Mon..Fri *-*-* 09:00'
+        在 /etc/cron.d 回退下无法转换而被拒，改为纯 HH:MM '09:00'，
+        非 systemd 主机也能装出可用的定时。
+     c. operation_run_app_action 的 per-app 通知钩子加 declare -F
+        notify_send 守卫：隔离 source operation.sh 的环境（守卫测试、
+        嵌入式使用）不再因 command not found 中断动作。
+  2) O7（24f3bf1）：修复 check_migration_export_import_roundtrip 守卫
+     缺陷——traversal 断言在 if 条件内直接调用 migrate_main import，
+     而 migrate_main 拒绝时走 error()（测试 double 为 exit 9），函数
+     在 if 条件中不 fork 子 shell，exit 直接终止整个测试进程，守卫从未
+     真正通过（O2 引入时即损坏，此前 verify 记录被掩盖）。改为子 shell
+     调用隔离 exit，拒绝以非零状态被正确观察到。
+- 验证 / Verified: guards 全套通过（含 fail_check 已知预期噪声；日志末尾
+  "Guards verification passed"）；受影响守卫单独运行全部 PASS
+  （check_app_action_operation_wrapping / check_per_app_event_notifications /
+  check_notification_fail_open_and_redaction / check_schedule_units_are_
+  atomic_and_cleaned_up / check_schedule_retries_are_configurable /
+  check_migration_export_import_roundtrip / check_i18n_keys_are_consistent）；
+  改动文件 bash -n 通过；dist 随 build-release.sh 重建。
+- 提交 / Commit: 6060b97, 24f3bf1
