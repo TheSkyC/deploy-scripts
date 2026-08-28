@@ -3,3 +3,5 @@ dist/*_impl.sh
 .commandcode/
 # Work-in-progress logs are not tracked; keep historical progress archives in docs/.
 progress.log
+guards_final.log
+lib/*.sh.bak
