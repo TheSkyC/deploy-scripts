@@ -11,12 +11,14 @@ SERVICE_USER="${SERVICE_USER:-newapi}"
 GITHUB_REPO="${GITHUB_REPO:-QuantumNous/new-api}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/new-api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+BACKUP_CRON="${BACKUP_CRON:-30 3 * * *}"
+TZ="${TZ:-Asia/Shanghai}"
 BIN_PATH="${INSTALL_DIR}/new-api"
 LOG_FILE="${LOG_DIR}/new-api.log"
 ENV_FILE="/etc/${SERVICE_NAME}.env"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CRON TZ INSTALLED_VERSION
 )
 _NEWAPI_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/new-api"
@@ -90,6 +92,22 @@ _validate_config_values() {
   require_safe_path "LOG_FILE" "$LOG_FILE"
   require_safe_path "ENV_FILE" "$ENV_FILE"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  # BACKUP_CRON is a crontab(5) schedule; reject newlines, quotes, or shell
+  # metacharacters so the generated /etc/cron.d line stays well-formed.
+  if [[ -z "$BACKUP_CRON" || "$BACKUP_CRON" == *$'\n'* || "$BACKUP_CRON" == *$'\r'* ]] \
+      || [[ "$BACKUP_CRON" == *'&'* || "$BACKUP_CRON" == *'|'* || "$BACKUP_CRON" == *';'* \
+      || "$BACKUP_CRON" == *'$'* || "$BACKUP_CRON" == *'`'* || "$BACKUP_CRON" == *'"'* \
+      || "$BACKUP_CRON" == *"'"* ]]; then
+    error "$(t app.newapi.error.cron_invalid "$BACKUP_CRON")"
+  fi
+  # TZ must be a bare IANA timezone name like Asia/Shanghai or UTC; reject
+  # spaces, newlines, or shell metacharacters.
+  if [[ -z "$TZ" || "$TZ" == *[[:space:]]* || "$TZ" == *$'\n'* || "$TZ" == *$'\r'* ]] \
+      || [[ "$TZ" == *'&'* || "$TZ" == *'|'* || "$TZ" == *';'* || "$TZ" == *'$'* \
+      || "$TZ" == *'`'* || "$TZ" == *'"'* || "$TZ" == *"'"* || "$TZ" == *'..'* \
+      || "$TZ" == /* ]]; then
+    error "$(t app.newapi.error.tz_invalid "$TZ")"
+  fi
 }
 check_connectivity() {
   app_check_connectivity app.newapi.error.github_unreachable \
@@ -167,7 +185,7 @@ _write_env_file() {
 # Managed by deploy-scripts.
 PORT=${PORT}
 SESSION_SECRET=${session_secret}
-TZ=Asia/Shanghai
+TZ=${TZ}
 SQLITE_BUSY_TIMEOUT=3000
 GODEBUG=netdns=go
 EOF
@@ -554,7 +572,7 @@ do_install() {
   if ! cron_tmp=$(mktemp "${cron_file}.XXXXXX"); then
     error "$(t app.newapi.error.cron)"
   fi
-  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
+  if ! printf '%s\n' "${BACKUP_CRON} root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
       || ! chmod 644 "$cron_tmp" \
       || ! chown root:root "$cron_tmp" \
       || ! mv "$cron_tmp" "$cron_file"; then

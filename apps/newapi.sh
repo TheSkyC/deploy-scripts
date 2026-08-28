@@ -303,6 +303,12 @@ i18n_register_many \
   app.newapi.error.cron \
   "Scheduled backup config write failed: /etc/cron.d/new-api-backup" \
   "定时备份配置写入失败：/etc/cron.d/new-api-backup。" \
+  app.newapi.error.cron_invalid \
+  "BACKUP_CRON is invalid: '%s'. Use a crontab(5) schedule like '30 3 * * *' without shell metacharacters." \
+  "BACKUP_CRON 无效：'%s'。请使用 crontab(5) 格式（如 '30 3 * * *'），且不含 shell 特殊字符。" \
+  app.newapi.error.tz_invalid \
+  "TZ is invalid: '%s'. Use an IANA timezone name like Asia/Shanghai or UTC." \
+  "TZ 无效：'%s'。请使用 IANA 时区名（如 Asia/Shanghai 或 UTC）。" \
   app.newapi.step.start \
   "Step 10  Start service" \
   "Step 10  启动服务" \

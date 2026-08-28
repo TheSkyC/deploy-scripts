@@ -115,11 +115,11 @@
 | ntfy | 2586 | `/etc/ntfy/server.yml` |
 | meilisearch | 7700 | 裸二进制 aarch64 命名；`/etc/meilisearch.env`（保留 master key） |
 | alist | 5244 | `server --data ${DATA_DIR}` |
-| filebrowser | 8081 | `FB_ROOT`（默认 `/srv/filebrowser`） |
+| filebrowser | 8084 | `FB_ROOT`（默认 `/srv/filebrowser`） |
 | navidrome | 4533 | `ND_*` env；`MUSIC_DIR`（默认 `/srv/music`） |
 | frps | 7000 | `/etc/frps/frps.toml` + auth.token；systemd 健康检查 |
 | gitea | 3000 | 裸二进制；`BA_APT_PACKAGES="git"`；`/etc/gitea/app.ini` |
-| gotify | 8080 | zip 发行包；`/etc/gotify.env`；首次生成并保留随机管理员密码 |
+| gotify | 8085 | zip 发行包；`/etc/gotify.env`；首次生成并保留随机管理员密码 |
 | beszel | 8090 | Hub tar.gz 发行包；PocketBase 数据目录 `/var/lib/beszel`；`/api/health` 健康检查 |
 
 ### 后续（非本轮必需）
@@ -157,7 +157,7 @@
 - 安装后提示 `alist admin random|set` 初始化管理员密码（`ba_summary_extra`）。
 
 ### filebrowser
-- 端口 8081（避开 8080）；`BA_ARCHIVE_TYPE=tar.gz`；根目录 `FB_ROOT` 默认 `/srv/filebrowser`（safe path + 加入 `BA_READWRITE_PATHS`）。
+- 端口 8084（避开 newapi 8080 / vaultwarden 8081 / sub2api 8082 / cyberstrikeai 8083）；`BA_ARCHIVE_TYPE=tar.gz`；根目录 `FB_ROOT` 默认 `/srv/filebrowser`（safe path + 加入 `BA_READWRITE_PATHS`）。
 - 参数 `-d/-r/-p/-a` 或环境 `FILEBROWSER_DATABASE`/`FILEBROWSER_ROOT`；首次默认 admin/admin，摘要提示修改。
 
 ### navidrome
