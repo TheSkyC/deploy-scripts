@@ -1551,6 +1551,12 @@ STUB
 # path re-enters through deploy.sh so it inherits lock + notification logic.
 check_schedule_units_are_atomic_and_cleaned_up() {
   awk '
+    /^schedule_load_config\(\)/ { in_load=1; saw_trust=0; next }
+    in_load && /app_conf_trusted_value/ { saw_trust=1 }
+    in_load && /^}$/ {
+      if (!saw_trust) { print "schedule config must be trust-gated like app and notify configs" > "/dev/stderr"; exit 1 }
+      in_load=0
+    }
     /^schedule_write_runner\(\)/ { in_fn=1; saw_atomic=0; saw_mode=0; next }
     in_fn && /atomic_write_file "\$runner" 750/ { saw_atomic=1; saw_mode=1 }
     in_fn && /^}$/ {
@@ -1584,6 +1590,7 @@ check_schedule_units_are_atomic_and_cleaned_up() {
   # the cron fallback runs — assert its output file lifecycle.
   "$BASH_BIN" -c '
     set -euo pipefail
+    cd /e/workspace/deploy-scripts
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -1606,8 +1613,8 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     # Disable: cron file removed, config kept.
     rm -f "$DEPLOY_SCHEDULE_RUNNER"
     schedule_main schedule --disable
-    [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] && { echo CRON_STILL_THERE; exit 64; }
-    [[ -f "$SCHEDULE_CONF_FILE" ]] || { echo CONF_LOST; exit 65; }
+    if [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]]; then echo CRON_STILL_THERE; exit 64; fi
+    if [[ ! -f "$SCHEDULE_CONF_FILE" ]]; then echo CONF_LOST; exit 65; fi
     echo ok
   ' | grep -q ok
 }
@@ -1642,6 +1649,9 @@ check_schedule_retries_are_configurable() {
     require_root() { :; }
     error() { exit 9; }
     success() { :; }
+    # The test writes configs as the invoking user with default modes; the
+    # trust gate is asserted structurally above, so stub it open here.
+    app_conf_trusted_value() { return 0; }
     DEPLOY_ROOT_DIR="$tmp/root"
     mkdir -p "$tmp/root"
     # A failing deploy.sh stub that counts invocations.

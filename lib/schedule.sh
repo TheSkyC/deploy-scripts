@@ -27,6 +27,12 @@ schedule_load_config() {
   local conf_file="$SCHEDULE_CONF_FILE"
   SCHEDULE_ENABLED=false SCHEDULE_MODE="update-all" SCHEDULE_ON_CALENDAR="" SCHEDULE_INCLUDE=""
   [[ -f "$conf_file" ]] || return 0
+  # Same trust gate as app and notification configs: root-owned, mode
+  # 600/400, or the file is ignored entirely. A world-writable schedule
+  # file could otherwise inject --include tokens into the batch command.
+  if ! app_conf_trusted_value "$conf_file" "SCHEDULE_ENABLED" >/dev/null 2>&1; then
+    return 1
+  fi
   local line key value
   while IFS= read -r line; do
     [[ "$line" =~ ^[A-Z_]+= ]] || continue
@@ -69,7 +75,7 @@ RUNNER
 # the run finally reports failure through the notification path.
 schedule_run_main() {
   require_root "schedule-run"
-  schedule_load_config
+  schedule_load_config || true
   [[ "${SCHEDULE_ENABLED,,}" == true ]] || { echo "scheduled batch disabled; nothing to do." >&2; return 0; }
   local include_args=()
   if [[ -n "${SCHEDULE_INCLUDE:-}" ]]; then
@@ -212,7 +218,7 @@ schedule_main() {
       return $?
       ;;
     status)
-      schedule_load_config
+      schedule_load_config || true
       echo "enabled=${SCHEDULE_ENABLED} mode=${SCHEDULE_MODE:-update-all} calendar=${SCHEDULE_ON_CALENDAR:-<default>}"
       if command -v systemctl >/dev/null 2>&1 \
           && systemctl list-timers --all 2>/dev/null | grep -q "$DEPLOY_SCHEDULE_SERVICE"; then
@@ -246,7 +252,7 @@ schedule_main() {
             ;;
         esac
       done
-      schedule_load_config
+      schedule_load_config || true
       case "${mode,,}" in
         ""|update-all|check-only) : ;;
         *) error "$(t common.invalid_choice "$mode")" ;;
