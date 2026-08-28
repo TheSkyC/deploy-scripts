@@ -16,6 +16,7 @@ COMMON_RELEASE_LIB_FILES=(
   lib/network.sh
   lib/version.sh
   lib/operation.sh
+  lib/backup.sh
   lib/state.sh
   lib/version_check.sh
   lib/manager_status.sh
@@ -25,6 +26,16 @@ COMMON_RELEASE_LIB_FILES=(
   lib/manager_update.sh
   lib/app.sh
   lib/binary_app.sh
+)
+
+# Central-command libraries used only by the manager bundle (dist/deploy.sh).
+# Kept out of COMMON_RELEASE_LIB_FILES so per-app release scripts stay lean.
+MANAGER_ONLY_RELEASE_LIB_FILES=(
+  lib/notify.sh
+  lib/schedule.sh
+  lib/migrate.sh
+  lib/fleet.sh
+  lib/compose.sh
 )
 
 source "${ROOT_DIR}/lib/app_registry.sh"
@@ -207,6 +218,7 @@ build_manager() {
     echo
     emit_common_release_libs
     emit_release_files lib/self_update.sh lib/app_registry.sh
+    emit_release_files "${MANAGER_ONLY_RELEASE_LIB_FILES[@]}"
     emit_app_loader_file
     emit_release_files lib/cli.sh lib/manager_cli.sh
     echo 'manager_main "$@"'
