@@ -516,5 +516,19 @@ Format per entry:
   语法 + shellcheck（style）通过。
 - 提交 / Commit: 1caf53f, 7fb9975, 548805c
 
+## 2026-08-28（自主演进批次 O4–O5）
+- 状态 / Status: completed
+- 成果 / Change:
+  1) O4（b07104a）：fleet 远端 JSON 记录形状校验——非 `{...}` 形状的
+     污染行包装为 {"error":"..."} 而非原样嵌入破坏汇总 JSON；守卫断言
+     record 校验结构。
+  2) O5（f8e3a1b）：fleet 主机清单信任门——/etc/deploy-hosts.conf 必须
+     root:600/400 才被读取，否则整表忽略并 stderr 提示（与 app/notify/
+     schedule 配置同姿态）；守卫含不可信清单被忽略的行为验证
+     （stat stub root:600 可信解析 3 台、nobody:644 拒绝加载）。
+- 验证 / Verified: 各批次 guards 全套唯一失败为已知预期 fail_check 探测；
+  语法 + shellcheck（style）通过。
+- 提交 / Commit: b07104a, f8e3a1b
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
