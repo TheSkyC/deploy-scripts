@@ -306,6 +306,7 @@ bash tools/verify.sh shellcheck
 bash tools/verify.sh release
 bash tools/verify.sh dispatch
 bash tools/verify.sh guards
+bash tools/verify.sh prove   # behavioral feature proofs (backup/restore, notify, schedule, migrate, compose, fleet)
 ```
 
 The parallel CI jobs run `syntax`, `shellcheck`, `release`, `dispatch`, and
