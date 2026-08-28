@@ -7314,6 +7314,10 @@ migrate_main() {
 FLEET_HOSTS_FILE="${FLEET_HOSTS_FILE:-/etc/deploy-hosts.conf}"
 FLEET_CONCURRENCY="${FLEET_CONCURRENCY:-4}"
 FLEET_TIMEOUT="${FLEET_TIMEOUT:-120}"
+# Remote directory holding deploy.sh on fleet hosts. Override per fleet run
+# (FLEET_REMOTE_DIR=/srv/deploy bash deploy.sh fleet status-all) or in the
+# environment; must be an absolute path with no spaces.
+FLEET_REMOTE_DIR="${FLEET_REMOTE_DIR:-/opt/deploy-scripts}"
 FLEET_SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
 
 fleet_load_hosts() {
@@ -7399,7 +7403,7 @@ fleet_main() {
   case "${subcommand,,}" in
     status-all|update-all|backup-all) ;;
     *)
-      echo "Usage: sudo bash $0 fleet [status-all|update-all|backup-all] [--hosts FILE] [--concurrency N] [--timeout SEC]" >&2
+      echo "Usage: sudo bash $0 fleet [status-all|update-all|backup-all] [--hosts FILE] [--concurrency N] [--timeout SEC] [--remote-dir DIR]" >&2
       return 2
       ;;
   esac
@@ -7409,18 +7413,23 @@ fleet_main() {
       --hosts) FLEET_HOSTS_FILE="${2:-}"; shift 2 ;;
       --concurrency) FLEET_CONCURRENCY="${2:-}"; shift 2 ;;
       --timeout) FLEET_TIMEOUT="${2:-}"; shift 2 ;;
+      --remote-dir) FLEET_REMOTE_DIR="${2:-}"; shift 2 ;;
       *) echo "fleet: unknown option: $1" >&2; return 2 ;;
     esac
   done
   [[ "$FLEET_CONCURRENCY" =~ ^[0-9]+$ ]] && (( FLEET_CONCURRENCY >= 1 )) || FLEET_CONCURRENCY=4
   [[ "$FLEET_TIMEOUT" =~ ^[0-9]+$ ]] && (( FLEET_TIMEOUT >= 10 )) || FLEET_TIMEOUT=120
+  if [[ -z "$FLEET_REMOTE_DIR" || "$FLEET_REMOTE_DIR" != /* || "$FLEET_REMOTE_DIR" == *" "* ]]; then
+    echo "fleet: invalid remote directory: $FLEET_REMOTE_DIR (must be absolute with no spaces)" >&2
+    return 2
+  fi
   fleet_load_hosts
   if [[ ${#FLEET_HOSTS[@]} -eq 0 ]]; then
     echo "fleet: no hosts configured in $FLEET_HOSTS_FILE" >&2
     return 1
   fi
   local remote_script
-  remote_script="cd /opt/deploy-scripts 2>/dev/null && bash deploy.sh ${action} --json 2>/dev/null || echo '{\"state\":\"failed\"}'"
+  remote_script="cd ${FLEET_REMOTE_DIR} 2>/dev/null && bash deploy.sh ${action} --json 2>/dev/null || echo '{\"state\":\"failed\"}'"
   # Run with bounded concurrency; each host writes its JSON record to its
   # own temp file, and failures are isolated per host.
   local tmp_root alias target entry pid
