@@ -498,5 +498,23 @@ Format per entry:
 - P2 统一 Compose 支持层：8/8 完成（TickFlow 已迁移至共享层）
 - P2 Fleet/多机管理：8/8 完成
 
+## 2026-08-28（自主演进批次 O1–O3）
+- 状态 / Status: completed
+- 成果 / Change:
+  1) O1（1caf53f）：schedule 时间规格校验——HH:MM 越界（25:99）在写配置
+     前拒绝；systemd 主机用 systemd-analyze calendar 权威校验，无该工具
+     时保守形状检查；--backoff 参数持久化 SCHEDULE_RETRY_BACKOFF；
+     schedule_apply 失败不再用误导性 config_write 错误包装（自身已输出
+     具体诊断）。
+  2) O2（7fb9975）：migrate import 解包前 tar -tzf 成员安全扫描，拒绝
+     绝对路径/.. /反斜杠成员（sha256 只保真不保善，被攻破的导出机可能
+     产出穿越成员）；守卫含 python tarfile 构造的恶意包行为验证。
+  3) O3（548805c）：schedule 配置信任门（root:600/400）与 notify/app
+     一致；被拒绝的读取在各调用方容忍（run 回退 disabled、status 显示
+     默认、写路径重建），修复 set -e 下 disable 分支中断问题；守卫扩展。
+- 验证 / Verified: 各批次 guards 全套唯一失败为已知预期 fail_check 探测；
+  语法 + shellcheck（style）通过。
+- 提交 / Commit: 1caf53f, 7fb9975, 548805c
+
 ## 阻塞项
 - 无（当前无仅用户可解的阻塞）
