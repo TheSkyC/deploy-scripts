@@ -29,7 +29,7 @@ check_newapi_uninstall_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_uninstall_checks_directory_removal_errors() {
@@ -45,12 +45,12 @@ check_newapi_uninstall_checks_directory_removal_errors() {
       echo "NewAPI uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_newapi_remove_dir_or_error() {' dist/install_newapi.sh \
-    && grep -Fq 'error "$(t app.newapi.error.remove_dir "$path")"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"' dist/install_newapi.sh \
-    && grep -Fq 'warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"' dist/install_newapi.sh \
+ grep -Fq '_newapi_remove_dir_or_error() {' \
+ && grep -Fq 'error "$(t app.newapi.error.remove_dir "$path")"' \
+ && grep -Fq '_newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"' \
+ && grep -Fq '_newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"' \
+ && grep -Fq 'warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"' \
+ && grep -Fq '_newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"' \
     || {
       echo "Release NewAPI script must preserve uninstall directory removal failure handling." >&2
       return 1
@@ -71,14 +71,14 @@ check_newapi_uninstall_checks_file_removal_errors() {
       echo "NewAPI uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_newapi_remove_file_or_error() {' dist/install_newapi.sh \
-    && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"' dist/install_newapi.sh \
-    && grep -Fq '_newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_newapi.sh \
+ grep -Fq '_newapi_remove_file_or_error() {' \
+ && grep -Fq 'error "$(t app.newapi.error.remove_file "$path")"' \
+ && grep -Fq '_newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"' \
+ && grep -Fq '_newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"' \
+ && grep -Fq '_newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"' \
+ && grep -Fq '_newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"' \
+ && grep -Fq '_newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"' \
+ && grep -Fq '_newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
     || {
       echo "Release NewAPI script must preserve uninstall file removal failure handling." >&2
       return 1
@@ -87,7 +87,7 @@ check_newapi_uninstall_checks_file_removal_errors() {
 
 check_newapi_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_newapi_require_safe_bin_path() {' impl/install_newapi.sh \
-    && grep -Fq '_newapi_require_safe_bin_path' dist/install_newapi.sh \
+ && grep -Fq '_newapi_require_safe_bin_path' \
     || {
       echo "NewAPI must centralize BIN_PATH safety validation in a reusable helper." >&2
       return 1
@@ -110,11 +110,11 @@ check_newapi_uninstall_validates_binary_path_before_removal() {
         }
         in_uninstall=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_backup_lists_preserve_paths_with_spaces() {
-  if grep -R -n 'awk '\''{print \$2}'\''' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+  if grep -R -n 'awk '\''{print \$2}'\''' impl/install_newapi.sh 2>/dev/null; then
     echo "NewAPI backup and binary retention lists must not split paths on spaces." >&2
     return 1
   fi
@@ -137,12 +137,12 @@ check_newapi_backup_lists_preserve_paths_with_spaces() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl ca-certificates sqlite3$' \
-      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+      impl/install_newapi.sh 2>/dev/null; then
     echo "NewAPI dependency installation must use explicit conditionals with actionable errors." >&2
     return 1
   fi
@@ -171,7 +171,7 @@ check_newapi_dependency_failures_are_reported() {
         }
         in_block=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_runtime_dir_failures_are_explicit() {
@@ -216,11 +216,11 @@ check_newapi_runtime_dir_failures_are_explicit() {
         }
         in_binary=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_secret_uses_private_env_file() {
-  if grep -R -n 'Environment="SESSION_SECRET=' impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+  if grep -R -n 'Environment="SESSION_SECRET=' impl/install_newapi.sh 2>/dev/null; then
     echo "NewAPI must not embed SESSION_SECRET directly in a world-readable systemd unit." >&2
     return 1
   fi
@@ -245,12 +245,12 @@ check_newapi_secret_uses_private_env_file() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_service_start_paths_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl (start|restart) "\$SERVICE_NAME"$' \
-      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+      impl/install_newapi.sh 2>/dev/null; then
     echo "NewAPI service start/restart paths must branch explicitly on command failure." >&2
     return 1
   fi
@@ -274,7 +274,7 @@ check_newapi_service_start_paths_are_explicit() {
         }
         in_update=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_enable_failures_are_reported() {
@@ -288,12 +288,12 @@ check_newapi_enable_failures_are_reported() {
           exit 1
         }
       }
-    ' apps/newapi.sh impl/install_newapi.sh dist/install_newapi.sh
+    ' apps/newapi.sh impl/install_newapi.sh
 }
 
 check_newapi_manual_backup_wal_result_is_explicit() {
   if grep -R -n '&& success "\$\(t app\.newapi\.success\.wal\)"' \
-      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+      impl/install_newapi.sh 2>/dev/null; then
     echo "NewAPI manual backup WAL checkpoint must use explicit conditionals." >&2
     return 1
   fi
@@ -311,12 +311,12 @@ check_newapi_manual_backup_wal_result_is_explicit() {
         }
         in_backup=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null || true' \
-      impl/install_newapi.sh dist/install_newapi.sh 2>/dev/null; then
+      impl/install_newapi.sh 2>/dev/null; then
     echo "NewAPI update rollback paths must not suppress service restart failures." >&2
     return 1
   fi
@@ -344,7 +344,7 @@ check_newapi_update_rollbacks_report_restart_failures() {
         }
         in_update_failure=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_install_cleanup_reports_systemctl_failures() {
@@ -372,7 +372,7 @@ check_newapi_install_cleanup_reports_systemctl_failures() {
         }
         in_cleanup=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_install_rollback_validates_binary_path_before_removal() {
@@ -395,7 +395,7 @@ check_newapi_install_rollback_validates_binary_path_before_removal() {
         }
         in_cleanup=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_install_rollback_surfaces_service_file_removal_failures() {
@@ -410,7 +410,7 @@ check_newapi_install_rollback_surfaces_service_file_removal_failures() {
         }
       }
       in_cleanup && /error "\$\(t app\.newapi\.error\.install_start_failed "\$SERVICE_NAME"\)"/ { in_cleanup=0 }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_update_stop_failure_aborts_before_replace() {
@@ -437,7 +437,7 @@ check_newapi_update_stop_failure_aborts_before_replace() {
         }
         in_stop=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_update_rollback_stop_failure_aborts_restore() {
@@ -462,7 +462,7 @@ check_newapi_update_rollback_stop_failure_aborts_restore() {
         }
         in_rollback=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_uninstall_stop_disable_failures_are_reported() {
@@ -493,7 +493,7 @@ check_newapi_uninstall_stop_disable_failures_are_reported() {
         }
         in_uninstall=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_install_summary_matches_health_state() {
@@ -543,7 +543,7 @@ check_newapi_install_summary_matches_health_state() {
         }
         in_install=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_health_checks_are_nonfatal_outside_install() {
@@ -557,7 +557,7 @@ check_newapi_health_checks_are_nonfatal_outside_install() {
         }
         in_update=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
 }
 
 check_newapi_status_backup_projection() {

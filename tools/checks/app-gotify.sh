@@ -4,7 +4,7 @@
 
 check_gotify_uses_shared_binary_lifecycle() {
   local file
-  for file in impl/install_gotify.sh dist/install_gotify.sh; do
+  for file in impl/install_gotify.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
       && grep -Fq 'bapp_backup' "$file" \
@@ -22,7 +22,7 @@ check_gotify_uses_shared_binary_lifecycle() {
 
 check_gotify_release_asset_mapping() {
   local file
-  for file in impl/install_gotify.sh dist/install_gotify.sh; do
+  for file in impl/install_gotify.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-gotify/server}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="gotify"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="zip"' "$file" \
@@ -39,7 +39,7 @@ check_gotify_release_asset_mapping() {
 
 check_gotify_env_is_managed_atomically() {
   local file
-  for file in impl/install_gotify.sh dist/install_gotify.sh; do
+  for file in impl/install_gotify.sh; do
     grep -Fq 'atomic_write_file "$env_file" 600 root:root' "$file" \
       && grep -Fq "grep -E '^GOTIFY_DEFAULTUSER_PASS='" "$file" \
       && grep -Fq "tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40" "$file" \

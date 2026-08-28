@@ -60,7 +60,7 @@ check_bundled_impl_temp_names_are_random() {
           exit 1
         }
       }
-    ' lib/app_loader.sh dist/install_newapi.sh
+ ' lib/app_loader.sh 
 }
 
 check_bundled_impl_dir_security_failure_cleanup() {
@@ -157,44 +157,21 @@ STUB
 # dist/ must always match the current source tree; run this after
 # build_verified_release so dist/ reflects the sources under verification.
 
-# lib/app_loader.sh's restore_framework_functions re-defines dispatch_action
-# for the dist per-app scripts. It must carry the exact same action branches
-# as lib/cli.sh; a drift here silently breaks actions in release scripts
-# (D1/D2 added verify to cli.sh but not the app_loader copy, so `verify`
-# died with "Invalid choice" in dist/install_*.sh).
+# The framework CLI and logging functions (dispatch_action, show_banner,
+# usage, show_menu, info/success/warn/error/step/prompt) live in lib/cli.sh
+# and lib/logging.sh. lib/app_loader.sh must NOT re-define them: the old
+# restore_framework_functions copy drifted from cli.sh (O12: `verify` was
+# added to cli.sh but not the app_loader copy, so `verify` died with
+# "Invalid choice" in dist/install_*.sh). Enforce that the loader stays a
+# pure reference so future dispatch changes only need one edit.
 check_app_loader_dispatch_matches_cli() {
-  # Both dispatch_action copies must dispatch the same actions. Extract the
-  # normalized action patterns (strip leading whitespace and the trailing
-  # `)` + payload) from each function and compare the sorted sets, so an
-  # indentation difference cannot mask a real branch drift.
-  local cli_actions loader_actions
-  cli_actions="$(awk '
-    /^dispatch_action\(\)/ { in_fn=1; next }
-    in_fn && /^[[:space:]]*[^[:space:]]+\)/ {
-      line=$0
-      sub(/^[[:space:]]*/, "", line)
-      sub(/\).*$/, "", line)
-      gsub(/[|" ]/, "", line)
-      if (line != "") print line
-    }
-    in_fn && /^}/ { exit }
-  ' lib/cli.sh | sort -u)"
-  loader_actions="$(awk '
-    /^  dispatch_action\(\)/ { in_fn=1; next }
-    in_fn && /^[[:space:]]*[^[:space:]]+\)/ {
-      line=$0
-      sub(/^[[:space:]]*/, "", line)
-      sub(/\).*$/, "", line)
-      gsub(/[|" ]/, "", line)
-      if (line != "") print line
-    }
-    in_fn && /^  }/ { exit }
-  ' lib/app_loader.sh | sort -u)"
-  [[ "$cli_actions" == "$loader_actions" ]] || {
-    echo "app_loader.sh dispatch_action must dispatch the same actions as lib/cli.sh (restore_framework_functions copy drifted)" >&2
-    diff <(printf '%s\n' "$cli_actions") <(printf '%s\n' "$loader_actions") >&2 || true
+  if grep -nE '^\s*(info|success|warn|error|step|prompt|show_banner|usage|show_menu|dispatch_action)\(\) \{' lib/app_loader.sh; then
+    echo "lib/app_loader.sh must not re-define framework CLI/logging functions; use lib/cli.sh and lib/logging.sh" >&2
     return 1
-  }
+  fi
+  # The dispatch contract itself is verified by executing the real cli.sh
+  # dispatcher against the dist script (dispatch target), so no duplicate
+  # branch comparison is needed here.
 }
 
 check_dist_is_up_to_date() {

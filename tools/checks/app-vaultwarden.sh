@@ -21,7 +21,7 @@ check_vaultwarden_status_backup_projection() {
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "vaultwarden backups" in x["path"]; assert x["path"].endswith("vaultwarden_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
   grep -Fq 'APP_STATUS_BACKUP_FN=_vw_status_backup' impl/install_vaultwarden.sh \
-    && grep -Fq 'APP_STATUS_BACKUP_FN=_vw_status_backup' dist/install_vaultwarden.sh
+ && grep -Fq 'APP_STATUS_BACKUP_FN=_vw_status_backup' 
 }
 
 check_vaultwarden_uninstall_supports_noninteractive_mode() {
@@ -41,7 +41,7 @@ check_vaultwarden_uninstall_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_uninstall_checks_directory_removal_errors() {
@@ -55,11 +55,11 @@ check_vaultwarden_uninstall_checks_directory_removal_errors() {
       echo "Vaultwarden uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_vw_remove_dir_or_error() {' dist/install_vaultwarden.sh \
-    && grep -Fq 'error "$(t app.vaultwarden.error.remove_dir "$path")"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"' dist/install_vaultwarden.sh \
+ grep -Fq '_vw_remove_dir_or_error() {' \
+ && grep -Fq 'error "$(t app.vaultwarden.error.remove_dir "$path")"' \
+ && grep -Fq '_vw_remove_dir_or_error "$_log_dir" "LOG_DIR" "$(t app.vaultwarden.success.deleted_log "$_log_dir")"' \
+ && grep -Fq '_vw_remove_dir_or_error "$VW_DATA_DIR" "VW_DATA_DIR" "$(t app.vaultwarden.success.deleted_data "$VW_DATA_DIR")"' \
+ && grep -Fq '_vw_remove_dir_or_error "$VW_BACKUP_DIR" "VW_BACKUP_DIR" "$(t app.vaultwarden.success.deleted_backup "$VW_BACKUP_DIR")"' \
     || {
       echo "Release Vaultwarden script must preserve uninstall directory removal failure handling." >&2
       return 1
@@ -85,19 +85,19 @@ check_vaultwarden_uninstall_checks_file_removal_errors() {
       echo "Vaultwarden uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_vw_remove_file_or_error() {' dist/install_vaultwarden.sh \
-    && grep -Fq 'error "$(t app.vaultwarden.error.remove_file "$path")"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_FILTER"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden-admin.conf" "VAULTWARDEN_FAIL2BAN_ADMIN_FILTER"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/jail.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_JAIL"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"' dist/install_vaultwarden.sh \
-    && grep -Fq '_vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_vaultwarden.sh \
+ grep -Fq '_vw_remove_file_or_error() {' \
+ && grep -Fq 'error "$(t app.vaultwarden.error.remove_file "$path")"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/systemd/system/vaultwarden.service" "VAULTWARDEN_SERVICE_FILE"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_FILTER"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/filter.d/vaultwarden-admin.conf" "VAULTWARDEN_FAIL2BAN_ADMIN_FILTER"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/fail2ban/jail.d/vaultwarden.conf" "VAULTWARDEN_FAIL2BAN_JAIL"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"' \
+ && grep -Fq '_vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"' \
+ && grep -Fq '_vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"' \
+ && grep -Fq '_vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"' \
+ && grep -Fq '_vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
     || {
       echo "Release Vaultwarden script must preserve uninstall file removal failure handling." >&2
       return 1
@@ -106,7 +106,7 @@ check_vaultwarden_uninstall_checks_file_removal_errors() {
 
 check_vaultwarden_uninstall_validates_binary_path_before_removal() {
   grep -Fq '_require_safe_vw_bin_path() {' impl/install_vaultwarden.sh \
-    && grep -Fq '_require_safe_vw_bin_path' dist/install_vaultwarden.sh \
+ && grep -Fq '_require_safe_vw_bin_path' \
     || {
       echo "Vaultwarden must centralize VW_BIN safety validation in a reusable helper." >&2
       return 1
@@ -129,7 +129,7 @@ check_vaultwarden_uninstall_validates_binary_path_before_removal() {
         }
         in_uninstall=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_supports_noninteractive_mode() {
@@ -166,7 +166,7 @@ check_vaultwarden_install_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_summary_is_localized() {
@@ -193,11 +193,11 @@ check_vaultwarden_install_summary_is_localized() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_backup_lists_preserve_paths_with_spaces() {
-  if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden backup and rollback lists must not split paths on spaces." >&2
     return 1
   fi
@@ -224,7 +224,7 @@ check_vaultwarden_backup_lists_preserve_paths_with_spaces() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_status_display_commands_are_nonfatal() {
@@ -242,7 +242,7 @@ check_vaultwarden_status_display_commands_are_nonfatal() {
       in_status && /find "\$VW_DATA_DIR" -mindepth 1 -maxdepth 1 -printf '\''%p\\0'\'' 2>\/dev\/null \| sort -z\) \|\| true/ { saw_ls=1 }
       in_status && /_data_size=\$\(du -sh "\$VW_DATA_DIR" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_data_size=1 }
       in_status && /DB_SIZE=\$\(du -sh "\$\{VW_DATA_DIR\}\/db\.sqlite3" 2>\/dev\/null \| cut -f1 \|\| t status\.unknown\)/ { saw_db_size=1 }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_version_probe_has_fallback() {
@@ -261,12 +261,12 @@ check_vaultwarden_version_probe_has_fallback() {
         }
         in_func=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_find_head_pipelines_are_nonfatal() {
   if grep -R -nE '\$\(find [^)]*\| head -1\)' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden find/head lookups must fall back so empty results reach explicit handling under pipefail." >&2
     return 1
   fi
@@ -300,7 +300,7 @@ check_vaultwarden_config_values_are_validated() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   awk '
       /step "\$\(t app\.vaultwarden\.step\.certbot\)"/ { in_certbot=1; saw_email=0; next }
       in_certbot && /app_validate_email "CERTBOT_EMAIL"/ { saw_email=1 }
@@ -311,12 +311,12 @@ check_vaultwarden_config_values_are_validated() {
         }
         in_certbot=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_apt_update_failures_are_reported() {
   if grep -R -n 'apt-get update -qq[[:space:]\\]*\\$' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null | grep '\|\| warn'; then
+      impl/install_vaultwarden.sh 2>/dev/null | grep '\|\| warn'; then
     echo "Vaultwarden apt-get update failures must use an explicit conditional." >&2
     return 1
   fi
@@ -337,7 +337,7 @@ check_vaultwarden_apt_update_failures_are_reported() {
         }
         in_block=0
       }
-    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_surfaces_default_nginx_site_removal_failures() {
@@ -353,17 +353,17 @@ check_vaultwarden_install_surfaces_default_nginx_site_removal_failures() {
         }
         in_nginx=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_workdir_cleanup_traps_are_nonfatal() {
   if grep -R -nE '\[\[ -d "\$\{WORK_DIR:-\}" \]\] && rm -rf "\$WORK_DIR"' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden WORK_DIR cleanup traps must not return failure when the directory is already gone." >&2
     return 1
   fi
   local file
-  for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+  for file in impl/install_vaultwarden.sh; do
     awk '
         /_cleanup_(install|update)\(\)/ { in_func=1; saw_if=0; saw_rm=0; next }
         in_func && /if \[\[ -d "\$\{WORK_DIR:-\}" \]\]; then/ { saw_if=1 }
@@ -471,7 +471,7 @@ check_vaultwarden_runtime_dir_failures_are_explicit() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_backup_failures_include_followup_guidance() {
@@ -497,7 +497,7 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
         }
         in_block=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   awk '
       /info "\$\(t app\.vaultwarden\.info\.pre_update_backup\)"/ { in_update=1; saw_if=0; next }
       in_update && /if ! _backup_silent "pre-update"; then/ { saw_if=1 }
@@ -508,7 +508,7 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
         }
         in_update=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   awk '
       /app\.vaultwarden\.error\.manual_backup_failed/ { saw_error_key=1 }
       /\/opt\/vaultwarden-backups\/backup\.log/ { saw_log_guidance=1 }
@@ -538,11 +538,11 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
         }
         in_backup=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_env_file_is_atomic() {
-  if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden env files contain secrets and must be written through a temporary file before replacement." >&2
     return 1
   fi
@@ -557,11 +557,11 @@ check_vaultwarden_env_file_is_atomic() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_binary_installs_are_atomic() {
-  if grep -R -n 'install -m 755 -o root -g root .* "$VW_BIN"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -n 'install -m 755 -o root -g root .* "$VW_BIN"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden binary installs must stage to a temporary file before replacing VW_BIN." >&2
     return 1
   fi
@@ -591,11 +591,11 @@ check_vaultwarden_binary_installs_are_atomic() {
         }
         in_func=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_admin_token_file_is_private() {
-  if grep -R -n 'mktemp /tmp/vw_token_' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -n 'mktemp /tmp/vw_token_' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden admin token display files must not be created in world-writable /tmp." >&2
     return 1
   fi
@@ -611,19 +611,19 @@ check_vaultwarden_admin_token_file_is_private() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_extract_tool_is_pinned_and_verified() {
-  if grep -R -n 'EXTRACT_TOOL_COMMIT="\${EXTRACT_TOOL_COMMIT:-main}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -n 'EXTRACT_TOOL_COMMIT="\${EXTRACT_TOOL_COMMIT:-main}"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden must not default docker-image-extract to a floating branch." >&2
     return 1
   fi
-  if grep -R -nE 'VW_IMAGE_TAG="\$\{VW_IMAGE_TAG:-(latest|latest-[^}]*)\}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -nE 'VW_IMAGE_TAG="\$\{VW_IMAGE_TAG:-(latest|latest-[^}]*)\}"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden must not default to a mutable image tag." >&2
     return 1
   fi
-  if grep -R -n 'EXTRACT_TOOL_SHA256="\${EXTRACT_TOOL_SHA256:-}"' impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+  if grep -R -n 'EXTRACT_TOOL_SHA256="\${EXTRACT_TOOL_SHA256:-}"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden must ship a pinned docker-image-extract SHA256 by default." >&2
     return 1
   fi
@@ -645,7 +645,7 @@ check_vaultwarden_extract_tool_is_pinned_and_verified() {
           exit 1
         }
       }
-    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_enable_failures_are_reported() {
@@ -663,7 +663,7 @@ check_vaultwarden_enable_failures_are_reported() {
           exit 1
         }
       }
-    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_certbot_cron_failures_are_reported() {
@@ -680,12 +680,12 @@ check_vaultwarden_certbot_cron_failures_are_reported() {
         }
         in_block=0
       }
-    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_runtime_service_starts_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl restart (nginx|fail2ban)$' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden nginx/fail2ban restart paths must branch explicitly on command failure." >&2
     return 1
   fi
@@ -709,12 +709,12 @@ check_vaultwarden_runtime_service_starts_are_explicit() {
         }
         in_fail2ban=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_service_start_paths_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl start vaultwarden$' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden service start paths must branch explicitly on command failure." >&2
     return 1
   fi
@@ -737,7 +737,7 @@ check_vaultwarden_service_start_paths_are_explicit() {
         }
         in_update=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_cleanup_reports_systemctl_failures() {
@@ -765,7 +765,7 @@ check_vaultwarden_install_cleanup_reports_systemctl_failures() {
         }
         in_cleanup=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_rollback_validates_binary_path_before_removal() {
@@ -787,7 +787,7 @@ check_vaultwarden_install_rollback_validates_binary_path_before_removal() {
         }
         in_cleanup=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_rollback_surfaces_service_file_removal_failures() {
@@ -802,7 +802,7 @@ check_vaultwarden_install_rollback_surfaces_service_file_removal_failures() {
         }
       }
       in_cleanup && /error "\$\(t app\.vaultwarden\.error\.install_failed_start\)"/ { in_cleanup=0 }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_update_stop_failure_aborts_before_replace() {
@@ -829,7 +829,7 @@ check_vaultwarden_update_stop_failure_aborts_before_replace() {
         in_update=0
         in_stop=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_uninstall_stop_disable_failures_are_reported() {
@@ -862,7 +862,7 @@ check_vaultwarden_uninstall_stop_disable_failures_are_reported() {
         in_uninstall=0
       }
       in_func && /^}/ { in_func=0 }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_summary_matches_health_state() {
@@ -889,7 +889,7 @@ check_vaultwarden_install_summary_matches_health_state() {
         }
         in_install=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_status_health_guidance_matches_local_probe() {
@@ -914,12 +914,12 @@ check_vaultwarden_status_health_guidance_matches_local_probe() {
         }
         in_status=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_fail2ban_restart_failures_are_reported() {
   if grep -R -n 'systemctl restart fail2ban 2>/dev/null || true' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden uninstall must not silently ignore fail2ban restart failures." >&2
     return 1
   fi
@@ -935,12 +935,12 @@ check_vaultwarden_fail2ban_restart_failures_are_reported() {
         }
         in_block=0
       }
-    ' apps/vaultwarden.sh impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' apps/vaultwarden.sh impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_result_chains_are_explicit() {
   if grep -R -nE 'nginx -t && systemctl reload nginx[[:space:]\\]*$' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden must use explicit conditionals for nginx reload outcomes." >&2
     return 1
   fi
@@ -957,12 +957,12 @@ check_vaultwarden_result_chains_are_explicit() {
         }
         in_https=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_webvault_restore_cleans_partial() {
   if grep -R -nE '^[[:space:]]*\[\[ -d "\$_wv_(bak_ts|install_bak)" \]\] && mv "\$_wv_(bak_ts|install_bak)" "\$VW_WEB_DIR" \|\| true' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden Web Vault backup restores must validate replacement and permissions." >&2
     return 1
   fi
@@ -984,12 +984,12 @@ check_vaultwarden_webvault_restore_cleans_partial() {
         }
         in_helper=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_webvault_replacements_are_atomic() {
   if grep -R -nE 'cp -a "\$EXTRACTED_WEBVAULT_PATH" "\$VW_WEB_DIR"|tar -xzf "\$\{WORK_DIR\}/web-vault\.tar\.gz" -C "\$\(dirname "\$VW_WEB_DIR"\)"' \
-      impl/install_vaultwarden.sh dist/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden Web Vault installs and updates must stage replacement trees before swapping them live." >&2
     return 1
   fi
@@ -1013,7 +1013,7 @@ check_vaultwarden_webvault_replacements_are_atomic() {
         }
         in_helper=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_install_webvault_replacement_is_recoverable() {
@@ -1037,7 +1037,7 @@ check_vaultwarden_install_webvault_replacement_is_recoverable() {
         }
       }
       in_install && /info "\$\(t app\.vaultwarden\.info\.web_vault_path/ { in_install=0 }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_webvault_update_warnings_are_actionable() {
@@ -1069,7 +1069,7 @@ check_vaultwarden_webvault_update_warnings_are_actionable() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_vaultwarden_webvault_archives_are_validated() {
@@ -1086,7 +1086,7 @@ check_vaultwarden_webvault_archives_are_validated() {
       }
     ' apps/vaultwarden.sh
   local file
-  for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+  for file in impl/install_vaultwarden.sh; do
     awk '
         /_verify_web_vault_archive\(\)/ {
           in_helper=1

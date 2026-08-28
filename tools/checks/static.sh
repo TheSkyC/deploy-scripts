@@ -134,7 +134,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
@@ -150,7 +150,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "VW_DATA_DIR" "\$VW_DATA_DIR"/ { saw_data=1 }
@@ -165,7 +165,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
@@ -181,7 +181,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "TICKFLOW_INSTALL_DIR" "\$TICKFLOW_INSTALL_DIR"/ { saw_install=1 }
@@ -197,7 +197,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_tickflow.sh dist/install_tickflow.sh
+    ' impl/install_tickflow.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "SITE_DIR" "\$SITE_DIR"/ { saw_site=1 }
@@ -211,7 +211,7 @@ check_managed_paths_are_validated() {
         }
         in_func=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_safe_rm_dir_is_idempotent() {
@@ -237,7 +237,7 @@ check_safe_rm_dir_is_idempotent() {
         in_func=0
         in_heredoc=0
       }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
 }
 
 check_atomic_helpers_are_atomic() {
@@ -285,7 +285,7 @@ check_atomic_helpers_are_atomic() {
         }
         in_link=0
       }
-    ' lib/atomic.sh dist/install_newapi.sh
+ ' lib/atomic.sh 
 }
 
 check_binary_helpers_are_atomic() {
@@ -342,7 +342,7 @@ check_binary_helpers_are_atomic() {
         }
         in_backup=0
       }
-    ' lib/binary.sh dist/install_newapi.sh
+ ' lib/binary.sh 
 }
 
 check_systemd_helper_is_atomic() {
@@ -356,12 +356,12 @@ check_systemd_helper_is_atomic() {
         }
         in_func=0
       }
-    ' lib/service.sh dist/install_newapi.sh
+ ' lib/service.sh 
 }
 
 check_binary_app_systemd_paths_are_validated() {
   local file
-  for file in lib/binary_app.sh dist/install_ntfy.sh dist/install_meilisearch.sh \
+ for file in lib/binary_app.sh \
       dist/install_alist.sh dist/install_filebrowser.sh dist/install_navidrome.sh \
       dist/install_frps.sh dist/install_gitea.sh; do
     grep -Fq 'bapp_validate_no_whitespace' "$file" \
@@ -405,12 +405,12 @@ check_go_tarball_failures_cleanup() {
     echo "Do not remove the existing Go toolchain before the replacement archive is extracted." >&2
     return 1
   fi
-  if grep -R -n 'mv "$old_go_backup" /usr/local/go 2>/dev/null || true' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+  if grep -R -n 'mv "$old_go_backup" /usr/local/go 2>/dev/null || true' impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI Go toolchain rollback must validate restoring the previous /usr/local/go." >&2
     return 1
   fi
   if grep -R -nE '^[[:space:]]*ln -sf /usr/local/go/bin/(go|gofmt) /usr/local/bin/(go|gofmt)$' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI Go tool symlinks must be staged before replacement." >&2
     return 1
   fi
@@ -437,7 +437,7 @@ check_go_tarball_failures_cleanup() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /write_tool_symlink\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
       in_func && /atomic_symlink "\$target" "\$link_path"/ { saw_atomic=1 }
@@ -449,7 +449,7 @@ check_go_tarball_failures_cleanup() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_no_flag_chained_error_handlers() {

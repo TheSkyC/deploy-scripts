@@ -21,7 +21,7 @@ check_cyberstrikeai_status_backup_projection() {
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "cyber backups" in x["path"]; assert x["path"].endswith("cyberstrike-ai_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
   grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' impl/install_cyberstrikeai.sh \
-    && grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' dist/install_cyberstrikeai.sh
+ && grep -Fq 'APP_STATUS_BACKUP_FN=_csai_status_backup' 
 }
 
 check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
@@ -43,7 +43,7 @@ check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
@@ -56,10 +56,10 @@ check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
       echo "CyberStrikeAI uninstall must surface directory removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_csai_remove_dir_or_error() {' dist/install_cyberstrikeai.sh \
-    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_dir "$path")"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"' dist/install_cyberstrikeai.sh \
+ grep -Fq '_csai_remove_dir_or_error() {' \
+ && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_dir "$path")"' \
+ && grep -Fq '_csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"' \
+ && grep -Fq '_csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"' \
     || {
       echo "Release CyberStrikeAI script must preserve uninstall directory removal failure handling." >&2
       return 1
@@ -81,15 +81,15 @@ check_cyberstrikeai_uninstall_checks_file_removal_errors() {
       echo "CyberStrikeAI uninstall must surface file removal failures instead of reporting unconditional success." >&2
       return 1
     }
-  grep -Fq '_csai_remove_file_or_error() {' dist/install_cyberstrikeai.sh \
-    && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_file "$path")"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "$LOGROTATE_FILE" "LOGROTATE_FILE"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "$CRON_FILE" "CRON_FILE"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"' dist/install_cyberstrikeai.sh \
-    && grep -Fq '_csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"' dist/install_cyberstrikeai.sh \
+ grep -Fq '_csai_remove_file_or_error() {' \
+ && grep -Fq 'error "$(t app.cyberstrikeai.error.remove_file "$path")"' \
+ && grep -Fq '_csai_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "CSAI_SERVICE_FILE"' \
+ && grep -Fq '_csai_remove_file_or_error "$NGINX_LINK" "NGINX_LINK"' \
+ && grep -Fq '_csai_remove_file_or_error "$NGINX_CONF" "NGINX_CONF"' \
+ && grep -Fq '_csai_remove_file_or_error "$LOGROTATE_FILE" "LOGROTATE_FILE"' \
+ && grep -Fq '_csai_remove_file_or_error "$CRON_FILE" "CRON_FILE"' \
+ && grep -Fq '_csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"' \
+ && grep -Fq '_csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"' \
     || {
       echo "Release CyberStrikeAI script must preserve uninstall file removal failure handling." >&2
       return 1
@@ -97,12 +97,12 @@ check_cyberstrikeai_uninstall_checks_file_removal_errors() {
 }
 
 check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
-  if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+  if grep -R -n -- "-printf '%T@ %p\\\\n'" impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI backup lists must not split paths on spaces." >&2
     return 1
   fi
   if grep -R -nF 'find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f 2>/dev/null | while read -r db; do' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI generated backup script must not split database paths on spaces." >&2
     return 1
   fi
@@ -123,7 +123,7 @@ check_cyberstrikeai_backup_lists_preserve_paths_with_spaces() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_display_sizes_are_nonfatal() {
@@ -150,7 +150,7 @@ check_cyberstrikeai_display_sizes_are_nonfatal() {
       in_status && /size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown\)/ { saw_backup_dir_size=1 }
       in_status && /du -sh "\$file" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t status\.unknown/ { saw_status_file_size=1 }
       in_status && /head -z -n 5\) \|\| true/ { saw_status_loop=1 }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_ports_are_validated() {
@@ -174,7 +174,7 @@ check_cyberstrikeai_ports_are_validated() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_booleans_are_validated() {
@@ -197,7 +197,7 @@ check_cyberstrikeai_booleans_are_validated() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 # China mirror endpoints must be opt-in (DEPLOY_CN_MIRROR=1): the global
@@ -241,7 +241,7 @@ check_cyberstrikeai_mirrors_are_opt_in() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_go_version_parse_failures_are_explicit() {
@@ -254,12 +254,12 @@ check_cyberstrikeai_go_version_parse_failures_are_explicit() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_go_restore_failures_are_reported() {
   if grep -R -n 'warn "\$\(t app\.cyberstrikeai\.error\.go_failed\)"' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI Go restore failures must not reuse the generic install failure message as a warning." >&2
     return 1
   fi
@@ -275,12 +275,12 @@ check_cyberstrikeai_go_restore_failures_are_reported() {
         }
         in_block=0
       }
-    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_pip_upgrade_failures_are_reported() {
   if grep -R -n 'python -m pip install --index-url "\$PIP_INDEX_URL" --upgrade pip >/dev/null 2>&1 || true' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI pip upgrade failures must not be silently ignored." >&2
     return 1
   fi
@@ -296,7 +296,7 @@ check_cyberstrikeai_pip_upgrade_failures_are_reported() {
         }
         in_block=0
       }
-    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_python_env_failures_are_reported() {
@@ -325,12 +325,12 @@ check_cyberstrikeai_python_env_failures_are_reported() {
         }
         in_block=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_repo_go_install_failures_are_reported() {
   if grep -R -n 'apt-get install -y -qq golang-go || true' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI repository Go installation failures must not be silently ignored." >&2
     return 1
   fi
@@ -346,17 +346,17 @@ check_cyberstrikeai_repo_go_install_failures_are_reported() {
         }
         in_block=0
       }
-    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_dependency_failures_are_reported() {
   if grep -R -nE '^[[:space:]]*apt-get update -qq$' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI dependency installation must use an explicit conditional for apt-get update." >&2
     return 1
   fi
   if grep -R -nE '^[[:space:]]*apt-get install -y -qq nginx$' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI nginx installation must use an explicit conditional with an actionable error." >&2
     return 1
   fi
@@ -389,7 +389,7 @@ check_cyberstrikeai_dependency_failures_are_reported() {
         }
         in_block=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_runtime_dir_failures_are_explicit() {
@@ -419,7 +419,7 @@ check_cyberstrikeai_runtime_dir_failures_are_explicit() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
@@ -529,15 +529,15 @@ check_cyberstrikeai_source_and_build_prep_failures_are_explicit() {
         }
         in_update=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_build_temp_cleanup() {
-  if grep -R -n '\${BIN_PATH}\.tmp\.\$\$' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+  if grep -R -n '\${BIN_PATH}\.tmp\.\$\$' impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI binary build must use mktemp instead of a pid-derived temporary binary path." >&2
     return 1
   fi
-  if grep -R -nE '^[[:space:]]*(go build|chmod 0755 "\$tmp_bin"|mv "\$tmp_bin" "\$BIN_PATH")' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+  if grep -R -nE '^[[:space:]]*(go build|chmod 0755 "\$tmp_bin"|mv "\$tmp_bin" "\$BIN_PATH")' impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI binary build must clean up the temporary binary on build, chmod, and move failures." >&2
     return 1
   fi
@@ -601,12 +601,12 @@ check_cyberstrikeai_build_temp_cleanup() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_rollback_restore_is_validated() {
   if grep -R -nE '^[[:space:]]*(\[\[ -f "\$(bin_bak|config_bak)" \]\] && cp "\$(bin_bak|config_bak)"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH" "\$CONFIG_FILE" 2>/dev/null \|\| true)' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI update rollback must validate backup restore, mode, and ownership changes." >&2
     return 1
   fi
@@ -630,12 +630,12 @@ check_cyberstrikeai_rollback_restore_is_validated() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_backups_are_atomic() {
   if grep -R -nE '^[[:space:]]*(cp "\$CONFIG_FILE" "\$backup"|\[\[ -f "\$(BIN_PATH|CONFIG_FILE)" \]\] && cp "\$(BIN_PATH|CONFIG_FILE)")' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI rollback/config backups must copy to a temporary file before replacing the final backup path." >&2
     return 1
   fi
@@ -654,12 +654,12 @@ check_cyberstrikeai_backups_are_atomic() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_config_patch_is_atomic() {
   if grep -R -n 'path.write_text(text, encoding="utf-8")' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI config patching must write via a staged temporary file and atomic replace." >&2
     return 1
   fi
@@ -679,12 +679,12 @@ check_cyberstrikeai_config_patch_is_atomic() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_service_start_paths_are_explicit() {
   if grep -R -nE '^[[:space:]]*systemctl restart "\$SERVICE_NAME"$' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI service restart paths must branch explicitly on command failure." >&2
     return 1
   fi
@@ -707,7 +707,7 @@ check_cyberstrikeai_service_start_paths_are_explicit() {
         }
         in_update=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_enable_failures_are_reported() {
@@ -723,12 +723,12 @@ check_cyberstrikeai_enable_failures_are_reported() {
           exit 1
         }
       }
-    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' apps/cyberstrikeai.sh impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_update_rollbacks_report_restart_failures() {
   if grep -R -n 'systemctl start "\$SERVICE_NAME" 2>/dev/null' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI update rollback paths must not suppress service restart diagnostics." >&2
     return 1
   fi
@@ -746,7 +746,7 @@ check_cyberstrikeai_update_rollbacks_report_restart_failures() {
         }
       }
       in_update_failure && /^  else$/ { in_update_failure=0 }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_update_rollback_stop_failure_aborts_restore() {
@@ -771,7 +771,7 @@ check_cyberstrikeai_update_rollback_stop_failure_aborts_restore() {
         }
         in_rollback=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_uninstall_stop_disable_failures_are_reported() {
@@ -803,7 +803,7 @@ check_cyberstrikeai_uninstall_stop_disable_failures_are_reported() {
         }
         in_uninstall=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_install_summary_matches_health_state() {
@@ -858,7 +858,7 @@ check_cyberstrikeai_install_summary_matches_health_state() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_nginx_health_probe_matches_server_name() {
@@ -885,7 +885,7 @@ check_cyberstrikeai_nginx_health_probe_matches_server_name() {
         }
         in_health=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_health_checks_are_nonfatal_outside_install() {
@@ -909,12 +909,12 @@ check_cyberstrikeai_health_checks_are_nonfatal_outside_install() {
         }
         in_status=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
   if grep -R -n 'systemctl reload nginx 2>/dev/null || systemctl restart nginx' \
-      impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "CyberStrikeAI nginx apply path must not suppress reload diagnostics." >&2
     return 1
   fi
@@ -934,5 +934,5 @@ check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics() {
         }
         in_block=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }

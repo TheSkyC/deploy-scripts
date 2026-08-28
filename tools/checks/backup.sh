@@ -23,7 +23,7 @@ check_backup_script_dir_failures_are_explicit() {
         }
         in_newapi=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /_write_backup_script\(\)/ { in_sub2api=1; saw_sub2api_if=0; saw_sub2api_error=0; next }
       in_sub2api && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_sub2api_if=1 }
@@ -35,7 +35,7 @@ check_backup_script_dir_failures_are_explicit() {
         }
         in_sub2api=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_preupdate_backup_warnings_include_followup_guidance() {
@@ -103,13 +103,13 @@ check_preupdate_backup_warnings_include_followup_guidance() {
         }
         in_helper=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_preupdate_backup_logs_match_guidance() {
   "$BASH_BIN" -c '
     set -euo pipefail
-    for file in impl/install_newapi.sh dist/install_newapi.sh; do
+    for file in impl/install_newapi.sh; do
       block=$(sed -n "/^_backup_silent()/,/^_print_install_summary()/p" "$file")
       grep -Fq '\''local backup_log="${BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
         echo "$file NewAPI silent backup helper must declare backup.log output" >&2
@@ -144,7 +144,7 @@ check_preupdate_backup_logs_match_guidance() {
         exit 1
       }
     done
-    for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+    for file in impl/install_vaultwarden.sh; do
       block=$(sed -n "/^_backup_silent()/,/^do_backup()/p" "$file")
       grep -Fq '\''local backup_log="${VW_BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
         echo "$file Vaultwarden silent backup helper must declare backup.log output" >&2
@@ -243,7 +243,7 @@ check_mutating_actions_acquire_locks() {
         }
         in_func=0
       }
-    ' lib/lock.sh dist/install_newapi.sh
+ ' lib/lock.sh 
 
   local handler_tmp handler_status handler_output
   handler_tmp="$(mktemp -d)"
@@ -338,7 +338,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       }
     ' apps/cyberstrikeai.sh
-  for file in impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh; do
+  for file in impl/install_cyberstrikeai.sh; do
     awk '
         /while IFS= read -r -d '\'''\'' _old_bak; do/ { saw_loop=1 }
         /warn "\$\(t app\.cyberstrikeai\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_warn=1 }
@@ -355,7 +355,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       ' "$file"
   done
-  for file in impl/install_newapi.sh dist/install_newapi.sh; do
+  for file in impl/install_newapi.sh; do
     awk '
         /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
         /warn "\$\(t app\.newapi\.warn\.cleanup_old_failed "\$_old_bak"\)"/ { saw_warn=1 }
@@ -372,7 +372,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       ' "$file"
   done
-  for file in impl/install_sub2api.sh dist/install_sub2api.sh; do
+  for file in impl/install_sub2api.sh; do
     awk '
         /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
         /warn "\$\(t app\.sub2api\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_warn=1 }
@@ -389,7 +389,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       ' "$file"
   done
-  for file in impl/install_vaultwarden.sh dist/install_vaultwarden.sh; do
+  for file in impl/install_vaultwarden.sh; do
     awk '
         /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_binary_loop=1 }
         /warn "\$\(t app\.vaultwarden\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_binary_warn=1 }
@@ -429,7 +429,7 @@ check_uninstall_binary_cleanup_reports_failures() {
         }
         in_uninstall=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_file_loop=0; saw_dir_loop=0; saw_warn=0; next }
       in_uninstall && /-type f -print0/ { saw_file_loop=1 }
@@ -442,7 +442,7 @@ check_uninstall_binary_cleanup_reports_failures() {
         }
         in_uninstall=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_loop=0; saw_warn=0; next }
       in_uninstall && /while IFS= read -r -d '\'''\'' _cleanup_path; do/ { saw_loop=1 }
@@ -454,7 +454,7 @@ check_uninstall_binary_cleanup_reports_failures() {
         }
         in_uninstall=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_backup_temp_moves_handle_failure() {
@@ -466,12 +466,12 @@ check_backup_temp_moves_handle_failure() {
 
 check_binary_replacements_handle_failure() {
   if grep -R -nE '^[[:space:]]*(mv "\$TMP_(BIN|ARCHIVE)" "\$BIN_PATH"|chmod \+x "\$BIN_PATH"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH")$' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+ impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "Binary replacements must clean up candidates and restore backups on move, chmod, and chown failures." >&2
     return 1
   fi
   if grep -R -n 'mv "$backup_path" "$BIN_PATH" 2>/dev/null || true' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+ impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "Binary candidate installs must validate moving backups back into place." >&2
     return 1
   fi
@@ -485,7 +485,7 @@ check_binary_replacements_handle_failure() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+ ' impl/install_newapi.sh impl/install_sub2api.sh 
   awk '
       /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; saw_app_helper=0; next }
       in_func && /app_binary_restore_moved_backup "\$1"/ { saw_app_helper=1 }
@@ -503,17 +503,17 @@ check_binary_replacements_handle_failure() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+ ' impl/install_newapi.sh impl/install_sub2api.sh 
 }
 
 check_binary_restores_validate_permissions() {
   if grep -R -nE '^[[:space:]]*(chmod \+x "\$BIN_PATH"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH") 2>/dev/null \|\| true$' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+ impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "Binary rollback restores must validate executable mode and ownership changes." >&2
     return 1
   fi
   if grep -R -n '_restore_binary_backup "\$OLD_BIN_BAK" || true' \
-      impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh 2>/dev/null; then
+ impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "Install rollback restores must not ignore backup restore failures." >&2
     return 1
   fi
@@ -533,12 +533,12 @@ check_binary_restores_validate_permissions() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh dist/install_newapi.sh dist/install_sub2api.sh
+ ' impl/install_newapi.sh impl/install_sub2api.sh 
 }
 
 check_download_validation_failures_cleanup() {
   if grep -R -n 'app\.sub2api\.warn\.\(checksum_download\|checksum_missing\|sha_tool_missing\)' \
-      apps/sub2api.sh impl/install_sub2api.sh dist/install_sub2api.sh 2>/dev/null; then
+      apps/sub2api.sh impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API checksum verification must fail closed instead of warning and continuing." >&2
     return 1
   fi
@@ -553,7 +553,7 @@ check_download_validation_failures_cleanup() {
         saw_rm=0
       }
       in_func && /^}/ { in_func=0 }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /verify_checksum\(\)/ { in_checksum=1; saw_checksum_archive_rm=0; saw_checksum_archive_warn=0; next }
       in_checksum && /if ! rm -f "\$archive"; then/ { saw_checksum_archive_rm=1 }
@@ -587,7 +587,7 @@ check_download_validation_failures_cleanup() {
         saw_archive_rm=0
       }
       in_extract && /^}/ { in_extract=0 }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /app\.cyberstrikeai\.warn\.go_archive_cleanup_failed/ { saw_warn_key=1 }
       END {
@@ -623,7 +623,7 @@ check_download_validation_failures_cleanup() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /tarball="\$\{version\}\.linux-\$\{go_arch\}\.tar\.gz"/ { saw_tarball=1 }
       /expected_sha=\$\(go_release_sha256 "\$latest_json" "\$tarball" \|\| true\)/ { saw_expected=1 }
@@ -634,7 +634,7 @@ check_download_validation_failures_cleanup() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_download_temp_creation_failures_are_explicit() {
@@ -650,7 +650,7 @@ check_download_temp_creation_failures_are_explicit() {
         }
         in_func=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /step "\$\(t app\.newapi\.step\.download "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
       in_install && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_install_tmp=1 }
@@ -678,7 +678,7 @@ check_download_temp_creation_failures_are_explicit() {
         }
         in_update_download_fail=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /app\.sub2api\.warn\.tmp_archive_cleanup_failed/ { saw_warn_key=1 }
       END {
@@ -715,7 +715,7 @@ check_download_temp_creation_failures_are_explicit() {
         }
         in_update_download_fail=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_backup_scripts_are_atomic() {
@@ -756,7 +756,7 @@ check_generated_backup_headers_are_shell_quoted() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /_write_backup_script\(\)/ { in_func=1; saw_backup=0; saw_data=0; saw_config=0; saw_dsn=0; next }
       in_func && /printf -v backup_dir_literal '\''%q'\'' "\$BACKUP_DIR"/ { saw_backup=1 }
@@ -770,7 +770,7 @@ check_generated_backup_headers_are_shell_quoted() {
         }
         in_func=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /write_backup_script\(\)/ { in_func=1; saw_install=0; saw_backup=0; saw_log=0; next }
       in_func && /printf -v install_dir_literal '\''%q'\'' "\$INSTALL_DIR"/ { saw_install=1 }
@@ -783,7 +783,7 @@ check_generated_backup_headers_are_shell_quoted() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
 }
 
 check_generated_backup_scripts_handle_missing_dirs() {
@@ -821,7 +821,7 @@ check_generated_backup_scripts_handle_missing_dirs() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /_write_backup_script\(\)/ { in_func=1; saw_msg=0; saw_mkdir=0; saw_stderr=0; next }
       in_func && /MSG_BACKUP_DIR_FAILED=/ { saw_msg=1 }
@@ -834,7 +834,7 @@ check_generated_backup_scripts_handle_missing_dirs() {
         }
         in_func=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /write_backup_script\(\)/ { in_func=1; saw_msg=0; saw_mkdir=0; saw_stderr=0; next }
       in_func && /MSG_BACKUP_DIR_FAILED=/ { saw_msg=1 }
@@ -847,7 +847,7 @@ check_generated_backup_scripts_handle_missing_dirs() {
         }
         in_func=0
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /_write_backup_script\(\)/ { in_func=1; saw_msg=0; saw_mkdir=0; saw_stderr=0; saw_maxdepth=0; next }
       in_func && /MSG_BACKUP_DIR_FAILED=/ { saw_msg=1 }
@@ -861,7 +861,7 @@ check_generated_backup_scripts_handle_missing_dirs() {
         }
         in_func=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_manual_backup_retention_is_normalized() {
@@ -885,7 +885,7 @@ check_manual_backup_retention_is_normalized() {
       in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
       in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /^do_backup\(\) \{/ {
         in_func=1
@@ -906,7 +906,7 @@ check_manual_backup_retention_is_normalized() {
       in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
       in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
-    ' impl/install_hugo_blog.sh dist/install_hugo_blog.sh
+    ' impl/install_hugo_blog.sh
   awk '
       /^do_backup\(\) \{/ {
         in_func=1
@@ -927,7 +927,7 @@ check_manual_backup_retention_is_normalized() {
       in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
       in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
 }
 
 check_backup_retention_cleanup_reports_failures() {
@@ -961,7 +961,7 @@ check_backup_retention_cleanup_reports_failures() {
           exit 1
         }
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
       /_log "\$\(printf "\$MSG_REMOVE_FAILED" "\$f"\)"/ { saw_log=1 }
@@ -971,7 +971,7 @@ check_backup_retention_cleanup_reports_failures() {
           exit 1
         }
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /^do_backup\(\) \{/ { in_backup=1; saw_warn=0; saw_info=0; saw_pattern=0; next }
       in_backup && /warn "\$\(t app\.sub2api\.warn\.backup_cleanup_failed "\$_old_backup"\)"/ { saw_warn=1 }
@@ -984,7 +984,7 @@ check_backup_retention_cleanup_reports_failures() {
         }
         in_backup=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
       index($0, "_log \"[WARN] \\$(printf \"\\$MSG_REMOVE_FAILED\" \"\\$old_backup\")\"") { saw_log=1 }
@@ -994,7 +994,7 @@ check_backup_retention_cleanup_reports_failures() {
           exit 1
         }
       }
-    ' impl/install_cyberstrikeai.sh dist/install_cyberstrikeai.sh
+    ' impl/install_cyberstrikeai.sh
   awk '
       /MSG_REMOVE_FAILED="\$\(t app\.vaultwarden\.backup\.script\.remove_failed\)"/ { saw_msg=1 }
       /while IFS= read -r -d '\'''\'' old_backup; do/ { saw_loop=1 }
@@ -1006,7 +1006,7 @@ check_backup_retention_cleanup_reports_failures() {
           exit 1
         }
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 check_optional_count_messages_are_nonfatal() {
@@ -1067,7 +1067,7 @@ check_tar_diagnostics_use_stderr() {
         }
         in_backup=0
       }
-    ' impl/install_newapi.sh dist/install_newapi.sh
+    ' impl/install_newapi.sh
   awk '
       /do_backup\(\)/ { in_backup=1; saw_conf_stderr=0; saw_data_stderr=0; next }
       in_backup && /if tar -czf "\$CONF_TMP"/ { in_conf=1; next }
@@ -1081,7 +1081,7 @@ check_tar_diagnostics_use_stderr() {
         }
         in_backup=0
       }
-    ' impl/install_sub2api.sh dist/install_sub2api.sh
+    ' impl/install_sub2api.sh
   awk '
       /ARCHIVE_TMP="\$\{ARCHIVE\}\.tmp"/ { in_script=1; saw_tar_stderr=0; next }
       in_script && /TAR_EXTRA.*>&2; then/ { saw_tar_stderr=1 }
@@ -1092,7 +1092,7 @@ check_tar_diagnostics_use_stderr() {
         }
         in_script=0
       }
-    ' impl/install_vaultwarden.sh dist/install_vaultwarden.sh
+    ' impl/install_vaultwarden.sh
 }
 
 

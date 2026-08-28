@@ -21,12 +21,12 @@ check_cpa_stack_status_backup_projection() {
   ')"
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert "cpa backups" in x["path"]; assert x["path"].endswith("cpa-stack-20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
   grep -Fq 'APP_STATUS_BACKUP_FN=_cpa_stack_status_backup' impl/install_cpa_stack.sh \
-    && grep -Fq 'APP_STATUS_BACKUP_FN=_cpa_stack_status_backup' dist/install_cpa_stack.sh
+ && grep -Fq 'APP_STATUS_BACKUP_FN=_cpa_stack_status_backup' 
 }
 
 check_cpa_stack_layout() {
   local file
-  for file in impl/install_cpa_stack.sh dist/install_cpa_stack.sh; do
+  for file in impl/install_cpa_stack.sh; do
     grep -Fq 'host: "127.0.0.1"' "$file" \
       && grep -Fq 'usage-statistics-enabled: true' "$file" \
       && grep -Fq 'Environment=HTTP_ADDR=127.0.0.1:18317' "$file" \

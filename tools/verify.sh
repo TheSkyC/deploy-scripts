@@ -284,6 +284,7 @@ main() {
       ;;
     dispatch)
       build_verified_release
+      check_dist_is_up_to_date
       check_localized_dispatch
       check_doctor_dispatch
       check_app_help_dispatch
@@ -414,6 +415,7 @@ main() {
     guards)
       check_shell_syntax
       build_verified_release
+      check_dist_is_up_to_date
       check_api_ports_are_validated
       check_api_status_directory_sizes_are_nonfatal
       check_app_json_string_escapes_controls

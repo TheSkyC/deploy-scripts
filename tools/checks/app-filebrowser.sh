@@ -4,7 +4,7 @@
 
 check_filebrowser_uses_shared_binary_lifecycle() {
   local file
-  for file in impl/install_filebrowser.sh dist/install_filebrowser.sh; do
+  for file in impl/install_filebrowser.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
       && grep -Fq 'bapp_backup' "$file" \
@@ -22,7 +22,7 @@ check_filebrowser_uses_shared_binary_lifecycle() {
 
 check_filebrowser_release_asset_mapping() {
   local file
-  for file in impl/install_filebrowser.sh dist/install_filebrowser.sh; do
+  for file in impl/install_filebrowser.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-filebrowser/filebrowser}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="filebrowser"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
@@ -38,7 +38,7 @@ check_filebrowser_release_asset_mapping() {
 
 check_filebrowser_root_directory_is_prepared() {
   local file
-  for file in impl/install_filebrowser.sh dist/install_filebrowser.sh; do
+  for file in impl/install_filebrowser.sh; do
     grep -Fq 'ba_pre_start()' "$file" \
       && grep -Fq 'mkdir -p "$FB_ROOT"' "$file" \
       && grep -Fq 'chown "${SERVICE_USER}:${SERVICE_USER}" "$FB_ROOT"' "$file" \

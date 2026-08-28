@@ -4,7 +4,7 @@
 
 check_frps_uses_shared_binary_lifecycle() {
   local file
-  for file in impl/install_frps.sh dist/install_frps.sh; do
+  for file in impl/install_frps.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
       && grep -Fq 'bapp_backup' "$file" \
@@ -22,7 +22,7 @@ check_frps_uses_shared_binary_lifecycle() {
 
 check_frps_release_asset_mapping() {
   local file
-  for file in impl/install_frps.sh dist/install_frps.sh; do
+  for file in impl/install_frps.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-fatedier/frp}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="frps"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
@@ -38,7 +38,7 @@ check_frps_release_asset_mapping() {
 
 check_frps_config_is_managed_atomically() {
   local file
-  for file in impl/install_frps.sh dist/install_frps.sh; do
+  for file in impl/install_frps.sh; do
     grep -Fq 'atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}"' "$file" \
       && grep -Fq 'auth.token' "$file" \
       && grep -Fq 'error "$(t app.frps.error.config_write "$config_file")"' "$file" \
