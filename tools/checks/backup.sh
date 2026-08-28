@@ -1350,6 +1350,29 @@ check_registry_restore_capability_matches_impl() {
     grep -q '^do_restore() {' "$impl" \
       || { echo "$app_id declares restore capability but $impl has no do_restore" >&2; return 1; }
   done < <(printf '%s\n' "${DEPLOY_APP_SPECS[@]}")
+  # Reverse direction: every app whose impl defines do_restore must declare
+  # the restore capability, or batch/status planning would report it as
+  # unsupported despite the implementation existing (the D3 gap: the nine
+  # shared-lifecycle apps implemented bapp_restore but the registry only
+  # declared backup).
+  local declared_ids=()
+  while IFS='|' read -r app_id _ _ _ caps; do
+    [[ ",${caps}," == *",restore,"* ]] || continue
+    declared_ids+=("$app_id")
+  done < <(printf '%s\n' "${DEPLOY_APP_SPECS[@]}")
+  local impl_file app
+  for impl_file in impl/install_*.sh; do
+    grep -q '^do_restore() {' "$impl_file" || continue
+    app="${impl_file#impl/install_}"
+    app="${app%.sh}"
+    case "${app}" in
+      hugo_blog) app="blog" ;;
+    esac
+    case " ${declared_ids[*]} " in
+      *" $app "*) : ;;
+      *) echo "$impl_file implements do_restore but $app does not declare restore capability" >&2; return 1 ;;
+    esac
+  done
   # Custom apps restored through the shared data-dir helper, plus the two
   # bespoke multi-artifact restores (sub2api three artifacts, cpa_stack
   # root-relative five paths).
