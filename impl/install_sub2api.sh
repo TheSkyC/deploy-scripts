@@ -508,6 +508,11 @@ _uri_encode() {
   printf '%s' "$output"
 }
 _setup_postgres() {
+  # The saved config is loaded again after preflight; re-validate the SQL
+  # identifiers here so a tampered PG_USER/PG_DB can never reach psql
+  # statement text (identifier injection via the deploy config).
+  app_validate_db_identifier "PG_USER" "$PG_USER"
+  app_validate_db_identifier "PG_DB" "$PG_DB"
   if ! systemctl is-active --quiet postgresql 2>/dev/null && \
      ! systemctl is-active --quiet postgresql-15 2>/dev/null; then
     warn "$(t app.sub2api.warn.postgres_not_running)"
@@ -712,13 +717,12 @@ _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
   fi
-  local backup_dir_literal data_dir_literal config_dir_literal service_name_literal keep_days_literal pg_dsn_literal
+  local backup_dir_literal data_dir_literal config_dir_literal service_name_literal keep_days_literal
   printf -v backup_dir_literal '%q' "$BACKUP_DIR"
   printf -v data_dir_literal '%q' "$DATA_DIR"
   printf -v config_dir_literal '%q' "$CONFIG_DIR"
   printf -v service_name_literal '%q' "$SERVICE_NAME"
   printf -v keep_days_literal '%q' "$BACKUP_KEEP_DAYS"
-  printf -v pg_dsn_literal '%q' "$PG_DSN"
   local msg_start msg_backup_dir_failed msg_pg_dump_start msg_pg_dump_ok msg_pg_dump_failed msg_pg_dsn_missing msg_pg_dump_missing
   local msg_config_ok msg_config_failed msg_data_ok msg_data_failed msg_removed_old msg_remove_failed msg_done
   msg_start="$(t app.sub2api.backup.log.start)"
@@ -736,6 +740,21 @@ _write_backup_script() {
   msg_remove_failed="$(t app.sub2api.backup.log.remove_failed '%s')"
   msg_done="$(t app.sub2api.backup.log.done)"
   local backup_script="/usr/local/bin/sub2api-backup"
+  # The database DSN contains the PostgreSQL password. Keep a single root-only
+  # copy under CONFIG_DIR and have the backup script read it at run time
+  # instead of embedding a second credential copy in the script itself.
+  local pg_dsn_file="${CONFIG_DIR}/.pg_dsn"
+  if ! mkdir -p "$CONFIG_DIR"; then
+    error "$(t app.sub2api.error.backup_script)"
+  fi
+  if ! atomic_write_file "$pg_dsn_file" 600 root:root <<EOF
+${PG_DSN}
+EOF
+  then
+    error "$(t app.sub2api.error.backup_script)"
+  fi
+  local pg_dsn_file_literal
+  printf -v pg_dsn_file_literal '%q' "$pg_dsn_file"
   local backup_tmp
   if ! backup_tmp=$(mktemp "${backup_script}.XXXXXX"); then
     error "$(t app.sub2api.error.backup_script)"
@@ -753,7 +772,8 @@ CONFIG_DIR=${config_dir_literal}
 SERVICE_NAME=${service_name_literal}
 KEEP_DAYS=${keep_days_literal}
 [[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
-PG_DSN=${pg_dsn_literal}
+PG_DSN_FILE=${pg_dsn_file_literal}
+[[ -r "\${PG_DSN_FILE}" ]] && PG_DSN=\$(cat "\${PG_DSN_FILE}" 2>/dev/null || true)
 MSG_START="${msg_start}"
 MSG_BACKUP_DIR_FAILED="${msg_backup_dir_failed}"
 MSG_PG_DUMP_START="${msg_pg_dump_start}"
@@ -1663,6 +1683,7 @@ do_uninstall() {
   _sub2api_remove_file_or_error "/usr/local/bin/sub2api-backup" "SUB2API_BACKUP_SCRIPT"
   _sub2api_remove_file_or_error "/etc/logrotate.d/sub2api" "SUB2API_LOGROTATE_FILE"
   success "$(t app.sub2api.success.removed_scheduled)"
+  _sub2api_remove_file_or_error "${CONFIG_DIR}/.pg_dsn" "SUB2API_PG_DSN_FILE"
   _sub2api_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.sub2api.success.removed_config)"
   if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
