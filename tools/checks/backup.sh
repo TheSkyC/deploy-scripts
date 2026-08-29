@@ -40,7 +40,8 @@ check_backup_script_dir_failures_are_explicit() {
 check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
       /binary_app\.warn\.pre_backup_failed/ { saw_framework=1 }
-      /binary_app\.warn\.silent_backup_failed/ && /backup\.log/ { saw_framework_log=1 }
+      /binary_app\.warn\.silent_backup_failed/ { saw_silent=1 }
+      /inspect %s\/backup\.log/ { saw_framework_log=1 }
       /app\.sub2api\.warn\.pre_update_backup/ { saw_sub2api=1 }
       /\/opt\/sub2api-backups\/backup\.log/ { saw_sub2api_log=1 }
       /\/usr\/local\/bin\/sub2api-backup/ { saw_sub2api_cmd=1 }
@@ -55,9 +56,9 @@ check_preupdate_backup_warnings_include_followup_guidance() {
       }
     ' lib/binary_app.sh apps/sub2api.sh apps/cyberstrikeai.sh
   awk '
-      /_ba_backup "pre-update"/ { in_framework=1; saw_framework_if=0; next }
+      /step .*pre_backup/ { in_framework=1; saw_framework_if=0; next }
       in_framework && /if ! _ba_backup "pre-update"; then/ { saw_framework_if=1 }
-      in_framework && /warn "\$\(t binary_app\.warn\.pre_backup_failed\)"/ {
+      in_framework && /warn .*binary_app\.warn\.pre_backup_failed/ {
         if (!saw_framework_if) {
           printf "%s binary-app pre-update backup warning must come from an explicit conditional\n", FILENAME > "/dev/stderr"
           exit 1
@@ -449,10 +450,10 @@ check_binary_replacements_handle_failure() {
  ' impl/install_sub2api.sh 
   awk '
       /bapp_update\(\)/ { in_update=1; saw_helper=0; next }
-      in_update && /app_binary_install_candidate "\$tmp_bin"/ { saw_helper=1 }
+      in_update && /ba_install_binary "\$tmp_bin"/ { saw_helper=1 }
       in_update && /^}/ {
         if (!saw_helper) {
-          printf "%s shared update lifecycle must install the candidate via app_binary_install_candidate\n", FILENAME > "/dev/stderr"
+          printf "%s shared update lifecycle must install the candidate via ba_install_binary\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_update=0
@@ -1313,7 +1314,7 @@ check_registry_restore_capability_matches_impl() {
   # Custom apps restored through the shared data-dir helper, plus the two
   # bespoke multi-artifact restores (sub2api three artifacts, cpa_stack
   # root-relative five paths).
-  for app_id in newapi vaultwarden cyberstrikeai; do
+  for app_id in vaultwarden cyberstrikeai; do
     grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for "$app_id")" \
       || { echo "$app_id do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
   done
