@@ -11,6 +11,7 @@
 #
 # Coverage:
 #   - binary_app lifecycle path (ntfy): install -> backup -> verify
+#   - newapi migrated lifecycle (env file + cron backup script): install -> backup
 #   - compose path (tickflow): install files + config generation
 #
 # Usage: bash tools/e2e-smoke.sh        (requires docker; Linux recommended)
@@ -53,6 +54,8 @@ with open(os.path.join(work, "ntfy.bin"), "wb") as fh:
     fh.write(payload)
 with open(os.path.join(work, "tickflow.bin"), "wb") as fh:
     fh.write(payload)
+with open(os.path.join(work, "newapi.bin"), "wb") as fh:
+    fh.write(payload)
 PY
 
 # Fake ntfy release tarball: ntfy_<ver>_linux_<arch>.tar.gz with a binary.
@@ -62,9 +65,14 @@ cp "$WORK/ntfy.bin" "$WORK/www/ntfy-stage/ntfy"
 tar -czf "$WORK/www/binwiederhier/ntfy/releases/download/v2.27.0/ntfy_2.27.0_linux_amd64.tar.gz" \
   -C "$WORK/www/ntfy-stage" ntfy
 
+# Fake new-api bare binary asset: new-api-<ver> (amd64).
+mkdir -p "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1"
+cp "$WORK/newapi.bin" "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1/new-api-0.6.1"
+
 # Fake GitHub API responses per repo path.
 mkdir -p "$WORK/www/api"
 printf '{"tag_name":"v2.27.0"}\n' > "$WORK/www/api/binwiederhier-ntfy_latest.json"
+printf '{"tag_name":"v0.6.1"}\n' > "$WORK/www/api/QuantumNous-new-api_latest.json"
 
 # A stub systemctl + a curl shim that serves GitHub requests from the
 # mounted /www tree (no network needed, works on every Docker host):
@@ -184,6 +192,62 @@ bash /repo/dist/install_ntfy.sh backup >"$LOG" 2>&1 || { echo "BACKUP_FAILED"; e
 test -n "$(ls /opt/ntfy-backups/ntfy_*.tar.gz 2>/dev/null)" || { echo "NO_ARCHIVE"; exit 1; }
 test -n "$(ls /opt/ntfy-backups/ntfy_*.tar.gz.sha256 2>/dev/null)" || { echo "NO_SIDECAR"; exit 1; }
 echo "BINARY_APP_SMOKE_OK"
+' || exit 1
+
+echo "=== e2e-smoke: newapi migrated lifecycle (env file + cron backup) ==="
+docker run --rm \
+  -v "$ROOT_MOUNT:/repo:ro" \
+  -v "$STUB_MOUNT:/stub:ro" \
+  -v "$WWW_MOUNT:/www:ro" \
+  deploy-e2e-smoke bash -c '
+set -euo pipefail
+export PATH="/stub:$PATH"
+LOG=/tmp/e2e.log
+# newapi uses BA_APT_PACKAGES="sqlite3"; stub apt-get to report success.
+cat > /usr/local/bin/apt-get <<APT
+#!/bin/bash
+exit 0
+APT
+chmod +x /usr/local/bin/apt-get
+# sqlite3 is used by the backup hook; stub it as present so the WAL branch
+# is exercised without a real database.
+cat > /usr/local/bin/sqlite3 <<SQLITE
+#!/bin/bash
+if [[ "\$1" == "PRAGMA" ]]; then
+  # First arg is the db file, second the pragma; wal_checkpoint is
+  # non-fatal (|| true) and integrity_check reports ok.
+  echo ok
+fi
+exit 0
+SQLITE
+chmod +x /usr/local/bin/sqlite3
+# Install the migrated newapi: bare GitHub-release binary, private env file,
+# cron backup script, and systemd unit via the shared lifecycle.
+DOMAIN=api.example.com PORT=2587 INSTALL_DIR=/opt/new-api DATA_DIR=/opt/new-api/data \
+LOG_DIR=/opt/new-api/logs SERVICE_NAME=new-api SERVICE_USER=newapi \
+GITHUB_REPO=QuantumNous/new-api BACKUP_DIR=/opt/new-api-backups \
+BACKUP_KEEP_DAYS=30 BACKUP_CRON="30 3 * * *" \
+bash /repo/dist/install_newapi.sh install >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "NEWAPI_INSTALL_FAILED"
+  exit 1
+}
+grep -qE "Deployment Ready|verify service health before use" "$LOG" || { echo "NO_SUMMARY"; cat "$LOG"; exit 1; }
+test -x /opt/new-api/new-api || { echo "BINARY_MISSING"; exit 1; }
+test -f /etc/systemd/system/new-api.service || { echo "UNIT_MISSING"; exit 1; }
+grep -q "EnvironmentFile=/etc/new-api.env" /etc/systemd/system/new-api.service || { echo "ENVFILE_NOT_WIRED"; cat /etc/systemd/system/new-api.service; exit 1; }
+grep -q "LimitNOFILE=65536" /etc/systemd/system/new-api.service || { echo "LIMITS_MISSING"; exit 1; }
+test -f /etc/new-api.env || { echo "ENV_FILE_MISSING"; exit 1; }
+grep -q "^SESSION_SECRET=" /etc/new-api.env || { echo "NO_SESSION_SECRET"; exit 1; }
+test -f /usr/local/bin/new-api-backup || { echo "BACKUP_SCRIPT_MISSING"; exit 1; }
+test -f /etc/cron.d/new-api-backup || { echo "CRON_MISSING"; exit 1; }
+grep -q "30 3 \* \* \* root /bin/bash /usr/local/bin/new-api-backup" /etc/cron.d/new-api-backup || { echo "CRON_BAD"; cat /etc/cron.d/new-api-backup; exit 1; }
+# Manual backup must produce a new-api_ archive through the shared lifecycle
+# (BA_ARCHIVE_PREFIX keeps the historical prefix).
+bash /repo/dist/install_newapi.sh backup >"$LOG" 2>&1 || { echo "BACKUP_FAILED"; cat "$LOG"; exit 1; }
+test -n "$(ls /opt/new-api-backups/new-api_*.tar.gz 2>/dev/null)" || { echo "NO_ARCHIVE"; exit 1; }
+test -n "$(ls /opt/new-api-backups/new-api_*.tar.gz.sha256 2>/dev/null)" || { echo "NO_SIDECAR"; exit 1; }
+echo "NEWAPI_SMOKE_OK"
 ' || exit 1
 
 echo "=== e2e-smoke: compose path (tickflow config + compose delegation) ==="
