@@ -407,6 +407,18 @@ app_conf_trusted_value() {
   printf '%s\n' "$value"
 }
 
+# Shared check-update adapter for binary GitHub releases: loads the saved
+# deployment config (so INSTALLED_VERSION and GITHUB_REPO are current) and
+# delegates the comparison to the central version checker. Binary apps use
+# bapp_check_update_json; this variant is for hand-written apps whose impl
+# previously inlined the same three lines (newapi, sub2api).
+app_check_update_json() {
+  local app_id="$1" installed="$2" refresh="${3:-0}" no_network="${4:-0}" conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  version_check_binary_release_json "$app_id" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
+}
+
 # Print the state JSON for the newest backup archive in backup_dir matching
 # one or more archive globs. Shared tail of every APP_STATUS_BACKUP_FN
 # projection: inspect failures report state=failed, an empty directory reports

@@ -3732,6 +3732,18 @@ app_conf_trusted_value() {
   printf '%s\n' "$value"
 }
 
+# Shared check-update adapter for binary GitHub releases: loads the saved
+# deployment config (so INSTALLED_VERSION and GITHUB_REPO are current) and
+# delegates the comparison to the central version checker. Binary apps use
+# bapp_check_update_json; this variant is for hand-written apps whose impl
+# previously inlined the same three lines (newapi, sub2api).
+app_check_update_json() {
+  local app_id="$1" installed="$2" refresh="${3:-0}" no_network="${4:-0}" conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  version_check_binary_release_json "$app_id" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
+}
+
 # Print the state JSON for the newest backup archive in backup_dir matching
 # one or more archive globs. Shared tail of every APP_STATUS_BACKUP_FN
 # projection: inspect failures report state=failed, an empty directory reports
@@ -4319,6 +4331,9 @@ i18n_register_many \
   binary_app.warn.integrity_failed \
   "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
   "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
+  binary_app.warn.backup_hook_failed \
+  "Pre-backup hook (ba_backup_hook) failed; continuing with the backup." \
+  "备份前钩子（ba_backup_hook）执行失败，继续备份。" \
   binary_app.status.service \
   "Service: %s (%s)" \
   "服务：%s（%s）" \
@@ -5008,6 +5023,15 @@ _ba_backup() {
     _ba_backup_log "$(t binary_app.error.data_missing "$DATA_DIR")"
     warn "$(t binary_app.error.data_missing "$DATA_DIR")"
     return 1
+  fi
+  # Apps with data that needs to be quiesced before archiving (for example a
+  # SQLite WAL checkpoint) define ba_backup_hook(); the hook is best-effort:
+  # a failure is reported but does not abort the backup.
+  if declare -f ba_backup_hook >/dev/null 2>&1; then
+    if ! ba_backup_hook; then
+      warn "$(t binary_app.warn.backup_hook_failed)"
+      _ba_backup_log "$(t binary_app.warn.backup_hook_failed)"
+    fi
   fi
   local archive archive_tmp
   archive="${BACKUP_DIR}/${APP_ID}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
@@ -6708,10 +6732,7 @@ APP_CONFIG_DERIVE_HOOK=_SUB2API_DERIVE_PATHS
 # applies with the configured repository. Saved configuration is reloaded so
 # custom install repositories are honored without running an app action.
 _sub2api_check_update_json() {
-  local installed="$1" refresh="${2:-0}" no_network="${3:-0}" conf_file
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
-  version_check_binary_release_json "sub2api" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
+  app_check_update_json "sub2api" "$1" "${2:-0}" "${3:-0}"
 }
 APP_CHECK_UPDATE_FN=_sub2api_check_update_json
 _sub2api_status_version_json() {
