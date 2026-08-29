@@ -571,15 +571,29 @@ check_vaultwarden_admin_token_file_is_private() {
     echo "Vaultwarden admin token display files must not be created in world-writable /tmp." >&2
     return 1
   fi
+  # The plaintext Admin Token must be persisted to a fixed mode-600 path
+  # through an atomic helper, and never printed to the terminal or left in a
+  # throwaway /root/.vaultwarden-admin-token.* file.
   awk '
-      /if ! _token_tmp=\$\(mktemp \/root\/\.vaultwarden-admin-token\.XXXXXX\); then/ { saw_tmp=1 }
-      /error "\$\(t app\.vaultwarden\.error\.admin_token_hash\)"/ { saw_tmp_error=1 }
-      /chmod 600 "\$_token_tmp"/ { saw_chmod=1 }
-      /printf .*\$ADMIN_PLAIN.*> "\$_token_tmp"/ { saw_write=1 }
-      /rm -f "\$_token_tmp"/ { saw_cleanup=1 }
+      /^_write_admin_token_file\(\) \{/ { in_func=1 }
+      in_func && /chmod 600 "\$tmp"/ { saw_chmod=1 }
+      in_func && /mv -f "\$tmp" "\$VW_ADMIN_TOKEN_FILE"/ { saw_mv=1 }
+      in_func && /rm -f "\$tmp"/ { saw_cleanup=1 }
+      in_func && /^}/ { in_func=0 }
+      /mktemp \/root\/\.vaultwarden-admin-token\.XXXXXX/ { saw_legacy_tmp=1 }
+      /cat "\$\{_token_tmp\}"/ { saw_terminal_print=1 }
+      /echo.*\$ADMIN_PLAIN/ { saw_terminal_print=1 }
       END {
-        if (!(saw_tmp && saw_tmp_error && saw_chmod && saw_write && saw_cleanup)) {
-          print "Vaultwarden admin token display files must report temp creation failures, be private, and clean up on write failure." > "/dev/stderr"
+        if (!(saw_chmod && saw_mv && saw_cleanup)) {
+          print "Vaultwarden admin token file helper must be atomic and mode 600." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_legacy_tmp) {
+          print "Vaultwarden must not use throwaway /root/.vaultwarden-admin-token.* temp files." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_terminal_print) {
+          print "Vaultwarden must not print the plaintext Admin Token to the terminal." > "/dev/stderr"
           exit 1
         }
       }

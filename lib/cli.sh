@@ -31,38 +31,53 @@ show_menu() {
 
 dispatch_action() {
   local action="${1:-menu}"
+  shift || true
   if declare -f deploy_trim >/dev/null 2>&1; then
     action="$(deploy_trim "$action")"
   fi
   case "${action,,}" in
-      install|1) operation_run_app_action install do_install ;;
-      update|2) operation_run_app_action update do_update ;;
-      backup|3) operation_run_app_action backup do_backup ;;
+      install|1) operation_run_app_action install do_install "$@" ;;
+      update|2) operation_run_app_action update do_update "$@" ;;
+      backup|3) operation_run_app_action backup do_backup "$@" ;;
       restore|4)
         if declare -f do_restore >/dev/null 2>&1; then
-          operation_run_app_action restore do_restore
+          operation_run_app_action restore do_restore "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
         fi
         ;;
       cert|https)
         if declare -f do_cert >/dev/null 2>&1; then
-          operation_run_app_action cert do_cert
+          operation_run_app_action cert do_cert "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
         fi
         ;;
       verify)
         if declare -f do_verify >/dev/null 2>&1; then
-          operation_run_app_action verify do_verify
+          operation_run_app_action verify do_verify "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" verify)"
         fi
         ;;
-      status|5) do_status ;;
-      status-json|json-status) do_status_json ;;
-      doctor|6) do_doctor ;;
-      uninstall|7) operation_run_app_action uninstall do_uninstall ;;
+      token)
+        if declare -f do_token >/dev/null 2>&1; then
+          operation_run_app_action token do_token "$@"
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" token)"
+        fi
+        ;;
+      signups)
+        if declare -f do_signups >/dev/null 2>&1; then
+          operation_run_app_action signups do_signups "$@"
+        else
+          error "$(t error.unsupported_action "${APP_NAME:-app}" signups)"
+        fi
+        ;;
+      status|5) do_status "$@" ;;
+      status-json|json-status) do_status_json "$@" ;;
+      doctor|6) do_doctor "$@" ;;
+      uninstall|7) operation_run_app_action uninstall do_uninstall "$@" ;;
     menu|"") show_menu ;;
     help|-h|--help) usage ;;
     q|quit|exit) exit 0 ;;
