@@ -52,6 +52,15 @@ i18n_register_many \
   binary_app.error.bind_addr \
   "BA_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
   "BA_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
+  binary_app.error.pinned_version_invalid \
+  "BA_VERSION is invalid: '%s'. Use a GitHub release tag like v1.2.3." \
+  "BA_VERSION 无效：'%s'。请使用类似 v1.2.3 的 GitHub 发布标签。" \
+  binary_app.success.pinned_version \
+  "Installing pinned version %s (BA_VERSION)." \
+  "正在安装固定版本 %s（BA_VERSION）。" \
+  binary_app.info.pinned_target \
+  "Pinned target version: %s" \
+  "固定目标版本：%s" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -529,6 +538,11 @@ bapp_validate_cfg() {
     127.0.0.1|0.0.0.0|::1|::) : ;;
     *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
   esac
+  # A pinned version must look like a GitHub release tag (vX.Y.Z); anything
+  # else would produce a broken download URL.
+  if [[ -n "${BA_VERSION:-}" ]] && ! [[ "$BA_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+    error "$(t binary_app.error.pinned_version_invalid "$BA_VERSION")"
+  fi
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -588,6 +602,18 @@ bapp_check_net() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com"
+}
+
+# Echo the release tag to install: BA_VERSION pins a specific release (e.g.
+# "v1.2.3"), otherwise the latest release tag is used. Pinned installs make
+# deployments reproducible; update() upgrades to BA_VERSION when it is set
+# (explicit upgrade) instead of silently drifting to the newest release.
+ba_resolve_version() {
+  if [[ -n "${BA_VERSION:-}" ]]; then
+    printf '%s\n' "$BA_VERSION"
+    return 0
+  fi
+  ba_latest_version
 }
 
 # Echo the latest release tag for GITHUB_REPO, or the empty string.
@@ -890,9 +916,13 @@ bapp_install() {
   bapp_check_net
   info "$(t binary_app.info.query_latest)"
   local latest
-  latest="$(ba_latest_version)"
+  latest="$(ba_resolve_version)"
   [[ -n "$latest" ]] || error "$(t binary_app.error.version_failed)"
-  success "$(t binary_app.success.latest "${BOLD}${latest}${NC}")"
+  if [[ -n "${BA_VERSION:-}" ]]; then
+    success "$(t binary_app.success.pinned_version "${BOLD}${latest}${NC}")"
+  else
+    success "$(t binary_app.success.latest "${BOLD}${latest}${NC}")"
+  fi
   step "$(t binary_app.step.deps)"
   if ! apt-get update -qq; then
     error "$(t binary_app.error.apt_update)"
@@ -1164,11 +1194,15 @@ bapp_update() {
   bapp_check_net
   info "$(t binary_app.info.query_latest)"
   local latest current
-  latest="$(ba_latest_version)"
+  latest="$(ba_resolve_version)"
   [[ -n "$latest" ]] || error "$(t binary_app.error.version_failed)"
   current="${INSTALLED_VERSION:-unknown}"
   info "$(t binary_app.info.current "${YELLOW}${current}${NC}")"
-  info "$(t binary_app.info.github_latest "${YELLOW}${latest}${NC}")"
+  if [[ -n "${BA_VERSION:-}" ]]; then
+    info "$(t binary_app.info.pinned_target "${YELLOW}${latest}${NC}")"
+  else
+    info "$(t binary_app.info.github_latest "${YELLOW}${latest}${NC}")"
+  fi
   if [[ "$current" == "$latest" ]]; then
     success "$(t binary_app.success.already_latest "$latest")"
     exit 0
