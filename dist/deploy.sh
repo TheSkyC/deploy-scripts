@@ -171,6 +171,10 @@ i18n_register doctor.service_inactive "Service is not active: %s" "服务未运�
 i18n_register doctor.service_unit_missing "systemd unit was not found: %s.service" "未找到 systemd 单元：%s.service"
 i18n_register doctor.systemctl_missing "systemctl is not available; skipping service checks." "systemctl 不可用，跳过服务检查。"
 i18n_register doctor.title "Deployment doctor" "部署诊断"
+i18n_register doctor.config_diff_step "Comparing saved config with current values" "对比已保存配置与当前值"
+i18n_register doctor.config_diff "Config drift: %s changed from '%s' to '%s'" "配置漂移：%s 由 '%s' 变为 '%s'"
+i18n_register doctor.config_diff_secret "Config drift: %s changed (value hidden)" "配置漂移：%s 已变更（值已隐藏）"
+i18n_register doctor.config_diff_none "No configuration drift detected." "未检测到配置漂移。"
 i18n_register menu.backup_desc "create a manual backup" "创建手动备份"
 i18n_register menu.doctor_desc "run non-destructive diagnostics" "执行非破坏性诊断"
 i18n_register menu.install_desc "full install or redeploy" "完整安装或重新部署"
@@ -3980,6 +3984,32 @@ app_configure_firewall() {
   fi
 }
 
+# Audit: compare the current CONFIG_KEYS values against the deployment config
+# file (the install-time baseline) and report any differences. This surfaces
+# config drift that status/doctor otherwise would not show. Secrets keys are
+# compared for equality only; their values are never printed.
+app_doctor_config_diff() {
+  local conf_file key saved current changed=0
+  conf_file="$(app_conf_file)"
+  [[ -f "$conf_file" ]] || return 0
+  declare -p CONFIG_KEYS >/dev/null 2>&1 || return 0
+  for key in "${CONFIG_KEYS[@]}"; do
+    saved="$(grep -E "^${key}=" "$conf_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+    [[ -n "$saved" ]] || continue
+    current="${!key:-}"
+    if [[ "$saved" != "$current" ]]; then
+      if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
+        echo "$(t doctor.config_diff_secret "$key")"
+      else
+        echo "$(t doctor.config_diff "$key" "$saved" "$current")"
+      fi
+      changed=$((changed + 1))
+    fi
+  done
+  [[ "$changed" -eq 0 ]] && echo "$(t doctor.config_diff_none)"
+  return 0
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -4024,6 +4054,17 @@ do_doctor() {
         doctor_fail "$(t doctor.config_parse_bad "$conf_file")"
       fi
     fi
+    # Config audit: report drift between the saved baseline and current values.
+    step "$(t doctor.config_diff_step)"
+    local diff_line
+    while IFS= read -r diff_line; do
+      [[ -n "$diff_line" ]] || continue
+      if [[ "$diff_line" == *"$(t doctor.config_diff_none)" ]]; then
+        doctor_ok "$diff_line"
+      else
+        doctor_warn "$diff_line"
+      fi
+    done < <(app_doctor_config_diff)
   else
     doctor_warn "$(t doctor.config_missing "$conf_file")"
   fi

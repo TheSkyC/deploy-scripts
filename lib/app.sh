@@ -664,6 +664,32 @@ app_configure_firewall() {
   fi
 }
 
+# Audit: compare the current CONFIG_KEYS values against the deployment config
+# file (the install-time baseline) and report any differences. This surfaces
+# config drift that status/doctor otherwise would not show. Secrets keys are
+# compared for equality only; their values are never printed.
+app_doctor_config_diff() {
+  local conf_file key saved current changed=0
+  conf_file="$(app_conf_file)"
+  [[ -f "$conf_file" ]] || return 0
+  declare -p CONFIG_KEYS >/dev/null 2>&1 || return 0
+  for key in "${CONFIG_KEYS[@]}"; do
+    saved="$(grep -E "^${key}=" "$conf_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+    [[ -n "$saved" ]] || continue
+    current="${!key:-}"
+    if [[ "$saved" != "$current" ]]; then
+      if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
+        echo "$(t doctor.config_diff_secret "$key")"
+      else
+        echo "$(t doctor.config_diff "$key" "$saved" "$current")"
+      fi
+      changed=$((changed + 1))
+    fi
+  done
+  [[ "$changed" -eq 0 ]] && echo "$(t doctor.config_diff_none)"
+  return 0
+}
+
 do_doctor() {
   local failures=0 warnings=0
 
@@ -708,6 +734,17 @@ do_doctor() {
         doctor_fail "$(t doctor.config_parse_bad "$conf_file")"
       fi
     fi
+    # Config audit: report drift between the saved baseline and current values.
+    step "$(t doctor.config_diff_step)"
+    local diff_line
+    while IFS= read -r diff_line; do
+      [[ -n "$diff_line" ]] || continue
+      if [[ "$diff_line" == *"$(t doctor.config_diff_none)" ]]; then
+        doctor_ok "$diff_line"
+      else
+        doctor_warn "$diff_line"
+      fi
+    done < <(app_doctor_config_diff)
   else
     doctor_warn "$(t doctor.config_missing "$conf_file")"
   fi
