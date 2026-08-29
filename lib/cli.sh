@@ -77,6 +77,28 @@ show_menu() {
   dispatch_action "$choice"
 }
 
+# Export the app's deployment config before uninstall so the user can restore
+# it later. Writes <BACKUP_DIR or /opt>/<app>-deploy-config-<ts>.conf (mode
+# 600) and prints a hint about re-importing. Best-effort: failures are
+# warnings, never block the uninstall.
+app_export_config_before_uninstall() {
+  local conf_file dir export_path
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] || return 0
+  dir="$(dirname "$conf_file")"
+  export_path="${dir}/${APP_ID:-app}-deploy-config-export.conf"
+  if [[ -d "${BACKUP_DIR:-}" ]] && [[ -w "${BACKUP_DIR}" ]]; then
+    export_path="${BACKUP_DIR}/${APP_ID:-app}-deploy-config-export.conf"
+  fi
+  if ! cp "$conf_file" "$export_path" 2>/dev/null; then
+    warn "$(t common.config_export_failed "$conf_file")"
+    return 0
+  fi
+  chmod 600 "$export_path" 2>/dev/null || true
+  info "$(t common.config_exported "$export_path")"
+  info "$(t common.config_export_restore_hint "$export_path")"
+}
+
 dispatch_action() {
   local action="${1:-menu}"
   shift || true
@@ -135,7 +157,10 @@ dispatch_action() {
       status|5) do_status "$@" ;;
       status-json|json-status) do_status_json "$@" ;;
       doctor|6) do_doctor "$@" ;;
-      uninstall|7) app_dry_run_guard uninstall; operation_run_app_action uninstall do_uninstall "$@" ;;
+      uninstall|7)
+        app_dry_run_guard uninstall
+        app_export_config_before_uninstall
+        operation_run_app_action uninstall do_uninstall "$@" ;;
     menu|"") show_menu ;;
     help|-h|--help) usage --help ;;
     q|quit|exit) exit 0 ;;
