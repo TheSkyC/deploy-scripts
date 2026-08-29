@@ -73,3 +73,16 @@ jobs:
 
       - name: Run full verification suite
         run: bash tools/verify.sh all
+
+  # Real-install smoke matrix: runs the actual install flows (binary_app and
+  # compose paths) inside a disposable Debian container with stubbed systemd
+  # and a local asset server, so the filesystem side of the lifecycle is
+  # exercised end to end on every push without touching a real host.
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run e2e install smoke matrix
+        run: bash tools/e2e-smoke.sh
