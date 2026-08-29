@@ -2,6 +2,10 @@
 
 Shared deployment framework for application install scripts. The repository keeps the old top-level commands while moving common behavior into reusable framework libraries.
 
+Reference documentation:
+- [Per-app deployment reference](docs/apps.md) — every app's configuration keys, defaults, and non-obvious operations.
+- [Central commands reference](docs/central-commands.md) — status-all/backup-all/update-all/doctor-all, notify-config, schedule, export/import, fleet.
+
 ## Quick Start
 
 Run a script from the repository checkout:
