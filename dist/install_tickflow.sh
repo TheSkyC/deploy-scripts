@@ -6273,11 +6273,15 @@ _write_env_file() {
   if existing_value="$(_env_value_from_file LOG_LEVEL)"; then
     log_level="$existing_value"
   fi
-  if existing_value="$(_env_value_from_file AUTH_PASSWORD)"; then
-    auth_password="$existing_value"
+  # Password precedence: an explicit TICKFLOW_AUTH_PASSWORD wins (the user is
+  # deliberately rotating it); otherwise keep an existing AUTH_PASSWORD from a
+  # previous install; otherwise generate a random one. Never leave the panel
+  # unauthenticated.
+  if [[ -z "$auth_password" ]]; then
+    if existing_value="$(_env_value_from_file AUTH_PASSWORD)"; then
+      auth_password="$existing_value"
+    fi
   fi
-  # Never leave the panel unauthenticated: generate a random password when
-  # neither the config nor an existing env file provides one.
   if [[ -z "$auth_password" ]]; then
     auth_password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
     if [[ -z "$auth_password" ]]; then
