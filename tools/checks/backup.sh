@@ -278,10 +278,10 @@ check_no_explicit_release_lock_calls() {
 
 check_update_backs_up_before_stop() {
   local file
-  for file in impl/install_newapi.sh impl/install_sub2api.sh; do
+  for file in lib/binary_app.sh impl/install_sub2api.sh; do
     awk '
-      /local BAK_PATH=/ { seen_bak=1; seen_cp=0 }
-      seen_bak && index($0, "_backup_current_binary \"$BAK_PATH\"") { seen_cp=1 }
+      /local bak_path=/ { seen_bak=1; seen_cp=0 }
+      seen_bak && index($0, "app_binary_backup_current \"$bak_path\"") { seen_cp=1 }
       seen_bak && index($0, "systemctl stop \"$SERVICE_NAME\"") {
         if (!seen_cp) {
           printf "%s stops the service before backing up the current binary\n", FILENAME > "/dev/stderr"
@@ -294,7 +294,7 @@ check_update_backs_up_before_stop() {
 
 check_update_binary_backups_are_atomic() {
   if grep -R -nE '^[[:space:]]*cp "\$(BIN_PATH|VW_BIN)" "?\$\{?(BAK_PATH|VW_BIN)\}?' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Update binary backups must copy to a temporary file before replacing the final backup path." >&2
     return 1
   fi
@@ -303,7 +303,7 @@ check_update_binary_backups_are_atomic() {
       in_func && /atomic_copy_file "\$(BIN_PATH|VW_BIN)" "\$backup_path"/ { saw_atomic=1 }
       in_func && /app_binary_backup_current "\$backup_path"/ { saw_app_helper=1 }
       in_func && /if ! backup_tmp=\$\(mktemp "\$\{backup_path\}\.XXXXXX"\); then/ { saw_tmp=1 }
-      in_func && /error "\$\(t app\.(newapi|sub2api|vaultwarden)\.error\.binary_install/ { saw_tmp_error=1 }
+      in_func && /error "\$\(t app\.(sub2api|vaultwarden)\.error\.binary_install/ { saw_tmp_error=1 }
       in_func && /cp "\$(BIN_PATH|VW_BIN)" "\$backup_tmp"/ { saw_cp=1 }
       in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
@@ -314,7 +314,7 @@ check_update_binary_backups_are_atomic() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
+    ' impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
 check_old_backup_cleanup_reports_failures() {
@@ -341,23 +341,6 @@ check_old_backup_cleanup_reports_failures() {
         END {
           if (!(saw_loop && saw_warn && saw_count)) {
             printf "%s CyberStrikeAI old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
-            exit 1
-          }
-        }
-      ' "$file"
-  done
-  for file in impl/install_newapi.sh; do
-    awk '
-        /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
-        /warn "\$\(t app\.newapi\.warn\.cleanup_old_failed "\$_old_bak"\)"/ { saw_warn=1 }
-        /info "\$\(t app\.newapi\.info\.cleaned_old "\$_cleaned_old"\)"/ { saw_count=1 }
-        /rm -f "\$\{_old_baks\[@\]\}"/ {
-          printf "%s NewAPI must not silently batch-remove old binary backups\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        END {
-          if (!(saw_loop && saw_warn && saw_count)) {
-            printf "%s NewAPI old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
             exit 1
           }
         }
@@ -404,22 +387,10 @@ check_old_backup_cleanup_reports_failures() {
 
 check_uninstall_binary_cleanup_reports_failures() {
   if grep -R -nE 'find "\$INSTALL_DIR" -maxdepth 1 .* -delete 2>/dev/null \|\| true|find "\$\(dirname "\$VW_BIN"\)" -maxdepth 1 .* -delete 2>/dev/null \|\| true' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Uninstall binary cleanup must report per-path removal failures instead of ignoring find -delete errors." >&2
     return 1
   fi
-  awk '
-      /do_uninstall\(\)/ { in_uninstall=1; saw_loop=0; saw_warn=0; next }
-      in_uninstall && /while IFS= read -r -d '\'''\'' _cleanup_path; do/ { saw_loop=1 }
-      in_uninstall && /warn "\$\(t app\.newapi\.warn\.cleanup_old_failed "\$_cleanup_path"\)"/ { saw_warn=1 }
-      in_uninstall && /success "\$\(t app\.newapi\.success\.removed_binary\)"/ {
-        if (!(saw_loop && saw_warn)) {
-          printf "%s NewAPI uninstall binary cleanup must warn on per-path removal failures\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_uninstall=0
-      }
-    ' impl/install_newapi.sh
   awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_file_loop=0; saw_dir_loop=0; saw_warn=0; next }
       in_uninstall && /-type f -print0/ { saw_file_loop=1 }
@@ -456,12 +427,12 @@ check_backup_temp_moves_handle_failure() {
 
 check_binary_replacements_handle_failure() {
   if grep -R -nE '^[[:space:]]*(mv "\$TMP_(BIN|ARCHIVE)" "\$BIN_PATH"|chmod \+x "\$BIN_PATH"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH")$' \
- impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
+ impl/install_sub2api.sh 2>/dev/null; then
     echo "Binary replacements must clean up candidates and restore backups on move, chmod, and chown failures." >&2
     return 1
   fi
   if grep -R -n 'mv "$backup_path" "$BIN_PATH" 2>/dev/null || true' \
- impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
+ impl/install_sub2api.sh 2>/dev/null; then
     echo "Binary candidate installs must validate moving backups back into place." >&2
     return 1
   fi
@@ -475,7 +446,18 @@ check_binary_replacements_handle_failure() {
         }
         in_func=0
       }
- ' impl/install_newapi.sh impl/install_sub2api.sh 
+ ' impl/install_sub2api.sh 
+  awk '
+      /bapp_update\(\)/ { in_update=1; saw_helper=0; next }
+      in_update && /app_binary_install_candidate "\$tmp_bin"/ { saw_helper=1 }
+      in_update && /^}/ {
+        if (!saw_helper) {
+          printf "%s shared update lifecycle must install the candidate via app_binary_install_candidate\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+ ' lib/binary_app.sh
   awk '
       /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; saw_app_helper=0; next }
       in_func && /app_binary_restore_moved_backup "\$1"/ { saw_app_helper=1 }
@@ -493,17 +475,17 @@ check_binary_replacements_handle_failure() {
         }
         in_func=0
       }
- ' impl/install_newapi.sh impl/install_sub2api.sh 
+ ' impl/install_sub2api.sh 
 }
 
 check_binary_restores_validate_permissions() {
   if grep -R -nE '^[[:space:]]*(chmod \+x "\$BIN_PATH"|chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH") 2>/dev/null \|\| true$' \
- impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
+ impl/install_sub2api.sh 2>/dev/null; then
     echo "Binary rollback restores must validate executable mode and ownership changes." >&2
     return 1
   fi
   if grep -R -n '_restore_binary_backup "\$OLD_BIN_BAK" || true' \
- impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
+ impl/install_sub2api.sh 2>/dev/null; then
     echo "Install rollback restores must not ignore backup restore failures." >&2
     return 1
   fi
@@ -523,7 +505,7 @@ check_binary_restores_validate_permissions() {
         }
         in_func=0
       }
- ' impl/install_newapi.sh impl/install_sub2api.sh 
+ ' impl/install_sub2api.sh 
 }
 
 check_download_validation_failures_cleanup() {
@@ -532,18 +514,6 @@ check_download_validation_failures_cleanup() {
     echo "Sub2API checksum verification must fail closed instead of warning and continuing." >&2
     return 1
   fi
-  awk '
-      /verify_binary\(\)/ { in_func=1; saw_rm=0; next }
-      in_func && /rm -f "\$bin"/ { saw_rm=1 }
-      in_func && /error "\$\(t app\.newapi\.error\.binary_/ {
-        if (!saw_rm) {
-          printf "%s does not remove the downloaded binary before validation failure\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        saw_rm=0
-      }
-      in_func && /^}/ { in_func=0 }
-    ' impl/install_newapi.sh
   awk '
       /verify_checksum\(\)/ { in_checksum=1; saw_checksum_archive_rm=0; saw_checksum_archive_warn=0; next }
       in_checksum && /if ! rm -f "\$archive"; then/ { saw_checksum_archive_rm=1 }
@@ -641,34 +611,6 @@ check_download_temp_creation_failures_are_explicit() {
         in_func=0
       }
     ' impl/install_sub2api.sh
-  awk '
-      /step "\$\(t app\.newapi\.step\.download "\$BIN_ARCH"\)"/ { in_install=1; saw_install_tmp=0; saw_install_error=0; next }
-      in_install && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_install_tmp=1 }
-      in_install && /error "\$\(t app\.newapi\.error\.download "\$GITHUB_REPO"\)"/ { saw_install_error=1 }
-      in_install && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ { saw_install_cleanup_if=0; saw_install_cleanup_warn=0; in_install_download_fail=1; next }
-      in_install_download_fail && /if ! rm -f "\$TMP_BIN"; then/ { saw_install_cleanup_if=1 }
-      in_install_download_fail && /warn "\$\(t app\.newapi\.warn\.tmp_binary_cleanup_failed "\$TMP_BIN"\)"/ { saw_install_cleanup_warn=1 }
-      in_install_download_fail && /error "\$\(t app\.newapi\.error\.download "\$GITHUB_REPO"\)"/ {
-        if (!(saw_install_tmp && saw_install_error && saw_install_cleanup_if && saw_install_cleanup_warn)) {
-          printf "%s NewAPI install must report temporary download file creation and cleanup failures\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_install_download_fail=0
-      }
-      /step "\$\(t app\.newapi\.step\.download_update "\$CURRENT" "\$LATEST"\)"/ { in_update=1; saw_update_tmp=0; saw_update_error=0; next }
-      in_update && /if ! TMP_BIN=\$\(mktemp "\$\{INSTALL_DIR\}\/new-api\.tmp\.XXXXXX"\); then/ { saw_update_tmp=1 }
-      in_update && /error "\$\(t app\.newapi\.error\.update_download\)"/ { saw_update_error=1 }
-      in_update && /if ! curl -fL --progress-bar -o "\$TMP_BIN" "\$DOWNLOAD_URL"; then/ { saw_update_cleanup_if=0; saw_update_cleanup_warn=0; in_update_download_fail=1; next }
-      in_update_download_fail && /if ! rm -f "\$TMP_BIN"; then/ { saw_update_cleanup_if=1 }
-      in_update_download_fail && /warn "\$\(t app\.newapi\.warn\.tmp_binary_cleanup_failed "\$TMP_BIN"\)"/ { saw_update_cleanup_warn=1 }
-      in_update_download_fail && /error "\$\(t app\.newapi\.error\.update_download\)"/ {
-        if (!(saw_update_tmp && saw_update_error && saw_update_cleanup_if && saw_update_cleanup_warn)) {
-          printf "%s NewAPI update must report temporary download file creation and cleanup failures\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_update_download_fail=0
-      }
-    ' impl/install_newapi.sh
   awk '
       /app\.sub2api\.warn\.tmp_archive_cleanup_failed/ { saw_warn_key=1 }
       END {
@@ -854,26 +796,24 @@ check_generated_backup_scripts_handle_missing_dirs() {
 
 check_manual_backup_retention_is_normalized() {
   awk '
-      /^do_backup\(\) \{/ {
+      /_ba_prune_backups\(\)/ {
         in_func=1
-        saw_assignment=0
         saw_guard=0
         saw_positive_guard=0
         saw_find=0
         next
       }
       in_func && /^}/ {
-        if (!(saw_assignment && saw_guard && saw_positive_guard && saw_find)) {
-          printf "%s NewAPI manual backup retention cleanup must normalize BACKUP_KEEP_DAYS and skip cleanup when it is zero\n", FILENAME > "/dev/stderr"
+        if (!(saw_guard && saw_positive_guard && saw_find)) {
+          printf "%s shared backup retention cleanup must normalize BACKUP_KEEP_DAYS and skip cleanup when it is zero\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
-      in_func && /local _keep_days="\$\{BACKUP_KEEP_DAYS\}"/ { saw_assignment=1 }
-      in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
-      in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
-      in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
-    ' impl/install_newapi.sh
+      in_func && /\[\[ "\$keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| keep_days=0/ { saw_guard=1 }
+      in_func && /\[\[ "\$keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
+      in_func && /-mtime "\+\$\{keep_days\}"/ { saw_find=1 }
+    ' lib/binary_app.sh
   awk '
       /^do_backup\(\) \{/ {
         in_func=1
@@ -925,26 +865,25 @@ check_backup_retention_cleanup_reports_failures() {
     return 1
   fi
   awk '
+      /binary_app\.warn\.backup_cleanup_failed/ { saw_framework_warn=1 }
       /app\.newapi\.backup\.log\.remove_failed/ { saw_newapi_log_key=1 }
-      /app\.newapi\.warn\.backup_cleanup_failed/ { saw_newapi_warn_key=1 }
       /app\.sub2api\.backup\.log\.remove_failed/ { saw_sub2api_log_key=1 }
       /app\.sub2api\.warn\.backup_cleanup_failed/ { saw_sub2api_warn_key=1 }
       /app\.cyberstrikeai\.backup\.warn\.remove_failed/ { saw_csai_log_key=1 }
       /app\.vaultwarden\.backup\.script\.remove_failed/ { saw_vw_log_key=1 }
       END {
-        if (!(saw_newapi_log_key && saw_newapi_warn_key && saw_sub2api_log_key && saw_sub2api_warn_key && saw_csai_log_key && saw_vw_log_key)) {
+        if (!(saw_framework_warn && saw_newapi_log_key && saw_sub2api_log_key && saw_sub2api_warn_key && saw_csai_log_key && saw_vw_log_key)) {
           print "Backup cleanup failure messages must be localized." > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh apps/vaultwarden.sh
+    ' lib/binary_app.sh apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh apps/vaultwarden.sh
   awk '
       /MSG_REMOVE_FAILED="\$\{msg_remove_failed\}"/ { saw_msg=1 }
       /_log "\$\(printf "\$MSG_REMOVE_FAILED" "\$f"\)"/ { saw_log=1 }
-      /warn "\$\(t app\.newapi\.warn\.backup_cleanup_failed "\$f"\)"/ { saw_warn=1 }
       END {
-        if (!(saw_msg && saw_log && saw_warn)) {
-          printf "%s NewAPI backup retention cleanup must log generated-script failures and warn for manual backup cleanup failures\n", FILENAME > "/dev/stderr"
+        if (!(saw_msg && saw_log)) {
+          printf "%s NewAPI generated backup retention cleanup must log per-file removal failures\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
@@ -1006,10 +945,22 @@ check_optional_count_messages_are_nonfatal() {
 
 check_silent_backup_tar_diagnostics_use_stderr() {
   if grep -R -n '2>&1 >&2; then' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Silent backup tar diagnostics must be written directly to stderr." >&2
     return 1
   fi
+  awk '
+      /_ba_backup\(\)/ { in_func=1; saw_tar=0; saw_stderr=0; next }
+      in_func && /if tar -czf/ { saw_tar=1 }
+      in_func && / >&2; then/ { saw_stderr=1 }
+      in_func && /^}/ {
+        if (!(saw_tar && saw_stderr)) {
+          printf "%s shared backup helper must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' lib/binary_app.sh
   awk '
       /_backup_silent\(\)/ { in_func=1; saw_tar=0; saw_stderr=0; next }
       in_func && /if tar -czf/ { saw_tar=1 }
@@ -1021,12 +972,12 @@ check_silent_backup_tar_diagnostics_use_stderr() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
+    ' impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
 check_tar_diagnostics_use_stderr() {
   if grep -R -nE 'tar -(czf|xzf) .*2>&1; then' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Tar diagnostics in backup and extract paths must be written to stderr." >&2
     return 1
   fi
@@ -1050,7 +1001,7 @@ check_tar_diagnostics_use_stderr() {
         }
         in_backup=0
       }
-    ' impl/install_newapi.sh
+    ' impl/install_sub2api.sh
   awk '
       /do_backup\(\)/ { in_backup=1; saw_conf_stderr=0; saw_data_stderr=0; next }
       in_backup && /if tar -czf "\$CONF_TMP"/ { in_conf=1; next }
@@ -1182,7 +1133,8 @@ check_binary_impls_have_verify_delegate() {
   local impl
   for impl in install_alist.sh install_beszel.sh install_filebrowser.sh \
       install_frps.sh install_gitea.sh install_gotify.sh \
-      install_meilisearch.sh install_navidrome.sh install_ntfy.sh; do
+      install_meilisearch.sh install_navidrome.sh install_ntfy.sh \
+      install_newapi.sh; do
     awk -v file="impl/$impl" '
       /^do_verify\(\) \{/ { in_fn=1; next }
       in_fn && /bapp_verify/ { saw=1 }
@@ -1199,7 +1151,7 @@ check_binary_impls_have_verify_delegate() {
 # verdict rendering to app_verify_latest_backup with their own archive globs.
 check_custom_impls_have_verify_delegate() {
   local impl
-  for impl in install_newapi.sh install_sub2api.sh install_cyberstrikeai.sh \
+  for impl in install_sub2api.sh install_cyberstrikeai.sh \
       install_vaultwarden.sh install_cpa_stack.sh install_tickflow.sh \
       install_hugo_blog.sh; do
     awk -v file="impl/$impl" '
@@ -1222,7 +1174,8 @@ check_shared_impls_have_restore_delegate() {
   local impl
   for impl in install_alist.sh install_beszel.sh install_filebrowser.sh \
       install_frps.sh install_gitea.sh install_gotify.sh \
-      install_meilisearch.sh install_navidrome.sh install_ntfy.sh; do
+      install_meilisearch.sh install_navidrome.sh install_ntfy.sh \
+      install_newapi.sh; do
     awk -v file="impl/$impl" '
       /^do_restore\(\) \{/ { in_fn=1; next }
       in_fn && /bapp_restore/ { saw=1 }

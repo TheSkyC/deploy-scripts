@@ -35,25 +35,27 @@ check_framework_validator_errors_are_actionable() {
 
 check_api_ports_are_validated() {
   awk '
-      /preflight_check\(\)/ { in_preflight=1; next }
-      in_preflight && /^}/ {
-        if (!saw_preflight) {
-          printf "%s NewAPI preflight must validate PORT defaults\n", FILENAME > "/dev/stderr"
+      /_validate_config_values\(\)/ { in_validate=1; saw_bapp=0; next }
+      in_validate && /bapp_validate_cfg/ { saw_bapp=1 }
+      in_validate && /^}/ {
+        if (!saw_bapp) {
+          printf "%s NewAPI must delegate validation to the shared config validator\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_preflight=0
-      }
-      in_preflight && /_validate_config_values/ { saw_preflight=1 }
-      /_validate_config_values\(\)/ { in_validate=1; next }
-      in_validate && /app_validate_port/ { saw_valport=1 }
-      in_validate && /^}/ { in_validate=0 }
-      END {
-        if (!(saw_preflight && saw_valport)) {
-          printf "%s NewAPI must validate PORT range via _validate_config_values\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
+        in_validate=0
       }
     ' impl/install_newapi.sh
+  awk '
+      /^bapp_validate_cfg\(\)/ { in_validate=1; next }
+      in_validate && /app_validate_port/ { saw_valport=1 }
+      in_validate && /^}/ {
+        if (!saw_valport) {
+          printf "%s Shared binary-app validator must validate PORT range\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_validate=0
+      }
+    ' lib/binary_app.sh
   awk '
       /preflight_check\(\)/ { in_preflight=1; next }
       in_preflight && /^}/ {
@@ -211,10 +213,10 @@ check_config_value_validators() {
   '
 
   local checks=(
-    'impl/install_newapi.sh|app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"'
-    'impl/install_newapi.sh|app_validate_domain "DOMAIN" "$DOMAIN"'
-    'impl/install_newapi.sh|app_validate_system_name "SERVICE_USER" "$SERVICE_USER"'
-    'impl/install_newapi.sh|app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"'
+    'lib/binary_app.sh|app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"'
+    'lib/binary_app.sh|app_validate_domain "DOMAIN" "$DOMAIN"'
+    'lib/binary_app.sh|app_validate_system_name "SERVICE_USER" "$SERVICE_USER"'
+    'lib/binary_app.sh|app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"'
     'impl/install_sub2api.sh|app_validate_db_identifier "PG_USER" "$PG_USER"'
     'impl/install_sub2api.sh|app_validate_db_identifier "PG_DB" "$PG_DB"'
     'impl/install_cyberstrikeai.sh|app_validate_git_ref "GITHUB_BRANCH" "$GITHUB_BRANCH"'

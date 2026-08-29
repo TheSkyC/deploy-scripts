@@ -4472,6 +4472,9 @@ i18n_register_many \
   binary_app.warn.health_pending \
   "Service started, but the HTTP health probe did not pass yet; verify the service before relying on it." \
   "服务已启动，但 HTTP 健康检查尚未通过；请先核验服务状态再使用。" \
+  binary_app.warn.non_root_status \
+  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
+  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
   binary_app.status.service \
   "Service: %s (%s)" \
   "服务：%s（%s）" \
@@ -5584,6 +5587,9 @@ bapp_status() {
   show_banner
   bapp_preflight "status"
   app_load_config _binary_app_derive_paths
+  if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+    warn "$(t binary_app.warn.non_root_status "$0")"
+  fi
   step "$(t status.title)"
   if [[ -f "$CONF_FILE" ]]; then
     printf '%s\n' "$(t binary_app.status.service "$SERVICE_NAME" "$(service_status_label "$SERVICE_NAME")")"

@@ -57,7 +57,18 @@ check_config_writes_are_centralized() {
         }
       }
     ' impl/install_hugo_blog.sh impl/install_cpa_stack.sh impl/install_cyberstrikeai.sh \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_tickflow.sh impl/install_vaultwarden.sh
+      impl/install_sub2api.sh impl/install_tickflow.sh impl/install_vaultwarden.sh
+  awk '
+      /bapp_install\(\)/ { in_install=1; saw_save=0; next }
+      in_install && /app_save_config/ { saw_save=1 }
+      in_install && /^}/ {
+        if (!saw_save) {
+          printf "%s shared install lifecycle must persist config through app_save_config\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_install=0
+      }
+    ' lib/binary_app.sh
 }
 
 check_config_crlf_handling() {
@@ -202,7 +213,7 @@ check_config_save_failures_are_explicit() {
         }
         in_func=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
  lib/app.sh
 }
 
@@ -246,7 +257,7 @@ check_systemctl_status_diagnostics_are_nonfatal() {
         printf "%s:%d systemctl status diagnostic pipelines must be non-fatal under pipefail.\n", FILENAME, pending_line > "/dev/stderr"
         exit 1
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh
+    ' impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh
 }
 
 check_status_commands_allow_non_root() {
@@ -262,6 +273,17 @@ check_status_commands_allow_non_root() {
       }
     ' apps/sub2api.sh apps/cyberstrikeai.sh apps/tickflow.sh
   awk '
+      /^bapp_status\(\)/ { in_status=1; saw_warn=0; next }
+      in_status && /warn "\$\(t binary_app\.warn\.non_root_status "\$0"\)"/ { saw_warn=1 }
+      in_status && /^}/ {
+        if (!saw_warn) {
+          printf "%s shared status must warn when running without root\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+    ' lib/binary_app.sh
+  awk '
       /preflight_check\(\)/ { in_preflight=1; saw_status_exemption=0; next }
       in_preflight && /status/ && /\$EUID/ { saw_status_exemption=1 }
       in_preflight && /^}/ {
@@ -272,7 +294,7 @@ check_status_commands_allow_non_root() {
         in_preflight=0
       }
       /do_status\(\)/ { in_status=1; saw_warn=0; next }
-      in_status && /warn "\$\(t app\.(newapi|sub2api|cyberstrikeai|tickflow)\.warn\.non_root_status "\$0"\)"/ { saw_warn=1 }
+      in_status && /warn "\$\(t app\.(sub2api|cyberstrikeai|tickflow)\.warn\.non_root_status "\$0"\)"/ { saw_warn=1 }
       in_status && /^}/ {
         if (!saw_warn) {
           printf "%s status must warn when running without root\n", FILENAME > "/dev/stderr"
@@ -280,23 +302,10 @@ check_status_commands_allow_non_root() {
         }
         in_status=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_tickflow.sh
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_tickflow.sh
 }
 
 check_api_status_directory_sizes_are_nonfatal() {
-  awk '
-      /do_status\(\)/ { in_status=1; next }
-      in_status && /^}/ {
-        if (!(saw_data && saw_db && saw_backup)) {
-          printf "%s NewAPI status directory sizes must fall back instead of failing under pipefail\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_status=0
-      }
-      in_status && /data_size=\$\(du -sh "\$DATA_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_data=1 }
-      in_status && /db_size=\$\(du -sh "\$\{DATA_DIR\}\/one-api\.db" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_db=1 }
-      in_status && /bak_total_size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.newapi\.status\.unknown\)/ { saw_backup=1 }
-    ' impl/install_newapi.sh
   awk '
       /do_status\(\)/ { in_status=1; next }
       in_status && /^}/ {
@@ -309,16 +318,27 @@ check_api_status_directory_sizes_are_nonfatal() {
       in_status && /_sz=\$\(du -sh "\$_d" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.sub2api\.status\.unknown\)/ { saw_dir=1 }
       in_status && /bak_total_size=\$\(du -sh "\$BACKUP_DIR" 2>\/dev\/null \| awk '\''\{print \$1\}'\'' \|\| t app\.sub2api\.status\.unknown\)/ { saw_backup=1 }
     ' impl/install_sub2api.sh
+  awk '
+      /^bapp_status\(\)/ { in_status=1; next }
+      in_status && /^}/ {
+        if (!(saw_paths)) {
+          printf "%s shared status must verify configured paths exist without failing under pipefail\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_status=0
+      }
+      in_status && /\[\[ -e "\$path" \]\]/ { saw_paths=1 }
+    ' lib/binary_app.sh
 }
 
 check_status_port_matches_are_bounded() {
   if grep -R -nF 'grep ":${PORT}"' \
- impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
+ impl/install_sub2api.sh 2>/dev/null; then
     echo "API port owner detection must not use substring port matches." >&2
     return 1
   fi
   if grep -R -nF 'grep "${PORT}"' \
- impl/install_newapi.sh impl/install_sub2api.sh 2>/dev/null; then
+ impl/install_sub2api.sh 2>/dev/null; then
     echo "API firewall status checks must not use substring port matches." >&2
     return 1
   fi
@@ -340,14 +360,13 @@ check_status_port_matches_are_bounded() {
  ' lib/network.sh 
   awk '
       /app_check_port_conflict "\$PORT"/ { saw_owner++ }
-      /grep -E "\(\^\|\[\[:space:\]\]\)\$\{PORT\}\/tcp\(\[\[:space:\]\]\|\$\)"/ { saw_ufw++ }
       END {
-        if (!(saw_owner >= 1 && saw_ufw >= 1)) {
-          printf "%s API checks must use shared bounded PORT conflict detection and bounded UFW rules\n", FILENAME > "/dev/stderr"
+        if (saw_owner < 1) {
+          printf "%s shared lifecycle must use bounded PORT conflict detection\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
- ' impl/install_newapi.sh impl/install_sub2api.sh 
+ ' lib/binary_app.sh
   awk '
       /app_check_port_conflict "\$VW_PORT"/ { saw_owner++ }
       END {
