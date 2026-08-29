@@ -51,6 +51,16 @@
 - **listmonk：暂缓**。候选仓库和发布渠道需要重新核实，且其数据库依赖与初始化流程也超出当前共享二进制应用的薄封装范围。
 - **Beszel：已实现**。Hub 是单二进制 PocketBase 应用，数据目录和 HTTP 健康检查可以直接映射到当前生命周期库。
 
+### 2.2 手写应用迁移到共享框架的评估（M15）
+
+> **2026-08-29 更新：newapi 已完成迁移**（`impl/install_newapi.sh` 从 1074 行瘦身到约 337 行，21 个专属 guard 精简为 4 个，框架新增 `BA_ARCHIVE_PREFIX` 保持 `new-api_` 历史备份前缀兼容）。迁移前提是应用走 **GitHub Release 裸二进制 + 标准生命周期**——newapi 完全符合。
+
+其余三个手写应用因架构差异**保留手写**（已充分复用共享 helper：`app_binary_*` 二进制回滚、`app_remove_*` 删除、`app_save_config` 配置持久化、`backup_restore_data_dir` 恢复、`github_latest_release_tag` 版本查询）：
+
+- **vaultwarden**：二进制从 Docker 镜像提取（`docker-image-extract`），非 GitHub Release；另有 Web Vault 第二构件 + nginx 反代 + certbot TLS。迁移需框架新增"容器镜像提取"下载后端，收益/风险比低。
+- **sub2api**：PostgreSQL/Redis 依赖安装 + 多构件备份（数据目录/配置目录/PG 转储）+ nginx 反代。备份格式与框架单目录打包模型不兼容。
+- **cyberstrikeai**：源码构建（Go build + Python venv）而非下载二进制，完全不在框架生命周期内。
+
 ## 3. 技术方案：共享生命周期库 lib/binary_app.sh
 
 新增共享库（已完成第一版），复用仓库“共享 helper 优先于逐应用复制”的约定：
