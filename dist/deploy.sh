@@ -4398,8 +4398,8 @@ i18n_register_many \
   "Inspect the failure: journalctl -u %s -n 50 --no-pager" \
   "请检查失败原因：journalctl -u %s -n 50 --no-pager" \
   binary_app.warn.pre_backup_failed \
-  "Pre-update backup failed; continuing anyway." \
-  "更新前备份失败，继续执行更新。" \
+  "Pre-update backup failed; continuing anyway. Inspect the backup log or run backup again after fixing the issue." \
+  "更新前备份失败，继续执行更新。请检查备份日志，或修复问题后重新执行 backup。" \
   binary_app.error.stop_service_failed \
   "Failed to stop %s before replacing the binary." \
   "替换二进制前停止 %s 失败。" \
@@ -4461,8 +4461,8 @@ i18n_register_many \
   "Backup created: %s (%s)" \
   "备份已创建：%s（%s）" \
   binary_app.warn.silent_backup_failed \
-  "Backup failed; see %s for details." \
-  "备份失败，详见 %s。" \
+  "Backup failed; inspect %s/backup.log for details." \
+  "备份失败，详见 %s/backup.log。" \
   binary_app.warn.integrity_failed \
   "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
   "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
@@ -4670,6 +4670,10 @@ _binary_app_derive_paths() {
   # to the network.  Publish through a reverse proxy, or set BA_BIND_ADDR
   # explicitly when the app is designed to listen publicly (e.g. frps).
   BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
+  # Backup archive prefix; defaults to APP_ID. Apps migrating from a
+  # hand-written lifecycle may pin the historical prefix to keep existing
+  # backup archives discoverable (e.g. BA_ARCHIVE_PREFIX=new-api).
+  BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-${APP_ID}}"
 }
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
@@ -4742,7 +4746,7 @@ binary_app_bootstrap() {
 # with custom update logic must opt in with their own adapter instead.
 bapp_status_backup_json() {
   app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
-    "backup directory is unsafe or missing" "${APP_ID}_*.tar.gz"
+    "backup directory is unsafe or missing" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz"
 }
 bapp_status_version_json() {
   local conf_file installed
@@ -5332,7 +5336,7 @@ _ba_backup() {
     fi
   fi
   local archive archive_tmp
-  archive="${BACKUP_DIR}/${APP_ID}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   archive_tmp="${archive}.tmp"
   if tar -czf "$archive_tmp" \
       --exclude="*.log" --exclude="*.log.*" \
@@ -5373,7 +5377,7 @@ _ba_prune_backups() {
       else
         warn "$(t binary_app.warn.backup_cleanup_failed "$f")"
       fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${APP_ID}_*.tar.gz" \
+    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" \
              -mtime "+${keep_days}" -type f -print0 2>/dev/null)
     if [[ "$cleaned" -gt 0 ]]; then
       info "$(t binary_app.info.cleaned_backups "$cleaned" "$keep_days")"
@@ -5396,7 +5400,7 @@ bapp_backup() {
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
     printf '  %s\n' "$f"
-  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${APP_ID}_*.tar.gz" -type f \
+  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" -type f \
            -printf '%T@ %f\n' 2>/dev/null | sort -rn | sed 's/^[0-9.]* //')
   echo ""
 }
@@ -5411,7 +5415,7 @@ bapp_verify() {
   app_load_config _binary_app_derive_paths
   step "$(t backup.verify.step)"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  app_verify_latest_backup "$BACKUP_DIR" "${APP_ID}_*.tar.gz"
+  app_verify_latest_backup "$BACKUP_DIR" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz"
 }
 
 # Shared restore lifecycle for binary-app data directories. Selects the newest
@@ -5431,10 +5435,10 @@ bapp_restore() {
   local archive restore_env="${APP_ID^^}_RESTORE_ARCHIVE"
   archive="${!restore_env:-}"
   if [[ -n "$archive" ]]; then
-    [[ "$archive" == "$BACKUP_DIR"/${APP_ID}_*.tar.gz && -f "$archive" ]] \
+    [[ "$archive" == "$BACKUP_DIR"/${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz && -f "$archive" ]] \
       || error "$(t backup.restore.invalid_archive "$archive")"
   else
-    archive="$(backup_latest_archive "$BACKUP_DIR" "${APP_ID}_*.tar.gz" || true)"
+    archive="$(backup_latest_archive "$BACKUP_DIR" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
   backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
@@ -8491,71 +8495,8 @@ APP_ID="newapi"
 APP_NAME="New API"
 i18n_register_many \
   app.newapi.description \
-  "Binary deployment with systemd, backups, and operational checks." \
-  "使用 systemd、备份和运维检查的二进制部署脚本。" \
-  app.newapi.error.apt_only \
-  "This script only supports Debian / Ubuntu because apt-get was not found." \
-  "此脚本仅支持 Debian / Ubuntu（apt-get 未找到）。" \
-  app.newapi.error.arch \
-  "Unsupported architecture: %s. Supported: x86_64 / aarch64." \
-  "不支持的架构：%s（支持 x86_64 / aarch64）。" \
-  app.newapi.error.github_unreachable \
-  "Cannot reach GitHub. Check network/proxy settings and retry." \
-  "网络不通，无法访问 GitHub，请检查网络或代理后重试。" \
-  app.newapi.warn.github_api \
-  "Cannot reach GitHub API." \
-  "无法访问 GitHub API。" \
-  app.newapi.error.binary_empty \
-  "Binary file is empty; the download likely failed." \
-  "二进制文件为空，疑似下载失败。" \
-  app.newapi.error.binary_too_small \
-  "Binary file is too small (%s bytes); the download may be incomplete or the URL may have returned an error page such as 404 HTML." \
-  "二进制文件过小（%s 字节），疑似下载不完整或 URL 返回了错误页（如 404 HTML）。" \
-  app.newapi.error.binary_not_elf \
-  "Binary file is not a valid ELF file (magic: %s).\n  Check the download URL or whether the network path intercepted/redirected the request." \
-  "二进制文件不是有效的 ELF 格式（magic: %s）。\n  请检查下载 URL 或网络环境是否有拦截/302 跳转。" \
-  app.newapi.success.binary_verified \
-  "Binary verification passed (ELF, %s MB)." \
-  "二进制校验通过（ELF，%s MB）。" \
-  app.newapi.success.http_health \
-  "HTTP health check passed (status %s)." \
-  "HTTP 健康检查通过（状态码 %s）。" \
-  app.newapi.warn.http_health \
-  "Health check returned %s. The service may still be initializing; run status again later." \
-  "健康检查返回 %s，服务可能仍在初始化（属正常现象，稍后可用 status 再次确认）。" \
-  app.newapi.warn.debug_command \
-  "Debug command: journalctl -u %s -n 30 --no-pager" \
-  "调试命令：journalctl -u %s -n 30 --no-pager" \
-  app.newapi.success.ufw_port \
-  "ufw allows port %s." \
-  "ufw 已放行端口 %s。" \
-  app.newapi.warn.firewall_config_failed \
-  "Automatic firewall configuration failed for port %s. Open it manually or retry after fixing the firewall service." \
-  "端口 %s 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
-  app.newapi.success.iptables_saved \
-  "iptables rules persisted with netfilter-persistent." \
-  "iptables 规则已持久化（netfilter-persistent）。" \
-  app.newapi.info.iptables_rules_written \
-  "iptables rules written to /etc/iptables/rules.v4." \
-  "iptables 规则已写入 /etc/iptables/rules.v4。" \
-  app.newapi.warn.iptables_write_failed \
-  "Failed to write iptables rules; rules may be lost after reboot." \
-  "iptables 规则写入失败，重启后规则可能丢失。" \
-  app.newapi.warn.iptables_not_persisted \
-  "iptables rules are not persisted and may be lost after reboot. Recommended: apt-get install -y iptables-persistent && netfilter-persistent save" \
-  "iptables 规则未持久化（重启后失效）。建议：apt-get install -y iptables-persistent && netfilter-persistent save。" \
-  app.newapi.success.iptables_port \
-  "iptables allows port %s." \
-  "iptables 已放行端口 %s。" \
-  app.newapi.warn.no_firewall \
-  "No active firewall detected. If you use a cloud security group, allow port %s manually." \
-  "未检测到活跃防火墙，如有云安全组（如 AWS/阿里云/腾讯云）请手动放行端口 %s。" \
-  app.newapi.success.logrotate \
-  "Log rotation configured (daily rotation, 14 days retained, compressed automatically)." \
-  "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
-  app.newapi.error.logrotate \
-  "Logrotate config write failed: /etc/logrotate.d/new-api" \
-  "日志轮转配置写入失败：/etc/logrotate.d/new-api。" \
+  "New API deployment with systemd, backups, and operational checks." \
+  "使用 systemd、备份和运维检查的 New API 部署脚本。" \
   app.newapi.backup.log.start \
   "Backup started" \
   "开始备份" \
@@ -8589,33 +8530,33 @@ i18n_register_many \
   app.newapi.backup.log.done \
   "Backup finished" \
   "备份完成" \
-  app.newapi.success.backup_script \
-  "Backup script written: /usr/local/bin/new-api-backup" \
-  "备份脚本已写入：/usr/local/bin/new-api-backup。" \
   app.newapi.error.backup_script \
   "Backup script write failed: /usr/local/bin/new-api-backup" \
   "备份脚本写入失败：/usr/local/bin/new-api-backup。" \
-  app.newapi.warn.silent_data_missing \
-  "_backup_silent: data directory does not exist (%s); skipping backup." \
-  "_backup_silent: 数据目录不存在（%s），跳过备份。" \
-  app.newapi.warn.silent_backup_dir_failed \
-  "_backup_silent: cannot create backup directory (%s); skipping backup." \
-  "_backup_silent: 无法创建备份目录（%s），跳过备份。" \
-  app.newapi.warn.sqlite_integrity \
-  "SQLite integrity_check warning (%s); backup continues." \
-  "SQLite integrity_check 警告（%s），备份继续。" \
-  app.newapi.success.silent_backup \
-  "Silent backup created: %s (%s)." \
-  "静默备份已创建：%s（%s）。" \
-  app.newapi.warn.silent_backup_failed \
-  "Silent backup failed (tar error); continuing..." \
-  "静默备份失败（tar 报错），继续执行..." \
-  app.newapi.summary.title_ready \
-  "New API deployment complete" \
-  "New API 部署完成！" \
-  app.newapi.summary.title_pending \
-  "New API files installed; verify service health before use" \
-  "New API 文件已安装；请先确认服务健康后再使用" \
+  app.newapi.error.backup_dir_create \
+  "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
+  "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
+  app.newapi.error.cron \
+  "Scheduled backup config write failed: /etc/cron.d/new-api-backup" \
+  "定时备份配置写入失败：/etc/cron.d/new-api-backup。" \
+  app.newapi.error.cron_invalid \
+  "BACKUP_CRON is invalid: '%s'. Use a crontab(5) schedule like '30 3 * * *' without shell metacharacters." \
+  "BACKUP_CRON 无效：'%s'。请使用 crontab(5) 格式（如 '30 3 * * *'），且不含 shell 特殊字符。" \
+  app.newapi.error.tz_invalid \
+  "TZ is invalid: '%s'. Use an IANA timezone name like Asia/Shanghai or UTC." \
+  "TZ 无效：'%s'。请使用 IANA 时区名（如 Asia/Shanghai 或 UTC）。" \
+  app.newapi.error.env_file \
+  "Runtime environment file write failed: %s" \
+  "运行时环境文件写入失败：%s" \
+  app.newapi.error.secret \
+  "Failed to generate SESSION_SECRET. Check /dev/urandom availability and retry." \
+  "生成 SESSION_SECRET 失败。请检查 /dev/urandom 是否可用后重试。" \
+  app.newapi.success.cron \
+  "Scheduled backup configured (daily 03:30, keep %s days)." \
+  "定时备份已配置（每日 03:30，保留 %s 天）。" \
+  app.newapi.success.env_file \
+  "Runtime environment file written: %s (mode 600)." \
+  "运行时环境文件已写入：%s（权限 600）。" \
   app.newapi.summary.public \
   "Public URL" \
   "公网访问" \
@@ -8627,568 +8568,7 @@ i18n_register_many \
   "警告：首次登录使用应用内置的默认管理员凭据" \
   app.newapi.summary.credential_hint \
   "Change the password immediately after login — the default credentials are public knowledge" \
-  "登录后请立即修改密码——默认凭据是公开已知的" \
-  app.newapi.summary.api_url \
-  "API URL" \
-  "API 地址" \
-  app.newapi.summary.version \
-  "Version" \
-  "版本" \
-  app.newapi.summary.data_dir \
-  "Data dir" \
-  "数据目录" \
-  app.newapi.summary.log_dir \
-  "Log dir" \
-  "日志目录" \
-  app.newapi.summary.backup_dir \
-  "Backup dir" \
-  "备份目录" \
-  app.newapi.summary.management \
-  "Management commands:" \
-  "管理命令：" \
-  app.newapi.summary.status_cmd \
-  "show runtime status" \
-  "查看运行状态" \
-  app.newapi.summary.update_cmd \
-  "update to the latest version" \
-  "更新到最新版" \
-  app.newapi.summary.backup_cmd \
-  "back up data now" \
-  "立即备份数据" \
-  app.newapi.summary.uninstall_cmd \
-  "uninstall the service" \
-  "卸载服务" \
-  app.newapi.summary.systemd \
-  "systemd commands:" \
-  "systemd 命令：" \
-  app.newapi.summary.show_status \
-  "show status" \
-  "查看状态" \
-  app.newapi.summary.live_logs \
-  "follow logs" \
-  "实时日志" \
-  app.newapi.summary.restart \
-  "restart service" \
-  "重启服务" \
-  app.newapi.summary.cf_ssl \
-  "[Cloudflare] Set SSL/TLS mode to Flexible." \
-  "[CF 提醒] SSL/TLS 模式请设为「灵活」。" \
-  app.newapi.summary.cf_sse \
-  "[Cloudflare] If streaming responses (SSE) stall, disable buffering/cache for this domain in Cloudflare rules." \
-  "[CF 提醒] 如遇流式响应（SSE）卡顿，在 CF 规则中关闭该域名的缓冲/缓存。" \
-  app.newapi.step.latest \
-  "Step 1  Get latest version" \
-  "Step 1  获取最新版本" \
-  app.newapi.info.query_latest \
-  "Querying latest GitHub release..." \
-  "查询 GitHub 最新 Release..." \
-  app.newapi.error.version_failed \
-  "Failed to get version. Check the network and retry." \
-  "获取版本号失败，请检查网络后重试。" \
-  app.newapi.success.latest \
-  "Latest version: %s" \
-  "最新版本：%s" \
-  app.newapi.error.apt_update \
-  "apt-get update failed. Check /var/log/apt/*, fix repository or network issues, and retry the installation." \
-  "apt-get update 失败。请检查 /var/log/apt/*，修复软件源或网络问题后重新执行安装。" \
-  app.newapi.error.deps_install \
-  "Dependency installation failed. Run apt-get install -y curl ca-certificates sqlite3 after fixing the package manager state." \
-  "依赖安装失败。请在修复软件包管理器状态后执行 apt-get install -y curl ca-certificates sqlite3。" \
-  app.newapi.step.deps \
-  "Step 2  Install system dependencies" \
-  "Step 2  安装系统依赖" \
-  app.newapi.success.deps \
-  "Dependencies installed (curl / ca-certificates / sqlite3)." \
-  "依赖安装完成（curl / ca-certificates / sqlite3）。" \
-  app.newapi.step.user_dirs \
-  "Step 3  Create user and directories" \
-  "Step 3  创建用户与目录" \
-  app.newapi.success.user_created \
-  "System user %s created (low privilege, no login shell)." \
-  "系统用户 %s 已创建（低权限，无登录 shell）。" \
-  app.newapi.info.user_exists \
-  "User %s already exists; skipping creation." \
-  "用户 %s 已存在，跳过创建。" \
-  app.newapi.error.user_create \
-  "Failed to create system user %s. Check useradd output and retry." \
-  "创建系统用户 %s 失败。请检查 useradd 输出后重试。" \
-  app.newapi.error.dir_create \
-  "Failed to create one or more runtime directories. Check permissions for %s and %s, then retry." \
-  "创建运行目录失败。请检查 %s 和 %s 的权限后重试。" \
-  app.newapi.error.dir_owner \
-  "Failed to apply ownership %s to %s. Check filesystem permissions and retry." \
-  "无法将 %s 的所有权设置到 %s。请检查文件系统权限后重试。" \
-  app.newapi.success.dirs \
-  "Directories created: %s / %s / %s." \
-  "目录创建完成：%s / %s / %s。" \
-  app.newapi.step.download \
-  "Step 4  Download New API binary (arch: %s)" \
-  "Step 4  下载 New API 二进制（架构：%s）" \
-  app.newapi.info.download_url \
-  "Download URL: %s" \
-  "下载地址：%s" \
-  app.newapi.error.download \
-  "Download failed. Check the network or confirm the release exists: https://github.com/%s/releases" \
-  "下载失败，请检查网络或前往 https://github.com/%s/releases 确认版本存在。" \
-  app.newapi.warn.tmp_binary_cleanup_failed \
-  "Failed to remove temporary binary %s. Remove it manually after this command finishes." \
-  "删除临时二进制 %s 失败。请在本次命令结束后手动清理。" \
-  app.newapi.warn.old_binary_backup \
-  "Backed up old binary -> %s" \
-  "已备份旧二进制 → %s。" \
-  app.newapi.error.binary_install \
-  "Failed to install binary: %s" \
-  "二进制安装失败：%s。" \
-  app.newapi.success.binary_installed \
-  "Binary installed: %s" \
-  "二进制安装完成：%s。" \
-  app.newapi.step.secret \
-  "Step 5  Generate secure configuration" \
-  "Step 5  生成安全配置" \
-  app.newapi.error.secret \
-  "Failed to generate SESSION_SECRET. Check /dev/urandom availability and retry." \
-  "生成 SESSION_SECRET 失败。请检查 /dev/urandom 是否可用后重试。" \
-  app.newapi.success.secret \
-  "SESSION_SECRET generated." \
-  "SESSION_SECRET 已生成。" \
-  app.newapi.error.env_file \
-  "Runtime environment file write failed: %s" \
-  "运行时环境文件写入失败：%s" \
-  app.newapi.success.env_file \
-  "Runtime environment file written: %s (mode 600)." \
-  "运行时环境文件已写入：%s（权限 600）。" \
-  app.newapi.step.systemd \
-  "Step 6  Configure systemd service" \
-  "Step 6  配置 systemd 服务" \
-  app.newapi.error.systemd_unit \
-  "systemd service file write failed: /etc/systemd/system/%s.service" \
-  "systemd 服务文件写入失败：/etc/systemd/system/%s.service。" \
-  app.newapi.success.systemd \
-  "systemd service file written: /etc/systemd/system/%s.service" \
-  "systemd 服务文件已写入：/etc/systemd/system/%s.service。" \
-  app.newapi.error.systemd_reload \
-  "systemd daemon reload failed for %s. Run manually after fixing systemd: systemctl daemon-reload" \
-  "无法为 %s 重新加载 systemd daemon。请在修复 systemd 问题后手动执行：systemctl daemon-reload。" \
-  app.newapi.warn.service_enable_failed \
-  "Could not enable %s to start automatically on boot. Run manually after fixing systemd: systemctl enable %s" \
-  "无法将 %s 设置为开机自启。请在修复 systemd 问题后手动执行：systemctl enable %s。" \
-  app.newapi.step.firewall \
-  "Step 7  Configure firewall" \
-  "Step 7  配置防火墙" \
-  app.newapi.step.logrotate \
-  "Step 8  Configure log rotation" \
-  "Step 8  配置日志轮转" \
-  app.newapi.step.cron \
-  "Step 9  Configure scheduled backup (daily 03:30)" \
-  "Step 9  配置定时备份（每日 03:30）" \
-  app.newapi.success.cron \
-  "Scheduled backup configured (daily 03:30, keep %s days)." \
-  "定时备份已配置（每日 03:30，保留 %s 天）。" \
-  app.newapi.error.cron \
-  "Scheduled backup config write failed: /etc/cron.d/new-api-backup" \
-  "定时备份配置写入失败：/etc/cron.d/new-api-backup。" \
-  app.newapi.error.cron_invalid \
-  "BACKUP_CRON is invalid: '%s'. Use a crontab(5) schedule like '30 3 * * *' without shell metacharacters." \
-  "BACKUP_CRON 无效：'%s'。请使用 crontab(5) 格式（如 '30 3 * * *'），且不含 shell 特殊字符。" \
-  app.newapi.error.tz_invalid \
-  "TZ is invalid: '%s'. Use an IANA timezone name like Asia/Shanghai or UTC." \
-  "TZ 无效：'%s'。请使用 IANA 时区名（如 Asia/Shanghai 或 UTC）。" \
-  app.newapi.step.start \
-  "Step 10  Start service" \
-  "Step 10  启动服务" \
-  app.newapi.success.service_started \
-  "Service started successfully." \
-  "服务启动成功。" \
-  app.newapi.warn.start_rollback \
-  "Service did not start within 20 seconds; rolling back installed files..." \
-  "服务在 20 秒内未能正常启动，正在回滚已安装文件..." \
-  app.newapi.warn.cleanup_stop_failed \
-  "Could not stop %s during install rollback. It may already be stopped; otherwise inspect systemctl status %s." \
-  "安装回滚时无法停止 %s。它可能已经停止；否则请检查：systemctl status %s。" \
-  app.newapi.warn.cleanup_disable_failed \
-  "Could not disable %s during install rollback. Run manually after fixing systemd: systemctl disable %s" \
-  "安装回滚时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
-  app.newapi.warn.cleanup_reload_failed \
-  "Could not reload systemd during install rollback. Run manually: systemctl daemon-reload" \
-  "安装回滚时无法重新加载 systemd。请手动执行：systemctl daemon-reload。" \
-  app.newapi.error.install_start_failed \
-  "Install failed: service could not start, binary and systemd unit rolled back.\n  Debug command: journalctl -u %s -n 30 --no-pager\n  Data and log directories were kept; fix the issue and rerun install." \
-  "安装失败：服务无法启动，已回滚二进制与 systemd unit。\n  调试命令：journalctl -u %s -n 30 --no-pager\n  （数据目录、日志目录已保留，修复原因后可重新执行 install）。" \
-  app.newapi.step.health \
-  "Step 11  Health check" \
-  "Step 11  健康检查" \
-  app.newapi.error.not_installed \
-  "Installed New API binary was not found (%s). Run install first." \
-  "未检测到已安装的 New API 二进制（%s），请先执行 install。" \
-  app.newapi.step.check_update \
-  "Check for updates" \
-  "检查更新" \
-  app.newapi.error.latest_failed \
-  "Failed to get latest version. Check the network and retry." \
-  "获取最新版本失败，请检查网络后重试。" \
-  app.newapi.info.current \
-  "Current version (recorded): %s" \
-  "当前版本（记录）：%s" \
-  app.newapi.info.github_latest \
-  "Latest GitHub version: %s" \
-  "GitHub 最新版本：%s" \
-  app.newapi.success.already_latest \
-  "Already on the latest version (%s); no update needed." \
-  "已是最新版本（%s），无需更新。" \
-  app.newapi.warn.pre_failed_state \
-  "Service was failed before update; this update will also reset the failure marker." \
-  "注意：更新前服务处于 failed 状态，本次更新将同时重置故障标记。" \
-  app.newapi.warn.pre_failed_debug \
-  "If problems remain after update, inspect the existing errors first: journalctl -u %s -n 50 --no-pager" \
-  "如更新后仍有问题，请先检查已有错误：journalctl -u %s -n 50 --no-pager。" \
-  app.newapi.step.pre_backup \
-  "Back up data before update" \
-  "更新前备份数据" \
-  app.newapi.warn.pre_backup_failed \
-  "Pre-update backup failed; continuing with update. Inspect /opt/new-api-backups/backup.log or run /usr/local/bin/new-api-backup manually before proceeding further." \
-  "更新前备份失败，继续执行更新。请检查 /opt/new-api-backups/backup.log，或先手动执行 /usr/local/bin/new-api-backup 再继续后续操作。" \
-  app.newapi.step.download_update \
-  "Download new binary (%s -> %s)" \
-  "下载新版本二进制（%s → %s）" \
-  app.newapi.error.update_download \
-  "Download failed; update aborted and the current version was not changed." \
-  "下载失败，更新中止（当前版本未受影响）。" \
-  app.newapi.step.replace_restart \
-  "Replace binary and restart service" \
-  "替换二进制并重启服务" \
-  app.newapi.info.stop_service \
-  "Stopping service..." \
-  "停止服务..." \
-  app.newapi.error.stop_service_failed \
-  "Could not stop %s before replacing the binary. Update aborted and the current binary was left unchanged. Inspect: systemctl status %s" \
-  "替换二进制前无法停止 %s。更新已中止，当前二进制未变更。请检查：systemctl status %s。" \
-  app.newapi.info.old_binary \
-  "Old binary backed up: %s" \
-  "旧二进制已备份：%s。" \
-  app.newapi.success.updated_started \
-  "Service started successfully with the new version." \
-  "服务以新版本启动成功。" \
-  app.newapi.info.cleaned_old \
-  "Removed %s expired old binary backups (keeping latest 3)." \
-  "已清理 %s 个过期旧二进制备份（保留最近 3 个）。" \
-  app.newapi.warn.cleanup_old_failed \
-  "Could not remove old binary backup: %s" \
-  "旧二进制备份删除失败：%s" \
-  app.newapi.success.update_done \
-  "Update complete: %s -> %s" \
-  "更新完成：%s → %s" \
-  app.newapi.warn.update_start_failed \
-  "New version (%s) failed to start; rolling back automatically to %s..." \
-  "新版本（%s）启动失败，正在自动回滚到 %s..." \
-  app.newapi.error.rollback_stop_failed \
-  "New version failed to start, but %s could not be stopped. Rollback was aborted before restoring files; old binary backup is kept at %s. Inspect: systemctl status %s" \
-  "新版本启动失败，但无法停止 %s。回滚已在恢复文件前中止；旧二进制备份保留在 %s。请检查：systemctl status %s。" \
-  app.newapi.success.rollback \
-  "Rollback to old version (%s) succeeded; service restored." \
-  "已成功回滚到旧版本（%s），服务已恢复。" \
-  app.newapi.warn.rollback_start_failed \
-  "Service still did not start after rollback. Inspect: journalctl -u %s -n 30 --no-pager" \
-  "回滚后服务仍未正常启动，请手动检查：journalctl -u %s -n 30 --no-pager。" \
-  app.newapi.error.update_failed \
-  "Update failed and rolled back to %s.\n  New version diagnostics: journalctl -u %s -n 50 --no-pager\n  The new binary is kept at %s (it is the pre-rollback new binary); rename it if you want to test it manually." \
-  "更新失败，已自动回滚至 %s。\n  新版本诊断：journalctl -u %s -n 50 --no-pager\n  新版二进制已保留在：%s（实为回滚前的新版）如需手动测试可重命名使用。" \
-  app.newapi.error.data_missing_install \
-  "Data directory does not exist (%s). Run install first." \
-  "数据目录不存在（%s），请先执行安装。" \
-  app.newapi.step.manual_backup \
-  "Manual New API data backup" \
-  "手动备份 New API 数据" \
-  app.newapi.success.wal \
-  "SQLite WAL checkpoint completed." \
-  "SQLite WAL checkpoint 成功。" \
-  app.newapi.warn.wal \
-  "SQLite WAL flush failed; backup continues and a small amount of data may not be flushed." \
-  "SQLite WAL flush 失败，备份继续（可能有少量未落盘数据）。" \
-  app.newapi.success.sqlite_integrity \
-  "SQLite integrity check passed." \
-  "SQLite 完整性校验通过。" \
-  app.newapi.warn.sqlite_integrity_failed \
-  "SQLite integrity check failed (%s); backup continues, but the database may be corrupted." \
-  "SQLite 完整性校验失败（%s），备份继续，但数据库可能已损坏。" \
-  app.newapi.info.backing_up \
-  "Backing up: %s -> %s" \
-  "备份中：%s → %s" \
-  app.newapi.success.backup_done \
-  "Backup complete: %s (%s)." \
-  "备份完成：%s（%s）。" \
-  app.newapi.error.backup_dir_create \
-  "Backup directory could not be created: %s. Check permissions or disk state before retrying." \
-  "无法创建备份目录：%s。请检查权限或磁盘状态后重试。" \
-  app.newapi.error.backup_failed \
-  "Backup failed. Check disk space on the disk containing %s." \
-  "备份失败，请检查磁盘空间（%s 所在磁盘）。" \
-  app.newapi.info.cleaned_backups \
-  "Removed %s old backups older than %s days." \
-  "已清理 %s 个超过 %s 天的旧备份。" \
-  app.newapi.warn.backup_cleanup_failed \
-  "Could not remove old backup: %s" \
-  "旧备份删除失败：%s" \
-  app.newapi.info.backup_list \
-  "Backup list (%s, latest 10):" \
-  "备份列表（%s，最近 10 个）：" \
-  app.newapi.info.backup_total \
-  "Total backups: %s." \
-  "合计 %s 个备份。" \
-  app.newapi.warn.no_backups \
-  "No backup files yet." \
-  "暂无备份文件。" \
-  app.newapi.warn.non_root_status \
-  "Running without root; some status details may be incomplete. Recommended: sudo bash %s status" \
-  "以非 root 运行，部分状态信息可能不完整（建议：sudo bash %s status）。" \
-  app.newapi.step.status \
-  "New API system status" \
-  "New API 系统状态" \
-  app.newapi.status.systemd \
-  "systemd service status" \
-  "systemd 服务状态" \
-  app.newapi.status.running \
-  "running" \
-  "运行中" \
-  app.newapi.status.not_running \
-  "not running" \
-  "未运行" \
-  app.newapi.status.version_info \
-  "Version information" \
-  "版本信息" \
-  app.newapi.status.recorded_version \
-  "Recorded version" \
-  "记录版本" \
-  app.newapi.status.binary_path \
-  "Binary path" \
-  "二进制路径" \
-  app.newapi.status.binary_time \
-  "Binary time" \
-  "二进制时间" \
-  app.newapi.status.binary_size \
-  "Binary size" \
-  "二进制大小" \
-  app.newapi.status.unknown \
-  "unknown" \
-  "未知" \
-  app.newapi.status.binary_missing \
-  "Binary not found: %s" \
-  "未找到二进制：%s" \
-  app.newapi.status.resources \
-  "Process resources" \
-  "进程资源" \
-  app.newapi.status.pid \
-  "Process PID" \
-  "进程 PID" \
-  app.newapi.status.memory \
-  "Memory" \
-  "内存占用" \
-  app.newapi.status.cpu \
-  "CPU" \
-  "CPU 使用" \
-  app.newapi.status.start_time \
-  "Start time" \
-  "启动时间" \
-  app.newapi.status.no_process \
-  "Service is not running; no process information." \
-  "服务未运行，无进程信息。" \
-  app.newapi.status.directories \
-  "Directory information" \
-  "目录信息" \
-  app.newapi.status.data_dir \
-  "Data dir" \
-  "数据目录" \
-  app.newapi.status.database \
-  "Database" \
-  "数据库" \
-  app.newapi.status.data_missing \
-  "Data directory does not exist: %s" \
-  "数据目录不存在：%s" \
-  app.newapi.status.log_dir \
-  "Log dir" \
-  "日志目录" \
-  app.newapi.status.backup_info \
-  "Backup information" \
-  "备份信息" \
-  app.newapi.status.backup_dir \
-  "Backup dir" \
-  "备份目录" \
-  app.newapi.status.backup_count \
-  "%s files" \
-  "共 %s 个" \
-  app.newapi.status.backup_missing \
-  "Backup directory does not exist: %s" \
-  "备份目录不存在：%s" \
-  app.newapi.status.disk \
-  "Disk space" \
-  "磁盘空间" \
-  app.newapi.status.disk_usage \
-  "mount: %-15s  used: %s / %s (%s used)" \
-  "挂载点: %-15s  已用: %s / %s（%s 已用）" \
-  app.newapi.status.health \
-  "HTTP health check (local 127.0.0.1:%s)" \
-  "HTTP 健康检查（本地 127.0.0.1:%s）" \
-  app.newapi.status.local_ok \
-  "Local endpoint responded normally: HTTP %s" \
-  "本地接口响应正常：HTTP %s" \
-  app.newapi.status.local_warn \
-  "Local endpoint returned HTTP %s (service not running, wrong port, or still initializing?)." \
-  "本地接口响应：HTTP %s（服务未运行、端口错误或仍在初始化？）。" \
-  app.newapi.status.firewall \
-  "Firewall rules (port %s)" \
-  "防火墙规则（端口 %s）" \
-  app.newapi.status.ufw_allowed \
-  "ufw allows port %s." \
-  "ufw 端口 %s 已放行。" \
-  app.newapi.status.ufw_missing \
-  "ufw does not include port %s (service may not be externally reachable)." \
-  "ufw 端口 %s 未在规则中（服务可能无法从外部访问）。" \
-  app.newapi.status.iptables_allowed \
-  "iptables allows port %s." \
-  "iptables 端口 %s 已放行。" \
-  app.newapi.status.iptables_missing \
-  "iptables does not allow port %s." \
-  "iptables 端口 %s 未放行。" \
-  app.newapi.status.no_firewall \
-  "No firewall detected; cloud security groups may still apply." \
-  "未检测到防火墙（可能依赖云安全组）。" \
-  app.newapi.error.install_dir_empty \
-  "INSTALL_DIR is not set; uninstall aborted (check config file: %s)." \
-  "INSTALL_DIR 未设置，卸载中止（请确认配置文件 %s 存在）。" \
-  app.newapi.error.data_dir_empty \
-  "DATA_DIR is not set; uninstall aborted." \
-  "DATA_DIR 未设置，卸载中止。" \
-  app.newapi.error.backup_dir_empty \
-  "BACKUP_DIR is not set; uninstall aborted." \
-  "BACKUP_DIR 未设置，卸载中止。" \
-  app.newapi.error.install_dir_root \
-  "INSTALL_DIR is root (/); refusing uninstall." \
-  "INSTALL_DIR 为根目录（/），拒绝执行卸载。" \
-  app.newapi.error.data_dir_root \
-  "DATA_DIR is root (/); refusing uninstall." \
-  "DATA_DIR 为根目录（/），拒绝执行卸载。" \
-  app.newapi.error.backup_dir_root \
-  "BACKUP_DIR is root (/); refusing uninstall." \
-  "BACKUP_DIR 为根目录（/），拒绝执行卸载。" \
-  app.newapi.step.uninstall \
-  "Uninstall New API" \
-  "卸载 New API" \
-  app.newapi.uninstall.removes \
-  "This will remove:" \
-  "此操作将删除：" \
-  app.newapi.uninstall.binary \
-  "New API binary and old binary backups (%s/new-api*)" \
-  "New API 二进制及旧版备份（%s/new-api*）" \
-  app.newapi.uninstall.systemd \
-  "systemd service unit (/etc/systemd/system/%s.service)" \
-  "systemd 服务单元（/etc/systemd/system/%s.service）" \
-  app.newapi.uninstall.logrotate \
-  "logrotate config (/etc/logrotate.d/new-api)" \
-  "日志轮转配置（/etc/logrotate.d/new-api）" \
-  app.newapi.uninstall.cron \
-  "scheduled backup job (/etc/cron.d/new-api-backup)" \
-  "定时备份任务（/etc/cron.d/new-api-backup）" \
-  app.newapi.uninstall.backup_script \
-  "backup script (/usr/local/bin/new-api-backup)" \
-  "备份脚本（/usr/local/bin/new-api-backup）" \
-  app.newapi.uninstall.env_file \
-  "runtime environment file (%s)" \
-  "运行时环境文件（%s）" \
-  app.newapi.uninstall.deploy_config \
-  "deployment config (%s)" \
-  "部署配置文件（%s）" \
-  app.newapi.uninstall.keep_data \
-  "Data directory (%s) is kept by default; you can choose deletion." \
-  "数据目录（%s）默认保留，可选是否删除。" \
-  app.newapi.uninstall.keep_backup \
-  "Backup directory (%s) is kept by default; you can choose deletion." \
-  "备份目录（%s）默认保留，可选是否删除。" \
-  app.newapi.prompt.continue \
-  "Continue uninstall? Type YES to confirm:" \
-  "确认继续卸载？（输入 YES 确认）：" \
-  app.newapi.info.cancelled \
-  "Uninstall cancelled." \
-  "已取消卸载。" \
-  app.newapi.prompt.delete_data \
-  "Delete data directory too (%s)? [y/N]:" \
-  "是否同时删除数据目录（%s）？[y/N]：" \
-  app.newapi.prompt.delete_backup \
-  "Delete backup directory too (%s)? [y/N]:" \
-  "是否同时删除备份目录（%s）？[y/N]：" \
-  app.newapi.info.stop_disable \
-  "Stopping and disabling %s service..." \
-  "停止并禁用 %s 服务..." \
-  app.newapi.error.uninstall_stop_failed \
-  "Could not stop %s during uninstall, and it still appears active. Uninstall aborted before deleting files. Inspect: systemctl status %s" \
-  "卸载时无法停止 %s，且该服务仍处于 active 状态。已在删除文件前中止卸载。请检查：systemctl status %s。" \
-  app.newapi.warn.uninstall_stop_failed \
-  "Could not stop %s during uninstall, but it is not active; continuing cleanup. Inspect systemd if this is unexpected: systemctl status %s" \
-  "卸载时无法停止 %s，但该服务当前不是 active，继续清理。如不符合预期，请检查：systemctl status %s。" \
-  app.newapi.warn.uninstall_disable_failed \
-  "Could not disable %s during uninstall. Remove the enablement manually after fixing systemd: systemctl disable %s" \
-  "卸载时无法禁用 %s。请在修复 systemd 后手动移除开机自启：systemctl disable %s。" \
-  app.newapi.error.remove_dir \
-  "Directory removal failed: %s" \
-  "目录删除失败：%s。" \
-  app.newapi.error.remove_file \
-  "File removal failed: %s" \
-  "文件删除失败：%s。" \
-  app.newapi.success.removed_systemd \
-  "systemd service removed." \
-  "systemd 服务已移除。" \
-  app.newapi.success.removed_binary \
-  "Binary and related files removed." \
-  "二进制及相关文件已删除。" \
-  app.newapi.success.removed_scheduled \
-  "Scheduled job, backup script, and logrotate config removed." \
-  "定时任务、备份脚本、日志轮转配置已清除。" \
-  app.newapi.success.removed_env_file \
-  "Runtime environment file removed." \
-  "运行时环境文件已移除。" \
-  app.newapi.success.removed_config \
-  "Deployment config removed." \
-  "部署配置文件已清除。" \
-  app.newapi.success.deleted_log \
-  "Log directory deleted: %s" \
-  "日志目录已删除：%s。" \
-  app.newapi.warn.log_path \
-  "Log directory path is unusual (%s); skipped deletion, clean it manually if needed." \
-  "日志目录路径异常（%s），已跳过删除，请手动清理。" \
-  app.newapi.success.deleted_data \
-  "Data directory deleted: %s" \
-  "数据目录已删除：%s。" \
-  app.newapi.success.cleaned_install \
-  "Install directory cleaned: %s" \
-  "安装目录已清理：%s。" \
-  app.newapi.warn.cleanup_install_failed \
-  "Install directory cleanup skipped because removal failed: %s" \
-  "安装目录清理失败，已跳过：%s。" \
-  app.newapi.info.kept_data \
-  "Data directory kept: %s" \
-  "数据目录已保留：%s。" \
-  app.newapi.success.deleted_backup \
-  "Backup directory deleted: %s" \
-  "备份目录已删除：%s。" \
-  app.newapi.info.kept_backup \
-  "Backup directory kept: %s" \
-  "备份目录已保留：%s。" \
-  app.newapi.success.deleted_user \
-  "System user %s deleted." \
-  "系统用户 %s 已删除。" \
-  app.newapi.warn.delete_user \
-  "Failed to delete system user %s; it may be referenced by another service." \
-  "系统用户 %s 删除失败，可能被其他服务引用。" \
-  app.newapi.success.uninstalled \
-  "New API fully uninstalled." \
-  "New API 已完全卸载。" \
-  app.newapi.hint.data_kept \
-  "Data kept at: %s" \
-  "数据保留在：%s。" \
-  app.newapi.hint.remove_data \
-  "When you are sure it is no longer needed, manually run: rm -rf %s" \
-  "确认不再需要时，可手动执行：rm -rf %s。" \
-  app.newapi.hint.backup_kept \
-  "Backups kept at: %s" \
-  "备份保留在：%s。"
+  "登录后请立即修改密码——默认凭据是公开已知的"
 
 APP_DESCRIPTION="$(t app.newapi.description)"
 APP_IMPL_SCRIPT="impl/install_newapi.sh"
@@ -13165,6 +12545,16 @@ __DEPLOY_APP_IMPL_SCRIPT__ install_newapi_impl.sh
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
+
+# New API (https://github.com/QuantumNous/new-api) ships a bare, versioned
+# GitHub-release binary (new-api-<version> on amd64, new-api-arm64-<version>
+# on arm64) and configures itself through an env file. The shared binary-app
+# library (lib/binary_app.sh) provides the lifecycle; this file configures it
+# and adds New API-specific hooks: the env file with the generated
+# SESSION_SECRET, the SQLite WAL checkpoint backup hook, the cron-driven
+# backup script, and the credential warning in the install summary.
+# See PLAN.md section 2 for the verified release asset mapping.
+
 DOMAIN="${DOMAIN:-api.example.com}"
 PORT="${PORT:-8080}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/new-api}"
@@ -13177,164 +12567,55 @@ BACKUP_DIR="${BACKUP_DIR:-/opt/new-api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BACKUP_CRON="${BACKUP_CRON:-30 3 * * *}"
 TZ="${TZ:-Asia/Shanghai}"
-BIN_PATH="${INSTALL_DIR}/new-api"
-LOG_FILE="${LOG_DIR}/new-api.log"
-ENV_FILE="/etc/${SERVICE_NAME}.env"
+BA_BIN_NAME="new-api"
+BA_ARCHIVE_TYPE="none"
+BA_APT_PACKAGES="sqlite3"
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
+BA_SERVICE_DESCRIPTION="New API - LLM API Aggregation Gateway"
+# Keep the historical backup archive prefix so pre-migration archives remain
+# discoverable by verify/restore/status.
+BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-new-api}"
+BA_USE_ENV_FILE=1
+BA_SERVICE_ARGS="--port ${PORT} --log-dir ${LOG_DIR}"
+BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
+BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CRON TZ INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CRON TZ
+  BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
-_NEWAPI_DERIVE_PATHS() {
-  BIN_PATH="${INSTALL_DIR}/new-api"
-  LOG_FILE="${LOG_DIR}/new-api.log"
-  ENV_FILE="/etc/${SERVICE_NAME}.env"
-}
-APP_CONFIG_DERIVE_HOOK=_NEWAPI_DERIVE_PATHS
-# Central check-update adapter: New API is a GitHub-release binary whose
-# recorded version lives in INSTALLED_VERSION, so the shared release checker
-# applies with the configured repository. Saved configuration is reloaded so
-# custom install repositories are honored without running an app action.
-_newapi_check_update_json() {
-  app_check_update_json "newapi" "$1" "${2:-0}" "${3:-0}"
-}
-APP_CHECK_UPDATE_FN=_newapi_check_update_json
-_newapi_status_version_json() {
-  version_check_cached_binary_release_json "newapi" "${INSTALLED_VERSION:-}"
-}
-APP_STATUS_VERSION_FN=_newapi_status_version_json
-_newapi_status_backup() {
-  app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
-    "backup directory is unsafe or missing" 'new-api_*.tar.gz'
-}
 
-APP_STATUS_BACKUP_FN=_newapi_status_backup
-_newapi_remove_dir_or_error() {
-  app_remove_dir_or_error "$1" "$2" "$3" "app.newapi.error.remove_dir"
-}
-_newapi_remove_file_or_error() {
-  app_remove_file_or_error "$1" "$2" "app.newapi.error.remove_file"
-}
-_newapi_require_safe_bin_path() {
-  require_safe_path "BIN_PATH" "$BIN_PATH"
-}
-app_conf_register_legacy "/etc/new-api-deploy.conf"
-CONF_FILE="$(app_conf_file)"
-LOCK_FILE="$(app_lock_file)"
-preflight_check() {
-  [[ "${1:-}" != "status" && $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
-  command -v apt-get &>/dev/null \
-    || error "$(t app.newapi.error.apt_only)"
-  ARCH=$(uname -m)
-  case $ARCH in
-    x86_64)  BIN_ARCH="amd64" ;;
-    aarch64) BIN_ARCH="arm64" ;;
-    *) error "$(t app.newapi.error.arch "$ARCH")" ;;
-  esac
-  _validate_config_values
-}
-_validate_config_values() {
-  app_validate_port "$PORT" "PORT"
-  app_validate_domain "DOMAIN" "$DOMAIN"
-  app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"
-  app_validate_system_name "SERVICE_USER" "$SERVICE_USER"
-  app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  _newapi_require_safe_bin_path
-  require_safe_path "DATA_DIR" "$DATA_DIR"
-  require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "LOG_FILE" "$LOG_FILE"
-  require_safe_path "ENV_FILE" "$ENV_FILE"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  # BACKUP_CRON is a crontab(5) schedule; reject newlines, quotes, or shell
-  # metacharacters so the generated /etc/cron.d line stays well-formed.
-  if [[ -z "$BACKUP_CRON" || "$BACKUP_CRON" == *$'\n'* || "$BACKUP_CRON" == *$'\r'* ]] \
-      || [[ "$BACKUP_CRON" == *'&'* || "$BACKUP_CRON" == *'|'* || "$BACKUP_CRON" == *';'* \
-      || "$BACKUP_CRON" == *'$'* || "$BACKUP_CRON" == *'`'* || "$BACKUP_CRON" == *'"'* \
-      || "$BACKUP_CRON" == *"'"* ]]; then
-    error "$(t app.newapi.error.cron_invalid "$BACKUP_CRON")"
-  fi
-  # TZ must be a bare IANA timezone name like Asia/Shanghai or UTC; reject
-  # spaces, newlines, or shell metacharacters.
-  if [[ -z "$TZ" || "$TZ" == *[[:space:]]* || "$TZ" == *$'\n'* || "$TZ" == *$'\r'* ]] \
-      || [[ "$TZ" == *'&'* || "$TZ" == *'|'* || "$TZ" == *';'* || "$TZ" == *'$'* \
-      || "$TZ" == *'`'* || "$TZ" == *'"'* || "$TZ" == *"'"* || "$TZ" == *'..'* \
-      || "$TZ" == /* ]]; then
-    error "$(t app.newapi.error.tz_invalid "$TZ")"
-  fi
-}
-check_connectivity() {
-  app_check_connectivity app.newapi.error.github_unreachable \
-    "https://api.github.com" \
-    "https://github.com" \
-    "https://objects.githubusercontent.com"
-}
-
-get_download_url() {
+# The binary asset name embeds the version (without a leading v) and the
+# architecture (arm64 asset uses the "arm64" suffix).
+ba_asset_name() {
   local version="$1"
-  if [[ "${BIN_ARCH}" == "amd64" ]]; then
-    echo "https://github.com/${GITHUB_REPO}/releases/download/${version}/new-api-${version}"
+  if [[ "$BA_ARCH" == "amd64" ]]; then
+    printf 'new-api-%s\n' "${version#v}"
   else
-    echo "https://github.com/${GITHUB_REPO}/releases/download/${version}/new-api-arm64-${version}"
+    printf 'new-api-arm64-%s\n' "${version#v}"
   fi
 }
-verify_binary() {
-  local bin="$1"
-  if [[ ! -s "$bin" ]]; then
-    rm -f "$bin"
-    error "$(t app.newapi.error.binary_empty)"
+
+# Extra systemd directives for the API-gateway workload.
+ba_systemd_extra() {
+  printf 'LimitNOFILE=65536\nLimitNPROC=512\n'
+}
+
+# Write the managed env file (root-only) with a generated SESSION_SECRET, and
+# the cron-driven backup script that the framework lifecycle cannot generate
+# on its own.
+ba_write_config() {
+  local env_file="/etc/${SERVICE_NAME}.env"
+  local session_secret=""
+  if [[ -f "$env_file" ]]; then
+    session_secret="$(grep -E '^SESSION_SECRET=' "$env_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
   fi
-  local size
-  size=$(wc -c < "$bin")
-  if [[ $size -lt 1048576 ]]; then
-    rm -f "$bin"
-    error "$(t app.newapi.error.binary_too_small "$size")"
+  if [[ -z "$session_secret" ]]; then
+    session_secret="$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 48 || true)"
+    [[ -n "$session_secret" ]] || error "$(t app.newapi.error.secret)"
   fi
-  local magic
-  magic=$(dd if="$bin" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n' 2>/dev/null || true)
-  if [[ "$magic" != "7f454c46" ]]; then
-    rm -f "$bin"
-    error "$(t app.newapi.error.binary_not_elf "${magic:-read failed}")"
-  fi
-  local size_mb=$(( size / 1024 / 1024 ))
-  success "$(t app.newapi.success.binary_verified "$size_mb")"
-}
-_restore_moved_binary_backup() {
-  app_binary_restore_moved_backup "$1"
-}
-_install_binary_candidate() {
-  app_binary_install_candidate "$@"
-}
-_restore_binary_backup() {
-  app_binary_restore_backup "$1"
-}
-_backup_current_binary() {
-  local backup_path="$1"
-  if ! app_binary_backup_current "$backup_path"; then
-    error "$(t app.newapi.error.binary_install "$BIN_PATH")"
-  fi
-}
-_health_check() {
-  local elapsed=0
-  local HTTP_CODE
-  until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
-      "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000") \
-      && [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; do
-    sleep 1
-    elapsed=$(( elapsed + 1 ))
-    [[ $elapsed -ge 15 ]] && break
-  done
-  if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
-    success "$(t app.newapi.success.http_health "$HTTP_CODE")"
-    return 0
-  else
-    warn "$(t app.newapi.warn.http_health "$HTTP_CODE")"
-    warn "$(t app.newapi.warn.debug_command "$SERVICE_NAME")"
-    return 1
-  fi
-}
-_write_env_file() {
-  local session_secret="$1"
-  if ! atomic_write_file "$ENV_FILE" 600 root:root << EOF
+  if ! atomic_write_file "$env_file" 600 root:root <<EOF
 # Managed by deploy-scripts.
 PORT=${PORT}
 SESSION_SECRET=${session_secret}
@@ -13343,69 +12624,55 @@ SQLITE_BUSY_TIMEOUT=3000
 GODEBUG=netdns=go
 EOF
   then
-    error "$(t app.newapi.error.env_file "$ENV_FILE")"
+    error "$(t app.newapi.error.env_file "$env_file")"
   fi
-  success "$(t app.newapi.success.env_file "$ENV_FILE")"
+  success "$(t app.newapi.success.env_file "$env_file")"
+  _write_backup_script
 }
-_write_systemd_unit() {
-  local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
-  if ! systemd_write_unit "$unit_path" << EOF
-[Unit]
-Description=New API - LLM API Aggregation Gateway
-Documentation=https://github.com/${GITHUB_REPO}
-After=network-online.target
-Wants=network-online.target
 
-[Service]
-Type=simple
-User=${SERVICE_USER}
-Group=${SERVICE_USER}
-WorkingDirectory=${DATA_DIR}
-
-ExecStart=${BIN_PATH} \\
-    --port ${PORT} \\
-    --log-dir ${LOG_DIR}
-
-# Restart automatically, with burst limits to avoid a crash loop.
-Restart=always
-RestartSec=5
-StartLimitInterval=60
-StartLimitBurst=5
-
-# Runtime environment.
-EnvironmentFile=${ENV_FILE}
-
-# File descriptor and process limits for API gateway workloads.
-LimitNOFILE=65536
-LimitNPROC=512
-
-# Security hardening.
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-# Keep the filesystem read-only except for data and log directories.
-ReadWritePaths=${DATA_DIR} ${LOG_DIR}
-
-# Send logs to systemd journal; inspect with journalctl -u ${SERVICE_NAME}.
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=${SERVICE_NAME}
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  then
-    error "$(t app.newapi.error.systemd_unit "$SERVICE_NAME")"
+# Flush the SQLite WAL before the framework archives DATA_DIR.
+ba_backup_hook() {
+  local db_file="${DATA_DIR}/one-api.db"
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "$db_file" ]]; then
+    sqlite3 "$db_file" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
+    local ic
+    ic="$(sqlite3 "$db_file" "PRAGMA integrity_check;" 2>/dev/null || echo "error")"
+    if [[ "$ic" != "ok" ]]; then
+      warn "$(t app.newapi.backup.log.integrity_warn "$ic")"
+    fi
   fi
+  return 0
 }
+
+# Remove the cron entry and backup script during uninstall (the logrotate
+# policy is removed by the shared lifecycle).
+ba_uninstall_extra() {
+  ba_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"
+  ba_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"
+}
+
+# The install summary needs the public/internal URLs and the credential
+# warning (New API ships with a publicly known default admin account).
+ba_summary_extra() {
+  local internal_ip
+  internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  internal_ip="${internal_ip:-YOUR_SERVER_IP}"
+  echo -e "  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
+  echo -e "  $(t app.newapi.summary.internal)  ${CYAN}http://${internal_ip}:${PORT}${GREEN}"
+  echo -e "  ${RED}${BOLD}$(t app.newapi.summary.credential_warning)${GREEN}"
+  echo -e "  $(t app.newapi.summary.credential_hint)"
+}
+
+# Write the standalone cron backup script. The framework's manual backup path
+# covers on-demand backups; the cron script gives unattended nightly backups
+# with the same SQLite WAL quiescing and retention rules.
 _write_backup_script() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
   fi
-  local backup_dir_literal data_dir_literal service_name_literal keep_days_literal
+  local backup_dir_literal data_dir_literal keep_days_literal
   printf -v backup_dir_literal '%q' "$BACKUP_DIR"
   printf -v data_dir_literal '%q' "$DATA_DIR"
-  printf -v service_name_literal '%q' "$SERVICE_NAME"
   printf -v keep_days_literal '%q' "$BACKUP_KEEP_DAYS"
   local msg_start msg_backup_dir_failed msg_data_missing msg_wal_ok msg_wal_warn msg_integrity_warn msg_backup_ok msg_tar_failed msg_removed_old msg_remove_failed msg_done
   msg_start="$(t app.newapi.backup.log.start)"
@@ -13433,7 +12700,6 @@ umask 077
 
 BACKUP_DIR=${backup_dir_literal}
 DATA_DIR=${data_dir_literal}
-SERVICE_NAME=${service_name_literal}
 KEEP_DAYS=${keep_days_literal}
 [[ "\$KEEP_DAYS" =~ ^[0-9]+$ ]] || KEEP_DAYS=0
 MSG_START="${msg_start}"
@@ -13527,205 +12793,24 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
     _log "$(printf "$MSG_REMOVED_OLD" "$REMOVED" "$KEEP_DAYS")"
   fi
 fi
-
 _log "── ${MSG_DONE} ────────────────────────────────────"
 BKSH_BODY
   then
     rm -f "$backup_tmp"
     error "$(t app.newapi.error.backup_script)"
   fi
-  if ! chmod 750 "$backup_tmp" \
+  if ! chmod 700 "$backup_tmp" \
       || ! chown root:root "$backup_tmp" \
       || ! mv "$backup_tmp" "$backup_script"; then
     rm -f "$backup_tmp"
     error "$(t app.newapi.error.backup_script)"
   fi
-  success "$(t app.newapi.success.backup_script)"
-}
-_backup_silent() {
-  local label="${1:-manual}"
-  local backup_log="${BACKUP_DIR}/backup.log"
-  _log_backup_helper() {
-    [[ -d "$BACKUP_DIR" ]] || return 1
-    printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
-  }
-  if ! mkdir -p "$BACKUP_DIR"; then
-    warn "$(t app.newapi.warn.silent_backup_dir_failed "$BACKUP_DIR")"
-    return 1
-  fi
-  if [[ ! -d "$DATA_DIR" ]]; then
-    _log_backup_helper "$(t app.newapi.backup.log.data_missing "$DATA_DIR")"
-    warn "$(t app.newapi.warn.silent_data_missing "$DATA_DIR")"
-    return 1
-  fi
-  local archive
-  archive="${BACKUP_DIR}/new-api_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
-  local archive_tmp="${archive}.tmp"
-  local DB_FILE="${DATA_DIR}/one-api.db"
-  if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
-    sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
-    local _ic
-    _ic=$(sqlite3 "$DB_FILE" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    if [[ "$_ic" != "ok" ]]; then
-      _log_backup_helper "$(t app.newapi.backup.log.integrity_warn "$_ic")"
-      warn "$(t app.newapi.warn.sqlite_integrity "$_ic")"
-    fi
-  fi
-  if tar -czf "$archive_tmp" \
-      --exclude="*.log" --exclude="*.log.*" \
-      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
-    if mv "$archive_tmp" "$archive"; then
-      local sz; sz=$(du -sh "$archive" 2>/dev/null | awk '{print $1}')
-      success "$(t app.newapi.success.silent_backup "$archive" "$sz")"
-    else
-      rm -f "$archive_tmp"
-      _log_backup_helper "$(t app.newapi.backup.log.tar_failed)"
-      warn "$(t app.newapi.warn.silent_backup_failed)"
-      return 1
-    fi
-  else
-    rm -f "$archive_tmp"
-    _log_backup_helper "$(t app.newapi.backup.log.tar_failed)"
-    warn "$(t app.newapi.warn.silent_backup_failed)"
-    return 1
-  fi
-}
-_print_install_summary() {
-  local version="$1"
-  local summary_state="${2:-ready}"
-  local INTERNAL_IP
-  local summary_title
-  INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
-  INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
-  if [[ "$summary_state" == "pending" ]]; then
-    summary_title="$(t app.newapi.summary.title_pending)"
-  else
-    summary_title="$(t app.newapi.summary.title_ready)"
-  fi
-  echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║           ${summary_title}                     ║"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
-  echo -e "  ║  $(t app.newapi.summary.internal)  ${CYAN}http://${INTERNAL_IP}:${PORT}${GREEN}"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${RED}${BOLD}$(t app.newapi.summary.credential_warning)${GREEN}"
-  echo -e "  ║  $(t app.newapi.summary.credential_hint)"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.newapi.summary.api_url)  ${CYAN}https://${DOMAIN}/v1${GREEN}"
-  echo -e "  ║  $(t app.newapi.summary.version)  ${YELLOW}${version}${GREEN}"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.newapi.summary.data_dir)  ${YELLOW}${DATA_DIR}${GREEN}"
-  echo -e "  ║  $(t app.newapi.summary.log_dir)  ${YELLOW}${LOG_DIR}${GREEN}"
-  echo -e "  ║  $(t app.newapi.summary.backup_dir)  ${YELLOW}${BACKUP_DIR}${GREEN}"
-  echo "  ╚══════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
-  echo -e "  ${BOLD}$(t app.newapi.summary.management)${NC}"
-  echo -e "    ${CYAN}bash $0 status${NC}      - $(t app.newapi.summary.status_cmd)"
-  echo -e "    ${CYAN}bash $0 update${NC}      - $(t app.newapi.summary.update_cmd)"
-  echo -e "    ${CYAN}bash $0 backup${NC}      - $(t app.newapi.summary.backup_cmd)"
-  echo -e "    ${CYAN}bash $0 uninstall${NC}   - $(t app.newapi.summary.uninstall_cmd)"
-  echo ""
-  echo -e "  ${BOLD}$(t app.newapi.summary.systemd)${NC}"
-  echo -e "    ${CYAN}systemctl status ${SERVICE_NAME}${NC}     $(t app.newapi.summary.show_status)"
-  echo -e "    ${CYAN}journalctl -u ${SERVICE_NAME} -f${NC}     $(t app.newapi.summary.live_logs)"
-  echo -e "    ${CYAN}systemctl restart ${SERVICE_NAME}${NC}    $(t app.newapi.summary.restart)"
-  echo ""
-  echo -e "  ${YELLOW}${BOLD}$(t app.newapi.summary.cf_ssl)${NC}"
-  echo -e "  ${YELLOW}${BOLD}$(t app.newapi.summary.cf_sse)${NC}"
-  echo ""
-}
-do_install() {
-  show_banner
-  preflight_check "install"
-  acquire_lock
-  step "$(t app.newapi.step.latest)"
-  check_connectivity
-  info "$(t app.newapi.info.query_latest)"
-  local LATEST
-  LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.newapi.warn.github_api")
-  [[ -z "$LATEST" ]] && error "$(t app.newapi.error.version_failed)"
-  success "$(t app.newapi.success.latest "${BOLD}${LATEST}${NC}")"
-  local DOWNLOAD_URL
-  DOWNLOAD_URL=$(get_download_url "$LATEST")
-  step "$(t app.newapi.step.deps)"
-  if ! apt-get update -qq; then
-    error "$(t app.newapi.error.apt_update)"
-  fi
-  if ! apt-get install -y -qq curl ca-certificates sqlite3; then
-    error "$(t app.newapi.error.deps_install)"
-  fi
-  success "$(t app.newapi.success.deps)"
-  step "$(t app.newapi.step.user_dirs)"
-  if ! id "$SERVICE_USER" &>/dev/null; then
-    if ! useradd -r -s /usr/sbin/nologin -d "$INSTALL_DIR" "$SERVICE_USER"; then
-      error "$(t app.newapi.error.user_create "$SERVICE_USER")"
-    fi
-    success "$(t app.newapi.success.user_created "$SERVICE_USER")"
-  else
-    info "$(t app.newapi.info.user_exists "$SERVICE_USER")"
-  fi
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  require_safe_path "DATA_DIR" "$DATA_DIR"
-  require_safe_path "LOG_DIR" "$LOG_DIR"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  if ! mkdir -p "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
-    error "$(t app.newapi.error.dir_create "$INSTALL_DIR" "$BACKUP_DIR")"
-  fi
-  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$LOG_DIR" "$BACKUP_DIR"; then
-    error "$(t app.newapi.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
-  fi
-  success "$(t app.newapi.success.dirs "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR")"
-  step "$(t app.newapi.step.download "$BIN_ARCH")"
-  info "$(t app.newapi.info.download_url "$DOWNLOAD_URL")"
-  local TMP_BIN
-  if ! TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX"); then
-    error "$(t app.newapi.error.download "$GITHUB_REPO")"
-  fi
-  if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    if ! rm -f "$TMP_BIN"; then
-      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
-    fi
-    error "$(t app.newapi.error.download "$GITHUB_REPO")"
-  fi
-  verify_binary "$TMP_BIN"
-  local OLD_BIN_BAK=""
-  if [[ -f "$BIN_PATH" ]]; then
-    local OLD_TS; OLD_TS=$(date +%Y%m%d_%H%M%S)
-    OLD_BIN_BAK="${INSTALL_DIR}/new-api.bak.${OLD_TS}"
-  fi
-  if ! _install_binary_candidate "$TMP_BIN" "$OLD_BIN_BAK"; then
-    error "$(t app.newapi.error.binary_install "$BIN_PATH")"
-  fi
-  if [[ -n "$OLD_BIN_BAK" ]]; then
-    warn "$(t app.newapi.warn.old_binary_backup "$(basename "$OLD_BIN_BAK")")"
-  fi
-  if ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"; then
-    error "$(t app.newapi.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR")"
-  fi
-  success "$(t app.newapi.success.binary_installed "$BIN_PATH")"
-  step "$(t app.newapi.step.secret)"
-  local SESSION_SECRET
-  SESSION_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 48; true)
-  [[ -n "$SESSION_SECRET" ]] || error "$(t app.newapi.error.secret)"
-  success "$(t app.newapi.success.secret)"
-  _write_env_file "$SESSION_SECRET"
-  step "$(t app.newapi.step.systemd)"
-  _write_systemd_unit
-  success "$(t app.newapi.success.systemd "$SERVICE_NAME")"
-  step "$(t app.newapi.step.firewall)"
-  app_configure_firewall "$PORT" "app.newapi" "New API"
-  step "$(t app.newapi.step.logrotate)"
-  app_write_logrotate "/etc/logrotate.d/new-api" "$LOG_DIR" "app.newapi.error.logrotate" "app.newapi.success.logrotate"
-  step "$(t app.newapi.step.cron)"
-  _write_backup_script
   local cron_file="/etc/cron.d/new-api-backup"
   local cron_tmp
   if ! cron_tmp=$(mktemp "${cron_file}.XXXXXX"); then
     error "$(t app.newapi.error.cron)"
   fi
-  if ! printf '%s\n' "${BACKUP_CRON} root /bin/bash /usr/local/bin/new-api-backup" > "$cron_tmp" \
+  if ! printf '%s\n' "${BACKUP_CRON} root /bin/bash ${backup_script}" > "$cron_tmp" \
       || ! chmod 644 "$cron_tmp" \
       || ! chown root:root "$cron_tmp" \
       || ! mv "$cron_tmp" "$cron_file"; then
@@ -13733,509 +12818,66 @@ do_install() {
     error "$(t app.newapi.error.cron)"
   fi
   success "$(t app.newapi.success.cron "$BACKUP_KEEP_DAYS")"
-  step "$(t app.newapi.step.start)"
-  local _install_summary_state="ready"
-  app_check_port_conflict "$PORT"
-  if ! systemctl daemon-reload; then
-    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
-  fi
-  if ! systemctl enable "$SERVICE_NAME" --quiet; then
-    warn "$(t app.newapi.warn.service_enable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-  fi
-  if systemctl restart "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
-    success "$(t app.newapi.success.service_started)"
-    systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null | head -12 | sed 's/^/  /' >&2 || true
-  else
-    warn "$(t app.newapi.warn.start_rollback)"
-    if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-      warn "$(t app.newapi.warn.cleanup_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-    fi
-    if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
-      warn "$(t app.newapi.warn.cleanup_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-    fi
-    _newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"
-    if ! systemctl daemon-reload 2>/dev/null; then
-      warn "$(t app.newapi.warn.cleanup_reload_failed)"
-    fi
-    if [[ -n "${OLD_BIN_BAK:-}" && -f "$OLD_BIN_BAK" ]]; then
-      _restore_binary_backup "$OLD_BIN_BAK" \
-        || error "$(t app.newapi.error.install_start_failed "$SERVICE_NAME")"
-    else
-      _newapi_require_safe_bin_path
-      _newapi_remove_file_or_error "$BIN_PATH" "BIN_PATH"
-    fi
-    error "$(t app.newapi.error.install_start_failed "$SERVICE_NAME")"
-  fi
-  step "$(t app.newapi.step.health)"
-  INSTALLED_VERSION="$LATEST"
-  app_save_config
-  if ! _health_check; then
-    _install_summary_state="pending"
-  fi
-  _print_install_summary "$LATEST" "$_install_summary_state"
 }
+
+# Thin lifecycle delegates over the shared binary-app library.
+preflight_check() {
+  bapp_preflight "$@"
+}
+
+_validate_config_values() {
+  bapp_validate_cfg
+  # BACKUP_CRON is a crontab(5) schedule; reject newlines, quotes, or shell
+  # metacharacters so the generated /etc/cron.d line stays well-formed.
+  if [[ -z "$BACKUP_CRON" || "$BACKUP_CRON" == *$'\n'* || "$BACKUP_CRON" == *$'\r'* ]] \
+      || [[ "$BACKUP_CRON" == *'&'* || "$BACKUP_CRON" == *'|'* || "$BACKUP_CRON" == *';'* \
+      || "$BACKUP_CRON" == *'$'* || "$BACKUP_CRON" == *'`'* || "$BACKUP_CRON" == *'"'* \
+      || "$BACKUP_CRON" == *"'"* ]]; then
+    error "$(t app.newapi.error.cron_invalid "$BACKUP_CRON")"
+  fi
+  # TZ must be a bare IANA timezone name like Asia/Shanghai or UTC; reject
+  # spaces, newlines, or shell metacharacters.
+  if [[ -z "$TZ" || "$TZ" == *[[:space:]]* || "$TZ" == *$'\n'* || "$TZ" == *$'\r'* ]] \
+      || [[ "$TZ" == *'&'* || "$TZ" == *'|'* || "$TZ" == *';'* || "$TZ" == *'$'* \
+      || "$TZ" == *'`'* || "$TZ" == *'"'* || "$TZ" == *"'"* || "$TZ" == *'..'* \
+      || "$TZ" == /* ]]; then
+    error "$(t app.newapi.error.tz_invalid "$TZ")"
+  fi
+}
+
+do_install() {
+  acquire_lock
+  bapp_install
+}
+
 do_update() {
-  show_banner
-  preflight_check "update"
-  app_load_config _NEWAPI_DERIVE_PATHS
   acquire_lock
-  [[ ! -x "$BIN_PATH" ]] \
-    && error "$(t app.newapi.error.not_installed "$BIN_PATH")"
-  step "$(t app.newapi.step.check_update)"
-  check_connectivity
-  info "$(t app.newapi.info.query_latest)"
-  local LATEST
-  LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.newapi.warn.github_api")
-  [[ -z "$LATEST" ]] && error "$(t app.newapi.error.latest_failed)"
-  local CURRENT="${INSTALLED_VERSION:-unknown}"
-  info "$(t app.newapi.info.current "${YELLOW}${CURRENT}${NC}")"
-  info "$(t app.newapi.info.github_latest "${YELLOW}${LATEST}${NC}")"
-  if [[ "$CURRENT" == "$LATEST" ]]; then
-    success "$(t app.newapi.success.already_latest "$LATEST")"
-    exit 0
-  fi
-  local _pre_svc_state
-  _pre_svc_state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
-  if [[ "$_pre_svc_state" == "failed" ]]; then
-    warn "$(t app.newapi.warn.pre_failed_state)"
-    warn "$(t app.newapi.warn.pre_failed_debug "$SERVICE_NAME")"
-  fi
-  step "$(t app.newapi.step.pre_backup)"
-  if ! _backup_silent "pre-update"; then
-    warn "$(t app.newapi.warn.pre_backup_failed)"
-  fi
-  step "$(t app.newapi.step.download_update "$CURRENT" "$LATEST")"
-  local DOWNLOAD_URL
-  DOWNLOAD_URL=$(get_download_url "$LATEST")
-  info "$(t app.newapi.info.download_url "$DOWNLOAD_URL")"
-  local TMP_BIN
-  if ! TMP_BIN=$(mktemp "${INSTALL_DIR}/new-api.tmp.XXXXXX"); then
-    error "$(t app.newapi.error.update_download)"
-  fi
-  if ! curl -fL --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    if ! rm -f "$TMP_BIN"; then
-      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
-    fi
-    error "$(t app.newapi.error.update_download)"
-  fi
-  verify_binary "$TMP_BIN"
-  step "$(t app.newapi.step.replace_restart)"
-  local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
-  local BAK_PATH="${INSTALL_DIR}/new-api.bak.${BAK_TS}"
-  _backup_current_binary "$BAK_PATH" \
-    || error "$(t app.newapi.error.binary_install "$BIN_PATH")"
-  info "$(t app.newapi.info.old_binary "$BAK_PATH")"
-  info "$(t app.newapi.info.stop_service)"
-  if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-    if ! rm -f "$TMP_BIN"; then
-      warn "$(t app.newapi.warn.tmp_binary_cleanup_failed "$TMP_BIN")"
-    fi
-    error "$(t app.newapi.error.stop_service_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-  fi
-  if ! _install_binary_candidate "$TMP_BIN"; then
-    if _restore_binary_backup "$BAK_PATH"; then
-      if ! systemctl start "$SERVICE_NAME"; then
-        warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
-      fi
-    fi
-    error "$(t app.newapi.error.binary_install "$BIN_PATH")"
-  fi
-  if ! systemctl daemon-reload; then
-    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
-  fi
-  if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
-    success "$(t app.newapi.success.updated_started)"
-    INSTALLED_VERSION="$LATEST"
-    app_save_config
-    local -a _old_baks
-    local _old_bak_entry
-    while IFS= read -r -d '' _old_bak_entry; do
-      _old_baks+=("${_old_bak_entry#* }")
-    done < <(
-      find "$INSTALL_DIR" -maxdepth 1 -name "new-api.bak.*" -type f \
-        -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
-    )
-    if [[ ${#_old_baks[@]} -gt 0 ]]; then
-      local _cleaned_old=0
-      local _old_bak
-      for _old_bak in "${_old_baks[@]}"; do
-        if rm -f "$_old_bak"; then
-          _cleaned_old=$(( _cleaned_old + 1 ))
-        else
-          warn "$(t app.newapi.warn.cleanup_old_failed "$_old_bak")"
-        fi
-      done
-      if [[ $_cleaned_old -gt 0 ]]; then
-        info "$(t app.newapi.info.cleaned_old "$_cleaned_old")"
-      fi
-    fi
-    if ! _health_check; then
-      :
-    fi
-    echo ""
-    echo -e "  ${BOLD}${GREEN}$(t app.newapi.success.update_done "${YELLOW}${CURRENT}${GREEN}" "${YELLOW}${LATEST}${NC}")${NC}"
-    echo ""
-  else
-    warn "$(t app.newapi.warn.update_start_failed "$LATEST" "$CURRENT")"
-    if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-      error "$(t app.newapi.error.rollback_stop_failed "$SERVICE_NAME" "$BAK_PATH" "$SERVICE_NAME")"
-    fi
-    if ! _restore_binary_backup "$BAK_PATH"; then
-      warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
-      error "$(t app.newapi.error.update_failed "$CURRENT" "$SERVICE_NAME" "$BAK_PATH")"
-    fi
-    if systemctl start "$SERVICE_NAME"; then
-      if wait_for_service "$SERVICE_NAME" 15; then
-        success "$(t app.newapi.success.rollback "$CURRENT")"
-      else
-        warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
-      fi
-    else
-      warn "$(t app.newapi.warn.rollback_start_failed "$SERVICE_NAME")"
-    fi
-    error "$(t app.newapi.error.update_failed "$CURRENT" "$SERVICE_NAME" "$BAK_PATH")"
-  fi
+  bapp_update
 }
+
 do_backup() {
-  show_banner
-  preflight_check "backup"
-  app_load_config _NEWAPI_DERIVE_PATHS
   acquire_lock
-  [[ ! -d "$DATA_DIR" ]] \
-    && error "$(t app.newapi.error.data_missing_install "$DATA_DIR")"
-  step "$(t app.newapi.step.manual_backup)"
-  if ! mkdir -p "$BACKUP_DIR"; then
-    error "$(t app.newapi.error.backup_dir_create "$BACKUP_DIR")"
-  fi
-  local DB_FILE="${DATA_DIR}/one-api.db"
-  if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
-    if sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null; then
-      success "$(t app.newapi.success.wal)"
-    else
-      warn "$(t app.newapi.warn.wal)"
-    fi
-    local _ic
-    _ic=$(sqlite3 "$DB_FILE" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
-    if [[ "$_ic" == "ok" ]]; then
-      success "$(t app.newapi.success.sqlite_integrity)"
-    else
-      warn "$(t app.newapi.warn.sqlite_integrity_failed "$_ic")"
-    fi
-  fi
-  local TS; TS=$(date +%Y%m%d_%H%M%S)
-  local ARCHIVE="${BACKUP_DIR}/new-api_${TS}.tar.gz"
-  local ARCHIVE_TMP="${ARCHIVE}.tmp"
-  info "$(t app.newapi.info.backing_up "$DATA_DIR" "$ARCHIVE")"
-  if tar -czf "$ARCHIVE_TMP" \
-      --exclude="*.log" --exclude="*.log.*" \
-      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
-    if mv "$ARCHIVE_TMP" "$ARCHIVE"; then
-      local SZ; SZ=$(du -sh "$ARCHIVE" 2>/dev/null | awk '{print $1}')
-      success "$(t app.newapi.success.backup_done "$ARCHIVE" "$SZ")"
-    else
-      rm -f "$ARCHIVE_TMP"
-      error "$(t app.newapi.error.backup_failed "$BACKUP_DIR")"
-    fi
-  else
-    rm -f "$ARCHIVE_TMP"
-    error "$(t app.newapi.error.backup_failed "$BACKUP_DIR")"
-  fi
-  local _keep_days="${BACKUP_KEEP_DAYS}"
-  [[ "$_keep_days" =~ ^[0-9]+$ ]] || _keep_days=0
-  if [[ "$_keep_days" -gt 0 ]]; then
-    local _cleaned=0
-    while IFS= read -r -d '' f; do
-      if rm -f "$f"; then
-        _cleaned=$(( _cleaned + 1 ))
-      else
-        warn "$(t app.newapi.warn.backup_cleanup_failed "$f")"
-      fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-             -mtime "+${_keep_days}" -type f -print0 2>/dev/null)
-    if [[ $_cleaned -gt 0 ]]; then
-      info "$(t app.newapi.info.cleaned_backups "$_cleaned" "$_keep_days")"
-    fi
-  fi
-  echo ""
-  info "$(t app.newapi.info.backup_list "$BACKUP_DIR")"
-  local -a _bak_list
-  local _bak_entry
-  while IFS= read -r -d '' _bak_entry; do
-    _bak_list+=("${_bak_entry#* }")
-  done < <(
-    find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | head -z -n 10
-  )
-  if [[ ${#_bak_list[@]} -gt 0 ]]; then
-    local _sz
-    for _f in "${_bak_list[@]}"; do
-      _sz=$(du -sh "$_f" 2>/dev/null | cut -f1 || echo "?")
-      printf '  %-55s  %s\n' "$(basename "$_f")" "$_sz" >&2
-    done
-    local _total
-    _total=$(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" 2>/dev/null | wc -l)
-    info "$(t app.newapi.info.backup_total "$_total")"
-  else
-    warn "$(t app.newapi.warn.no_backups)"
-  fi
-  echo ""
-}
-do_status() {
-  show_banner
-  preflight_check "status"
-  app_load_config _NEWAPI_DERIVE_PATHS
-  [[ $EUID -ne 0 ]] && warn "$(t app.newapi.warn.non_root_status "$0")"
-  step "$(t app.newapi.step.status)"
-  echo -e "\n${BOLD}[$(t app.newapi.status.systemd)]${NC}"
-  systemctl is-active --quiet "$SERVICE_NAME" \
-    && echo -e "  ${GREEN}[✓]${NC} ${SERVICE_NAME} $(t app.newapi.status.running)" \
-    || echo -e "  ${RED}[✗]${NC} ${SERVICE_NAME} $(t app.newapi.status.not_running)"
-  systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null \
-    | tail -n +3 | head -10 | sed 's/^/  /' || true
-  echo -e "\n${BOLD}[$(t app.newapi.status.version_info)]${NC}"
-  if [[ -x "$BIN_PATH" ]]; then
-    echo -e "  $(t app.newapi.status.recorded_version):  ${YELLOW}${INSTALLED_VERSION:-$(t app.newapi.status.unknown)}${NC}"
-    echo -e "  $(t app.newapi.status.binary_path): ${BIN_PATH}"
-    echo -e "  $(t app.newapi.status.binary_time): $(stat -c '%y' "$BIN_PATH" 2>/dev/null | cut -d'.' -f1 || t app.newapi.status.unknown)"
-    echo -e "  $(t app.newapi.status.binary_size): $(du -sh "$BIN_PATH" 2>/dev/null | cut -f1 || t app.newapi.status.unknown)"
-  else
-    echo -e "  ${RED}[✗]${NC} $(t app.newapi.status.binary_missing "$BIN_PATH")"
-  fi
-  echo -e "\n${BOLD}[$(t app.newapi.status.resources)]${NC}"
-  local pid
-  pid=$(systemctl show "$SERVICE_NAME" --property=MainPID --value 2>/dev/null || echo "0")
-  if [[ "$pid" -gt 0 ]] 2>/dev/null; then
-    local mem cpu
-    mem=$(ps -p "$pid" -o rss= 2>/dev/null | awk '{printf "%.1f MB", $1/1024}' || echo "N/A")
-    cpu=$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ' || echo "N/A")
-    echo -e "  $(t app.newapi.status.pid):  ${pid}"
-    echo -e "  $(t app.newapi.status.memory):  ${mem}"
-    echo -e "  $(t app.newapi.status.cpu):  ${cpu}%"
-    echo -e "  $(t app.newapi.status.start_time):  $(ps -p "$pid" -o lstart= 2>/dev/null | tr -s ' ' || echo 'N/A')"
-  else
-    echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.no_process)"
-  fi
-  echo -e "\n${BOLD}[$(t app.newapi.status.directories)]${NC}"
-  if [[ -d "$DATA_DIR" ]]; then
-    local data_size; data_size=$(du -sh "$DATA_DIR" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
-    echo -e "  $(t app.newapi.status.data_dir):  ${DATA_DIR} (${data_size})"
-    if [[ -f "${DATA_DIR}/one-api.db" ]]; then
-      local db_size; db_size=$(du -sh "${DATA_DIR}/one-api.db" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
-      echo -e "  $(t app.newapi.status.database):    one-api.db (${db_size})"
-    fi
-  else
-    echo -e "  ${RED}[✗]${NC} $(t app.newapi.status.data_missing "$DATA_DIR")"
-  fi
-  echo -e "  $(t app.newapi.status.log_dir):  ${LOG_DIR}"
-  echo -e "\n${BOLD}[$(t app.newapi.status.backup_info)]${NC}"
-  if [[ -d "$BACKUP_DIR" ]]; then
-    local bak_count bak_total_size
-    bak_count=$(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" 2>/dev/null | wc -l)
-    bak_total_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | awk '{print $1}' || t app.newapi.status.unknown)
-    echo -e "  $(t app.newapi.status.backup_dir):  ${BACKUP_DIR} (${bak_total_size}, $(t app.newapi.status.backup_count "$bak_count"))"
-    local _cnt=0
-    local _bak_entry
-    while IFS= read -r -d '' _bak_entry; do
-      f="${_bak_entry#* }"
-      local _sz; _sz=$(du -sh "$f" 2>/dev/null | cut -f1 || echo "?")
-      echo -e "  $((_cnt+1)). $(basename "$f") (${_sz})"
-      _cnt=$(( _cnt + 1 ))
-    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "new-api_*.tar.gz" \
-             -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | head -z -n 3)
-    if [[ $_cnt -eq 0 ]]; then
-      echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.warn.no_backups)"
-    fi
-  else
-    echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.backup_missing "$BACKUP_DIR")"
-  fi
-  echo -e "\n${BOLD}[$(t app.newapi.status.disk)]${NC}"
-  local disk_fmt
-  disk_fmt="$(t app.newapi.status.disk_usage)"
-  df -h "$INSTALL_DIR" 2>/dev/null \
-    | awk -v fmt="$disk_fmt" 'NR==2{printf "  " fmt "\n", $6,$3,$2,$5}' || true
-  echo -e "\n${BOLD}[$(t app.newapi.status.health "$PORT")]${NC}"
-  local HTTP_CODE
-  HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
-    "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000")
-  if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
-    echo -e "  ${GREEN}[✓]${NC} $(t app.newapi.status.local_ok "$HTTP_CODE")"
-  else
-    echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.local_warn "$HTTP_CODE")"
-  fi
-  echo -e "\n${BOLD}[$(t app.newapi.status.firewall "$PORT")]${NC}"
-  if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    local ufw_rule
-    ufw_rule=$(ufw status 2>/dev/null | grep -E "(^|[[:space:]])${PORT}/tcp([[:space:]]|$)" || true)
-    if [[ -n "$ufw_rule" ]]; then
-      echo -e "  ${GREEN}[✓]${NC} $(t app.newapi.status.ufw_allowed "$PORT")"
-      ufw_rule="${ufw_rule//$'\n'/$'\n'  }"
-      printf '  %s\n' "$ufw_rule"
-    else
-      echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.ufw_missing "$PORT")"
-    fi
-  elif command -v iptables &>/dev/null; then
-    if iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
-      echo -e "  ${GREEN}[✓]${NC} $(t app.newapi.status.iptables_allowed "$PORT")"
-    else
-      echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.iptables_missing "$PORT")"
-    fi
-  else
-    echo -e "  ${YELLOW}[!]${NC} $(t app.newapi.status.no_firewall)"
-  fi
-  echo ""
-}
-do_uninstall() {
-  show_banner
-  preflight_check "uninstall"
-  app_load_config _NEWAPI_DERIVE_PATHS
-  acquire_lock
-  [[ -z "${INSTALL_DIR:-}" ]] && error "$(t app.newapi.error.install_dir_empty "$CONF_FILE")"
-  [[ -z "${DATA_DIR:-}"    ]] && error "$(t app.newapi.error.data_dir_empty)"
-  [[ -z "${BACKUP_DIR:-}"  ]] && error "$(t app.newapi.error.backup_dir_empty)"
-  [[ "${INSTALL_DIR}" == "/" ]] && error "$(t app.newapi.error.install_dir_root)"
-  [[ "${DATA_DIR}"    == "/" ]] && error "$(t app.newapi.error.data_dir_root)"
-  [[ "${BACKUP_DIR}"  == "/" ]] && error "$(t app.newapi.error.backup_dir_root)"
-  step "$(t app.newapi.step.uninstall)"
-  echo -e "${RED}${BOLD}"
-  echo "  $(t app.newapi.uninstall.removes)"
-  echo "     - $(t app.newapi.uninstall.binary "$INSTALL_DIR")"
-  echo "     - $(t app.newapi.uninstall.systemd "$SERVICE_NAME")"
-  echo "     - $(t app.newapi.uninstall.logrotate)"
-  echo "     - $(t app.newapi.uninstall.cron)"
-  echo "     - $(t app.newapi.uninstall.backup_script)"
-  echo "     - $(t app.newapi.uninstall.env_file "$ENV_FILE")"
-  echo "     - $(t app.newapi.uninstall.deploy_config "$CONF_FILE")"
-  echo ""
-  echo "  $(t app.newapi.uninstall.keep_data "$DATA_DIR")"
-  echo "  $(t app.newapi.uninstall.keep_backup "$BACKUP_DIR")"
-  echo -e "${NC}"
-  local _c
-  if deploy_assume_yes; then
-    _c="YES"
-  else
-    prompt "$(t app.newapi.prompt.continue)"
-    read -r _c
-  fi
-  [[ "$_c" != "YES" ]] && { info "$(t app.newapi.info.cancelled)"; exit 0; }
-  local DELETE_DATA=false
-  if deploy_assume_yes; then
-    deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true
-  else
-    prompt "$(t app.newapi.prompt.delete_data "$DATA_DIR")"
-    local _del_data; read -r _del_data
-    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
-  fi
-  local DELETE_BACKUP=false
-  if deploy_assume_yes; then
-    deploy_env_truthy DEPLOY_DELETE_BACKUP && DELETE_BACKUP=true
-  else
-    prompt "$(t app.newapi.prompt.delete_backup "$BACKUP_DIR")"
-    local _del_bak; read -r _del_bak
-    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
-  fi
-  info "$(t app.newapi.info.stop_disable "$SERVICE_NAME")"
-  if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-      error "$(t app.newapi.error.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-    fi
-    warn "$(t app.newapi.warn.uninstall_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-  fi
-  if ! systemctl disable "$SERVICE_NAME" 2>/dev/null; then
-    warn "$(t app.newapi.warn.uninstall_disable_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-  fi
-  _newapi_remove_file_or_error "/etc/systemd/system/${SERVICE_NAME}.service" "NEWAPI_SERVICE_FILE"
-  if ! systemctl daemon-reload; then
-    error "$(t app.newapi.error.systemd_reload "$SERVICE_NAME")"
-  fi
-  success "$(t app.newapi.success.removed_systemd)"
-  _newapi_require_safe_bin_path
-  _newapi_remove_file_or_error "$BIN_PATH" "BIN_PATH"
-  require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
-  local _cleanup_path
-  while IFS= read -r -d '' _cleanup_path; do
-    if ! rm -f "$_cleanup_path"; then
-      warn "$(t app.newapi.warn.cleanup_old_failed "$_cleanup_path")"
-    fi
-  done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "new-api.bak.*" -o -name "new-api.tmp.*" \) -type f -print0 2>/dev/null)
-  success "$(t app.newapi.success.removed_binary)"
-  _newapi_remove_file_or_error "/etc/cron.d/new-api-backup" "NEWAPI_CRON_FILE"
-  _newapi_remove_file_or_error "/usr/local/bin/new-api-backup" "NEWAPI_BACKUP_SCRIPT"
-  _newapi_remove_file_or_error "/etc/logrotate.d/new-api" "NEWAPI_LOGROTATE_FILE"
-  success "$(t app.newapi.success.removed_scheduled)"
-  _newapi_remove_file_or_error "$ENV_FILE" "ENV_FILE"
-  success "$(t app.newapi.success.removed_env_file)"
-  _newapi_remove_file_or_error "$CONF_FILE" "CONF_FILE"
-  success "$(t app.newapi.success.removed_config)"
-  if [[ -n "${LOG_DIR:-}" && "$LOG_DIR" != "." && "$LOG_DIR" != "/" && -d "$LOG_DIR" ]]; then
-    _newapi_remove_dir_or_error "$LOG_DIR" "LOG_DIR" "$(t app.newapi.success.deleted_log "$LOG_DIR")"
-  else
-    warn "$(t app.newapi.warn.log_path "${LOG_DIR:-unset}")"
-  fi
-  if $DELETE_DATA; then
-    _newapi_remove_dir_or_error "$DATA_DIR" "DATA_DIR" "$(t app.newapi.success.deleted_data "$DATA_DIR")"
-    if [[ -d "$INSTALL_DIR" ]] && [[ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-      if ! safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"; then
-        warn "$(t app.newapi.warn.cleanup_install_failed "$INSTALL_DIR")"
-      else
-        success "$(t app.newapi.success.cleaned_install "$INSTALL_DIR")"
-      fi
-    fi
-  else
-    info "$(t app.newapi.info.kept_data "$DATA_DIR")"
-  fi
-  if $DELETE_BACKUP; then
-    _newapi_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.newapi.success.deleted_backup "$BACKUP_DIR")"
-  else
-    info "$(t app.newapi.info.kept_backup "$BACKUP_DIR")"
-  fi
-  if $DELETE_DATA && id "$SERVICE_USER" &>/dev/null; then
-    if userdel "$SERVICE_USER" 2>/dev/null; then
-      success "$(t app.newapi.success.deleted_user "$SERVICE_USER")"
-    else
-      warn "$(t app.newapi.warn.delete_user "$SERVICE_USER")"
-    fi
-  fi
-  echo ""
-  echo -e "${BOLD}${GREEN}  $(t app.newapi.success.uninstalled)${NC}"
-  if ! $DELETE_DATA; then
-    echo -e "  ${YELLOW}[hint]${NC} $(t app.newapi.hint.data_kept "$DATA_DIR")"
-    echo -e "  ${YELLOW}[hint]${NC} $(t app.newapi.hint.remove_data "$DATA_DIR")"
-  fi
-  if ! $DELETE_BACKUP; then
-    echo -e "  ${YELLOW}[hint]${NC} $(t app.newapi.hint.backup_kept "$BACKUP_DIR")"
-  fi
-  echo ""
+  bapp_backup
 }
 
 do_verify() {
-  show_banner
-  require_root "verify"
-  app_load_config _NEWAPI_DERIVE_PATHS
-  step "$(t backup.verify.step)"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  app_verify_latest_backup "$BACKUP_DIR" 'new-api_*.tar.gz'
+  bapp_verify
 }
 
 do_restore() {
-  show_banner
-  require_root "restore"
-  app_load_config _NEWAPI_DERIVE_PATHS
-  acquire_lock
-  step "$(t backup.restore.step)"
-  require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  require_safe_path "DATA_DIR" "$DATA_DIR"
-  [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
-  local archive
-  archive="${NEWAPI_RESTORE_ARCHIVE:-}"
-  if [[ -n "$archive" ]]; then
-    [[ "$archive" == "$BACKUP_DIR"/new-api_*.tar.gz && -f "$archive" ]] \
-      || error "$(t backup.restore.invalid_archive "$archive")"
-  else
-    archive="$(backup_latest_archive "$BACKUP_DIR" 'new-api_*.tar.gz' || true)"
-    [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
-  fi
-  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
+  bapp_restore
 }
+
+do_status() {
+  bapp_status
+}
+
+do_uninstall() {
+  acquire_lock
+  bapp_uninstall
+}
+
+binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_sub2api_impl.sh
