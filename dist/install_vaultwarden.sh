@@ -6211,9 +6211,6 @@ i18n_register_many \
   app.vaultwarden.summary.view_command \
   "View command:" \
   "查看命令：" \
-  app.vaultwarden.summary.remove_command \
-  "Remove it immediately after viewing:" \
-  "查看后请立即运行：" \
   app.vaultwarden.summary.first_steps \
   "First-use steps:" \
   "首次使用步骤：" \
