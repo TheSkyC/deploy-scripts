@@ -171,25 +171,20 @@ manager_status_render_table() {
 }
 
 manager_status_main() {
-  local command="$1" arg json=0 short=0 strict=0 errors_only=0 only_installed=0 include_csv="" exclude_csv="" temp_dir status
+  local command="$1" json short strict errors_only only_installed include_csv exclude_csv temp_dir status
   shift || true
-  while (($#)); do
-    arg="$1"; shift
-    case "$arg" in
-      --json) json=1 ;;
-      --short) short=1 ;;
-      --strict) strict=1 ;;
-      --errors-only) errors_only=1 ;;
-      --only-installed) only_installed=1 ;;
-      --no-probe) export DEPLOY_STATUS_NO_PROBE=1 ;;
-      --no-network) export DEPLOY_STATUS_NO_NETWORK=1 ;;
-      --include) (($#)) || { manager_status_print_usage; return 2; }; include_csv="$1"; shift ;;
-      --exclude) (($#)) || { manager_status_print_usage; return 2; }; exclude_csv="$1"; shift ;;
-      --include=*) include_csv="${arg#*=}" ;;
-      --exclude=*) exclude_csv="${arg#*=}" ;;
-      *) manager_status_print_usage; return 2 ;;
-    esac
-  done
+  if ! manager_parse_args "--json --short --strict --errors-only --only-installed --no-probe --no-network --include --exclude --help" manager_status_print_usage "$@"; then
+    return $?
+  fi
+  json="$MANAGER_ARG_JSON"
+  short="$MANAGER_ARG_SHORT"
+  strict="$MANAGER_ARG_STRICT"
+  errors_only="$MANAGER_ARG_ERRORS_ONLY"
+  only_installed="$MANAGER_ARG_ONLY_INSTALLED"
+  include_csv="$MANAGER_ARG_INCLUDE"
+  exclude_csv="$MANAGER_ARG_EXCLUDE"
+  if [[ "$MANAGER_ARG_NO_PROBE" == 1 ]]; then export DEPLOY_STATUS_NO_PROBE=1; fi
+  if [[ "$MANAGER_ARG_NO_NETWORK" == 1 ]]; then export DEPLOY_STATUS_NO_NETWORK=1; fi
   [[ "$command" != problems ]] || strict=1
   [[ "$command" != health-all ]] || only_installed=1
   manager_status_collect "$include_csv" "$exclude_csv" "$only_installed" || return $?
