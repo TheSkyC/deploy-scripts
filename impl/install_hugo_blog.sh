@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 BLOG_DOMAIN="${BLOG_DOMAIN:-blog.example.com}"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"
@@ -721,7 +721,7 @@ server {
 }
 NGINX
 app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog "app.blog.error.nginx_write"
-_blog_remove_file /etc/nginx/sites-enabled/default
+app_nginx_default_site_backup
 nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"
 step "$(t app.blog.step_firewall)"
@@ -1228,6 +1228,7 @@ do_uninstall() {
 
   _blog_remove_file /etc/nginx/sites-enabled/blog
   _blog_remove_file /etc/nginx/sites-available/blog
+  app_nginx_default_site_restore
   _blog_remove_file /usr/local/bin/blog-publish
   _blog_remove_dir "PUBLIC_DIR" "$PUBLIC_DIR"
   _blog_remove_dir "NGINX_ROOT" "$NGINX_ROOT"

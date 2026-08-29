@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 DOMAIN="${DOMAIN:-api.example.com}"

@@ -118,6 +118,10 @@ i18n_register common.dry_run_uninstall "Dry run: would uninstall %s (config and 
 i18n_register common.dry_run_action "Dry run: would run '%s %s'. No changes were made." "试运行：将执行 '%s %s'。未做任何更改。"
 i18n_register common.dry_run_config "Planned configuration:" "计划使用的配置："
 i18n_register common.dry_run_requires_action "Dry run requires an action: %s --dry-run install|update|backup|uninstall" "试运行需要指定动作：%s --dry-run install|update|backup|uninstall"
+i18n_register common.default_site_backed_up "Moved the default Nginx site out of the way (restored on uninstall): %s" "已将默认 Nginx 站点移开（卸载时恢复）：%s"
+i18n_register common.default_site_backup_failed "Failed to move the default Nginx site %s; the new site cannot take over port 80." "无法移开默认 Nginx 站点 %s；新站点无法接管 80 端口。"
+i18n_register common.default_site_restored "Restored the default Nginx site: %s" "已恢复默认 Nginx 站点：%s"
+i18n_register common.default_site_restore_failed "Failed to restore the default Nginx site from %s to %s. Restore it manually if needed." "无法将默认 Nginx 站点从 %s 恢复到 %s。如需恢复请手动操作。"
 i18n_register config.loaded "Loaded deployment config: %s" "已加载部署记录：%s"
 i18n_register config.saved "Saved deployment config: %s" "部署配置已持久化：%s"
 i18n_register error.command_required "Required command is missing: %s" "缺少必要命令：%s"
@@ -3568,6 +3572,40 @@ app_conf_register_legacy() {
   local legacy="$1"
   if [[ -f "$legacy" ]]; then
     _APP_CONF_LEGACY="$legacy"
+  fi
+}
+
+# Move /etc/nginx/sites-enabled/default out of the way instead of deleting it
+# so an existing site is never lost. The backup lives in sites-available as
+# .<app>-default.deploy-bak and is restored by app_nginx_default_site_restore
+# during uninstall. Fails explicitly when the move fails (the caller aborts
+# the install because nginx -t would then fail on port conflicts).
+app_nginx_default_site_backup() {
+  local link="/etc/nginx/sites-enabled/default"
+  local backup="/etc/nginx/sites-available/.${APP_ID:-app}-default.deploy-bak"
+  [[ -e "$link" || -L "$link" ]] || return 0
+  if [[ -e "$backup" || -L "$backup" ]]; then
+    rm -f "$backup" 2>/dev/null || true
+  fi
+  if mv "$link" "$backup"; then
+    success "$(t common.default_site_backed_up "$backup")"
+    return 0
+  fi
+  error "$(t common.default_site_backup_failed "$link")"
+}
+
+# Restore the default Nginx site that app_nginx_default_site_backup moved
+# away, unless the app's own site is still using port 80. Called during
+# uninstall; failures are warnings because the app is being removed anyway.
+app_nginx_default_site_restore() {
+  local backup="/etc/nginx/sites-available/.${APP_ID:-app}-default.deploy-bak"
+  local link="/etc/nginx/sites-enabled/default"
+  [[ -e "$backup" || -L "$backup" ]] || return 0
+  [[ -e "$link" || -L "$link" ]] && return 0
+  if mv "$backup" "$link"; then
+    success "$(t common.default_site_restored "$link")"
+  else
+    warn "$(t common.default_site_restore_failed "$backup" "$link")"
   fi
 }
 
@@ -10146,9 +10184,6 @@ i18n_register_many \
   app.vaultwarden.step.nginx_http \
   "Step 9  Configure Nginx reverse proxy (HTTP-only; Step 10 certbot completes HTTPS)" \
   "Step 9  配置 Nginx 反向代理（HTTP-only，HTTPS 由 Step 10 certbot 补全）" \
-  app.vaultwarden.warn.default_site_removed \
-  "Removed the default Nginx site (/etc/nginx/sites-enabled/default). Restore it manually if another site depends on it." \
-  "已移除 Nginx 默认站点（/etc/nginx/sites-enabled/default）。如有其他站点依赖它，请手动恢复。" \
   app.vaultwarden.error.nginx_write \
   "Nginx config write failed: %s" \
   "Nginx 配置写入失败：%s" \
@@ -12820,7 +12855,7 @@ load_app_impl "$APP_IMPL_SCRIPT"
 __DEPLOY_APP_DEFINITION_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_newapi_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 DOMAIN="${DOMAIN:-api.example.com}"
@@ -13897,7 +13932,7 @@ do_restore() {
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_sub2api_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 PORT="${PORT:-8082}"
@@ -15744,7 +15779,7 @@ do_restore() {
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_vaultwarden_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 VW_DOMAIN="${VW_DOMAIN:-vault.example.com}"
@@ -16643,10 +16678,7 @@ server {
 }
 NGINX
   app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden "app.vaultwarden.error.nginx_write"
-  if [[ -L /etc/nginx/sites-enabled/default ]]; then
-    warn "$(t app.vaultwarden.warn.default_site_removed)"
-    _vw_remove_file_or_error "/etc/nginx/sites-enabled/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"
-  fi
+  app_nginx_default_site_backup
   nginx -t || error "$(t app.vaultwarden.error.nginx_http_test)"
   success "$(t app.vaultwarden.success.nginx_http)"
   step "$(t app.vaultwarden.step.certbot)"
@@ -17587,6 +17619,7 @@ do_uninstall() {
   success "$(t app.vaultwarden.success.removed_binary)"
   _vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"
   _vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"
+  app_nginx_default_site_restore
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
       if ! systemctl reload nginx >/dev/null 2>&1; then
@@ -18869,7 +18902,7 @@ do_restore() {
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_hugo_blog_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 BLOG_DOMAIN="${BLOG_DOMAIN:-blog.example.com}"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"
@@ -19592,7 +19625,7 @@ server {
 }
 NGINX
 app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/blog "app.blog.error.nginx_write"
-_blog_remove_file /etc/nginx/sites-enabled/default
+app_nginx_default_site_backup
 nginx -t || error "$(t app.blog.error.nginx_config)"
 success "$(t app.blog.nginx_configured)"
 step "$(t app.blog.step_firewall)"
@@ -20099,6 +20132,7 @@ do_uninstall() {
 
   _blog_remove_file /etc/nginx/sites-enabled/blog
   _blog_remove_file /etc/nginx/sites-available/blog
+  app_nginx_default_site_restore
   _blog_remove_file /usr/local/bin/blog-publish
   _blog_remove_dir "PUBLIC_DIR" "$PUBLIC_DIR"
   _blog_remove_dir "NGINX_ROOT" "$NGINX_ROOT"
@@ -21923,7 +21957,7 @@ do_restore() {
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_ntfy_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22042,7 +22076,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_meilisearch_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22156,7 +22190,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_alist_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22335,7 +22369,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_filebrowser_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22444,7 +22478,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_navidrome_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22560,7 +22594,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_frps_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22700,7 +22734,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_gitea_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22840,7 +22874,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_gotify_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -22956,7 +22990,7 @@ binary_app_bootstrap
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_beszel_impl.sh
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 

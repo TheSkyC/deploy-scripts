@@ -303,9 +303,6 @@ i18n_register_many \
   app.vaultwarden.step.nginx_http \
   "Step 9  Configure Nginx reverse proxy (HTTP-only; Step 10 certbot completes HTTPS)" \
   "Step 9  配置 Nginx 反向代理（HTTP-only，HTTPS 由 Step 10 certbot 补全）" \
-  app.vaultwarden.warn.default_site_removed \
-  "Removed the default Nginx site (/etc/nginx/sites-enabled/default). Restore it manually if another site depends on it." \
-  "已移除 Nginx 默认站点（/etc/nginx/sites-enabled/default）。如有其他站点依赖它，请手动恢复。" \
   app.vaultwarden.error.nginx_write \
   "Nginx config write failed: %s" \
   "Nginx 配置写入失败：%s" \

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 VW_DOMAIN="${VW_DOMAIN:-vault.example.com}"
@@ -897,10 +897,7 @@ server {
 }
 NGINX
   app_write_nginx_site_link "$NGINX_CONF" /etc/nginx/sites-enabled/vaultwarden "app.vaultwarden.error.nginx_write"
-  if [[ -L /etc/nginx/sites-enabled/default ]]; then
-    warn "$(t app.vaultwarden.warn.default_site_removed)"
-    _vw_remove_file_or_error "/etc/nginx/sites-enabled/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"
-  fi
+  app_nginx_default_site_backup
   nginx -t || error "$(t app.vaultwarden.error.nginx_http_test)"
   success "$(t app.vaultwarden.success.nginx_http)"
   step "$(t app.vaultwarden.step.certbot)"
@@ -1841,6 +1838,7 @@ do_uninstall() {
   success "$(t app.vaultwarden.success.removed_binary)"
   _vw_remove_file_or_error "/etc/nginx/sites-enabled/vaultwarden" "VAULTWARDEN_NGINX_LINK"
   _vw_remove_file_or_error "/etc/nginx/sites-available/vaultwarden" "VAULTWARDEN_NGINX_CONF"
+  app_nginx_default_site_restore
   if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
       if ! systemctl reload nginx >/dev/null 2>&1; then
