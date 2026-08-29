@@ -751,14 +751,14 @@ check_generated_backup_headers_are_shell_quoted() {
       }
     ' impl/install_newapi.sh
   awk '
-      /_write_backup_script\(\)/ { in_func=1; saw_backup=0; saw_data=0; saw_config=0; saw_dsn=0; next }
+      /_write_backup_script\(\)/ { in_func=1; saw_backup=0; saw_data=0; saw_config=0; saw_dsn_file=0; next }
       in_func && /printf -v backup_dir_literal '\''%q'\'' "\$BACKUP_DIR"/ { saw_backup=1 }
       in_func && /printf -v data_dir_literal '\''%q'\'' "\$DATA_DIR"/ { saw_data=1 }
       in_func && /printf -v config_dir_literal '\''%q'\'' "\$CONFIG_DIR"/ { saw_config=1 }
-      in_func && /printf -v pg_dsn_literal '\''%q'\'' "\$PG_DSN"/ { saw_dsn=1 }
+      in_func && /printf -v pg_dsn_file_literal '\''%q'\'' "\$pg_dsn_file"/ { saw_dsn_file=1 }
       in_func && /^BKSH_HEADER$/ {
-        if (!(saw_backup && saw_data && saw_config && saw_dsn)) {
-          printf "%s generated Sub2API backup header must shell-quote configured paths and DSN\n", FILENAME > "/dev/stderr"
+        if (!(saw_backup && saw_data && saw_config && saw_dsn_file)) {
+          printf "%s generated Sub2API backup header must shell-quote configured paths and the DSN file path\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
