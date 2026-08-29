@@ -26,16 +26,33 @@ check_newapi_secret_uses_private_env_file() {
         }
         in_func=0
       }
-      /EnvironmentFile=\$\{ENV_FILE\}/ { saw_envfile=1 }
       /error "\$\(t app\.newapi\.error\.env_file "\$env_file"\)"/ { saw_error=1 }
       /success "\$\(t app\.newapi\.success\.env_file "\$env_file"\)"/ { saw_success=1 }
       END {
-        if (!(saw_envfile && saw_error && saw_success)) {
-          printf "%s NewAPI must wire the private environment file through the systemd unit\n", FILENAME > "/dev/stderr"
+        if (!(saw_error && saw_success)) {
+          printf "%s NewAPI env file writes must report success and failure\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
     ' impl/install_newapi.sh
+  awk '
+      /ba_systemd_unit\(\)/ { in_unit=1; saw_envfile=0; next }
+      in_unit && /EnvironmentFile=\$\{ENV_FILE\}/ { saw_envfile=1 }
+      in_unit && /^}/ {
+        if (!saw_envfile) {
+          printf "%s shared systemd unit must wire the private environment file when BA_USE_ENV_FILE is set\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_unit=0
+      }
+      /BA_USE_ENV_FILE=1/ { saw_use_env=1 }
+      END {
+        if (!saw_use_env) {
+          printf "%s NewAPI must opt into the environment file through BA_USE_ENV_FILE\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh impl/install_newapi.sh
 }
 
 check_newapi_backup_wal_hook_is_best_effort() {
