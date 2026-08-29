@@ -264,6 +264,40 @@ app_conf_register_legacy() {
   fi
 }
 
+# Move /etc/nginx/sites-enabled/default out of the way instead of deleting it
+# so an existing site is never lost. The backup lives in sites-available as
+# .<app>-default.deploy-bak and is restored by app_nginx_default_site_restore
+# during uninstall. Fails explicitly when the move fails (the caller aborts
+# the install because nginx -t would then fail on port conflicts).
+app_nginx_default_site_backup() {
+  local link="/etc/nginx/sites-enabled/default"
+  local backup="/etc/nginx/sites-available/.${APP_ID:-app}-default.deploy-bak"
+  [[ -e "$link" || -L "$link" ]] || return 0
+  if [[ -e "$backup" || -L "$backup" ]]; then
+    rm -f "$backup" 2>/dev/null || true
+  fi
+  if mv "$link" "$backup"; then
+    success "$(t common.default_site_backed_up "$backup")"
+    return 0
+  fi
+  error "$(t common.default_site_backup_failed "$link")"
+}
+
+# Restore the default Nginx site that app_nginx_default_site_backup moved
+# away, unless the app's own site is still using port 80. Called during
+# uninstall; failures are warnings because the app is being removed anyway.
+app_nginx_default_site_restore() {
+  local backup="/etc/nginx/sites-available/.${APP_ID:-app}-default.deploy-bak"
+  local link="/etc/nginx/sites-enabled/default"
+  [[ -e "$backup" || -L "$backup" ]] || return 0
+  [[ -e "$link" || -L "$link" ]] && return 0
+  if mv "$backup" "$link"; then
+    success "$(t common.default_site_restored "$link")"
+  else
+    warn "$(t common.default_site_restore_failed "$backup" "$link")"
+  fi
+}
+
 deploy_env_truthy() {
   local name="$1"
   local value="${!name:-}"

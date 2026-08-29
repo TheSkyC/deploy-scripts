@@ -66,12 +66,13 @@ check_blog_status_dispatch() {
 
 check_blog_install_surfaces_default_nginx_site_removal_failures() {
   awk '
-      /app_write_nginx_site_link "\$NGINX_CONF" \/etc\/nginx\/sites-enabled\/blog/ { in_nginx=1; saw_remove=0; saw_raw_rm=0; next }
-      in_nginx && /_blog_remove_file \/etc\/nginx\/sites-enabled\/default/ { saw_remove=1 }
+      /app_write_nginx_site_link "\$NGINX_CONF" \/etc\/nginx\/sites-enabled\/blog/ { in_nginx=1; saw_backup=0; saw_raw_rm=0; next }
+      in_nginx && /app_nginx_default_site_backup/ { saw_backup=1 }
+      in_nginx && /_blog_remove_file \/etc\/nginx\/sites-enabled\/default/ { saw_backup=1 }
       in_nginx && /rm -f \/etc\/nginx\/sites-enabled\/default/ { saw_raw_rm=1 }
       in_nginx && /nginx -t \|\| error "\$\(t app\.blog\.error\.nginx_config\)"/ {
-        if (!saw_remove || saw_raw_rm) {
-          printf "%s Blog install must surface default Nginx site removal failures before testing Nginx config\n", FILENAME > "/dev/stderr"
+        if (!saw_backup || saw_raw_rm) {
+          printf "%s Blog install must move the default Nginx site aside (recoverably) before testing Nginx config\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_nginx=0

@@ -314,13 +314,13 @@ check_vaultwarden_apt_update_failures_are_reported() {
 
 check_vaultwarden_install_surfaces_default_nginx_site_removal_failures() {
   awk '
-      /step "\$\(t app\.vaultwarden\.step\.nginx_http\)"/ { in_nginx=1; saw_warn=0; saw_remove=0; saw_raw_rm=0; next }
-      in_nginx && /warn "\$\(t app\.vaultwarden\.warn\.default_site_removed\)"/ { saw_warn=1 }
-      in_nginx && /_vw_remove_file_or_error "\/etc\/nginx\/sites-enabled\/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"/ { saw_remove=1 }
+      /step "\$\(t app\.vaultwarden\.step\.nginx_http\)"/ { in_nginx=1; saw_backup=0; saw_raw_rm=0; next }
+      in_nginx && /app_nginx_default_site_backup/ { saw_backup=1 }
+      in_nginx && /_vw_remove_file_or_error "\/etc\/nginx\/sites-enabled\/default" "VAULTWARDEN_DEFAULT_NGINX_SITE"/ { saw_backup=1 }
       in_nginx && /rm -f \/etc\/nginx\/sites-enabled\/default/ { saw_raw_rm=1 }
       in_nginx && /nginx -t \|\| error "\$\(t app\.vaultwarden\.error\.nginx_http_test\)"/ {
-        if (saw_warn && (!saw_remove || saw_raw_rm)) {
-          printf "%s Vaultwarden install must surface default Nginx site removal failures before testing Nginx config\n", FILENAME > "/dev/stderr"
+        if (!saw_backup || saw_raw_rm) {
+          printf "%s Vaultwarden install must move the default Nginx site aside (recoverably) before testing Nginx config\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_nginx=0

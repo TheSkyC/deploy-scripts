@@ -117,6 +117,10 @@ i18n_register common.dry_run_uninstall "Dry run: would uninstall %s (config and 
 i18n_register common.dry_run_action "Dry run: would run '%s %s'. No changes were made." "试运行：将执行 '%s %s'。未做任何更改。"
 i18n_register common.dry_run_config "Planned configuration:" "计划使用的配置："
 i18n_register common.dry_run_requires_action "Dry run requires an action: %s --dry-run install|update|backup|uninstall" "试运行需要指定动作：%s --dry-run install|update|backup|uninstall"
+i18n_register common.default_site_backed_up "Moved the default Nginx site out of the way (restored on uninstall): %s" "已将默认 Nginx 站点移开（卸载时恢复）：%s"
+i18n_register common.default_site_backup_failed "Failed to move the default Nginx site %s; the new site cannot take over port 80." "无法移开默认 Nginx 站点 %s；新站点无法接管 80 端口。"
+i18n_register common.default_site_restored "Restored the default Nginx site: %s" "已恢复默认 Nginx 站点：%s"
+i18n_register common.default_site_restore_failed "Failed to restore the default Nginx site from %s to %s. Restore it manually if needed." "无法将默认 Nginx 站点从 %s 恢复到 %s。如需恢复请手动操作。"
 i18n_register config.loaded "Loaded deployment config: %s" "已加载部署记录：%s"
 i18n_register config.saved "Saved deployment config: %s" "部署配置已持久化：%s"
 i18n_register error.command_required "Required command is missing: %s" "缺少必要命令：%s"
@@ -3570,6 +3574,40 @@ app_conf_register_legacy() {
   fi
 }
 
+# Move /etc/nginx/sites-enabled/default out of the way instead of deleting it
+# so an existing site is never lost. The backup lives in sites-available as
+# .<app>-default.deploy-bak and is restored by app_nginx_default_site_restore
+# during uninstall. Fails explicitly when the move fails (the caller aborts
+# the install because nginx -t would then fail on port conflicts).
+app_nginx_default_site_backup() {
+  local link="/etc/nginx/sites-enabled/default"
+  local backup="/etc/nginx/sites-available/.${APP_ID:-app}-default.deploy-bak"
+  [[ -e "$link" || -L "$link" ]] || return 0
+  if [[ -e "$backup" || -L "$backup" ]]; then
+    rm -f "$backup" 2>/dev/null || true
+  fi
+  if mv "$link" "$backup"; then
+    success "$(t common.default_site_backed_up "$backup")"
+    return 0
+  fi
+  error "$(t common.default_site_backup_failed "$link")"
+}
+
+# Restore the default Nginx site that app_nginx_default_site_backup moved
+# away, unless the app's own site is still using port 80. Called during
+# uninstall; failures are warnings because the app is being removed anyway.
+app_nginx_default_site_restore() {
+  local backup="/etc/nginx/sites-available/.${APP_ID:-app}-default.deploy-bak"
+  local link="/etc/nginx/sites-enabled/default"
+  [[ -e "$backup" || -L "$backup" ]] || return 0
+  [[ -e "$link" || -L "$link" ]] && return 0
+  if mv "$backup" "$link"; then
+    success "$(t common.default_site_restored "$link")"
+  else
+    warn "$(t common.default_site_restore_failed "$backup" "$link")"
+  fi
+}
+
 deploy_env_truthy() {
   local name="$1"
   local value="${!name:-}"
@@ -5840,7 +5878,7 @@ load_app_impl "$APP_IMPL_SCRIPT"
 main "$@"
 exit 0
 __DEPLOY_APP_IMPL_SCRIPT__
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
