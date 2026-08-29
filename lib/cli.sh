@@ -8,6 +8,54 @@ show_banner() {
 usage() {
   echo "$(t common.usage "$0")" >&2
   echo "      $(t common.no_argument_menu)" >&2
+  if [[ "${1:-}" == "--help" ]] && declare -p CONFIG_KEYS >/dev/null 2>&1; then
+    local key
+    echo "" >&2
+    echo "$(t common.help_config_keys)" >&2
+    for key in "${CONFIG_KEYS[@]}"; do
+      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+    done
+    echo "" >&2
+    echo "$(t common.help_env_hint)" >&2
+  fi
+}
+
+# Application-level dry-run: prints the actions that install/update/backup/
+# uninstall would take and exits without modifying the system. Each do_* and
+# bapp_* entry point honors DEPLOY_DRY_RUN=1.
+app_dry_run_guard() {
+  local action="$1"
+  [[ "${DEPLOY_DRY_RUN:-0}" == "1" ]] || return 0
+  case "$action" in
+    install)
+      info "$(t common.dry_run_install "$APP_NAME")"
+      app_dry_run_list_config
+      ;;
+    update)
+      info "$(t common.dry_run_update "$APP_NAME")"
+      ;;
+    backup)
+      info "$(t common.dry_run_backup "$APP_NAME")"
+      ;;
+    uninstall)
+      info "$(t common.dry_run_uninstall "$APP_NAME")"
+      ;;
+    *)
+      info "$(t common.dry_run_action "$APP_NAME" "$action")"
+      ;;
+  esac
+  exit 0
+}
+
+app_dry_run_list_config() {
+  [[ "${DEPLOY_DRY_RUN_SHOW_CONFIG:-0}" == "1" ]] || return 0
+  local key
+  if declare -p CONFIG_KEYS >/dev/null 2>&1; then
+    echo "$(t common.dry_run_config)" >&2
+    for key in "${CONFIG_KEYS[@]}"; do
+      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+    done
+  fi
 }
 
 show_menu() {
@@ -36,9 +84,9 @@ dispatch_action() {
     action="$(deploy_trim "$action")"
   fi
   case "${action,,}" in
-      install|1) operation_run_app_action install do_install "$@" ;;
-      update|2) operation_run_app_action update do_update "$@" ;;
-      backup|3) operation_run_app_action backup do_backup "$@" ;;
+      install|1) app_dry_run_guard install; operation_run_app_action install do_install "$@" ;;
+      update|2) app_dry_run_guard update; operation_run_app_action update do_update "$@" ;;
+      backup|3) app_dry_run_guard backup; operation_run_app_action backup do_backup "$@" ;;
       restore|4)
         if declare -f do_restore >/dev/null 2>&1; then
           operation_run_app_action restore do_restore "$@"
@@ -74,12 +122,22 @@ dispatch_action() {
           error "$(t error.unsupported_action "${APP_NAME:-app}" signups)"
         fi
         ;;
+      --dry-run|--dryrun)
+        DEPLOY_DRY_RUN=1
+        DEPLOY_DRY_RUN_SHOW_CONFIG=1
+        export DEPLOY_DRY_RUN DEPLOY_DRY_RUN_SHOW_CONFIG
+        if (($#)); then
+          dispatch_action "$@"
+        else
+          error "$(t common.dry_run_requires_action "$APP_NAME")"
+        fi
+        ;;
       status|5) do_status "$@" ;;
       status-json|json-status) do_status_json "$@" ;;
       doctor|6) do_doctor "$@" ;;
-      uninstall|7) operation_run_app_action uninstall do_uninstall "$@" ;;
+      uninstall|7) app_dry_run_guard uninstall; operation_run_app_action uninstall do_uninstall "$@" ;;
     menu|"") show_menu ;;
-    help|-h|--help) usage ;;
+    help|-h|--help) usage --help ;;
     q|quit|exit) exit 0 ;;
     *) error "$(t common.invalid_choice "$action")" ;;
   esac

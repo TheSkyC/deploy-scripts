@@ -37,5 +37,5 @@ source "${DEPLOY_FRAMEWORK_DIR}/cli.sh"
 source "${DEPLOY_FRAMEWORK_DIR}/manager_cli.sh"
 
 main() {
-  dispatch_action "${1:-menu}"
+  dispatch_action "$@"
 }

@@ -109,6 +109,15 @@ i18n_register common.no_argument_menu "No argument opens the interactive menu." 
 i18n_register common.quit "quit" "退出"
 i18n_register common.selection_prompt "Selection [1-7/q]:" "请输入选项 [1-7/q]："
 i18n_register common.usage "Usage: sudo bash %s [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" "用法：sudo bash %s [install, update, backup, restore, verify, status, status-json, doctor, uninstall]"
+i18n_register common.help_config_keys "Configuration keys (current values):" "配置键（当前值）："
+i18n_register common.help_env_hint "Override any key by exporting it as an environment variable, or pass --dry-run before an action to preview it." "可通过环境变量覆盖任意键；在动作前加 --dry-run 可预览将执行的操作。"
+i18n_register common.dry_run_install "Dry run: would install %s with the configuration below. No changes were made." "试运行：将使用以下配置安装 %s。未做任何更改。"
+i18n_register common.dry_run_update "Dry run: would update %s to the latest version. No changes were made." "试运行：将把 %s 更新到最新版本。未做任何更改。"
+i18n_register common.dry_run_backup "Dry run: would create a backup for %s. No changes were made." "试运行：将为 %s 创建备份。未做任何更改。"
+i18n_register common.dry_run_uninstall "Dry run: would uninstall %s (config and data are kept unless you answer the prompts). No changes were made." "试运行：将卸载 %s（除非在提示中确认，否则保留配置和数据）。未做任何更改。"
+i18n_register common.dry_run_action "Dry run: would run '%s %s'. No changes were made." "试运行：将执行 '%s %s'。未做任何更改。"
+i18n_register common.dry_run_config "Planned configuration:" "计划使用的配置："
+i18n_register common.dry_run_requires_action "Dry run requires an action: %s --dry-run install|update|backup|uninstall" "试运行需要指定动作：%s --dry-run install|update|backup|uninstall"
 i18n_register config.loaded "Loaded deployment config: %s" "已加载部署记录：%s"
 i18n_register config.saved "Saved deployment config: %s" "部署配置已持久化：%s"
 i18n_register error.command_required "Required command is missing: %s" "缺少必要命令：%s"
@@ -7797,6 +7806,54 @@ show_banner() {
 usage() {
   echo "$(t common.usage "$0")" >&2
   echo "      $(t common.no_argument_menu)" >&2
+  if [[ "${1:-}" == "--help" ]] && declare -p CONFIG_KEYS >/dev/null 2>&1; then
+    local key
+    echo "" >&2
+    echo "$(t common.help_config_keys)" >&2
+    for key in "${CONFIG_KEYS[@]}"; do
+      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+    done
+    echo "" >&2
+    echo "$(t common.help_env_hint)" >&2
+  fi
+}
+
+# Application-level dry-run: prints the actions that install/update/backup/
+# uninstall would take and exits without modifying the system. Each do_* and
+# bapp_* entry point honors DEPLOY_DRY_RUN=1.
+app_dry_run_guard() {
+  local action="$1"
+  [[ "${DEPLOY_DRY_RUN:-0}" == "1" ]] || return 0
+  case "$action" in
+    install)
+      info "$(t common.dry_run_install "$APP_NAME")"
+      app_dry_run_list_config
+      ;;
+    update)
+      info "$(t common.dry_run_update "$APP_NAME")"
+      ;;
+    backup)
+      info "$(t common.dry_run_backup "$APP_NAME")"
+      ;;
+    uninstall)
+      info "$(t common.dry_run_uninstall "$APP_NAME")"
+      ;;
+    *)
+      info "$(t common.dry_run_action "$APP_NAME" "$action")"
+      ;;
+  esac
+  exit 0
+}
+
+app_dry_run_list_config() {
+  [[ "${DEPLOY_DRY_RUN_SHOW_CONFIG:-0}" == "1" ]] || return 0
+  local key
+  if declare -p CONFIG_KEYS >/dev/null 2>&1; then
+    echo "$(t common.dry_run_config)" >&2
+    for key in "${CONFIG_KEYS[@]}"; do
+      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+    done
+  fi
 }
 
 show_menu() {
@@ -7825,9 +7882,9 @@ dispatch_action() {
     action="$(deploy_trim "$action")"
   fi
   case "${action,,}" in
-      install|1) operation_run_app_action install do_install "$@" ;;
-      update|2) operation_run_app_action update do_update "$@" ;;
-      backup|3) operation_run_app_action backup do_backup "$@" ;;
+      install|1) app_dry_run_guard install; operation_run_app_action install do_install "$@" ;;
+      update|2) app_dry_run_guard update; operation_run_app_action update do_update "$@" ;;
+      backup|3) app_dry_run_guard backup; operation_run_app_action backup do_backup "$@" ;;
       restore|4)
         if declare -f do_restore >/dev/null 2>&1; then
           operation_run_app_action restore do_restore "$@"
@@ -7863,12 +7920,22 @@ dispatch_action() {
           error "$(t error.unsupported_action "${APP_NAME:-app}" signups)"
         fi
         ;;
+      --dry-run|--dryrun)
+        DEPLOY_DRY_RUN=1
+        DEPLOY_DRY_RUN_SHOW_CONFIG=1
+        export DEPLOY_DRY_RUN DEPLOY_DRY_RUN_SHOW_CONFIG
+        if (($#)); then
+          dispatch_action "$@"
+        else
+          error "$(t common.dry_run_requires_action "$APP_NAME")"
+        fi
+        ;;
       status|5) do_status "$@" ;;
       status-json|json-status) do_status_json "$@" ;;
       doctor|6) do_doctor "$@" ;;
-      uninstall|7) operation_run_app_action uninstall do_uninstall "$@" ;;
+      uninstall|7) app_dry_run_guard uninstall; operation_run_app_action uninstall do_uninstall "$@" ;;
     menu|"") show_menu ;;
-    help|-h|--help) usage ;;
+    help|-h|--help) usage --help ;;
     q|quit|exit) exit 0 ;;
     *) error "$(t common.invalid_choice "$action")" ;;
   esac
@@ -7967,7 +8034,7 @@ manager_list_apps() {
 }
 
 manager_main() {
-  local command="${1:-menu}" app_id status action
+  local command="${1:-menu}" app_id status
   command="$(deploy_trim "$command")"
   case "${command,,}" in
     overview|status-all|problems|health-all)
@@ -8064,9 +8131,8 @@ manager_main() {
         error "$(t manager.invalid_app "$command")"
       fi
       shift || true
-      action="${1:-menu}"
       manager_load_app "$app_id"
-      dispatch_action "$action"
+      dispatch_action "$@"
       ;;
   esac
 }
