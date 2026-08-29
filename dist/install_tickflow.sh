@@ -4104,6 +4104,9 @@ i18n_register_many \
   binary_app.error.backup_keep_days \
   "BACKUP_KEEP_DAYS is invalid: '%s'. Use a non-negative integer (0 disables retention pruning)." \
   "BACKUP_KEEP_DAYS 无效：'%s'。请输入非负整数（0 表示不做保留期清理）。" \
+  binary_app.error.bind_addr \
+  "BA_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "BA_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -4455,6 +4458,18 @@ i18n_register_many \
   binary_app.summary.backup_dir \
   "Backup directory:" \
   "备份目录：" \
+  binary_app.summary.plaintext_warning \
+  "WARNING: the service listens on 0.0.0.0:%s over plain HTTP. Anyone who can reach this port can access it." \
+  "警告：服务正以明文 HTTP 监听 0.0.0.0:%s，任何能访问该端口的人都可以使用它。" \
+  binary_app.summary.proxy_hint \
+  "Recommended: put it behind an HTTPS reverse proxy (nginx/caddy), or set BA_BIND_ADDR=127.0.0.1 and use ssh -L / Tailscale for remote access." \
+  "建议：将其置于 HTTPS 反向代理（nginx/caddy）之后，或设置 BA_BIND_ADDR=127.0.0.1 并通过 ssh -L / Tailscale 远程访问。" \
+  binary_app.summary.public_bind \
+  "Listening on 0.0.0.0 (public). Ensure TLS or an auth layer protects this service." \
+  "正在监听 0.0.0.0（公网）。请确保有 TLS 或认证层保护该服务。" \
+  binary_app.summary.local_bind \
+  "Listening on 127.0.0.1:%s (local only). Use a reverse proxy to publish it securely." \
+  "正在监听 127.0.0.1:%s（仅本机）。如需对外提供服务，请通过反向代理安全发布。" \
   binary_app.summary.management \
   "Management" \
   "常用管理命令" \
@@ -4520,6 +4535,10 @@ _binary_app_derive_paths() {
   BIN_PATH="${INSTALL_DIR}/${BA_BIN_NAME}"
   LOG_FILE="${LOG_DIR}/${BA_BIN_NAME}.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
+  # Default to loopback: a plain-HTTP service on 0.0.0.0 is directly exposed
+  # to the network.  Publish through a reverse proxy, or set BA_BIND_ADDR
+  # explicitly when the app is designed to listen publicly (e.g. frps).
+  BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 }
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
@@ -4559,6 +4578,12 @@ bapp_validate_cfg() {
   if ! [[ "${BACKUP_KEEP_DAYS:-0}" =~ ^[0-9]+$ ]]; then
     error "$(t binary_app.error.backup_keep_days "${BACKUP_KEEP_DAYS:-unset}")"
   fi
+  # The bind address must be a concrete IP (loopback or wildcard); anything
+  # else would silently break the generated service/config.
+  case "${BA_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
+  esac
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -4848,8 +4873,11 @@ bapp_health_probe() {
 }
 
 # Firewall + logrotate for the service port and log directory.
+# BA_FIREWALL defaults to 0: opening a firewall port for a plain-HTTP
+# service bound to 0.0.0.0 exposes it to the public internet.  Apps that
+# genuinely need a public port (e.g. frps) opt in explicitly.
 ba_configure_ops() {
-  if [[ "${BA_FIREWALL:-1}" == "1" ]]; then
+  if [[ "${BA_FIREWALL:-0}" == "1" ]]; then
     app_configure_firewall "$PORT" "binary_app" "$APP_NAME"
   fi
   app_write_logrotate "/etc/logrotate.d/${SERVICE_NAME}" "$LOG_DIR" \
@@ -4885,6 +4913,15 @@ bapp_summary() {
   echo -e "  $(t binary_app.summary.backup_dir)  ${YELLOW}${BACKUP_DIR}${GREEN}"
   if declare -f ba_summary_extra >/dev/null 2>&1; then
     ba_summary_extra
+  fi
+  echo "  =========================================================="
+  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_TLS_ENABLED:-0}" != "1" ]]; then
+    echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
+    echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
+  elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
+    echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
+  else
+    echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
   fi
   echo "  =========================================================="
   echo -e "${NC}"
@@ -5878,6 +5915,18 @@ i18n_register_many \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
+  app.tickflow.error.auth_password_short \
+  "TICKFLOW_AUTH_PASSWORD must be at least 6 characters when set explicitly." \
+  "显式设置 TICKFLOW_AUTH_PASSWORD 时至少需要 6 个字符。" \
+  app.tickflow.error.bind_addr \
+  "TICKFLOW_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "TICKFLOW_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
+  app.tickflow.summary.auth_file \
+  "Panel password (AUTH_PASSWORD) is in:" \
+  "面板密码（AUTH_PASSWORD）位于：" \
+  app.tickflow.summary.auth_warning \
+  "The panel requires this password. Change it in %s and restart the service to rotate." \
+  "面板需要此密码。修改 %s 中的值并重启服务即可轮换。" \
   app.tickflow.uninstall.removes \
   "This will remove the TickFlow systemd service and deploy config." \
   "这将删除 TickFlow systemd 服务和部署配置。" \
@@ -6035,12 +6084,18 @@ TICKFLOW_SERVICE_NAME="${TICKFLOW_SERVICE_NAME:-tickflow-stock-panel}"
 TICKFLOW_PORT="${TICKFLOW_PORT:-3018}"
 TICKFLOW_LOG_DIR="${TICKFLOW_LOG_DIR:-${TICKFLOW_INSTALL_DIR}/logs}"
 TICKFLOW_AUTH_PASSWORD="${TICKFLOW_AUTH_PASSWORD:-}"
+# Bind address for the container port mapping. 127.0.0.1 by default: the
+# panel has no authentication unless TICKFLOW_AUTH_PASSWORD is set, so
+# publishing it on 0.0.0.0 would expose an unauthenticated stock panel to the
+# network. Put it behind an HTTPS reverse proxy instead.
+TICKFLOW_BIND_ADDR="${TICKFLOW_BIND_ADDR:-127.0.0.1}"
 TICKFLOW_BACKEND_EXTRAS="${TICKFLOW_BACKEND_EXTRAS:-}"
 
 CONFIG_KEYS=(
   TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_INSTALL_DIR
   TICKFLOW_DATA_DIR TICKFLOW_ENV_FILE TICKFLOW_COMPOSE_FILE TICKFLOW_TIERS_FILE
   TICKFLOW_SERVICE_NAME TICKFLOW_PORT TICKFLOW_LOG_DIR TICKFLOW_AUTH_PASSWORD
+  TICKFLOW_BIND_ADDR
   TICKFLOW_BACKEND_EXTRAS
 )
 
@@ -6117,8 +6172,12 @@ _validate_config_values() {
   require_safe_path "TICKFLOW_COMPOSE_FILE" "$TICKFLOW_COMPOSE_FILE"
   require_safe_path "TICKFLOW_TIERS_FILE" "$TICKFLOW_TIERS_FILE"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
-    warn "$(t app.tickflow.warn.auth_password_short)"
+    error "$(t app.tickflow.error.auth_password_short)"
   fi
+  case "${TICKFLOW_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t app.tickflow.error.bind_addr "${TICKFLOW_BIND_ADDR:-unset}")" ;;
+  esac
 }
 
 _compose_bin() {
@@ -6193,6 +6252,7 @@ _write_env_file() {
   local ai_model="deepseek-chat"
   local ai_daily_token_budget="500000"
   local log_level="INFO"
+  local auth_password="${TICKFLOW_AUTH_PASSWORD:-}"
   local existing_value
   mkdir -p "$(dirname "$TICKFLOW_ENV_FILE")"
   if existing_value="$(_env_value_from_file TICKFLOW_API_KEY)"; then
@@ -6216,6 +6276,18 @@ _write_env_file() {
   if existing_value="$(_env_value_from_file LOG_LEVEL)"; then
     log_level="$existing_value"
   fi
+  if existing_value="$(_env_value_from_file AUTH_PASSWORD)"; then
+    auth_password="$existing_value"
+  fi
+  # Never leave the panel unauthenticated: generate a random password when
+  # neither the config nor an existing env file provides one.
+  if [[ -z "$auth_password" ]]; then
+    auth_password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
+    if [[ -z "$auth_password" ]]; then
+      auth_password="$(openssl rand -hex 20 2>/dev/null || true)"
+    fi
+    [[ -n "$auth_password" ]] || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
+  fi
   atomic_write_file "$TICKFLOW_ENV_FILE" 600 <<EOF \
     || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
 TICKFLOW_API_KEY=${tickflow_api_key}
@@ -6227,14 +6299,14 @@ AI_DAILY_TOKEN_BUDGET=${ai_daily_token_budget}
 HOST=0.0.0.0
 PORT=${TICKFLOW_PORT}
 LOG_LEVEL=${log_level}
-AUTH_PASSWORD=${TICKFLOW_AUTH_PASSWORD}
+AUTH_PASSWORD=${auth_password}
 BACKEND_EXTRAS=${TICKFLOW_BACKEND_EXTRAS}
 DATA_DIR=./data
 EOF
 }
 
 _write_compose_file() {
-  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<'EOF' \
+  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<EOF \
     || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 services:
   app:
@@ -6245,7 +6317,7 @@ services:
         BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
     container_name: TickFlow_Stock_Panel
     ports:
-      - "${PORT:-3018}:3018"
+      - "${TICKFLOW_BIND_ADDR:-127.0.0.1}:${TICKFLOW_PORT}:3018"
     env_file:
       - .env
     volumes:
@@ -6341,6 +6413,9 @@ _print_summary() {
   echo -e "  ║  $(t app.tickflow.summary.compose)  ${YELLOW}${TICKFLOW_INSTALL_DIR}${GREEN}"
   echo -e "  ║  $(t app.tickflow.summary.data)  ${YELLOW}${TICKFLOW_DATA_DIR}${GREEN}"
   echo -e "  ║  $(t app.tickflow.summary.env)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
+  echo "  ╠══════════════════════════════════════════════════════╣"
+  echo -e "  ║  $(t app.tickflow.summary.auth_file)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
+  echo -e "  ║  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${GREEN}"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo -e "${NC}"
   echo -e "  ${BOLD}$(t app.tickflow.summary.systemd)${NC}"

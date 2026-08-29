@@ -9,7 +9,16 @@ i18n_register_many \
   "使用 systemd 和备份的 Alist 文件列表服务部署脚本。" \
   app.alist.hint.admin \
   "Initialize the administrator password with: alist admin --data %s" \
-  "初始化管理员密码：alist admin --data %s"
+  "初始化管理员密码：alist admin --data %s" \
+  app.alist.error.config_dir \
+  "Failed to prepare Alist data directory: %s" \
+  "准备 Alist 数据目录失败：%s" \
+  app.alist.error.config_write \
+  "Failed to write Alist server configuration: %s" \
+  "写入 Alist 服务端配置失败：%s" \
+  app.alist.success.config_written \
+  "Alist server configuration written: %s" \
+  "Alist 服务端配置已写入：%s"
 
 APP_DESCRIPTION="$(t app.alist.description)"
 APP_IMPL_SCRIPT="impl/install_alist.sh"

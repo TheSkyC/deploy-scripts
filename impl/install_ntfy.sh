@@ -21,14 +21,15 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BA_BIN_NAME="ntfy"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="ntfy push notification server"
 BA_SERVICE_ARGS="serve /etc/ntfy/server.yml"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Release asset names embed the version without the leading v.
@@ -43,7 +44,7 @@ ba_write_config() {
   local config_file="${config_dir}/server.yml"
   if ! atomic_write_file "$config_file" 644 root:root <<EOF
 # Managed by the ntfy deploy script.
-listen-http: :${PORT}
+listen-http: ${BA_BIND_ADDR}:${PORT}
 cache-file: ${DATA_DIR}/cache.db
 attachment-cache-dir: ${DATA_DIR}/attachments
 EOF

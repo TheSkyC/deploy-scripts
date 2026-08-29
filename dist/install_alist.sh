@@ -4104,6 +4104,9 @@ i18n_register_many \
   binary_app.error.backup_keep_days \
   "BACKUP_KEEP_DAYS is invalid: '%s'. Use a non-negative integer (0 disables retention pruning)." \
   "BACKUP_KEEP_DAYS 无效：'%s'。请输入非负整数（0 表示不做保留期清理）。" \
+  binary_app.error.bind_addr \
+  "BA_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "BA_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -4455,6 +4458,18 @@ i18n_register_many \
   binary_app.summary.backup_dir \
   "Backup directory:" \
   "备份目录：" \
+  binary_app.summary.plaintext_warning \
+  "WARNING: the service listens on 0.0.0.0:%s over plain HTTP. Anyone who can reach this port can access it." \
+  "警告：服务正以明文 HTTP 监听 0.0.0.0:%s，任何能访问该端口的人都可以使用它。" \
+  binary_app.summary.proxy_hint \
+  "Recommended: put it behind an HTTPS reverse proxy (nginx/caddy), or set BA_BIND_ADDR=127.0.0.1 and use ssh -L / Tailscale for remote access." \
+  "建议：将其置于 HTTPS 反向代理（nginx/caddy）之后，或设置 BA_BIND_ADDR=127.0.0.1 并通过 ssh -L / Tailscale 远程访问。" \
+  binary_app.summary.public_bind \
+  "Listening on 0.0.0.0 (public). Ensure TLS or an auth layer protects this service." \
+  "正在监听 0.0.0.0（公网）。请确保有 TLS 或认证层保护该服务。" \
+  binary_app.summary.local_bind \
+  "Listening on 127.0.0.1:%s (local only). Use a reverse proxy to publish it securely." \
+  "正在监听 127.0.0.1:%s（仅本机）。如需对外提供服务，请通过反向代理安全发布。" \
   binary_app.summary.management \
   "Management" \
   "常用管理命令" \
@@ -4520,6 +4535,10 @@ _binary_app_derive_paths() {
   BIN_PATH="${INSTALL_DIR}/${BA_BIN_NAME}"
   LOG_FILE="${LOG_DIR}/${BA_BIN_NAME}.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
+  # Default to loopback: a plain-HTTP service on 0.0.0.0 is directly exposed
+  # to the network.  Publish through a reverse proxy, or set BA_BIND_ADDR
+  # explicitly when the app is designed to listen publicly (e.g. frps).
+  BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 }
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
@@ -4559,6 +4578,12 @@ bapp_validate_cfg() {
   if ! [[ "${BACKUP_KEEP_DAYS:-0}" =~ ^[0-9]+$ ]]; then
     error "$(t binary_app.error.backup_keep_days "${BACKUP_KEEP_DAYS:-unset}")"
   fi
+  # The bind address must be a concrete IP (loopback or wildcard); anything
+  # else would silently break the generated service/config.
+  case "${BA_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
+  esac
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -4848,8 +4873,11 @@ bapp_health_probe() {
 }
 
 # Firewall + logrotate for the service port and log directory.
+# BA_FIREWALL defaults to 0: opening a firewall port for a plain-HTTP
+# service bound to 0.0.0.0 exposes it to the public internet.  Apps that
+# genuinely need a public port (e.g. frps) opt in explicitly.
 ba_configure_ops() {
-  if [[ "${BA_FIREWALL:-1}" == "1" ]]; then
+  if [[ "${BA_FIREWALL:-0}" == "1" ]]; then
     app_configure_firewall "$PORT" "binary_app" "$APP_NAME"
   fi
   app_write_logrotate "/etc/logrotate.d/${SERVICE_NAME}" "$LOG_DIR" \
@@ -4885,6 +4913,15 @@ bapp_summary() {
   echo -e "  $(t binary_app.summary.backup_dir)  ${YELLOW}${BACKUP_DIR}${GREEN}"
   if declare -f ba_summary_extra >/dev/null 2>&1; then
     ba_summary_extra
+  fi
+  echo "  =========================================================="
+  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_TLS_ENABLED:-0}" != "1" ]]; then
+    echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
+    echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
+  elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
+    echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
+  else
+    echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
   fi
   echo "  =========================================================="
   echo -e "${NC}"
@@ -5743,7 +5780,16 @@ i18n_register_many \
   "使用 systemd 和备份的 Alist 文件列表服务部署脚本。" \
   app.alist.hint.admin \
   "Initialize the administrator password with: alist admin --data %s" \
-  "初始化管理员密码：alist admin --data %s"
+  "初始化管理员密码：alist admin --data %s" \
+  app.alist.error.config_dir \
+  "Failed to prepare Alist data directory: %s" \
+  "准备 Alist 数据目录失败：%s" \
+  app.alist.error.config_write \
+  "Failed to write Alist server configuration: %s" \
+  "写入 Alist 服务端配置失败：%s" \
+  app.alist.success.config_written \
+  "Alist server configuration written: %s" \
+  "Alist 服务端配置已写入：%s"
 
 APP_DESCRIPTION="$(t app.alist.description)"
 APP_IMPL_SCRIPT="impl/install_alist.sh"
@@ -5776,14 +5822,15 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BA_BIN_NAME="alist"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="127.0.0.1"
 BA_SERVICE_DESCRIPTION="Alist file listing service"
 BA_SERVICE_ARGS="server --data ${DATA_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Alist stores its own configuration and database under DATA_DIR on first
@@ -5792,6 +5839,93 @@ CONFIG_KEYS=(
 ba_asset_name() {
   local version="$1"
   printf 'alist-linux-%s.tar.gz\n' "$BA_ARCH"
+}
+
+# Pin the HTTP listen address before the first start. Alist generates
+# data/config.json on first run with scheme.address=0.0.0.0 by default; write
+# a minimal config first so the service binds to BA_BIND_ADDR from the start.
+# If an existing config.json already has a scheme block, preserve everything
+# and only rewrite scheme.address (via a small awk in-place rewrite).
+ba_pre_start() {
+  local config_file="${DATA_DIR}/config.json"
+  if [[ ! -f "$config_file" ]]; then
+    if ! mkdir -p "$DATA_DIR"; then
+      error "$(t app.alist.error.config_dir "$DATA_DIR")"
+    fi
+    if ! atomic_write_file "$config_file" 600 "root:${SERVICE_USER}" <<EOF
+{
+  "force": false,
+  "site_url": "",
+  "scheme": {
+    "address": "${BA_BIND_ADDR}",
+    "http_port": ${PORT},
+    "https_port": -1,
+    "force_https": false,
+    "cert_file": "",
+    "key_file": "",
+    "unix_file": "",
+    "unix_file_perm": ""
+  }
+}
+EOF
+    then
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    success "$(t app.alist.success.config_written "$config_file")"
+  elif ! grep -q "\"address\"" "$config_file"; then
+    # Existing config without a scheme block: append one before the closing
+    # brace so the listener stays pinned to BA_BIND_ADDR.
+    local tmp
+    if ! tmp=$(mktemp "${config_file}.XXXXXX"); then
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! awk -v addr="${BA_BIND_ADDR}" -v port="${PORT}" '
+        { print }
+        /^[[:space:]]*}[[:space:]]*$/ && !done {
+          print "  ,\"scheme\": {"
+          print "    \"address\": \"" addr "\","
+          print "    \"http_port\": " port ","
+          print "    \"https_port\": -1,"
+          print "    \"force_https\": false,"
+          print "    \"cert_file\": \"\","
+          print "    \"key_file\": \"\","
+          print "    \"unix_file\": \"\","
+          print "    \"unix_file_perm\": \"\""
+          print "  }"
+          done = 1
+        }
+      ' "$config_file" > "$tmp"; then
+      rm -f "$tmp"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! chown "root:${SERVICE_USER}" "$tmp" 2>/dev/null \
+        || ! chmod 600 "$tmp" \
+        || ! mv -f "$tmp" "$config_file"; then
+      rm -f "$tmp"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    success "$(t app.alist.success.config_written "$config_file")"
+  else
+    # Existing scheme block: rewrite only the address field.
+    local tmp2
+    if ! tmp2=$(mktemp "${config_file}.XXXXXX"); then
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! awk -v addr="${BA_BIND_ADDR}" '
+        /"address"[[:space:]]*:/ { sub(/"address"[[:space:]]*:[[:space:]]*"[^"]*"/, "\"address\": \"" addr "\""); }
+        { print }
+      ' "$config_file" > "$tmp2"; then
+      rm -f "$tmp2"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! chown "root:${SERVICE_USER}" "$tmp2" 2>/dev/null \
+        || ! chmod 600 "$tmp2" \
+        || ! mv -f "$tmp2" "$config_file"; then
+      rm -f "$tmp2"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    success "$(t app.alist.success.config_written "$config_file")"
+  fi
 }
 
 # Remind users how to seed/rotate the administrator password after install.

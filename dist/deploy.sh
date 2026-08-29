@@ -4105,6 +4105,9 @@ i18n_register_many \
   binary_app.error.backup_keep_days \
   "BACKUP_KEEP_DAYS is invalid: '%s'. Use a non-negative integer (0 disables retention pruning)." \
   "BACKUP_KEEP_DAYS 无效：'%s'。请输入非负整数（0 表示不做保留期清理）。" \
+  binary_app.error.bind_addr \
+  "BA_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "BA_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -4456,6 +4459,18 @@ i18n_register_many \
   binary_app.summary.backup_dir \
   "Backup directory:" \
   "备份目录：" \
+  binary_app.summary.plaintext_warning \
+  "WARNING: the service listens on 0.0.0.0:%s over plain HTTP. Anyone who can reach this port can access it." \
+  "警告：服务正以明文 HTTP 监听 0.0.0.0:%s，任何能访问该端口的人都可以使用它。" \
+  binary_app.summary.proxy_hint \
+  "Recommended: put it behind an HTTPS reverse proxy (nginx/caddy), or set BA_BIND_ADDR=127.0.0.1 and use ssh -L / Tailscale for remote access." \
+  "建议：将其置于 HTTPS 反向代理（nginx/caddy）之后，或设置 BA_BIND_ADDR=127.0.0.1 并通过 ssh -L / Tailscale 远程访问。" \
+  binary_app.summary.public_bind \
+  "Listening on 0.0.0.0 (public). Ensure TLS or an auth layer protects this service." \
+  "正在监听 0.0.0.0（公网）。请确保有 TLS 或认证层保护该服务。" \
+  binary_app.summary.local_bind \
+  "Listening on 127.0.0.1:%s (local only). Use a reverse proxy to publish it securely." \
+  "正在监听 127.0.0.1:%s（仅本机）。如需对外提供服务，请通过反向代理安全发布。" \
   binary_app.summary.management \
   "Management" \
   "常用管理命令" \
@@ -4521,6 +4536,10 @@ _binary_app_derive_paths() {
   BIN_PATH="${INSTALL_DIR}/${BA_BIN_NAME}"
   LOG_FILE="${LOG_DIR}/${BA_BIN_NAME}.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
+  # Default to loopback: a plain-HTTP service on 0.0.0.0 is directly exposed
+  # to the network.  Publish through a reverse proxy, or set BA_BIND_ADDR
+  # explicitly when the app is designed to listen publicly (e.g. frps).
+  BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 }
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
@@ -4560,6 +4579,12 @@ bapp_validate_cfg() {
   if ! [[ "${BACKUP_KEEP_DAYS:-0}" =~ ^[0-9]+$ ]]; then
     error "$(t binary_app.error.backup_keep_days "${BACKUP_KEEP_DAYS:-unset}")"
   fi
+  # The bind address must be a concrete IP (loopback or wildcard); anything
+  # else would silently break the generated service/config.
+  case "${BA_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
+  esac
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -4849,8 +4874,11 @@ bapp_health_probe() {
 }
 
 # Firewall + logrotate for the service port and log directory.
+# BA_FIREWALL defaults to 0: opening a firewall port for a plain-HTTP
+# service bound to 0.0.0.0 exposes it to the public internet.  Apps that
+# genuinely need a public port (e.g. frps) opt in explicitly.
 ba_configure_ops() {
-  if [[ "${BA_FIREWALL:-1}" == "1" ]]; then
+  if [[ "${BA_FIREWALL:-0}" == "1" ]]; then
     app_configure_firewall "$PORT" "binary_app" "$APP_NAME"
   fi
   app_write_logrotate "/etc/logrotate.d/${SERVICE_NAME}" "$LOG_DIR" \
@@ -4886,6 +4914,15 @@ bapp_summary() {
   echo -e "  $(t binary_app.summary.backup_dir)  ${YELLOW}${BACKUP_DIR}${GREEN}"
   if declare -f ba_summary_extra >/dev/null 2>&1; then
     ba_summary_extra
+  fi
+  echo "  =========================================================="
+  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_TLS_ENABLED:-0}" != "1" ]]; then
+    echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
+    echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
+  elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
+    echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
+  else
+    echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
   fi
   echo "  =========================================================="
   echo -e "${NC}"
@@ -12098,6 +12135,18 @@ i18n_register_many \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
+  app.tickflow.error.auth_password_short \
+  "TICKFLOW_AUTH_PASSWORD must be at least 6 characters when set explicitly." \
+  "显式设置 TICKFLOW_AUTH_PASSWORD 时至少需要 6 个字符。" \
+  app.tickflow.error.bind_addr \
+  "TICKFLOW_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "TICKFLOW_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
+  app.tickflow.summary.auth_file \
+  "Panel password (AUTH_PASSWORD) is in:" \
+  "面板密码（AUTH_PASSWORD）位于：" \
+  app.tickflow.summary.auth_warning \
+  "The panel requires this password. Change it in %s and restart the service to rotate." \
+  "面板需要此密码。修改 %s 中的值并重启服务即可轮换。" \
   app.tickflow.uninstall.removes \
   "This will remove the TickFlow systemd service and deploy config." \
   "这将删除 TickFlow systemd 服务和部署配置。" \
@@ -12548,7 +12597,16 @@ i18n_register_many \
   "使用 systemd 和备份的 Alist 文件列表服务部署脚本。" \
   app.alist.hint.admin \
   "Initialize the administrator password with: alist admin --data %s" \
-  "初始化管理员密码：alist admin --data %s"
+  "初始化管理员密码：alist admin --data %s" \
+  app.alist.error.config_dir \
+  "Failed to prepare Alist data directory: %s" \
+  "准备 Alist 数据目录失败：%s" \
+  app.alist.error.config_write \
+  "Failed to write Alist server configuration: %s" \
+  "写入 Alist 服务端配置失败：%s" \
+  app.alist.success.config_written \
+  "Alist server configuration written: %s" \
+  "Alist 服务端配置已写入：%s"
 
 APP_DESCRIPTION="$(t app.alist.description)"
 APP_IMPL_SCRIPT="impl/install_alist.sh"
@@ -13813,6 +13871,12 @@ GITHUB_REPO="${GITHUB_REPO:-Wei-Shaw/sub2api}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/sub2api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 SUB2API_DOMAIN="${SUB2API_DOMAIN:-}"
+# Bind the backend to loopback by default: the nginx reverse proxy on
+# 80/443 is the public entry point. Set SUB2API_BIND_ADDR=0.0.0.0 only when
+# you know you need direct backend access.
+SUB2API_BIND_ADDR="${SUB2API_BIND_ADDR:-127.0.0.1}"
+# Timezone for the service process; defaults to the server local time.
+SUB2API_TZ="${SUB2API_TZ:-}"
 PG_USER="${PG_USER:-sub2api}"
 PG_PASS="${PG_PASS:-}"
 PG_DB="${PG_DB:-sub2api}"
@@ -13821,7 +13885,7 @@ BIN_PATH="${INSTALL_DIR}/sub2api"
 CONFIG_KEYS=(
   PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
-  SUB2API_DOMAIN INSTALLED_VERSION
+  SUB2API_DOMAIN SUB2API_BIND_ADDR SUB2API_TZ INSTALLED_VERSION
 )
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
@@ -14475,9 +14539,9 @@ StartLimitInterval=60
 StartLimitBurst=5
 
 # Environment variables.
-Environment="SERVER_HOST=0.0.0.0"
+Environment="SERVER_HOST=${SUB2API_BIND_ADDR}"
 Environment="SERVER_PORT=${PORT}"
-Environment="TZ=Asia/Shanghai"
+Environment="TZ=${SUB2API_TZ}"
 # Prefer Go DNS resolution to reduce SSE timeout stalls.
 Environment="GODEBUG=netdns=go"
 
@@ -19974,12 +20038,18 @@ TICKFLOW_SERVICE_NAME="${TICKFLOW_SERVICE_NAME:-tickflow-stock-panel}"
 TICKFLOW_PORT="${TICKFLOW_PORT:-3018}"
 TICKFLOW_LOG_DIR="${TICKFLOW_LOG_DIR:-${TICKFLOW_INSTALL_DIR}/logs}"
 TICKFLOW_AUTH_PASSWORD="${TICKFLOW_AUTH_PASSWORD:-}"
+# Bind address for the container port mapping. 127.0.0.1 by default: the
+# panel has no authentication unless TICKFLOW_AUTH_PASSWORD is set, so
+# publishing it on 0.0.0.0 would expose an unauthenticated stock panel to the
+# network. Put it behind an HTTPS reverse proxy instead.
+TICKFLOW_BIND_ADDR="${TICKFLOW_BIND_ADDR:-127.0.0.1}"
 TICKFLOW_BACKEND_EXTRAS="${TICKFLOW_BACKEND_EXTRAS:-}"
 
 CONFIG_KEYS=(
   TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_INSTALL_DIR
   TICKFLOW_DATA_DIR TICKFLOW_ENV_FILE TICKFLOW_COMPOSE_FILE TICKFLOW_TIERS_FILE
   TICKFLOW_SERVICE_NAME TICKFLOW_PORT TICKFLOW_LOG_DIR TICKFLOW_AUTH_PASSWORD
+  TICKFLOW_BIND_ADDR
   TICKFLOW_BACKEND_EXTRAS
 )
 
@@ -20056,8 +20126,12 @@ _validate_config_values() {
   require_safe_path "TICKFLOW_COMPOSE_FILE" "$TICKFLOW_COMPOSE_FILE"
   require_safe_path "TICKFLOW_TIERS_FILE" "$TICKFLOW_TIERS_FILE"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
-    warn "$(t app.tickflow.warn.auth_password_short)"
+    error "$(t app.tickflow.error.auth_password_short)"
   fi
+  case "${TICKFLOW_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t app.tickflow.error.bind_addr "${TICKFLOW_BIND_ADDR:-unset}")" ;;
+  esac
 }
 
 _compose_bin() {
@@ -20132,6 +20206,7 @@ _write_env_file() {
   local ai_model="deepseek-chat"
   local ai_daily_token_budget="500000"
   local log_level="INFO"
+  local auth_password="${TICKFLOW_AUTH_PASSWORD:-}"
   local existing_value
   mkdir -p "$(dirname "$TICKFLOW_ENV_FILE")"
   if existing_value="$(_env_value_from_file TICKFLOW_API_KEY)"; then
@@ -20155,6 +20230,18 @@ _write_env_file() {
   if existing_value="$(_env_value_from_file LOG_LEVEL)"; then
     log_level="$existing_value"
   fi
+  if existing_value="$(_env_value_from_file AUTH_PASSWORD)"; then
+    auth_password="$existing_value"
+  fi
+  # Never leave the panel unauthenticated: generate a random password when
+  # neither the config nor an existing env file provides one.
+  if [[ -z "$auth_password" ]]; then
+    auth_password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
+    if [[ -z "$auth_password" ]]; then
+      auth_password="$(openssl rand -hex 20 2>/dev/null || true)"
+    fi
+    [[ -n "$auth_password" ]] || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
+  fi
   atomic_write_file "$TICKFLOW_ENV_FILE" 600 <<EOF \
     || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
 TICKFLOW_API_KEY=${tickflow_api_key}
@@ -20166,14 +20253,14 @@ AI_DAILY_TOKEN_BUDGET=${ai_daily_token_budget}
 HOST=0.0.0.0
 PORT=${TICKFLOW_PORT}
 LOG_LEVEL=${log_level}
-AUTH_PASSWORD=${TICKFLOW_AUTH_PASSWORD}
+AUTH_PASSWORD=${auth_password}
 BACKEND_EXTRAS=${TICKFLOW_BACKEND_EXTRAS}
 DATA_DIR=./data
 EOF
 }
 
 _write_compose_file() {
-  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<'EOF' \
+  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<EOF \
     || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 services:
   app:
@@ -20184,7 +20271,7 @@ services:
         BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
     container_name: TickFlow_Stock_Panel
     ports:
-      - "${PORT:-3018}:3018"
+      - "${TICKFLOW_BIND_ADDR:-127.0.0.1}:${TICKFLOW_PORT}:3018"
     env_file:
       - .env
     volumes:
@@ -20280,6 +20367,9 @@ _print_summary() {
   echo -e "  ║  $(t app.tickflow.summary.compose)  ${YELLOW}${TICKFLOW_INSTALL_DIR}${GREEN}"
   echo -e "  ║  $(t app.tickflow.summary.data)  ${YELLOW}${TICKFLOW_DATA_DIR}${GREEN}"
   echo -e "  ║  $(t app.tickflow.summary.env)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
+  echo "  ╠══════════════════════════════════════════════════════╣"
+  echo -e "  ║  $(t app.tickflow.summary.auth_file)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
+  echo -e "  ║  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${GREEN}"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo -e "${NC}"
   echo -e "  ${BOLD}$(t app.tickflow.summary.systemd)${NC}"
@@ -21745,14 +21835,15 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BA_BIN_NAME="ntfy"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="ntfy push notification server"
 BA_SERVICE_ARGS="serve /etc/ntfy/server.yml"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Release asset names embed the version without the leading v.
@@ -21767,7 +21858,7 @@ ba_write_config() {
   local config_file="${config_dir}/server.yml"
   if ! atomic_write_file "$config_file" 644 root:root <<EOF
 # Managed by the ntfy deploy script.
-listen-http: :${PORT}
+listen-http: ${BA_BIND_ADDR}:${PORT}
 cache-file: ${DATA_DIR}/cache.db
 attachment-cache-dir: ${DATA_DIR}/attachments
 EOF
@@ -21864,13 +21955,14 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BA_BIN_NAME="meilisearch"
 BA_ARCHIVE_TYPE="none"
 BA_USE_ENV_FILE=1
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Meilisearch search engine"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/health"
 BA_HEALTH_CODES="^200$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Upstream names the ARM64 asset aarch64 (the library BA_ARCH value is arm64).
@@ -21895,6 +21987,7 @@ ba_write_config() {
 MEILI_ENV=production
 MEILI_MASTER_KEY=${key}
 MEILI_DB_PATH=${DATA_DIR}/meili_data
+MEILI_HTTP_ADDR=${BA_BIND_ADDR}:${PORT}
 EOF
   then
     error "$(t app.meilisearch.error.env_write "$env_file")"
@@ -21975,14 +22068,15 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BA_BIN_NAME="alist"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="127.0.0.1"
 BA_SERVICE_DESCRIPTION="Alist file listing service"
 BA_SERVICE_ARGS="server --data ${DATA_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Alist stores its own configuration and database under DATA_DIR on first
@@ -21991,6 +22085,93 @@ CONFIG_KEYS=(
 ba_asset_name() {
   local version="$1"
   printf 'alist-linux-%s.tar.gz\n' "$BA_ARCH"
+}
+
+# Pin the HTTP listen address before the first start. Alist generates
+# data/config.json on first run with scheme.address=0.0.0.0 by default; write
+# a minimal config first so the service binds to BA_BIND_ADDR from the start.
+# If an existing config.json already has a scheme block, preserve everything
+# and only rewrite scheme.address (via a small awk in-place rewrite).
+ba_pre_start() {
+  local config_file="${DATA_DIR}/config.json"
+  if [[ ! -f "$config_file" ]]; then
+    if ! mkdir -p "$DATA_DIR"; then
+      error "$(t app.alist.error.config_dir "$DATA_DIR")"
+    fi
+    if ! atomic_write_file "$config_file" 600 "root:${SERVICE_USER}" <<EOF
+{
+  "force": false,
+  "site_url": "",
+  "scheme": {
+    "address": "${BA_BIND_ADDR}",
+    "http_port": ${PORT},
+    "https_port": -1,
+    "force_https": false,
+    "cert_file": "",
+    "key_file": "",
+    "unix_file": "",
+    "unix_file_perm": ""
+  }
+}
+EOF
+    then
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    success "$(t app.alist.success.config_written "$config_file")"
+  elif ! grep -q "\"address\"" "$config_file"; then
+    # Existing config without a scheme block: append one before the closing
+    # brace so the listener stays pinned to BA_BIND_ADDR.
+    local tmp
+    if ! tmp=$(mktemp "${config_file}.XXXXXX"); then
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! awk -v addr="${BA_BIND_ADDR}" -v port="${PORT}" '
+        { print }
+        /^[[:space:]]*}[[:space:]]*$/ && !done {
+          print "  ,\"scheme\": {"
+          print "    \"address\": \"" addr "\","
+          print "    \"http_port\": " port ","
+          print "    \"https_port\": -1,"
+          print "    \"force_https\": false,"
+          print "    \"cert_file\": \"\","
+          print "    \"key_file\": \"\","
+          print "    \"unix_file\": \"\","
+          print "    \"unix_file_perm\": \"\""
+          print "  }"
+          done = 1
+        }
+      ' "$config_file" > "$tmp"; then
+      rm -f "$tmp"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! chown "root:${SERVICE_USER}" "$tmp" 2>/dev/null \
+        || ! chmod 600 "$tmp" \
+        || ! mv -f "$tmp" "$config_file"; then
+      rm -f "$tmp"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    success "$(t app.alist.success.config_written "$config_file")"
+  else
+    # Existing scheme block: rewrite only the address field.
+    local tmp2
+    if ! tmp2=$(mktemp "${config_file}.XXXXXX"); then
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! awk -v addr="${BA_BIND_ADDR}" '
+        /"address"[[:space:]]*:/ { sub(/"address"[[:space:]]*:[[:space:]]*"[^"]*"/, "\"address\": \"" addr "\""); }
+        { print }
+      ' "$config_file" > "$tmp2"; then
+      rm -f "$tmp2"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    if ! chown "root:${SERVICE_USER}" "$tmp2" 2>/dev/null \
+        || ! chmod 600 "$tmp2" \
+        || ! mv -f "$tmp2" "$config_file"; then
+      rm -f "$tmp2"
+      error "$(t app.alist.error.config_write "$config_file")"
+    fi
+    success "$(t app.alist.success.config_written "$config_file")"
+  fi
 }
 
 # Remind users how to seed/rotate the administrator password after install.
@@ -22070,15 +22251,16 @@ FB_ROOT="${FB_ROOT:-/srv/filebrowser}"
 BA_BIN_NAME="filebrowser"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Filebrowser web file manager"
-BA_SERVICE_ARGS="-d ${DATA_DIR}/filebrowser.db -r ${FB_ROOT} -a 0.0.0.0 -p ${PORT}"
+BA_SERVICE_ARGS="-d ${DATA_DIR}/filebrowser.db -r ${FB_ROOT} -a ${BA_BIND_ADDR} -p ${PORT}"
 BA_READWRITE_PATHS="${FB_ROOT}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS FB_ROOT INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS FB_ROOT BA_BIND_ADDR INSTALLED_VERSION
 )
 
 ba_asset_name() {
@@ -22175,14 +22357,15 @@ MUSIC_DIR="${MUSIC_DIR:-/srv/music}"
 BA_BIN_NAME="navidrome"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=1
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Navidrome music server"
 BA_READWRITE_PATHS="${MUSIC_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/ping"
 BA_HEALTH_CODES="^200$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS MUSIC_DIR INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS MUSIC_DIR BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Upstream embeds the version without the leading v in the asset name.
@@ -22195,6 +22378,7 @@ ba_asset_name() {
 ba_write_config() {
   local env_file="/etc/${SERVICE_NAME}.env"
   if ! atomic_write_file "$env_file" 600 root:root <<EOF
+ND_ADDRESS=${BA_BIND_ADDR}
 ND_PORT=${PORT}
 ND_DATAFOLDER=${DATA_DIR}
 ND_MUSICFOLDER=${MUSIC_DIR}
@@ -22290,11 +22474,12 @@ BA_BIN_NAME="frps"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
 BA_FIREWALL=1
+BA_BIND_ADDR="${BA_BIND_ADDR:-0.0.0.0}"
 BA_SERVICE_DESCRIPTION="frp server (frps)"
 BA_SERVICE_ARGS="-c /etc/frps/frps.toml"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Upstream embeds the version without the leading v in the asset name.
@@ -22321,7 +22506,7 @@ ba_write_config() {
     [[ -n "$token" ]] || token="frps-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
   if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
-bindAddr = "0.0.0.0"
+bindAddr = "${BA_BIND_ADDR}"
 bindPort = ${PORT}
 auth.token = "${token}"
 EOF
@@ -22428,14 +22613,15 @@ BA_BIN_NAME="gitea"
 BA_ARCHIVE_TYPE="none"
 BA_APT_PACKAGES="git"
 BA_USE_ENV_FILE=0
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Gitea git server"
 BA_SERVICE_ARGS="web --config /etc/gitea/app.ini --work-path ${DATA_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302|403)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Upstream embeds the version without the leading v in the binary name.
@@ -22456,7 +22642,7 @@ RUN_MODE = prod
 [server]
 APP_DATA_PATH = ${DATA_DIR}
 PROTOCOL = http
-HTTP_ADDR = 0.0.0.0
+HTTP_ADDR = ${BA_BIND_ADDR}
 HTTP_PORT = ${PORT}
 DOMAIN = ${server_name}
 ROOT_URL = http://${server_name}:${PORT}/
@@ -22570,13 +22756,14 @@ BA_BIN_NAME="gotify"
 BA_ARCHIVE_TYPE="zip"
 BA_APT_PACKAGES="unzip"
 BA_USE_ENV_FILE=1
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Gotify push notification server"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 ba_asset_name() {
@@ -22597,7 +22784,7 @@ ba_write_config() {
     [[ -n "$admin_password" ]] || error "$(t app.gotify.error.env_write "$env_file")"
   fi
   if ! atomic_write_file "$env_file" 600 root:root <<EOF
-GOTIFY_SERVER_LISTENADDR=0.0.0.0
+GOTIFY_SERVER_LISTENADDR=${BA_BIND_ADDR}
 GOTIFY_SERVER_PORT=${PORT}
 GOTIFY_DEFAULTUSER_NAME=admin
 GOTIFY_DEFAULTUSER_PASS=${admin_password}
@@ -22680,14 +22867,15 @@ BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 BA_BIN_NAME="beszel"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=1
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Beszel monitoring hub"
-BA_SERVICE_ARGS="serve --http 0.0.0.0:${PORT} --dir ${DATA_DIR}"
+BA_SERVICE_ARGS="serve --http ${BA_BIND_ADDR}:${PORT} --dir ${DATA_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 BA_HEALTH_CODES="^200$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Beszel release assets use the architecture name without the v-prefixed tag.

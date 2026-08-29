@@ -14,12 +14,18 @@ TICKFLOW_SERVICE_NAME="${TICKFLOW_SERVICE_NAME:-tickflow-stock-panel}"
 TICKFLOW_PORT="${TICKFLOW_PORT:-3018}"
 TICKFLOW_LOG_DIR="${TICKFLOW_LOG_DIR:-${TICKFLOW_INSTALL_DIR}/logs}"
 TICKFLOW_AUTH_PASSWORD="${TICKFLOW_AUTH_PASSWORD:-}"
+# Bind address for the container port mapping. 127.0.0.1 by default: the
+# panel has no authentication unless TICKFLOW_AUTH_PASSWORD is set, so
+# publishing it on 0.0.0.0 would expose an unauthenticated stock panel to the
+# network. Put it behind an HTTPS reverse proxy instead.
+TICKFLOW_BIND_ADDR="${TICKFLOW_BIND_ADDR:-127.0.0.1}"
 TICKFLOW_BACKEND_EXTRAS="${TICKFLOW_BACKEND_EXTRAS:-}"
 
 CONFIG_KEYS=(
   TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_INSTALL_DIR
   TICKFLOW_DATA_DIR TICKFLOW_ENV_FILE TICKFLOW_COMPOSE_FILE TICKFLOW_TIERS_FILE
   TICKFLOW_SERVICE_NAME TICKFLOW_PORT TICKFLOW_LOG_DIR TICKFLOW_AUTH_PASSWORD
+  TICKFLOW_BIND_ADDR
   TICKFLOW_BACKEND_EXTRAS
 )
 
@@ -96,8 +102,12 @@ _validate_config_values() {
   require_safe_path "TICKFLOW_COMPOSE_FILE" "$TICKFLOW_COMPOSE_FILE"
   require_safe_path "TICKFLOW_TIERS_FILE" "$TICKFLOW_TIERS_FILE"
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
-    warn "$(t app.tickflow.warn.auth_password_short)"
+    error "$(t app.tickflow.error.auth_password_short)"
   fi
+  case "${TICKFLOW_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t app.tickflow.error.bind_addr "${TICKFLOW_BIND_ADDR:-unset}")" ;;
+  esac
 }
 
 _compose_bin() {
@@ -172,6 +182,7 @@ _write_env_file() {
   local ai_model="deepseek-chat"
   local ai_daily_token_budget="500000"
   local log_level="INFO"
+  local auth_password="${TICKFLOW_AUTH_PASSWORD:-}"
   local existing_value
   mkdir -p "$(dirname "$TICKFLOW_ENV_FILE")"
   if existing_value="$(_env_value_from_file TICKFLOW_API_KEY)"; then
@@ -195,6 +206,18 @@ _write_env_file() {
   if existing_value="$(_env_value_from_file LOG_LEVEL)"; then
     log_level="$existing_value"
   fi
+  if existing_value="$(_env_value_from_file AUTH_PASSWORD)"; then
+    auth_password="$existing_value"
+  fi
+  # Never leave the panel unauthenticated: generate a random password when
+  # neither the config nor an existing env file provides one.
+  if [[ -z "$auth_password" ]]; then
+    auth_password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
+    if [[ -z "$auth_password" ]]; then
+      auth_password="$(openssl rand -hex 20 2>/dev/null || true)"
+    fi
+    [[ -n "$auth_password" ]] || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
+  fi
   atomic_write_file "$TICKFLOW_ENV_FILE" 600 <<EOF \
     || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
 TICKFLOW_API_KEY=${tickflow_api_key}
@@ -206,14 +229,14 @@ AI_DAILY_TOKEN_BUDGET=${ai_daily_token_budget}
 HOST=0.0.0.0
 PORT=${TICKFLOW_PORT}
 LOG_LEVEL=${log_level}
-AUTH_PASSWORD=${TICKFLOW_AUTH_PASSWORD}
+AUTH_PASSWORD=${auth_password}
 BACKEND_EXTRAS=${TICKFLOW_BACKEND_EXTRAS}
 DATA_DIR=./data
 EOF
 }
 
 _write_compose_file() {
-  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<'EOF' \
+  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<EOF \
     || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 services:
   app:
@@ -224,7 +247,7 @@ services:
         BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
     container_name: TickFlow_Stock_Panel
     ports:
-      - "${PORT:-3018}:3018"
+      - "${TICKFLOW_BIND_ADDR:-127.0.0.1}:${TICKFLOW_PORT}:3018"
     env_file:
       - .env
     volumes:
@@ -320,6 +343,9 @@ _print_summary() {
   echo -e "  ║  $(t app.tickflow.summary.compose)  ${YELLOW}${TICKFLOW_INSTALL_DIR}${GREEN}"
   echo -e "  ║  $(t app.tickflow.summary.data)  ${YELLOW}${TICKFLOW_DATA_DIR}${GREEN}"
   echo -e "  ║  $(t app.tickflow.summary.env)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
+  echo "  ╠══════════════════════════════════════════════════════╣"
+  echo -e "  ║  $(t app.tickflow.summary.auth_file)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
+  echo -e "  ║  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${GREEN}"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo -e "${NC}"
   echo -e "  ${BOLD}$(t app.tickflow.summary.systemd)${NC}"

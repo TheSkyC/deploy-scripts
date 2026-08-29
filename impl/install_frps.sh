@@ -23,11 +23,12 @@ BA_BIN_NAME="frps"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
 BA_FIREWALL=1
+BA_BIND_ADDR="${BA_BIND_ADDR:-0.0.0.0}"
 BA_SERVICE_DESCRIPTION="frp server (frps)"
 BA_SERVICE_ARGS="-c /etc/frps/frps.toml"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Upstream embeds the version without the leading v in the asset name.
@@ -54,7 +55,7 @@ ba_write_config() {
     [[ -n "$token" ]] || token="frps-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
   if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
-bindAddr = "0.0.0.0"
+bindAddr = "${BA_BIND_ADDR}"
 bindPort = ${PORT}
 auth.token = "${token}"
 EOF

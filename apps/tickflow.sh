@@ -144,6 +144,18 @@ i18n_register_many \
   app.tickflow.warn.auth_password_short \
   "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
   "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
+  app.tickflow.error.auth_password_short \
+  "TICKFLOW_AUTH_PASSWORD must be at least 6 characters when set explicitly." \
+  "显式设置 TICKFLOW_AUTH_PASSWORD 时至少需要 6 个字符。" \
+  app.tickflow.error.bind_addr \
+  "TICKFLOW_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "TICKFLOW_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
+  app.tickflow.summary.auth_file \
+  "Panel password (AUTH_PASSWORD) is in:" \
+  "面板密码（AUTH_PASSWORD）位于：" \
+  app.tickflow.summary.auth_warning \
+  "The panel requires this password. Change it in %s and restart the service to rotate." \
+  "面板需要此密码。修改 %s 中的值并重启服务即可轮换。" \
   app.tickflow.uninstall.removes \
   "This will remove the TickFlow systemd service and deploy config." \
   "这将删除 TickFlow systemd 服务和部署配置。" \

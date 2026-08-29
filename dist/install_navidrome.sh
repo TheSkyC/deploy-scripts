@@ -4104,6 +4104,9 @@ i18n_register_many \
   binary_app.error.backup_keep_days \
   "BACKUP_KEEP_DAYS is invalid: '%s'. Use a non-negative integer (0 disables retention pruning)." \
   "BACKUP_KEEP_DAYS 无效：'%s'。请输入非负整数（0 表示不做保留期清理）。" \
+  binary_app.error.bind_addr \
+  "BA_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
+  "BA_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -4455,6 +4458,18 @@ i18n_register_many \
   binary_app.summary.backup_dir \
   "Backup directory:" \
   "备份目录：" \
+  binary_app.summary.plaintext_warning \
+  "WARNING: the service listens on 0.0.0.0:%s over plain HTTP. Anyone who can reach this port can access it." \
+  "警告：服务正以明文 HTTP 监听 0.0.0.0:%s，任何能访问该端口的人都可以使用它。" \
+  binary_app.summary.proxy_hint \
+  "Recommended: put it behind an HTTPS reverse proxy (nginx/caddy), or set BA_BIND_ADDR=127.0.0.1 and use ssh -L / Tailscale for remote access." \
+  "建议：将其置于 HTTPS 反向代理（nginx/caddy）之后，或设置 BA_BIND_ADDR=127.0.0.1 并通过 ssh -L / Tailscale 远程访问。" \
+  binary_app.summary.public_bind \
+  "Listening on 0.0.0.0 (public). Ensure TLS or an auth layer protects this service." \
+  "正在监听 0.0.0.0（公网）。请确保有 TLS 或认证层保护该服务。" \
+  binary_app.summary.local_bind \
+  "Listening on 127.0.0.1:%s (local only). Use a reverse proxy to publish it securely." \
+  "正在监听 127.0.0.1:%s（仅本机）。如需对外提供服务，请通过反向代理安全发布。" \
   binary_app.summary.management \
   "Management" \
   "常用管理命令" \
@@ -4520,6 +4535,10 @@ _binary_app_derive_paths() {
   BIN_PATH="${INSTALL_DIR}/${BA_BIN_NAME}"
   LOG_FILE="${LOG_DIR}/${BA_BIN_NAME}.log"
   ENV_FILE="/etc/${SERVICE_NAME}.env"
+  # Default to loopback: a plain-HTTP service on 0.0.0.0 is directly exposed
+  # to the network.  Publish through a reverse proxy, or set BA_BIND_ADDR
+  # explicitly when the app is designed to listen publicly (e.g. frps).
+  BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 }
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
@@ -4559,6 +4578,12 @@ bapp_validate_cfg() {
   if ! [[ "${BACKUP_KEEP_DAYS:-0}" =~ ^[0-9]+$ ]]; then
     error "$(t binary_app.error.backup_keep_days "${BACKUP_KEEP_DAYS:-unset}")"
   fi
+  # The bind address must be a concrete IP (loopback or wildcard); anything
+  # else would silently break the generated service/config.
+  case "${BA_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0|::1|::) : ;;
+    *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
+  esac
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -4848,8 +4873,11 @@ bapp_health_probe() {
 }
 
 # Firewall + logrotate for the service port and log directory.
+# BA_FIREWALL defaults to 0: opening a firewall port for a plain-HTTP
+# service bound to 0.0.0.0 exposes it to the public internet.  Apps that
+# genuinely need a public port (e.g. frps) opt in explicitly.
 ba_configure_ops() {
-  if [[ "${BA_FIREWALL:-1}" == "1" ]]; then
+  if [[ "${BA_FIREWALL:-0}" == "1" ]]; then
     app_configure_firewall "$PORT" "binary_app" "$APP_NAME"
   fi
   app_write_logrotate "/etc/logrotate.d/${SERVICE_NAME}" "$LOG_DIR" \
@@ -4885,6 +4913,15 @@ bapp_summary() {
   echo -e "  $(t binary_app.summary.backup_dir)  ${YELLOW}${BACKUP_DIR}${GREEN}"
   if declare -f ba_summary_extra >/dev/null 2>&1; then
     ba_summary_extra
+  fi
+  echo "  =========================================================="
+  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_TLS_ENABLED:-0}" != "1" ]]; then
+    echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
+    echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
+  elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
+    echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
+  else
+    echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
   fi
   echo "  =========================================================="
   echo -e "${NC}"
@@ -5786,14 +5823,15 @@ MUSIC_DIR="${MUSIC_DIR:-/srv/music}"
 BA_BIN_NAME="navidrome"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=1
-BA_FIREWALL=1
+BA_FIREWALL=0
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Navidrome music server"
 BA_READWRITE_PATHS="${MUSIC_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/ping"
 BA_HEALTH_CODES="^200$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS MUSIC_DIR INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS MUSIC_DIR BA_BIND_ADDR INSTALLED_VERSION
 )
 
 # Upstream embeds the version without the leading v in the asset name.
@@ -5806,6 +5844,7 @@ ba_asset_name() {
 ba_write_config() {
   local env_file="/etc/${SERVICE_NAME}.env"
   if ! atomic_write_file "$env_file" 600 root:root <<EOF
+ND_ADDRESS=${BA_BIND_ADDR}
 ND_PORT=${PORT}
 ND_DATAFOLDER=${DATA_DIR}
 ND_MUSICFOLDER=${MUSIC_DIR}
