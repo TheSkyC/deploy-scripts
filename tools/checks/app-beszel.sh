@@ -27,7 +27,7 @@ check_beszel_release_asset_mapping() {
       && grep -Fq 'BA_BIN_NAME="beszel"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
       && grep -Fq "printf 'beszel_linux_%s.tar.gz" "$file" \
-      && grep -Fq 'BA_SERVICE_ARGS="serve --http 0.0.0.0:${PORT} --dir ${DATA_DIR}"' "$file" \
+      && grep -Fq 'BA_SERVICE_ARGS="serve --http ${BA_BIND_ADDR}:${PORT} --dir ${DATA_DIR}"' "$file" \
       && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/api/health"' "$file" \
       || {
         echo "${file} must map the verified Beszel hub release archive, data directory, and health endpoint." >&2

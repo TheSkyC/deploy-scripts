@@ -12,6 +12,12 @@ GITHUB_REPO="${GITHUB_REPO:-Wei-Shaw/sub2api}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/sub2api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 SUB2API_DOMAIN="${SUB2API_DOMAIN:-}"
+# Bind the backend to loopback by default: the nginx reverse proxy on
+# 80/443 is the public entry point. Set SUB2API_BIND_ADDR=0.0.0.0 only when
+# you know you need direct backend access.
+SUB2API_BIND_ADDR="${SUB2API_BIND_ADDR:-127.0.0.1}"
+# Timezone for the service process; defaults to the server local time.
+SUB2API_TZ="${SUB2API_TZ:-}"
 PG_USER="${PG_USER:-sub2api}"
 PG_PASS="${PG_PASS:-}"
 PG_DB="${PG_DB:-sub2api}"
@@ -20,7 +26,7 @@ BIN_PATH="${INSTALL_DIR}/sub2api"
 CONFIG_KEYS=(
   PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
-  SUB2API_DOMAIN INSTALLED_VERSION
+  SUB2API_DOMAIN SUB2API_BIND_ADDR SUB2API_TZ INSTALLED_VERSION
 )
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
@@ -674,9 +680,9 @@ StartLimitInterval=60
 StartLimitBurst=5
 
 # Environment variables.
-Environment="SERVER_HOST=0.0.0.0"
+Environment="SERVER_HOST=${SUB2API_BIND_ADDR}"
 Environment="SERVER_PORT=${PORT}"
-Environment="TZ=Asia/Shanghai"
+Environment="TZ=${SUB2API_TZ}"
 # Prefer Go DNS resolution to reduce SSE timeout stalls.
 Environment="GODEBUG=netdns=go"
 
