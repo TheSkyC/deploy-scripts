@@ -188,7 +188,7 @@ do_signups() {
   case "${_mode,,}" in
     on|enable|true)
       step "$(t app.vaultwarden.step.signups_on)"
-      sed -i "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=true/" "$VW_ENV_FILE"
+      _signups_set_env true
       systemctl restart vaultwarden 2>/dev/null \
         || error "$(t app.vaultwarden.error.rotate_restart)"
       success "$(t app.vaultwarden.success.signups_on)"
@@ -196,7 +196,7 @@ do_signups() {
       ;;
     off|disable|false)
       step "$(t app.vaultwarden.step.signups_off)"
-      sed -i "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=false/" "$VW_ENV_FILE"
+      _signups_set_env false
       systemctl restart vaultwarden 2>/dev/null \
         || error "$(t app.vaultwarden.error.rotate_restart)"
       success "$(t app.vaultwarden.success.signups_off)"
@@ -212,6 +212,20 @@ do_signups() {
       error "$(t app.vaultwarden.error.signups_bad_action "$_mode")"
       ;;
   esac
+}
+# Atomically rewrite SIGNUPS_ALLOWED in the env file through a temp file.
+_signups_set_env() {
+  local value="$1" env_tmp
+  if ! env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX"); then
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
+  if ! sed "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=${value}/" "$VW_ENV_FILE" > "$env_tmp" \
+      || ! chmod 600 "$env_tmp" \
+      || ! chown root:root "$env_tmp" \
+      || ! mv -f "$env_tmp" "$VW_ENV_FILE"; then
+    rm -f "$env_tmp"
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
 }
 app_conf_register_legacy "/etc/vaultwarden_deploy.conf"
 CONF_FILE="$(app_conf_file)"
