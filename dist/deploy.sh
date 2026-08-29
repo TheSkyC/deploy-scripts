@@ -10148,15 +10148,12 @@ i18n_register_many \
   app.vaultwarden.success.certbot_timer \
   "Certbot auto-renew timer is ready." \
   "Certbot 自动续签定时器已就绪。" \
-  app.vaultwarden.success.certbot_cron_exists \
-  "Certbot auto-renew cron entry already exists; skipping." \
-  "Certbot 自动续签 cron 条目已存在，跳过。" \
   app.vaultwarden.success.certbot_cron \
-  "Certbot auto-renew cron entry added (daily 02:30)." \
-  "Certbot 自动续签（每天 02:30）已加入 crontab。" \
+  "Certbot auto-renew cron entry added (/etc/cron.d/certbot-renew, daily 02:30)." \
+  "Certbot 自动续签已写入 /etc/cron.d/certbot-renew（每天 02:30）。" \
   app.vaultwarden.error.certbot_cron \
-  "Failed to write the Certbot auto-renew crontab entry. Add it manually after fixing crontab access: 30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" \
-  "写入 Certbot 自动续签 crontab 条目失败。请在修复 crontab 访问问题后手动添加：30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" \
+  "Failed to write the Certbot auto-renew cron entry. Add it manually after fixing cron access: 30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" \
+  "写入 Certbot 自动续签 cron 条目失败。请在修复 cron 访问问题后手动添加：30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" \
   app.vaultwarden.warn.nginx_version \
   "Cannot detect Nginx version; using legacy http2 syntax (attached to listen lines)." \
   "无法检测 Nginx 版本，默认使用旧版 http2 语法（listen 行附加）。" \
@@ -11512,6 +11509,15 @@ i18n_register app.blog.download_url \
 i18n_register app.blog.error.hugo_download \
   "Hugo download failed. Check the network or download it manually." \
   "Hugo 下载失败，请检查网络或手动下载。"
+i18n_register app.blog.error.hugo_digest \
+  "Could not obtain the SHA-256 digest for %s from the GitHub release metadata. Refusing to install an unverified package." \
+  "无法从 GitHub 发布元数据获取 %s 的 SHA-256 摘要。拒绝安装未经校验的软件包。"
+i18n_register app.blog.error.hugo_checksum \
+  "Hugo SHA-256 verification failed for %s. The download may be corrupted or tampered with; retry or download it manually." \
+  "Hugo SHA-256 校验失败：%s。下载可能损坏或被篡改，请重试或手动下载。"
+i18n_register app.blog.hugo_sha_ok \
+  "Hugo SHA-256 verification passed." \
+  "Hugo SHA-256 校验通过。"
 i18n_register app.blog.warn.hugo_cleanup_failed \
   "Failed to remove temporary Hugo package %s. Remove it manually after the install attempt finishes." \
   "删除 Hugo 临时包 %s 失败。请在本次安装结束后手动清理。"
@@ -16631,14 +16637,21 @@ NGINX
     if systemctl list-timers certbot* 2>/dev/null | grep -q certbot; then
       success "$(t app.vaultwarden.success.certbot_timer)"
     else
-      if crontab -l 2>/dev/null | grep -q "certbot renew"; then
-        success "$(t app.vaultwarden.success.certbot_cron_exists)"
-      else
-        if ! (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -; then
-          error "$(t app.vaultwarden.error.certbot_cron)"
-        fi
-        success "$(t app.vaultwarden.success.certbot_cron)"
+      # Use an /etc/cron.d file (atomic write) instead of appending to the
+      # root crontab, so an existing crontab is never overwritten non-atomically.
+      local _certbot_cron_file="/etc/cron.d/certbot-renew"
+      local _certbot_cron_tmp
+      if ! _certbot_cron_tmp=$(mktemp "${_certbot_cron_file}.XXXXXX"); then
+        error "$(t app.vaultwarden.error.certbot_cron)"
       fi
+      if ! printf '%s\n' "30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" > "$_certbot_cron_tmp" \
+          || ! chmod 644 "$_certbot_cron_tmp" \
+          || ! chown root:root "$_certbot_cron_tmp" \
+          || ! mv -f "$_certbot_cron_tmp" "$_certbot_cron_file"; then
+        rm -f "$_certbot_cron_tmp"
+        error "$(t app.vaultwarden.error.certbot_cron)"
+      fi
+      success "$(t app.vaultwarden.success.certbot_cron)"
     fi
     local CERT_PATH_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
     local CERT_KEY_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/privkey.pem"
@@ -17557,6 +17570,7 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_fail2ban)"
   _vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"
+  _vw_remove_file_or_error "/etc/cron.d/certbot-renew" "VAULTWARDEN_CERTBOT_CRON_FILE"
   _vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"
   _vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"
   success "$(t app.vaultwarden.success.removed_scheduled)"
@@ -18879,6 +18893,20 @@ _blog_load_config_if_root() {
   fi
 }
 
+# Verify a downloaded Hugo .deb against the SHA-256 digest published in the
+# GitHub release asset metadata. Fails when no sha256sum/shasum is available.
+_verify_hugo_sha256() {
+  local file="$1" expected="$2" actual=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$file" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$file" | awk '{print $1}')"
+  else
+    return 1
+  fi
+  [[ -n "$actual" && "$actual" == "$expected" ]]
+}
+
 restore_nginx_root_backup() {
   [[ -e "$DEPLOY_BAK" || -L "$DEPLOY_BAK" ]] || return 0
   if ! safe_rm_dir "$NGINX_ROOT" "NGINX_ROOT"; then
@@ -19111,6 +19139,23 @@ HUGO_VER="$(json_tag_name "$HUGO_JSON" --strip-v)"
 success "$(t app.blog.latest_version "$HUGO_VER")"
 DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"
 info "$(t app.blog.download_url "$DEB_URL")"
+# GitHub release assets carry a sha256:... digest field; extract the one for
+# this exact .deb asset so the download can be verified instead of trusting
+# the size alone.
+HUGO_DEB_SHA256="$(printf '%s' "$HUGO_JSON" | \
+  awk -v url="hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb" '
+    /"name"[[:space:]]*:[[:space:]]*"/ { line=$0 }
+    /"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"/ {
+      name=line; sub(/.*"name"[[:space:]]*:[[:space:]]*"/, "", name); sub(/".*/, "", name)
+      if (name == url) {
+        d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"sha256:/, "", d); sub(/".*/, "", d)
+        print d
+      }
+    }
+  ' | head -1)"
+if ! [[ "$HUGO_DEB_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+  error "$(t app.blog.error.hugo_digest "$DEB_URL")"
+fi
 if ! HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
   error "$(t app.blog.error.hugo_download)"
 fi
@@ -19126,6 +19171,13 @@ if [[ ! -s "$HUGO_DEB" ]]; then
   fi
   error "$(t app.blog.error.hugo_download)"
 fi
+if ! _verify_hugo_sha256 "$HUGO_DEB" "$HUGO_DEB_SHA256"; then
+  if ! rm -f "$HUGO_DEB"; then
+    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
+  fi
+  error "$(t app.blog.error.hugo_checksum "$DEB_URL")"
+fi
+success "$(t app.blog.hugo_sha_ok)"
 if ! dpkg -i "$HUGO_DEB"; then
   if ! rm -f "$HUGO_DEB"; then
     warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"

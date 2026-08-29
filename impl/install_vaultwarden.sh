@@ -928,14 +928,21 @@ NGINX
     if systemctl list-timers certbot* 2>/dev/null | grep -q certbot; then
       success "$(t app.vaultwarden.success.certbot_timer)"
     else
-      if crontab -l 2>/dev/null | grep -q "certbot renew"; then
-        success "$(t app.vaultwarden.success.certbot_cron_exists)"
-      else
-        if ! (crontab -l 2>/dev/null; echo "30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -; then
-          error "$(t app.vaultwarden.error.certbot_cron)"
-        fi
-        success "$(t app.vaultwarden.success.certbot_cron)"
+      # Use an /etc/cron.d file (atomic write) instead of appending to the
+      # root crontab, so an existing crontab is never overwritten non-atomically.
+      local _certbot_cron_file="/etc/cron.d/certbot-renew"
+      local _certbot_cron_tmp
+      if ! _certbot_cron_tmp=$(mktemp "${_certbot_cron_file}.XXXXXX"); then
+        error "$(t app.vaultwarden.error.certbot_cron)"
       fi
+      if ! printf '%s\n' "30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" > "$_certbot_cron_tmp" \
+          || ! chmod 644 "$_certbot_cron_tmp" \
+          || ! chown root:root "$_certbot_cron_tmp" \
+          || ! mv -f "$_certbot_cron_tmp" "$_certbot_cron_file"; then
+        rm -f "$_certbot_cron_tmp"
+        error "$(t app.vaultwarden.error.certbot_cron)"
+      fi
+      success "$(t app.vaultwarden.success.certbot_cron)"
     fi
     local CERT_PATH_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
     local CERT_KEY_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/privkey.pem"
@@ -1854,6 +1861,7 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_fail2ban)"
   _vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"
+  _vw_remove_file_or_error "/etc/cron.d/certbot-renew" "VAULTWARDEN_CERTBOT_CRON_FILE"
   _vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"
   _vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"
   success "$(t app.vaultwarden.success.removed_scheduled)"

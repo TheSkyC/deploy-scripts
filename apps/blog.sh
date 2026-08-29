@@ -209,6 +209,15 @@ i18n_register app.blog.download_url \
 i18n_register app.blog.error.hugo_download \
   "Hugo download failed. Check the network or download it manually." \
   "Hugo 下载失败，请检查网络或手动下载。"
+i18n_register app.blog.error.hugo_digest \
+  "Could not obtain the SHA-256 digest for %s from the GitHub release metadata. Refusing to install an unverified package." \
+  "无法从 GitHub 发布元数据获取 %s 的 SHA-256 摘要。拒绝安装未经校验的软件包。"
+i18n_register app.blog.error.hugo_checksum \
+  "Hugo SHA-256 verification failed for %s. The download may be corrupted or tampered with; retry or download it manually." \
+  "Hugo SHA-256 校验失败：%s。下载可能损坏或被篡改，请重试或手动下载。"
+i18n_register app.blog.hugo_sha_ok \
+  "Hugo SHA-256 verification passed." \
+  "Hugo SHA-256 校验通过。"
 i18n_register app.blog.warn.hugo_cleanup_failed \
   "Failed to remove temporary Hugo package %s. Remove it manually after the install attempt finishes." \
   "删除 Hugo 临时包 %s 失败。请在本次安装结束后手动清理。"
