@@ -91,7 +91,7 @@ manager_list_apps() {
 }
 
 manager_main() {
-  local command="${1:-menu}" app_id status action
+  local command="${1:-menu}" app_id status
   command="$(deploy_trim "$command")"
   case "${command,,}" in
     overview|status-all|problems|health-all)
@@ -188,9 +188,8 @@ manager_main() {
         error "$(t manager.invalid_app "$command")"
       fi
       shift || true
-      action="${1:-menu}"
       manager_load_app "$app_id"
-      dispatch_action "$action"
+      dispatch_action "$@"
       ;;
   esac
 }
