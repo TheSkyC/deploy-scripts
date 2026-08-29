@@ -277,6 +277,9 @@ i18n_register_many \
   binary_app.warn.integrity_failed \
   "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
   "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
+  binary_app.warn.backup_hook_failed \
+  "Pre-backup hook (ba_backup_hook) failed; continuing with the backup." \
+  "备份前钩子（ba_backup_hook）执行失败，继续备份。" \
   binary_app.status.service \
   "Service: %s (%s)" \
   "服务：%s（%s）" \
@@ -966,6 +969,15 @@ _ba_backup() {
     _ba_backup_log "$(t binary_app.error.data_missing "$DATA_DIR")"
     warn "$(t binary_app.error.data_missing "$DATA_DIR")"
     return 1
+  fi
+  # Apps with data that needs to be quiesced before archiving (for example a
+  # SQLite WAL checkpoint) define ba_backup_hook(); the hook is best-effort:
+  # a failure is reported but does not abort the backup.
+  if declare -f ba_backup_hook >/dev/null 2>&1; then
+    if ! ba_backup_hook; then
+      warn "$(t binary_app.warn.backup_hook_failed)"
+      _ba_backup_log "$(t binary_app.warn.backup_hook_failed)"
+    fi
   fi
   local archive archive_tmp
   archive="${BACKUP_DIR}/${APP_ID}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"

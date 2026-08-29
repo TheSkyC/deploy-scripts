@@ -373,6 +373,19 @@ check_binary_app_systemd_paths_are_validated() {
   done
 }
 
+check_binary_app_pre_backup_hook_is_best_effort() {
+  local file
+  for file in lib/binary_app.sh; do
+    grep -Fq 'declare -f ba_backup_hook' "$file" \
+      && grep -Fq 'if ! ba_backup_hook; then' "$file" \
+      && grep -Fq 'binary_app.warn.backup_hook_failed' "$file" \
+      || {
+        echo "$file must invoke ba_backup_hook() before archiving and keep it best-effort (warn, never abort the backup)." >&2
+        return 1
+      }
+  done
+}
+
 check_no_unsupported_systemctl_options() {
   if grep -R -nE 'systemctl[[:space:]]+stop[[:space:]][^;&|]*--timeout' impl lib dist 2>/dev/null; then
     echo "systemctl stop does not support --timeout; use the default blocking stop behavior." >&2

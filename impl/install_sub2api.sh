@@ -31,10 +31,7 @@ APP_CONFIG_DERIVE_HOOK=_SUB2API_DERIVE_PATHS
 # applies with the configured repository. Saved configuration is reloaded so
 # custom install repositories are honored without running an app action.
 _sub2api_check_update_json() {
-  local installed="$1" refresh="${2:-0}" no_network="${3:-0}" conf_file
-  conf_file="$(app_conf_file 2>/dev/null || true)"
-  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
-  version_check_binary_release_json "sub2api" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
+  app_check_update_json "sub2api" "$1" "${2:-0}" "${3:-0}"
 }
 APP_CHECK_UPDATE_FN=_sub2api_check_update_json
 _sub2api_status_version_json() {
