@@ -65,7 +65,9 @@
 
 ### 3.1 命名避让（关键设计约束，踩坑总结）
 
-仓库 `tools/checks/*.sh` 中有大量 awk 结构检查直接扫描 **`dist/install_*.sh`（库会被打包进每个 dist 脚本）**，且很多用未锚定正则（如 `/do_uninstall\(\)/`、`/health_check\(\)/`、`/verify_binary\(\)/`、`/print_summary\(\)/`）。因此：
+> **2026-08-29 更新：该约束已解除。** `tools/checks/*.sh` 的结构断言已全部改为只检查**源码**（`impl/`、`lib/`、`apps/`），dist 只由 `check_dist_is_up_to_date` 做"重建后与源码一致"的差异比较（guards/dispatch/release 目标均先确定性重建 dist 再比对）。因此库函数名不再需要避开检查正则的子串，也不需要 `command systemctl` 这类写法来规避 dist 计数。
+
+历史记录（解耦前）：仓库 `tools/checks/*.sh` 中有大量 awk 结构检查直接扫描 **`dist/install_*.sh`（库会被打包进每个 dist 脚本）**，且很多用未锚定正则（如 `/do_uninstall\(\)/`、`/health_check\(\)/`、`/verify_binary\(\)/`、`/print_summary\(\)/`）。因此：
 
 - 库内任何函数名**不得包含**检查正则的完整子串（如 `do_install`、`health_check`、`verify_binary`、`print_summary` 等）。
 - 当前已验证冲突并规避的：`preflight_check`、`check_connectivity`、`_validate_config_values`、`do_*`、`ba_health_check`→`bapp_health_probe`、`ba_verify_binary`→`bapp_inspect_binary`、`ba_print_summary`→`bapp_summary`。
@@ -73,7 +75,9 @@
 
 ### 3.2 systemd daemon-reload 计数避让（踩坑总结）
 
-`check_systemd_daemon_reloads_are_explicit` 对 newapi/sub2api/cyberstrikeai/vaultwarden 的 impl/dist **精确计数** `if ! systemctl daemon-reload; then` 与对应 error 行（如 newapi 必须恰好 3+3）。库若用同样写法会污染 dist 计数导致 guards 失败。当前规避：
+> **2026-08-29 更新：同样随守卫解耦解除。** `check_systemd_daemon_reloads_are_explicit` 现在只对 impl 计数（dist 由一致性检查保证），库内 3 处 `command systemctl daemon-reload` 的 `command` 前缀仅作为防御性写法保留，不再是硬性要求。
+
+历史记录（解耦前）：`check_systemd_daemon_reloads_are_explicit` 对 newapi/sub2api/cyberstrikeai/vaultwarden 的 impl/dist **精确计数** `if ! systemctl daemon-reload; then` 与对应 error 行（如 newapi 必须恰好 3+3）。库若用同样写法会污染 dist 计数导致 guards 失败。当前规避：
 
 - 库内 3 处 reload 用 `if ! command systemctl daemon-reload; then`（`command` 前缀，语义等价、不会被计数正则匹配）。
 - 卸载清理路径 1 处用 `if ! systemctl daemon-reload 2>/dev/null; then`（带重定向，也不匹配计数正则）。
@@ -205,6 +209,6 @@
 - `.gitattributes` 强制 `*.sh` LF，`core.autocrlf=true`；用 Python `newline=''`/`\n` 写文件避免 CRLF。
 - 不要用 `bash -c 'cat > file <<EOF'` 的 heredoc 经 PowerShell 传参（引号被打乱）；可靠写法：Python 3.14 显式 `\n` 写（本文件即如此生成），或 PowerShell here-string + `[System.IO.File]::WriteAllText`。
 - GitHub API 已限流（403）：核实资产用网页 `https://github.com/<repo>/releases/expanded_assets/<tag>`。
-- 不要在本机实装 install/update（需真实 systemd/root 服务环境且打 GitHub API）；验证靠 verify 套件 + 语法/静态检查。
+- 不要在本机实装 install/update（需真实 systemd/root 服务环境且打 GitHub API）；验证靠 verify 套件 + 语法/静态检查。**2026-08-29 起真实安装矩阵由 `tools/e2e-smoke.sh` 在 Docker 容器内执行**（stub systemd + 文件版 curl shim，覆盖 binary_app 与 compose 两条路径；CI job `e2e-smoke` 每次 push 运行）。
 - 二进制校验：非空、`BA_MIN_SIZE`（默认 1 MiB）、ELF magic `7f454c46`；失败时删除临时文件并 `error`。
 - bash 语法问题排查套路：先 `bash -n`；函数级拆分逐个 `bash -n`；注意行首 `}` 与后续 token 粘连、未闭合 `$(`、heredoc 终止符、行末 `\` 续行。
