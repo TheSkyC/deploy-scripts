@@ -12,7 +12,12 @@ VW_ENV_FILE="${VW_ENV_FILE:-/etc/vaultwarden.env}"
 VW_LOG_FILE="${VW_LOG_FILE:-/var/log/vaultwarden/vaultwarden.log}"
 VW_BACKUP_DIR="${VW_BACKUP_DIR:-/opt/vaultwarden-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
-SIGNUPS_ALLOWED="${SIGNUPS_ALLOWED:-true}"
+# Password vault: refuse open registration by default. Set SIGNUPS_ALLOWED=true
+# only when you are sure the instance is not reachable by strangers.
+SIGNUPS_ALLOWED="${SIGNUPS_ALLOWED:-false}"
+# Where the freshly generated plaintext Admin Token is stored (mode 600) so it
+# is never printed to the terminal. View it with: install_vaultwarden.sh token
+VW_ADMIN_TOKEN_FILE="${VW_ADMIN_TOKEN_FILE:-/root/.vaultwarden-admin-token}"
 ENABLE_HTTPS="${ENABLE_HTTPS:-true}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 VW_IMAGE_REPO="${VW_IMAGE_REPO:-vaultwarden/server}"
@@ -25,6 +30,7 @@ VW_BIN="${VW_BIN_DIR}/vaultwarden"
 CONFIG_KEYS=(
   VW_DOMAIN VW_PORT VW_USER VW_GROUP VW_BIN_DIR VW_DATA_DIR VW_WEB_DIR
   VW_ENV_FILE VW_LOG_FILE VW_BACKUP_DIR BACKUP_KEEP_DAYS SIGNUPS_ALLOWED
+  VW_ADMIN_TOKEN_FILE
   ENABLE_HTTPS CERTBOT_EMAIL VW_IMAGE_REPO VW_IMAGE_TAG WEB_VAULT_VER
   EXTRACT_TOOL_COMMIT EXTRACT_TOOL_SHA256
 )
@@ -80,6 +86,132 @@ _vw_remove_file_or_error() {
 _require_safe_vw_bin_path() {
   [[ "$VW_BIN" = /* && "$(dirname "$VW_BIN")" != "/" && "$(basename "$VW_BIN")" == "vaultwarden" ]] \
     || error "$(t error.unsafe_path "VW_BIN" "${VW_BIN:-empty}")"
+}
+# Persist the plaintext Admin Token atomically at a fixed mode-600 path.
+_write_admin_token_file() {
+  local token="$1"
+  local dir
+  dir="$(dirname "$VW_ADMIN_TOKEN_FILE")"
+  if [[ ! -d "$dir" ]] && ! mkdir -p "$dir"; then
+    return 1
+  fi
+  if ! chmod 700 "$dir" 2>/dev/null; then
+    return 1
+  fi
+  local tmp
+  if ! tmp=$(mktemp "${VW_ADMIN_TOKEN_FILE}.XXXXXX"); then
+    return 1
+  fi
+  if ! chmod 600 "$tmp" || ! printf '%s\n' "$token" > "$tmp" \
+      || ! mv -f "$tmp" "$VW_ADMIN_TOKEN_FILE"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  return 0
+}
+# Regenerate the Admin Token, rewrite the env file hash, persist the plaintext
+# and restart the service. Never printed to the terminal; view with `token`.
+_rotate_admin_token() {
+  [[ -x "$VW_BIN" ]] || error "$(t app.vaultwarden.error.not_installed_update)"
+  [[ -f "$VW_ENV_FILE" ]] || error "$(t app.vaultwarden.error.env_file_missing "$VW_ENV_FILE")"
+  local ADMIN_PLAIN ADMIN_HASH SALT
+  ADMIN_PLAIN=$(openssl rand -hex 24)
+  ADMIN_HASH=$(printf '%s' "$ADMIN_PLAIN" | "$VW_BIN" hash --preset owasp 2>/dev/null \
+    | grep '^\$argon2' | head -1 || true)
+  if [[ -z "$ADMIN_HASH" ]]; then
+    SALT=$(openssl rand -base64 32)
+    ADMIN_HASH=$(printf '%s' "$ADMIN_PLAIN" | \
+      argon2 "$SALT" -e -id -k 19456 -t 2 -p 1 -l 32 2>/dev/null || true)
+    [[ -z "$ADMIN_HASH" ]] && error "$(t app.vaultwarden.error.admin_token_hash)"
+  fi
+  local env_tmp
+  if ! env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX"); then
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
+  if ! sed "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN='${ADMIN_HASH}'|" "$VW_ENV_FILE" > "$env_tmp" \
+      || ! chmod 600 "$env_tmp" \
+      || ! chown root:root "$env_tmp" \
+      || ! mv -f "$env_tmp" "$VW_ENV_FILE"; then
+    rm -f "$env_tmp"
+    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
+  fi
+  if ! _write_admin_token_file "$ADMIN_PLAIN"; then
+    error "$(t app.vaultwarden.error.admin_token_hash)"
+  fi
+  if systemctl is-active --quiet vaultwarden 2>/dev/null; then
+    systemctl restart vaultwarden 2>/dev/null \
+      || error "$(t app.vaultwarden.error.rotate_restart)"
+  fi
+  success "$(t app.vaultwarden.success.admin_token_rotated "$VW_ADMIN_TOKEN_FILE")"
+}
+do_token() {
+  show_banner
+  require_root "token"
+  app_load_config _VW_DERIVE_PATHS
+  local _action="${1:-view}"
+  case "${_action,,}" in
+    view|show)
+      if [[ ! -f "$VW_ADMIN_TOKEN_FILE" ]]; then
+        error "$(t app.vaultwarden.error.token_missing "$VW_ADMIN_TOKEN_FILE")"
+      fi
+      info "$(t app.vaultwarden.info.token_view "$VW_ADMIN_TOKEN_FILE")"
+      cat "$VW_ADMIN_TOKEN_FILE"
+      echo ""
+      warn "$(t app.vaultwarden.warn.token_after_view)"
+      ;;
+    rotate|new)
+      acquire_lock
+      step "$(t app.vaultwarden.step.token_rotate)"
+      _rotate_admin_token
+      ;;
+    delete|remove)
+      if [[ -f "$VW_ADMIN_TOKEN_FILE" ]]; then
+        rm -f "$VW_ADMIN_TOKEN_FILE"
+        success "$(t app.vaultwarden.success.token_deleted)"
+      else
+        info "$(t app.vaultwarden.info.token_already_gone)"
+      fi
+      ;;
+    *)
+      error "$(t app.vaultwarden.error.token_bad_action "$_action")"
+      ;;
+  esac
+}
+# Convenience toggle for SIGNUPS_ALLOWED: flip the value in the env file and
+# restart the service. `signups status` prints the current value.
+do_signups() {
+  show_banner
+  require_root "signups"
+  app_load_config _VW_DERIVE_PATHS
+  [[ -f "$VW_ENV_FILE" ]] || error "$(t app.vaultwarden.error.env_file_missing "$VW_ENV_FILE")"
+  local _mode="${1:-status}"
+  case "${_mode,,}" in
+    on|enable|true)
+      step "$(t app.vaultwarden.step.signups_on)"
+      sed -i "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=true/" "$VW_ENV_FILE"
+      systemctl restart vaultwarden 2>/dev/null \
+        || error "$(t app.vaultwarden.error.rotate_restart)"
+      success "$(t app.vaultwarden.success.signups_on)"
+      warn "$(t app.vaultwarden.warn.signups_off_after)"
+      ;;
+    off|disable|false)
+      step "$(t app.vaultwarden.step.signups_off)"
+      sed -i "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=false/" "$VW_ENV_FILE"
+      systemctl restart vaultwarden 2>/dev/null \
+        || error "$(t app.vaultwarden.error.rotate_restart)"
+      success "$(t app.vaultwarden.success.signups_off)"
+      ;;
+    status|show|"")
+      if grep -q "^SIGNUPS_ALLOWED=true" "$VW_ENV_FILE"; then
+        info "$(t app.vaultwarden.info.signups_status_on)"
+      else
+        info "$(t app.vaultwarden.info.signups_status_off)"
+      fi
+      ;;
+    *)
+      error "$(t app.vaultwarden.error.signups_bad_action "$_mode")"
+      ;;
+  esac
 }
 app_conf_register_legacy "/etc/vaultwarden_deploy.conf"
 CONF_FILE="$(app_conf_file)"
@@ -582,7 +714,9 @@ WEB_VAULT_FOLDER=${VW_WEB_DIR}
 WEB_VAULT_ENABLED=true
 
 # ── Registration control ──────────────────────────────────────
-# After creating the first account, set this to false and restart the service.
+# Signups are DISABLED by default for a password vault. To create the first
+# account, flip this to true (or run: install_vaultwarden.sh signups on),
+# create the account, then set it back to false and restart the service.
 SIGNUPS_ALLOWED=${SIGNUPS_ALLOWED}
 INVITATIONS_ALLOWED=true
 
@@ -1086,12 +1220,11 @@ LOGR
   INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then PROTO="https"; else PROTO="http"; fi
   INSTALLED_VER=$(get_installed_version)
-  local _token_tmp
-  if ! _token_tmp=$(mktemp /root/.vaultwarden-admin-token.XXXXXX); then
-    error "$(t app.vaultwarden.error.admin_token_hash)"
-  fi
-  if ! chmod 600 "$_token_tmp" || ! printf '%s\n' "$ADMIN_PLAIN" > "$_token_tmp"; then
-    rm -f "$_token_tmp"
+  # Persist the plaintext Admin Token to a fixed mode-600 path instead of a
+  # throwaway mktemp file: no leftover /root/.vaultwarden-admin-token.* files
+  # after the user forgets to delete them, and the token is never printed to
+  # the terminal. View it with: install_vaultwarden.sh token
+  if ! _write_admin_token_file "$ADMIN_PLAIN"; then
     error "$(t app.vaultwarden.error.admin_token_hash)"
   fi
   echo ""
@@ -1115,16 +1248,14 @@ LOGR
   echo -e "  ║  $(t app.vaultwarden.summary.log)        ${YELLOW}${VW_LOG_FILE}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.backup)    ${YELLOW}${VW_BACKUP_DIR}${GREEN}"
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning)${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.view_command) ${YELLOW}cat ${_token_tmp}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.remove_command) ${YELLOW}rm -f ${_token_tmp}${GREEN}"
+  echo -e "  ║  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning "$VW_ADMIN_TOKEN_FILE")${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.view_command) ${YELLOW}install_vaultwarden.sh token${GREEN}"
   echo "  ╚═══════════════════════════════════════════════════════════════╝"
   echo -e "${NC}"
   echo -e "  ${BOLD}$(t app.vaultwarden.summary.first_steps)${NC}"
   echo ""
   echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step0)${NC}"
-  echo -e "     cat ${_token_tmp}"
-  echo -e "     rm -f ${_token_tmp}"
+  echo -e "     install_vaultwarden.sh token    # $(t app.vaultwarden.summary.step0_view)"
   echo ""
   echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step1)${NC}"
   echo -e "     $(t app.vaultwarden.summary.create_account "${PROTO}://${VW_DOMAIN}")"
@@ -1143,7 +1274,7 @@ LOGR
   echo -e "     systemctl restart vaultwarden         # $(t app.vaultwarden.summary.cmd_restart)"
   echo -e "     vaultwarden-backup                    # $(t app.vaultwarden.summary.cmd_backup)"
   echo ""
-  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup)"
+  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup "$VW_ADMIN_TOKEN_FILE")"
   echo ""
 }
 do_update() {
@@ -1713,6 +1844,7 @@ do_uninstall() {
   _vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"
   success "$(t app.vaultwarden.success.removed_scheduled)"
   _vw_remove_file_or_error "$VW_ENV_FILE" "VW_ENV_FILE"
+  _vw_remove_file_or_error "$VW_ADMIN_TOKEN_FILE" "VW_ADMIN_TOKEN_FILE"
   _vw_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.vaultwarden.success.removed_config)"
   local _log_dir

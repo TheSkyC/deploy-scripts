@@ -472,8 +472,8 @@ i18n_register_many \
   "Backup dir" \
   "备份目录" \
   app.vaultwarden.summary.token_warning \
-  "Admin plaintext token was written to a temporary file (root-readable only)" \
-  "Admin 明文 Token 已写入临时文件（仅 root 可读）" \
+  "Admin Token is stored at %s (mode 600, root-only)" \
+  "Admin Token 已保存至 %s（权限 600，仅 root 可读）" \
   app.vaultwarden.summary.view_command \
   "View command:" \
   "查看命令：" \
@@ -484,8 +484,11 @@ i18n_register_many \
   "First-use steps:" \
   "首次使用步骤：" \
   app.vaultwarden.summary.step0 \
-  "0. View and save the Admin Token (delete the temporary file immediately after viewing!)" \
-  "0. 查看并保存 Admin Token（查看后立即删除临时文件！）" \
+  "0. View and save the Admin Token (never printed to the terminal)" \
+  "0. 查看并保存 Admin Token（不会打印到终端）" \
+  app.vaultwarden.summary.step0_view \
+  "print the Admin Token" \
+  "打印 Admin Token" \
   app.vaultwarden.summary.step1 \
   "1. Open in a browser and create your account" \
   "1. 用浏览器访问，创建你的账号" \
@@ -529,8 +532,8 @@ i18n_register_many \
   "[important]" \
   "[重要]" \
   app.vaultwarden.summary.token_cleanup \
-  "Delete the Admin Token temporary file immediately after viewing it to avoid leaving it on disk!" \
-  "Admin Token 临时文件查看后请立即删除，避免遗留在磁盘！" \
+  "The Admin Token file (%s) is root-only; remove it after saving the token to your password manager: install_vaultwarden.sh token delete" \
+  "Admin Token 文件（%s）仅 root 可读；保存到密码管理器后请删除：install_vaultwarden.sh token delete" \
   app.vaultwarden.step.update \
   "Update Vaultwarden binary and Web Vault" \
   "更新 Vaultwarden 二进制与 Web Vault" \
@@ -887,7 +890,61 @@ i18n_register_many \
   "数据保留在：%s" \
   app.vaultwarden.hint.remove_data \
   "When you are sure it is no longer needed, manually run: rm -rf %s" \
-  "如确认不再需要，可手动执行：rm -rf %s"
+  "如确认不再需要，可手动执行：rm -rf %s" \
+  app.vaultwarden.error.env_file_missing \
+  "Environment config file not found: %s" \
+  "环境配置文件不存在：%s" \
+  app.vaultwarden.error.rotate_restart \
+  "The change was written, but restarting the vaultwarden service failed. Run: systemctl restart vaultwarden" \
+  "修改已写入，但重启 vaultwarden 服务失败。请执行：systemctl restart vaultwarden" \
+  app.vaultwarden.success.admin_token_rotated \
+  "Admin Token rotated. The new token is stored at %s (mode 600, root-only). View it with: install_vaultwarden.sh token" \
+  "Admin Token 已轮换。新 Token 已保存至 %s（权限 600，仅 root 可读）。查看命令：install_vaultwarden.sh token" \
+  app.vaultwarden.step.token_rotate \
+  "Rotate Admin Token" \
+  "轮换 Admin Token" \
+  app.vaultwarden.info.token_view \
+  "Admin Token (file: %s):" \
+  "Admin Token（文件：%s）：" \
+  app.vaultwarden.warn.token_after_view \
+  "Save this token to your password manager, then delete the file: install_vaultwarden.sh token delete" \
+  "请将此 Token 保存到密码管理器，然后删除文件：install_vaultwarden.sh token delete" \
+  app.vaultwarden.success.token_deleted \
+  "Admin Token file deleted." \
+  "Admin Token 文件已删除。" \
+  app.vaultwarden.info.token_already_gone \
+  "Admin Token file does not exist; nothing to delete." \
+  "Admin Token 文件不存在，无需删除。" \
+  app.vaultwarden.error.token_missing \
+  "Admin Token file not found: %s. Reinstall or use: install_vaultwarden.sh token rotate" \
+  "Admin Token 文件不存在：%s。请重新安装或使用：install_vaultwarden.sh token rotate" \
+  app.vaultwarden.error.token_bad_action \
+  "Unknown token subcommand: %s. Usage: install_vaultwarden.sh token [view|rotate|delete]" \
+  "未知的 token 子命令：%s。用法：install_vaultwarden.sh token [view|rotate|delete]" \
+  app.vaultwarden.step.signups_on \
+  "Enable public registration" \
+  "开启公开注册" \
+  app.vaultwarden.step.signups_off \
+  "Disable public registration" \
+  "关闭公开注册" \
+  app.vaultwarden.success.signups_on \
+  "Public registration is now ENABLED." \
+  "公开注册现已开启。" \
+  app.vaultwarden.success.signups_off \
+  "Public registration is now disabled." \
+  "公开注册现已关闭。" \
+  app.vaultwarden.warn.signups_off_after \
+  "Disable it again as soon as your account is created: install_vaultwarden.sh signups off" \
+  "创建完账号后请立即关闭：install_vaultwarden.sh signups off" \
+  app.vaultwarden.info.signups_status_on \
+  "SIGNUPS_ALLOWED=true (public registration is ENABLED)." \
+  "SIGNUPS_ALLOWED=true（公开注册已开启）。" \
+  app.vaultwarden.info.signups_status_off \
+  "SIGNUPS_ALLOWED=false (public registration is disabled)." \
+  "SIGNUPS_ALLOWED=false（公开注册已关闭）。" \
+  app.vaultwarden.error.signups_bad_action \
+  "Unknown signups subcommand: %s. Usage: install_vaultwarden.sh signups [on|off|status]" \
+  "未知的 signups 子命令：%s。用法：install_vaultwarden.sh signups [on|off|status]"
 
 APP_DESCRIPTION="$(t app.vaultwarden.description)"
 APP_IMPL_SCRIPT="impl/install_vaultwarden.sh"
