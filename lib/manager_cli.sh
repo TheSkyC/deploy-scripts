@@ -91,7 +91,7 @@ manager_list_apps() {
 }
 
 manager_main() {
-  local command="${1:-menu}" app_id status
+  local command="${1:-menu}" app_id status selection_output instance
   command="$(deploy_trim "$command")"
   case "${command,,}" in
     overview|status-all|problems|health-all)
@@ -176,8 +176,10 @@ manager_main() {
       exit 0
       ;;
     *)
+      # The selection prints "<app_id> [instance]"; set APP_INSTANCE in the
+      # current shell so per-instance config/lock paths take effect.
       set +e
-      app_id="$(deploy_app_id_from_selection "$command")"
+      selection_output="$(deploy_app_id_from_selection "$command")"
       status=$?
       set -e
       if [[ "$status" -eq 2 ]]; then
@@ -186,6 +188,13 @@ manager_main() {
       if [[ "$status" -ne 0 ]]; then
         manager_usage
         error "$(t manager.invalid_app "$command")"
+      fi
+      app_id="${selection_output%% *}"
+      instance="${selection_output#* }"
+      if [[ "$instance" == "$app_id" || -z "$instance" ]]; then
+        APP_INSTANCE=""
+      else
+        APP_INSTANCE="$instance"
       fi
       shift || true
       manager_load_app "$app_id"

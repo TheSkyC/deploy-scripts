@@ -3531,19 +3531,28 @@ app_validate_db_identifier() {
   fi
 }
 
-# Echo the standard deployment config path for the current app.
+# Echo the standard deployment config path for the current app. With
+# APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
+# config file so independent instances do not clobber each other.
 app_conf_file() {
-  local standard="/etc/${APP_ID:-app}-deploy.conf"
   if [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
     echo "$_APP_CONF_LEGACY"
+    return 0
+  fi
+  if [[ -n "${APP_INSTANCE:-}" ]]; then
+    echo "/etc/${APP_ID:-app}-${APP_INSTANCE}-deploy.conf"
   else
-    echo "$standard"
+    echo "/etc/${APP_ID:-app}-deploy.conf"
   fi
 }
 
 # Echo the standard lock file path for the current app.
 app_lock_file() {
-  echo "/var/lock/${APP_ID:-app}-deploy.lock"
+  if [[ -n "${APP_INSTANCE:-}" ]]; then
+    echo "/var/lock/${APP_ID:-app}-${APP_INSTANCE}-deploy.lock"
+  else
+    echo "/var/lock/${APP_ID:-app}-deploy.lock"
+  fi
 }
 
 # Standard config save — writes CONFIG_KEYS to the app conf file.
@@ -7051,14 +7060,30 @@ deploy_app_index_for() {
 }
 
 deploy_app_id_from_selection() {
-  local selection index=1 id
+  local selection index=1 id instance
   selection="$(deploy_trim "${1:-}")"
   case "${selection,,}" in
     q|quit|exit) return 2 ;;
   esac
+  # <app>@<instance>: split off the instance name and validate both halves.
+  # Prints "<app_id> <instance>" (instance empty when not specified).
+  if [[ "$selection" == *@* ]]; then
+    id="${selection%%@*}"
+    instance="${selection#*@}"
+    if ! [[ "$instance" =~ ^[a-z0-9_-]{1,32}$ ]]; then
+      return 1
+    fi
+    for id in "${DEPLOY_APP_IDS[@]}"; do
+      if [[ "${id,,}" == "${selection%%@*}" ]]; then
+        printf '%s %s\n' "$id" "$instance"
+        return 0
+      fi
+    done
+    return 1
+  fi
   for id in "${DEPLOY_APP_IDS[@]}"; do
     if [[ "${selection,,}" == "$id" || "$selection" == "$index" ]]; then
-      echo "$id"
+      printf '%s\n' "$id"
       return 0
     fi
     index=$((index + 1))
@@ -8345,7 +8370,7 @@ manager_list_apps() {
 }
 
 manager_main() {
-  local command="${1:-menu}" app_id status
+  local command="${1:-menu}" app_id status selection_output instance
   command="$(deploy_trim "$command")"
   case "${command,,}" in
     overview|status-all|problems|health-all)
@@ -8430,8 +8455,10 @@ manager_main() {
       exit 0
       ;;
     *)
+      # The selection prints "<app_id> [instance]"; set APP_INSTANCE in the
+      # current shell so per-instance config/lock paths take effect.
       set +e
-      app_id="$(deploy_app_id_from_selection "$command")"
+      selection_output="$(deploy_app_id_from_selection "$command")"
       status=$?
       set -e
       if [[ "$status" -eq 2 ]]; then
@@ -8440,6 +8467,13 @@ manager_main() {
       if [[ "$status" -ne 0 ]]; then
         manager_usage
         error "$(t manager.invalid_app "$command")"
+      fi
+      app_id="${selection_output%% *}"
+      instance="${selection_output#* }"
+      if [[ "$instance" == "$app_id" || -z "$instance" ]]; then
+        APP_INSTANCE=""
+      else
+        APP_INSTANCE="$instance"
       fi
       shift || true
       manager_load_app "$app_id"
