@@ -126,6 +126,9 @@ i18n_register_many \
   app.cpa_stack.success.installed \
   "CPA Stack installed. API: %s/v1 ; management: %s/management.html" \
   "CPA Stack 已安装。API：%s/v1；管理面板：%s/management.html" \
+  app.cpa_stack.success.installed_pending \
+  "CPA Stack files installed; service health check is pending (verify after firewall/network is ready). API: %s/v1 ; management: %s/management.html" \
+  "CPA Stack 文件已安装；服务健康检查待确认（请在网络/防火墙就绪后核验）。API：%s/v1；管理面板：%s/management.html" \
   app.cpa_stack.success.updated \
   "CPA Stack update completed." \
   "CPA Stack 更新完成。" \
