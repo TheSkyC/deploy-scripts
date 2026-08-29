@@ -4334,6 +4334,9 @@ i18n_register_many \
   binary_app.warn.backup_hook_failed \
   "Pre-backup hook (ba_backup_hook) failed; continuing with the backup." \
   "备份前钩子（ba_backup_hook）执行失败，继续备份。" \
+  binary_app.warn.health_pending \
+  "Service started, but the HTTP health probe did not pass yet; verify the service before relying on it." \
+  "服务已启动，但 HTTP 健康检查尚未通过；请先核验服务状态再使用。" \
   binary_app.status.service \
   "Service: %s (%s)" \
   "服务：%s（%s）" \
@@ -5140,6 +5143,8 @@ bapp_restore() {
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
   backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
+  # Data was restored but the service is not restarted by restore; a probe
+  # failure here is expected and must not be reported as an app fault.
   bapp_health_probe || true
 }
 _ba_prune_old_bins() {
@@ -5243,7 +5248,11 @@ bapp_update() {
     INSTALLED_VERSION="$latest"
     app_save_config
     _ba_prune_old_bins
-    bapp_health_probe || true
+    # The service started, but an HTTP-level probe failure means the app may
+    # not be fully ready yet; surface it explicitly instead of ignoring it.
+    if ! bapp_health_probe; then
+      warn "$(t binary_app.warn.health_pending)"
+    fi
     echo ""
     echo -e "  ${BOLD}${GREEN}$(t binary_app.info.github_latest "$latest")${NC}"
     echo ""

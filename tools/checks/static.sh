@@ -386,6 +386,20 @@ check_binary_app_pre_backup_hook_is_best_effort() {
   done
 }
 
+check_binary_app_health_results_are_surfaced() {
+  local file
+  for file in lib/binary_app.sh; do
+    grep -Fq '_summary_state="ready"' "$file" \
+      && grep -Fq '_summary_state="pending"' "$file" \
+      && grep -Fq 'bapp_summary "$latest" "$_summary_state"' "$file" \
+      && grep -Fq 'binary_app.warn.health_pending' "$file" \
+      || {
+        echo "$file must surface health-probe results: install summary shows pending when the probe fails, and update warns (binary_app.warn.health_pending) instead of silently ignoring the probe." >&2
+        return 1
+      }
+  done
+}
+
 check_no_unsupported_systemctl_options() {
   if grep -R -nE 'systemctl[[:space:]]+stop[[:space:]][^;&|]*--timeout' impl lib dist 2>/dev/null; then
     echo "systemctl stop does not support --timeout; use the default blocking stop behavior." >&2

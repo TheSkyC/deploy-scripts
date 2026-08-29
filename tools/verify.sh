@@ -430,6 +430,7 @@ main() {
       check_binary_restores_validate_permissions
       check_binary_app_systemd_paths_are_validated
       check_binary_app_pre_backup_hook_is_best_effort
+      check_binary_app_health_results_are_surfaced
       check_blog_config_persistence
       check_blog_dependency_failures_are_reported
       check_blog_enable_failures_are_reported
