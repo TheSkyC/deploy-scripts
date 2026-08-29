@@ -211,19 +211,28 @@ app_validate_db_identifier() {
   fi
 }
 
-# Echo the standard deployment config path for the current app.
+# Echo the standard deployment config path for the current app. With
+# APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
+# config file so independent instances do not clobber each other.
 app_conf_file() {
-  local standard="/etc/${APP_ID:-app}-deploy.conf"
   if [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
     echo "$_APP_CONF_LEGACY"
+    return 0
+  fi
+  if [[ -n "${APP_INSTANCE:-}" ]]; then
+    echo "/etc/${APP_ID:-app}-${APP_INSTANCE}-deploy.conf"
   else
-    echo "$standard"
+    echo "/etc/${APP_ID:-app}-deploy.conf"
   fi
 }
 
 # Echo the standard lock file path for the current app.
 app_lock_file() {
-  echo "/var/lock/${APP_ID:-app}-deploy.lock"
+  if [[ -n "${APP_INSTANCE:-}" ]]; then
+    echo "/var/lock/${APP_ID:-app}-${APP_INSTANCE}-deploy.lock"
+  else
+    echo "/var/lock/${APP_ID:-app}-deploy.lock"
+  fi
 }
 
 # Standard config save — writes CONFIG_KEYS to the app conf file.
