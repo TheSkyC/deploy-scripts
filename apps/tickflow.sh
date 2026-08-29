@@ -141,9 +141,6 @@ i18n_register_many \
   app.tickflow.status.curl_missing \
   "curl is unavailable; skipping local HTTP probe." \
   "curl 不可用，跳过本地 HTTP 探测。" \
-  app.tickflow.warn.auth_password_short \
-  "AUTH_PASSWORD is shorter than 6 characters; it will be ignored by the panel." \
-  "AUTH_PASSWORD 少于 6 个字符，面板会忽略它。" \
   app.tickflow.error.auth_password_short \
   "TICKFLOW_AUTH_PASSWORD must be at least 6 characters when set explicitly." \
   "显式设置 TICKFLOW_AUTH_PASSWORD 时至少需要 6 个字符。" \
