@@ -121,6 +121,9 @@ i18n_register common.default_site_backed_up "Moved the default Nginx site out of
 i18n_register common.default_site_backup_failed "Failed to move the default Nginx site %s; the new site cannot take over port 80." "无法移开默认 Nginx 站点 %s；新站点无法接管 80 端口。"
 i18n_register common.default_site_restored "Restored the default Nginx site: %s" "已恢复默认 Nginx 站点：%s"
 i18n_register common.default_site_restore_failed "Failed to restore the default Nginx site from %s to %s. Restore it manually if needed." "无法将默认 Nginx 站点从 %s 恢复到 %s。如需恢复请手动操作。"
+i18n_register common.config_exported "Deployment config exported before uninstall: %s" "卸载前已导出部署配置：%s"
+i18n_register common.config_export_failed "Could not export deployment config before uninstall: %s" "无法在卸载前导出部署配置：%s"
+i18n_register common.config_export_restore_hint "To restore this deployment later: copy %s back to the app config path and reinstall." "如需恢复此部署：将 %s 复制回应用配置路径后重新安装即可。"
 i18n_register config.loaded "Loaded deployment config: %s" "已加载部署记录：%s"
 i18n_register config.saved "Saved deployment config: %s" "部署配置已持久化：%s"
 i18n_register error.command_required "Required command is missing: %s" "缺少必要命令：%s"
@@ -3059,15 +3062,17 @@ manager_update_render_check_json() {
 }
 
 manager_update_render_check_table() {
-  local record
+  local record installed latest
   printf 'check-update: selected=%s installed=%s update_available=%s up_to_date=%s unsupported=%s unknown=%s stale=%s check_failed=%s errors=%s\n' \
     "$MANAGER_UPDATE_SELECTED" "$MANAGER_UPDATE_INSTALLED" "$MANAGER_UPDATE_AVAILABLE" "$MANAGER_UPDATE_CURRENT" "$MANAGER_UPDATE_UNSUPPORTED" "$MANAGER_UPDATE_UNKNOWN" "$MANAGER_UPDATE_STALE" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
-  printf '%-16s %-12s %-18s %-18s %s\n' App State Update Cache Reason
+  printf '%-16s %-12s %-20s %-20s %-18s %s\n' App State Installed Latest Update Reason
   for record in "${MANAGER_UPDATE_RECORDS[@]}"; do
-    printf '%-16s %-12s %-18s %-18s %s\n' \
+    installed="$(state_json_field "$record" version.installed 2>/dev/null || printf -- '-')"
+    latest="$(state_json_field "$record" version.latest 2>/dev/null || printf -- '-')"
+    printf '%-16s %-12s %-20s %-20s %-18s %s\n' \
       "$(state_json_field "$record" app_id)" "$(state_json_field "$record" state)" \
-      "$(state_json_field "$record" version.update_state)" "$(state_json_field "$record" version.cache_state)" \
-      "$(state_json_field "$record" reason)"
+      "${installed:-'-'}" "${latest:-'-'}" \
+      "$(state_json_field "$record" version.update_state)" "$(state_json_field "$record" reason)"
   done
 }
 
@@ -4125,6 +4130,63 @@ i18n_register_many \
   binary_app.error.bind_addr \
   "BA_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
   "BA_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
+  binary_app.error.pinned_version_invalid \
+  "BA_VERSION is invalid: '%s'. Use a GitHub release tag like v1.2.3." \
+  "BA_VERSION 无效：'%s'。请使用类似 v1.2.3 的 GitHub 发布标签。" \
+  binary_app.success.pinned_version \
+  "Installing pinned version %s (BA_VERSION)." \
+  "正在安装固定版本 %s（BA_VERSION）。" \
+  binary_app.info.pinned_target \
+  "Pinned target version: %s" \
+  "固定目标版本：%s" \
+  binary_app.error.tls_requires_domain \
+  "BA_ENABLE_HTTPS=1 requires DOMAIN to be set for %s." \
+  "启用 BA_ENABLE_HTTPS=1 需要为 %s 设置 DOMAIN。" \
+  binary_app.step.tls_deps \
+  "Installing nginx + certbot for HTTPS" \
+  "安装 nginx + certbot 以启用 HTTPS" \
+  binary_app.error.tls_deps \
+  "Failed to install nginx/certbot for HTTPS." \
+  "安装 nginx/certbot 失败。" \
+  binary_app.success.tls_deps \
+  "nginx and certbot installed." \
+  "nginx 与 certbot 已安装。" \
+  binary_app.error.tls_nginx_dirs \
+  "Failed to prepare Nginx directories for %s." \
+  "无法为 %s 准备 Nginx 目录。" \
+  binary_app.error.tls_nginx \
+  "Nginx config write failed: %s" \
+  "Nginx 配置写入失败：%s" \
+  binary_app.error.tls_nginx_test \
+  "Nginx configuration test failed; HTTPS setup aborted." \
+  "Nginx 配置测试失败，HTTPS 配置已中止。" \
+  binary_app.error.tls_nginx_restart \
+  "Nginx failed to restart during HTTPS setup." \
+  "HTTPS 配置期间 Nginx 重启失败。" \
+  binary_app.warn.tls_nginx_enable \
+  "Could not enable nginx on boot; enable it manually: systemctl enable nginx" \
+  "无法设置 nginx 开机自启，请手动执行：systemctl enable nginx" \
+  binary_app.step.tls_certbot \
+  "Obtaining a Let's Encrypt certificate" \
+  "申请 Let's Encrypt 证书" \
+  binary_app.info.tls_certbot \
+  "Requesting certificate for %s..." \
+  "正在为 %s 申请证书..." \
+  binary_app.error.tls_certbot \
+  "Certificate issuance failed for %s. Check DNS and port 80 reachability, then rerun install or use the cert action." \
+  "为 %s 申请证书失败。请检查 DNS 与 80 端口可达性，然后重新安装或使用 cert 操作。" \
+  binary_app.success.tls_certbot \
+  "Certificate obtained." \
+  "证书已获取。" \
+  binary_app.success.tls_live \
+  "HTTPS is live at %s" \
+  "HTTPS 已启用：%s" \
+  binary_app.error.tls_renewal \
+  "Failed to write the certbot auto-renew cron entry." \
+  "写入 certbot 自动续签 cron 条目失败。" \
+  binary_app.success.tls_renewal \
+  "Certbot auto-renewal scheduled (daily 02:30)." \
+  "Certbot 自动续签已安排（每天 02:30）。" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -4602,6 +4664,12 @@ bapp_validate_cfg() {
     127.0.0.1|0.0.0.0|::1|::) : ;;
     *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
   esac
+  # A pinned version must look like a GitHub release tag (vX.Y.Z); anything
+  # else would produce a broken download URL.
+  if [[ -n "${BA_VERSION:-}" ]] && ! [[ "$BA_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+    error "$(t binary_app.error.pinned_version_invalid "$BA_VERSION")"
+  fi
+  app_validate_bool "BA_ENABLE_HTTPS" "${BA_ENABLE_HTTPS:-0}"
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -4661,6 +4729,18 @@ bapp_check_net() {
     "https://api.github.com" \
     "https://github.com" \
     "https://objects.githubusercontent.com"
+}
+
+# Echo the release tag to install: BA_VERSION pins a specific release (e.g.
+# "v1.2.3"), otherwise the latest release tag is used. Pinned installs make
+# deployments reproducible; update() upgrades to BA_VERSION when it is set
+# (explicit upgrade) instead of silently drifting to the newest release.
+ba_resolve_version() {
+  if [[ -n "${BA_VERSION:-}" ]]; then
+    printf '%s\n' "$BA_VERSION"
+    return 0
+  fi
+  ba_latest_version
 }
 
 # Echo the latest release tag for GITHUB_REPO, or the empty string.
@@ -4902,6 +4982,107 @@ ba_configure_ops() {
     "binary_app.error.logrotate" "binary_app.success.logrotate"
 }
 
+# One-shot HTTPS: when BA_ENABLE_HTTPS=1 and DOMAIN is set, install nginx and
+# certbot, obtain a Let's Encrypt certificate, and publish the loopback-bound
+# service on 443 through an nginx reverse proxy. The service itself keeps
+# binding BA_BIND_ADDR (loopback by default). Requires CERTBOT_EMAIL for the
+# ACME registration. Failures are fatal (the user explicitly asked for TLS).
+ba_configure_tls() {
+  [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]] || return 0
+  [[ -n "${DOMAIN:-}" ]] || error "$(t binary_app.error.tls_requires_domain "$APP_NAME")"
+  app_validate_email "CERTBOT_EMAIL" "${CERTBOT_EMAIL:-}"
+  step "$(t binary_app.step.tls_deps)"
+  if ! apt-get install -y -qq nginx certbot python3-certbot-nginx; then
+    error "$(t binary_app.error.tls_deps)"
+  fi
+  success "$(t binary_app.success.tls_deps)"
+  local nginx_conf="/etc/nginx/sites-available/${SERVICE_NAME}"
+  if ! mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /var/www/certbot; then
+    error "$(t binary_app.error.tls_nginx_dirs "$nginx_conf")"
+  fi
+  # HTTP bootstrap site with the ACME challenge root.
+  app_write_nginx_config_file "$nginx_conf" "binary_app.error.tls_nginx" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+EOF
+  app_write_nginx_site_link "$nginx_conf" "/etc/nginx/sites-enabled/${SERVICE_NAME}" "binary_app.error.tls_nginx"
+  app_nginx_default_site_backup
+  nginx -t || error "$(t binary_app.error.tls_nginx_test)"
+  if ! systemctl enable --now nginx 2>/dev/null; then
+    warn "$(t binary_app.warn.tls_nginx_enable)"
+  fi
+  if ! systemctl restart nginx 2>/dev/null; then
+    error "$(t binary_app.error.tls_nginx_restart)"
+  fi
+  step "$(t binary_app.step.tls_certbot)"
+  info "$(t binary_app.info.tls_certbot "$DOMAIN")"
+  if ! certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" \
+      --email "$CERTBOT_EMAIL" --agree-tos --non-interactive >&2; then
+    error "$(t binary_app.error.tls_certbot "$DOMAIN")"
+  fi
+  success "$(t binary_app.success.tls_certbot)"
+  # Full HTTPS site.
+  app_write_nginx_config_file "$nginx_conf" "binary_app.error.tls_nginx" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name ${DOMAIN};
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:MozTLS:10m;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    location / {
+        proxy_pass         http://127.0.0.1:${PORT};
+        proxy_http_version 1.1;
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 90s;
+    }
+}
+EOF
+  if ! nginx -t || ! systemctl reload nginx; then
+    error "$(t binary_app.error.tls_nginx_test)"
+  fi
+  success "$(t binary_app.success.tls_live "https://${DOMAIN}")"
+  # Renewal via /etc/cron.d (atomic), matching the vaultwarden approach.
+  local cron_file="/etc/cron.d/certbot-renew" cron_tmp
+  if ! cron_tmp=$(mktemp "${cron_file}.XXXXXX"); then
+    error "$(t binary_app.error.tls_renewal)"
+  fi
+  if ! printf '%s\n' "30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" > "$cron_tmp" \
+      || ! chmod 644 "$cron_tmp" \
+      || ! chown root:root "$cron_tmp" \
+      || ! mv -f "$cron_tmp" "$cron_file"; then
+    rm -f "$cron_tmp"
+    error "$(t binary_app.error.tls_renewal)"
+  fi
+  success "$(t binary_app.success.tls_renewal)"
+}
+
 # Print the install summary box (localized, generic fields). The second
 # argument is the health state: "ready" (default) or "pending" when the
 # service did not pass its HTTP health probe within the wait window.
@@ -4933,7 +5114,7 @@ bapp_summary() {
     ba_summary_extra
   fi
   echo "  =========================================================="
-  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_TLS_ENABLED:-0}" != "1" ]]; then
+  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_ENABLE_HTTPS:-0}" != "1" ]]; then
     echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
     echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
   elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
@@ -4963,9 +5144,13 @@ bapp_install() {
   bapp_check_net
   info "$(t binary_app.info.query_latest)"
   local latest
-  latest="$(ba_latest_version)"
+  latest="$(ba_resolve_version)"
   [[ -n "$latest" ]] || error "$(t binary_app.error.version_failed)"
-  success "$(t binary_app.success.latest "${BOLD}${latest}${NC}")"
+  if [[ -n "${BA_VERSION:-}" ]]; then
+    success "$(t binary_app.success.pinned_version "${BOLD}${latest}${NC}")"
+  else
+    success "$(t binary_app.success.latest "${BOLD}${latest}${NC}")"
+  fi
   step "$(t binary_app.step.deps)"
   if ! apt-get update -qq; then
     error "$(t binary_app.error.apt_update)"
@@ -5034,6 +5219,9 @@ bapp_install() {
   fi
   step "$(t binary_app.step.firewall)"
   ba_configure_ops
+  if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+    ba_configure_tls
+  fi
   step "$(t binary_app.step.start)"
   if ba_start_service; then
     INSTALLED_VERSION="$latest"
@@ -5237,11 +5425,15 @@ bapp_update() {
   bapp_check_net
   info "$(t binary_app.info.query_latest)"
   local latest current
-  latest="$(ba_latest_version)"
+  latest="$(ba_resolve_version)"
   [[ -n "$latest" ]] || error "$(t binary_app.error.version_failed)"
   current="${INSTALLED_VERSION:-unknown}"
   info "$(t binary_app.info.current "${YELLOW}${current}${NC}")"
-  info "$(t binary_app.info.github_latest "${YELLOW}${latest}${NC}")"
+  if [[ -n "${BA_VERSION:-}" ]]; then
+    info "$(t binary_app.info.pinned_target "${YELLOW}${latest}${NC}")"
+  else
+    info "$(t binary_app.info.github_latest "${YELLOW}${latest}${NC}")"
+  fi
   if [[ "$current" == "$latest" ]]; then
     success "$(t binary_app.success.already_latest "$latest")"
     exit 0
@@ -5412,6 +5604,21 @@ bapp_uninstall() {
            -type f -print0 2>/dev/null)
   success "$(t binary_app.success.removed_binary)"
   ba_remove_file_or_error "/etc/logrotate.d/${SERVICE_NAME}" "LOGROTATE_FILE"
+  # Clean up the optional TLS reverse proxy (nginx site + certbot renewal)
+  # when it was provisioned by ba_configure_tls.
+  if [[ -e "/etc/nginx/sites-available/${SERVICE_NAME}" || -L "/etc/nginx/sites-available/${SERVICE_NAME}" ]]; then
+    ba_remove_file_or_error "/etc/nginx/sites-enabled/${SERVICE_NAME}" "TLS_NGINX_LINK"
+    ba_remove_file_or_error "/etc/nginx/sites-available/${SERVICE_NAME}" "TLS_NGINX_CONF"
+    app_nginx_default_site_restore
+    if command -v nginx >/dev/null 2>&1; then
+      if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
+  fi
+  if [[ -e "/etc/cron.d/certbot-renew" ]]; then
+    ba_remove_file_or_error "/etc/cron.d/certbot-renew" "TLS_RENEWAL_CRON"
+  fi
   if [[ "${BA_USE_ENV_FILE:-0}" == "1" ]]; then
     ba_remove_file_or_error "$ENV_FILE" "ENV_FILE"
   fi
@@ -5775,6 +5982,28 @@ show_menu() {
   dispatch_action "$choice"
 }
 
+# Export the app's deployment config before uninstall so the user can restore
+# it later. Writes <BACKUP_DIR or /opt>/<app>-deploy-config-<ts>.conf (mode
+# 600) and prints a hint about re-importing. Best-effort: failures are
+# warnings, never block the uninstall.
+app_export_config_before_uninstall() {
+  local conf_file dir export_path
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] || return 0
+  dir="$(dirname "$conf_file")"
+  export_path="${dir}/${APP_ID:-app}-deploy-config-export.conf"
+  if [[ -d "${BACKUP_DIR:-}" ]] && [[ -w "${BACKUP_DIR}" ]]; then
+    export_path="${BACKUP_DIR}/${APP_ID:-app}-deploy-config-export.conf"
+  fi
+  if ! cp "$conf_file" "$export_path" 2>/dev/null; then
+    warn "$(t common.config_export_failed "$conf_file")"
+    return 0
+  fi
+  chmod 600 "$export_path" 2>/dev/null || true
+  info "$(t common.config_exported "$export_path")"
+  info "$(t common.config_export_restore_hint "$export_path")"
+}
+
 dispatch_action() {
   local action="${1:-menu}"
   shift || true
@@ -5833,7 +6062,10 @@ dispatch_action() {
       status|5) do_status "$@" ;;
       status-json|json-status) do_status_json "$@" ;;
       doctor|6) do_doctor "$@" ;;
-      uninstall|7) app_dry_run_guard uninstall; operation_run_app_action uninstall do_uninstall "$@" ;;
+      uninstall|7)
+        app_dry_run_guard uninstall
+        app_export_config_before_uninstall
+        operation_run_app_action uninstall do_uninstall "$@" ;;
     menu|"") show_menu ;;
     help|-h|--help) usage --help ;;
     q|quit|exit) exit 0 ;;
@@ -5906,7 +6138,7 @@ BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
 # Alist stores its own configuration and database under DATA_DIR on first
