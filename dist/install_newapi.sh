@@ -5869,15 +5869,12 @@ i18n_register_many \
   app.newapi.summary.internal \
   "Internal URL" \
   "内网直连" \
-  app.newapi.summary.default_user \
-  "Default user" \
-  "默认账号" \
-  app.newapi.summary.default_password \
-  "Default password" \
-  "默认密码" \
-  app.newapi.summary.change_password \
-  "change it immediately after login" \
-  "请登录后立即修改" \
+  app.newapi.summary.credential_warning \
+  "WARNING: the first login uses the application's built-in default admin credentials" \
+  "警告：首次登录使用应用内置的默认管理员凭据" \
+  app.newapi.summary.credential_hint \
+  "Change the password immediately after login — the default credentials are public knowledge" \
+  "登录后请立即修改密码——默认凭据是公开已知的" \
   app.newapi.summary.api_url \
   "API URL" \
   "API 地址" \
@@ -6896,8 +6893,8 @@ _print_install_summary() {
   echo -e "  ║  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
   echo -e "  ║  $(t app.newapi.summary.internal)  ${CYAN}http://${INTERNAL_IP}:${PORT}${GREEN}"
   echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.newapi.summary.default_user)  ${YELLOW}root${GREEN}"
-  echo -e "  ║  $(t app.newapi.summary.default_password)  ${YELLOW}123456${GREEN}  <- $(t app.newapi.summary.change_password)"
+  echo -e "  ║  ${RED}${BOLD}$(t app.newapi.summary.credential_warning)${GREEN}"
+  echo -e "  ║  $(t app.newapi.summary.credential_hint)"
   echo "  ╠══════════════════════════════════════════════════════╣"
   echo -e "  ║  $(t app.newapi.summary.api_url)  ${CYAN}https://${DOMAIN}/v1${GREEN}"
   echo -e "  ║  $(t app.newapi.summary.version)  ${YELLOW}${version}${GREEN}"
