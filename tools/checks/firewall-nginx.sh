@@ -71,7 +71,7 @@ check_iptables_rules_are_atomic() {
 
 check_netfilter_persistent_save_reports_failures() {
   if grep -R -nE 'netfilter-persistent save 2>/dev/null( && success .*\\|\\| true|[[:space:]]*\\[?;?)' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "netfilter-persistent save failures must not be silently ignored." >&2
     return 1
   fi
@@ -102,15 +102,33 @@ check_systemd_units_are_atomic() {
     return 1
   fi
   awk '
+      /ba_systemd_unit\(\)/ { in_unit=1; saw_helper=0; next }
+      in_unit && /systemd_write_unit "\$unit_path"/ { saw_helper=1 }
+      in_unit && /^}/ {
+        if (!saw_helper) {
+          printf "%s shared systemd unit writer must use systemd_write_unit\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_unit=0
+      }
+      /binary_app\.error\.systemd_unit/ { saw_error=1 }
+      END {
+        if (!saw_error) {
+          print "systemd unit writes must report write failures through a localized key." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+  awk '
       /systemd_write_unit "\$unit_path"/ { saw_helper=1 }
-      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden|tickflow)\.error\.(systemd_unit|systemd|service_write)/ { saw_error=1 }
+      /error "\$\(t app\.(sub2api|cyberstrikeai|vaultwarden|tickflow)\.error\.(systemd_unit|systemd|service_write)/ { saw_error=1 }
       END {
         if (!(saw_helper && saw_error)) {
           print "systemd unit writes must use systemd_write_unit and report write failures." > "/dev/stderr"
           exit 1
         }
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_tickflow.sh
+    ' impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh impl/install_tickflow.sh
 }
 
 check_systemd_daemon_reloads_are_explicit() {
@@ -119,27 +137,27 @@ check_systemd_daemon_reloads_are_explicit() {
     return 1
   fi
   awk '
-      /app\.newapi\.error\.systemd_reload/ { saw_newapi_key=1 }
+      /binary_app\.error\.systemd_reload/ { saw_framework_key=1 }
       /app\.sub2api\.error\.systemd_reload/ { saw_sub2api_key=1 }
       /app\.cyberstrikeai\.error\.systemd_reload/ { saw_cyberstrikeai_key=1 }
       /app\.vaultwarden\.error\.systemd_reload/ { saw_vaultwarden_key=1 }
       END {
-        if (!(saw_newapi_key && saw_sub2api_key && saw_cyberstrikeai_key && saw_vaultwarden_key)) {
+        if (!(saw_framework_key && saw_sub2api_key && saw_cyberstrikeai_key && saw_vaultwarden_key)) {
           print "All systemd apps must define actionable daemon reload failure messages." > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh apps/vaultwarden.sh
+    ' lib/binary_app.sh apps/sub2api.sh apps/cyberstrikeai.sh apps/vaultwarden.sh
   awk '
-      /if ! systemctl daemon-reload; then/ { reloads++ }
-      /error "\$\(t app\.newapi\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
+      /if ! command systemctl daemon-reload; then/ { reloads++ }
+      /error "\$\(t binary_app\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
       END {
         if (!(reloads == 3 && errors == 3)) {
-          printf "%s NewAPI must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
+          printf "%s shared lifecycle must handle install, update, and uninstall daemon reload failures explicitly\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
-    ' impl/install_newapi.sh
+    ' lib/binary_app.sh
   awk '
       /if ! systemctl daemon-reload; then/ { reloads++ }
       /error "\$\(t app\.sub2api\.error\.systemd_reload "\$SERVICE_NAME"\)"/ { errors++ }
@@ -322,7 +340,7 @@ check_nginx_test_failures_report_diagnostics() {
 
 check_firewall_success_paths_validate_command_results() {
   if grep -R -nE 'ufw allow "?\$\{?(PORT|PUBLIC_PORT)[^"]*"?[^[:cntrl:]]*\|\| true|firewall-cmd --permanent --add-port=.*\|\| true|firewall-cmd --reload.*\|\| true' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_cyberstrikeai.sh 2>/dev/null; then
     echo "Firewall success paths must not ignore command failures." >&2
     return 1
   fi
@@ -345,11 +363,10 @@ check_firewall_success_paths_validate_command_results() {
         in_block=0
       }
     ' lib/app.sh
-  grep -Fq 'app_configure_firewall "$PORT" "app.newapi" "New API"' impl/install_newapi.sh \
-    && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
+  grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
     && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' impl/install_cyberstrikeai.sh \
     || {
-      echo "NewAPI, Sub2API, and CyberStrikeAI firewall configuration must use the shared app_configure_firewall helper." >&2
+      echo "Sub2API and CyberStrikeAI firewall configuration must use the shared app_configure_firewall helper." >&2
       return 1
     }
   if grep -nE '^_configure_firewall\(\)' impl/install_newapi.sh impl/install_sub2api.sh ; then
@@ -357,14 +374,14 @@ check_firewall_success_paths_validate_command_results() {
     return 1
   fi
   awk '
-      /app\.newapi\.success\.ufw_port/ { newapi_ufw=1 }
-      /app\.newapi\.success\.iptables_saved/ { newapi_saved=1 }
-      /app\.newapi\.info\.iptables_rules_written/ { newapi_info=1 }
-      /app\.newapi\.warn\.iptables_write_failed/ { newapi_write_failed=1 }
-      /app\.newapi\.warn\.iptables_not_persisted/ { newapi_not_persisted=1 }
-      /app\.newapi\.success\.iptables_port/ { newapi_port=1 }
-      /app\.newapi\.warn\.firewall_config_failed/ { newapi_cfg_failed=1 }
-      /app\.newapi\.warn\.no_firewall/ { newapi_no_fw=1 }
+      /binary_app\.success\.ufw_port/ { framework_ufw=1 }
+      /binary_app\.success\.iptables_saved/ { framework_saved=1 }
+      /binary_app\.info\.iptables_rules_written/ { framework_info=1 }
+      /binary_app\.warn\.iptables_write_failed/ { framework_write_failed=1 }
+      /binary_app\.warn\.iptables_not_persisted/ { framework_not_persisted=1 }
+      /binary_app\.success\.iptables_port/ { framework_port=1 }
+      /binary_app\.warn\.firewall_config_failed/ { framework_cfg_failed=1 }
+      /binary_app\.warn\.no_firewall/ { framework_no_fw=1 }
       /app\.sub2api\.success\.ufw_port/ { sub2api_ufw=1 }
       /app\.sub2api\.success\.firewalld_port/ { sub2api_firewalld=1 }
       /app\.sub2api\.success\.iptables_saved/ { sub2api_saved=1 }
@@ -383,8 +400,8 @@ check_firewall_success_paths_validate_command_results() {
       /app\.cyberstrikeai\.warn\.firewall_config_failed/ { csai_cfg_failed=1 }
       /app\.cyberstrikeai\.warn\.no_firewall/ { csai_no_fw=1 }
       END {
-        if (!(newapi_ufw && newapi_saved && newapi_info && newapi_write_failed &&
-              newapi_not_persisted && newapi_port && newapi_cfg_failed && newapi_no_fw &&
+        if (!(framework_ufw && framework_saved && framework_info && framework_write_failed &&
+              framework_not_persisted && framework_port && framework_cfg_failed && framework_no_fw &&
               sub2api_ufw && sub2api_firewalld && sub2api_saved && sub2api_info &&
               sub2api_write_failed && sub2api_not_persisted && sub2api_port &&
               sub2api_cfg_failed && sub2api_no_fw &&
@@ -394,7 +411,7 @@ check_firewall_success_paths_validate_command_results() {
           exit 1
         }
       }
-    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh
+    ' lib/binary_app.sh apps/sub2api.sh apps/cyberstrikeai.sh
   awk '
       /open_firewall_ports\(\)/ { in_block=1; saw_gate=0; saw_step=0; saw_port=0; saw_shared=0; next }
       in_block && /_bool_true "\$OPEN_FIREWALL" \|\| return 0/ { saw_gate=1 }
@@ -550,23 +567,23 @@ check_fail2ban_configs_are_atomic() {
 
 check_user_deletion_paths_are_explicit() {
   if grep -R -nE 'userdel "\$(SERVICE_USER|VW_USER)" 2>/dev/null[[:space:]\\]*&& success .* \|\| (warn|true)' \
-      impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh 2>/dev/null; then
+      impl/install_sub2api.sh impl/install_cyberstrikeai.sh impl/install_vaultwarden.sh 2>/dev/null; then
     echo "User deletion paths must use explicit conditionals for userdel outcomes." >&2
     return 1
   fi
   awk '
-      /if \$DELETE_DATA && id "\$SERVICE_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
+      /if \$delete_data && id "\$SERVICE_USER" >\/dev\/null 2>&1; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
       in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }
-      in_userdel && /success "\$\(t app\.newapi\.success\.deleted_user "\$SERVICE_USER"\)"/ { saw_success=1 }
-      in_userdel && /warn "\$\(t app\.newapi\.warn\.delete_user "\$SERVICE_USER"\)"/ { saw_warn=1 }
+      in_userdel && /success "\$\(t binary_app\.success\.deleted_user "\$SERVICE_USER"\)"/ { saw_success=1 }
+      in_userdel && /warn "\$\(t binary_app\.warn\.delete_user "\$SERVICE_USER"\)"/ { saw_warn=1 }
       in_userdel && /^  fi$/ {
         if (!(saw_userdel_if && saw_success && saw_warn)) {
-          printf "%s NewAPI uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
+          printf "%s shared uninstall user deletion must branch explicitly on userdel result\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_userdel=0
       }
-    ' impl/install_newapi.sh
+    ' lib/binary_app.sh
   awk '
       /if \$DELETE_DATA && \$DELETE_CONF && id "\$SERVICE_USER" &>\/dev\/null; then/ { in_userdel=1; saw_userdel_if=0; saw_success=0; saw_warn=0; next }
       in_userdel && /if userdel "\$SERVICE_USER" 2>\/dev\/null; then/ { saw_userdel_if=1 }

@@ -98,10 +98,21 @@ check_safe_path_guard() {
       }
     ' impl/install_hugo_blog.sh impl/install_vaultwarden.sh
   awk '
+      /^bapp_uninstall\(\)/ { in_uninstall=1; saw_install_dir_guard=0; next }
+      in_uninstall && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_dir_guard=1 }
+      in_uninstall && /find "\$INSTALL_DIR" -maxdepth 1/ {
+        if (!saw_install_dir_guard) {
+          printf "%s shared uninstall cleanup must validate INSTALL_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_uninstall && /^}/ { in_uninstall=0 }
+    ' lib/binary_app.sh
+  awk '
       /do_uninstall\(\)/ { in_uninstall=1; saw_install_dir_guard=0; saw_vw_bin_guard=0; next }
       in_uninstall && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install_dir_guard=1 }
       in_uninstall && /_require_safe_vw_bin_path/ { saw_vw_bin_guard=1 }
-      in_uninstall && /find "\$INSTALL_DIR" -maxdepth 1 -name "(new-api|sub2api)\./ {
+      in_uninstall && /find "\$INSTALL_DIR" -maxdepth 1 -name "sub2api\./ {
         if (!saw_install_dir_guard) {
           printf "%s uninstall cleanup must validate INSTALL_DIR before deleting generated files\n", FILENAME > "/dev/stderr"
           exit 1
@@ -114,27 +125,25 @@ check_safe_path_guard() {
         }
       }
       in_uninstall && /^}/ { in_uninstall=0 }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_vaultwarden.sh
+    ' impl/install_sub2api.sh impl/install_vaultwarden.sh
 }
 
 check_managed_paths_are_validated() {
   awk '
-      /_validate_config_values\(\)/ { in_func=1; next }
+      /^bapp_validate_cfg\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
-      in_func && /_newapi_require_safe_bin_path/ { saw_bin=1 }
+      in_func && /require_safe_path "BIN_PATH" "\$BIN_PATH"/ { saw_bin=1 }
       in_func && /require_safe_path "DATA_DIR" "\$DATA_DIR"/ { saw_data=1 }
       in_func && /require_safe_path "LOG_DIR" "\$LOG_DIR"/ { saw_log=1 }
-      in_func && /require_safe_path "LOG_FILE" "\$LOG_FILE"/ { saw_log_file=1 }
-      in_func && /require_safe_path "ENV_FILE" "\$ENV_FILE"/ { saw_env=1 }
-      in_func && /require_safe_path "BACKUP_DIR" "\$BACKUP_DIR"/ { saw_backup=1 }
+      in_func && /require_safe_path "BACKUP_DIR"/ { saw_backup=1 }
       in_func && /^}/ {
-        if (!(saw_install && saw_bin && saw_data && saw_log && saw_log_file && saw_env && saw_backup)) {
-          printf "%s NewAPI must validate managed directory and derived file paths before use\n", FILENAME > "/dev/stderr"
+        if (!(saw_install && saw_bin && saw_data && saw_log && saw_backup)) {
+          printf "%s shared validator must validate managed directory and derived binary paths before use\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
-    ' impl/install_newapi.sh
+    ' lib/binary_app.sh
   awk '
       /_validate_config_values\(\)/ { in_func=1; next }
       in_func && /require_safe_path "INSTALL_DIR" "\$INSTALL_DIR"/ { saw_install=1 }
