@@ -20419,14 +20419,14 @@ CPA_SERVICE_NAME="cli-proxy-api"
 CPAMP_SERVICE_NAME="cpa-manager-plus"
 CPA_SERVICE_USER="cli-proxy-api"
 CPAMP_SERVICE_USER="cpa-manager-plus"
-CPA_INSTALL_DIR="/opt/cli-proxy-api"
-CPAMP_INSTALL_DIR="/opt/cpa-manager-plus"
-CPA_CONFIG_DIR="/etc/cli-proxy-api"
+CPA_INSTALL_DIR="${CPA_INSTALL_DIR:-/opt/cli-proxy-api}"
+CPAMP_INSTALL_DIR="${CPAMP_INSTALL_DIR:-/opt/cpa-manager-plus}"
+CPA_CONFIG_DIR="${CPA_CONFIG_DIR:-/etc/cli-proxy-api}"
 CPA_CONFIG_FILE="${CPA_CONFIG_DIR}/config.yaml"
-CPA_DATA_DIR="/var/lib/cli-proxy-api"
+CPA_DATA_DIR="${CPA_DATA_DIR:-/var/lib/cli-proxy-api}"
 CPA_AUTH_DIR="${CPA_DATA_DIR}/auths"
-CPAMP_DATA_DIR="/var/lib/cpa-manager-plus"
-CPAMP_ENV_DIR="/etc/cpa-stack"
+CPAMP_DATA_DIR="${CPAMP_DATA_DIR:-/var/lib/cpa-manager-plus}"
+CPAMP_ENV_DIR="${CPAMP_ENV_DIR:-/etc/cpa-stack}"
 CPAMP_ENV_FILE="${CPAMP_ENV_DIR}/cpamp.env"
 CPA_BIN="${CPA_INSTALL_DIR}/cli-proxy-api"
 CPAMP_BIN="${CPAMP_INSTALL_DIR}/cpa-manager-plus"
@@ -20443,6 +20443,12 @@ CONFIG_KEYS=(
   CERTBOT_EMAIL
   CPA_STACK_BACKUP_DIR
   BACKUP_KEEP_DAYS
+  CPA_INSTALL_DIR
+  CPAMP_INSTALL_DIR
+  CPA_CONFIG_DIR
+  CPA_DATA_DIR
+  CPAMP_DATA_DIR
+  CPAMP_ENV_DIR
   INSTALLED_CPA_VERSION
   INSTALLED_CPAMP_VERSION
 )
