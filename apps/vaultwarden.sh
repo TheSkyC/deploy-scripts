@@ -342,15 +342,12 @@ i18n_register_many \
   app.vaultwarden.success.certbot_timer \
   "Certbot auto-renew timer is ready." \
   "Certbot 自动续签定时器已就绪。" \
-  app.vaultwarden.success.certbot_cron_exists \
-  "Certbot auto-renew cron entry already exists; skipping." \
-  "Certbot 自动续签 cron 条目已存在，跳过。" \
   app.vaultwarden.success.certbot_cron \
-  "Certbot auto-renew cron entry added (daily 02:30)." \
-  "Certbot 自动续签（每天 02:30）已加入 crontab。" \
+  "Certbot auto-renew cron entry added (/etc/cron.d/certbot-renew, daily 02:30)." \
+  "Certbot 自动续签已写入 /etc/cron.d/certbot-renew（每天 02:30）。" \
   app.vaultwarden.error.certbot_cron \
-  "Failed to write the Certbot auto-renew crontab entry. Add it manually after fixing crontab access: 30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" \
-  "写入 Certbot 自动续签 crontab 条目失败。请在修复 crontab 访问问题后手动添加：30 2 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" \
+  "Failed to write the Certbot auto-renew cron entry. Add it manually after fixing cron access: 30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" \
+  "写入 Certbot 自动续签 cron 条目失败。请在修复 cron 访问问题后手动添加：30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" \
   app.vaultwarden.warn.nginx_version \
   "Cannot detect Nginx version; using legacy http2 syntax (attached to listen lines)." \
   "无法检测 Nginx 版本，默认使用旧版 http2 语法（listen 行附加）。" \

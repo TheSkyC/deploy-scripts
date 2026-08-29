@@ -653,18 +653,21 @@ check_vaultwarden_enable_failures_are_reported() {
 }
 
 check_vaultwarden_certbot_cron_failures_are_reported() {
+  if grep -R -nE 'crontab -l.*crontab -' impl/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden must not rewrite the whole root crontab for Certbot renewal; use an /etc/cron.d file instead." >&2
+    return 1
+  fi
   awk '
       /app\.vaultwarden\.error\.certbot_cron/ { saw_error_key=1 }
-      /30 2 \* \* \* certbot renew --quiet --post-hook/ { saw_guidance=1 }
-      /if crontab -l 2>\/dev\/null \| grep -q "certbot renew"; then/ { in_block=1; saw_write_if=0; saw_error=0; next }
-      in_block && /if ! \(crontab -l 2>\/dev\/null; echo "30 2 \* \* \* certbot renew --quiet --post-hook '\''systemctl reload nginx'\''"\) \| crontab -; then/ { saw_write_if=1 }
-      in_block && /error "\$\(t app\.vaultwarden\.error\.certbot_cron\)"/ { saw_error=1 }
-      in_block && /success "\$\(t app\.vaultwarden\.success\.certbot_cron\)"/ {
-        if (!(saw_error_key && saw_guidance && saw_write_if && saw_error)) {
-          printf "%s Vaultwarden must fail explicitly with manual guidance when writing the Certbot auto-renew crontab entry fails\n", FILENAME > "/dev/stderr"
+      /30 2 \* \* \* root certbot renew --quiet --post-hook/ { saw_guidance=1 }
+      /_certbot_cron_file="\/etc\/cron\.d\/certbot-renew"/ { saw_file=1 }
+      /_certbot_cron_tmp=\$\(mktemp "\$\{_certbot_cron_file\}\.XXXXXX"\)/ { saw_tmp=1 }
+      /error "\$\(t app\.vaultwarden\.error\.certbot_cron\)"/ { saw_error=1 }
+      /success "\$\(t app\.vaultwarden\.success\.certbot_cron\)"/ {
+        if (!(saw_error_key && saw_guidance && saw_file && saw_tmp && saw_error)) {
+          printf "%s Vaultwarden must write the Certbot renewal cron atomically to /etc/cron.d and fail explicitly with guidance\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_block=0
       }
     ' apps/vaultwarden.sh impl/install_vaultwarden.sh
 }
