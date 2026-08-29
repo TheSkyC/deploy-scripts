@@ -146,22 +146,15 @@ manager_update_render_check_table() {
 }
 
 manager_update_main() {
-  local json=0 refresh=0 no_network=0 include_csv="" exclude_csv="" arg
-  while (($#)); do
-    arg="$1"; shift
-    case "$arg" in
-      --json) json=1 ;;
-      --refresh) refresh=1 ;;
-      --no-network) no_network=1 ;;
-      --include) (($#)) || { manager_update_print_usage; return 2; }; include_csv="$1"; shift ;;
-      --exclude) (($#)) || { manager_update_print_usage; return 2; }; exclude_csv="$1"; shift ;;
-      --include=*) include_csv="${arg#*=}" ;;
-      --exclude=*) exclude_csv="${arg#*=}" ;;
-      --only-installed|--continue-on-error) ;;
-      --help|-h) manager_update_print_usage; return 0 ;;
-      *) manager_update_print_usage; return 2 ;;
-    esac
-  done
+  local json refresh no_network include_csv exclude_csv
+  if ! manager_parse_args "--json --refresh --no-network --include --exclude --only-installed --continue-on-error --help" manager_update_print_usage "$@"; then
+    return $?
+  fi
+  json="$MANAGER_ARG_JSON"
+  refresh="$MANAGER_ARG_REFRESH"
+  no_network="$MANAGER_ARG_NO_NETWORK"
+  include_csv="$MANAGER_ARG_INCLUDE"
+  exclude_csv="$MANAGER_ARG_EXCLUDE"
   (( refresh && no_network )) && { manager_update_print_usage; return 2; }
   manager_update_collect "$refresh" "$no_network" "$include_csv" "$exclude_csv" || return $?
   if (( json )); then manager_update_render_check_json "$refresh" "$no_network"; else manager_update_render_check_table; fi
@@ -276,26 +269,19 @@ manager_update_execution_record() {
 }
 
 manager_update_all_main() {
-  local dry_run=0 json=0 refresh=0 no_network=0 yes=0 include_csv="" exclude_csv="" arg record plan_record action
+  local dry_run json refresh no_network yes include_csv exclude_csv record plan_record action
   local planned=0 skipped=0 updated=0 failed=0 first=1 status=0 app_id execution_record
   local -a plan_records=() execution_records=()
-  while (($#)); do
-    arg="$1"; shift
-    case "$arg" in
-      --dry-run) dry_run=1 ;;
-      --json) json=1 ;;
-      --refresh) refresh=1 ;;
-      --no-network) no_network=1 ;;
-      --yes) yes=1 ;;
-      --include) (($#)) || { manager_update_all_print_usage; return 2; }; include_csv="$1"; shift ;;
-      --exclude) (($#)) || { manager_update_all_print_usage; return 2; }; exclude_csv="$1"; shift ;;
-      --include=*) include_csv="${arg#*=}" ;;
-      --exclude=*) exclude_csv="${arg#*=}" ;;
-      --only-installed|--continue-on-error) ;;
-      --help|-h) manager_update_all_print_usage; return 0 ;;
-      *) manager_update_all_print_usage; return 2 ;;
-    esac
-  done
+  if ! manager_parse_args "--dry-run --json --refresh --no-network --yes --include --exclude --only-installed --continue-on-error --help" manager_update_all_print_usage "$@"; then
+    return $?
+  fi
+  dry_run="$MANAGER_ARG_DRY_RUN"
+  json="$MANAGER_ARG_JSON"
+  refresh="$MANAGER_ARG_REFRESH"
+  no_network="$MANAGER_ARG_NO_NETWORK"
+  yes="$MANAGER_ARG_YES"
+  include_csv="$MANAGER_ARG_INCLUDE"
+  exclude_csv="$MANAGER_ARG_EXCLUDE"
   (( refresh && no_network )) && { manager_update_all_print_usage; return 2; }
   manager_update_collect "$refresh" "$no_network" "$include_csv" "$exclude_csv" || return $?
   for record in "${MANAGER_UPDATE_RECORDS[@]}"; do

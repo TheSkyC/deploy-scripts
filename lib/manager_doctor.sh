@@ -15,22 +15,18 @@ manager_doctor_record() {
 }
 
 manager_doctor_main() {
-  local json=0 only_installed=1 include_csv="" exclude_csv="" arg app_id selected
+  local json only_installed include_csv exclude_csv app_id selected
   local installed=0 succeeded=0 failed=0 skipped=0 errors=0
   local -a ids=() records=()
-  while (($#)); do
-    arg="$1"; shift
-    case "$arg" in
-      --json) json=1 ;;
-      --only-installed) only_installed=1 ;;
-      --include) (($#)) || { manager_doctor_print_usage; return 2; }; include_csv="$1"; shift ;;
-      --exclude) (($#)) || { manager_doctor_print_usage; return 2; }; exclude_csv="$1"; shift ;;
-      --include=*) include_csv="${arg#*=}" ;;
-      --exclude=*) exclude_csv="${arg#*=}" ;;
-      --help|-h) manager_doctor_print_usage; return 0 ;;
-      *) manager_doctor_print_usage; return 2 ;;
-    esac
-  done
+  if ! manager_parse_args "--json --only-installed --include --exclude --help" manager_doctor_print_usage "$@"; then
+    return $?
+  fi
+  json="$MANAGER_ARG_JSON"
+  # doctor-all checks installed apps by default; --only-installed is an
+  # explicit no-op kept for compatibility (it cannot be turned off).
+  only_installed=1
+  include_csv="$MANAGER_ARG_INCLUDE"
+  exclude_csv="$MANAGER_ARG_EXCLUDE"
   if ! selected="$(manager_status_selected_ids "$include_csv" "$exclude_csv")"; then return 2; fi
   [[ -n "$selected" ]] && mapfile -t ids < <(printf '%s\n' "$selected")
 

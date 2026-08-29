@@ -83,23 +83,17 @@ manager_backup_execute_app() {
 }
 
 manager_backup_main() {
-  local dry_run=0 json=0 yes=0 include_csv="" exclude_csv="" arg selected app_id state_file err_file install_state capability collection_error
+  local dry_run json yes include_csv exclude_csv arg selected app_id state_file err_file install_state capability collection_error
   local planned=0 skipped=0 errors=0 updated=0 failed=0 status=0 first=1 record plan_record action
   local -a ids=() records=() plan_records=()
-  while (($#)); do
-    arg="$1"; shift
-    case "$arg" in
-      --dry-run) dry_run=1 ;;
-      --yes) yes=1 ;;
-      --json) json=1 ;;
-      --include) (($#)) || { manager_backup_print_usage; return 2; }; include_csv="$1"; shift ;;
-      --exclude) (($#)) || { manager_backup_print_usage; return 2; }; exclude_csv="$1"; shift ;;
-      --include=*) include_csv="${arg#*=}" ;;
-      --exclude=*) exclude_csv="${arg#*=}" ;;
-      --help|-h) manager_backup_print_usage; return 0 ;;
-      *) manager_backup_print_usage; return 2 ;;
-    esac
-  done
+  if ! manager_parse_args "--dry-run --yes --json --include --exclude --help" manager_backup_print_usage "$@"; then
+    return $?
+  fi
+  dry_run="$MANAGER_ARG_DRY_RUN"
+  yes="$MANAGER_ARG_YES"
+  json="$MANAGER_ARG_JSON"
+  include_csv="$MANAGER_ARG_INCLUDE"
+  exclude_csv="$MANAGER_ARG_EXCLUDE"
   if ! selected="$(manager_status_selected_ids "$include_csv" "$exclude_csv")"; then return 2; fi
   [[ -n "$selected" ]] && mapfile -t ids < <(printf '%s\n' "$selected")
 
