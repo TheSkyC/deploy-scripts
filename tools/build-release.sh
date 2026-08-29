@@ -26,16 +26,20 @@ COMMON_RELEASE_LIB_FILES=(
   lib/manager_update.sh
   lib/app.sh
   lib/binary_app.sh
+  # lib/compose.sh is used by the tickflow impl (which delegates its
+  # compose probes to the shared layer), so it must ship in per-app
+  # release scripts too, not only the manager bundle.
+  lib/compose.sh
 )
 
 # Central-command libraries used only by the manager bundle (dist/deploy.sh).
 # Kept out of COMMON_RELEASE_LIB_FILES so per-app release scripts stay lean.
+# (lib/compose.sh moved to COMMON because tickflow uses it at runtime.)
 MANAGER_ONLY_RELEASE_LIB_FILES=(
   lib/notify.sh
   lib/schedule.sh
   lib/migrate.sh
   lib/fleet.sh
-  lib/compose.sh
 )
 
 source "${ROOT_DIR}/lib/app_registry.sh"
