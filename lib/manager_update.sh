@@ -133,15 +133,17 @@ manager_update_render_check_json() {
 }
 
 manager_update_render_check_table() {
-  local record
+  local record installed latest
   printf 'check-update: selected=%s installed=%s update_available=%s up_to_date=%s unsupported=%s unknown=%s stale=%s check_failed=%s errors=%s\n' \
     "$MANAGER_UPDATE_SELECTED" "$MANAGER_UPDATE_INSTALLED" "$MANAGER_UPDATE_AVAILABLE" "$MANAGER_UPDATE_CURRENT" "$MANAGER_UPDATE_UNSUPPORTED" "$MANAGER_UPDATE_UNKNOWN" "$MANAGER_UPDATE_STALE" "$MANAGER_UPDATE_CHECK_FAILED" "$MANAGER_UPDATE_ERRORS"
-  printf '%-16s %-12s %-18s %-18s %s\n' App State Update Cache Reason
+  printf '%-16s %-12s %-20s %-20s %-18s %s\n' App State Installed Latest Update Reason
   for record in "${MANAGER_UPDATE_RECORDS[@]}"; do
-    printf '%-16s %-12s %-18s %-18s %s\n' \
+    installed="$(state_json_field "$record" version.installed 2>/dev/null || printf -- '-')"
+    latest="$(state_json_field "$record" version.latest 2>/dev/null || printf -- '-')"
+    printf '%-16s %-12s %-20s %-20s %-18s %s\n' \
       "$(state_json_field "$record" app_id)" "$(state_json_field "$record" state)" \
-      "$(state_json_field "$record" version.update_state)" "$(state_json_field "$record" version.cache_state)" \
-      "$(state_json_field "$record" reason)"
+      "${installed:-'-'}" "${latest:-'-'}" \
+      "$(state_json_field "$record" version.update_state)" "$(state_json_field "$record" reason)"
   done
 }
 
