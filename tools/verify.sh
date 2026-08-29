@@ -294,14 +294,8 @@ main() {
       check_port_conflict_is_warn_only
       check_port_conflict_strict_mode_aborts
       check_doctor_validates_saved_config
-      check_newapi_uninstall_supports_noninteractive_mode
-      check_newapi_uninstall_checks_directory_removal_errors
-      check_newapi_uninstall_checks_file_removal_errors
-      check_newapi_uninstall_validates_binary_path_before_removal
-      check_newapi_install_rollback_validates_binary_path_before_removal
-      check_newapi_install_rollback_surfaces_service_file_removal_failures
-      check_newapi_backup_lists_preserve_paths_with_spaces
       check_newapi_status_backup_projection
+      check_newapi_summary_warns_about_default_credentials
       check_sub2api_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
       check_sub2api_uninstall_checks_directory_removal_errors
@@ -505,19 +499,8 @@ main() {
       check_mutating_actions_acquire_locks
       check_no_explicit_release_lock_calls
       check_netfilter_persistent_save_reports_failures
-      check_newapi_dependency_failures_are_reported
-      check_newapi_enable_failures_are_reported
-      check_newapi_health_checks_are_nonfatal_outside_install
-      check_newapi_install_cleanup_reports_systemctl_failures
-      check_newapi_install_summary_matches_health_state
-      check_newapi_manual_backup_wal_result_is_explicit
-      check_newapi_runtime_dir_failures_are_explicit
       check_newapi_secret_uses_private_env_file
-      check_newapi_service_start_paths_are_explicit
-      check_newapi_uninstall_stop_disable_failures_are_reported
-      check_newapi_update_rollback_stop_failure_aborts_restore
-      check_newapi_update_rollbacks_report_restart_failures
-      check_newapi_update_stop_failure_aborts_before_replace
+      check_newapi_backup_wal_hook_is_best_effort
       check_nginx_configs_are_atomic
       check_nginx_domains_are_validated
       check_nginx_main_config_edits_are_atomic

@@ -39,9 +39,8 @@ check_backup_script_dir_failures_are_explicit() {
 
 check_preupdate_backup_warnings_include_followup_guidance() {
   awk '
-      /app\.newapi\.warn\.pre_backup_failed/ { saw_newapi=1 }
-      /\/opt\/new-api-backups\/backup\.log/ { saw_newapi_log=1 }
-      /\/usr\/local\/bin\/new-api-backup/ { saw_newapi_cmd=1 }
+      /binary_app\.warn\.pre_backup_failed/ { saw_framework=1 }
+      /binary_app\.warn\.silent_backup_failed/ && /backup\.log/ { saw_framework_log=1 }
       /app\.sub2api\.warn\.pre_update_backup/ { saw_sub2api=1 }
       /\/opt\/sub2api-backups\/backup\.log/ { saw_sub2api_log=1 }
       /\/usr\/local\/bin\/sub2api-backup/ { saw_sub2api_cmd=1 }
@@ -49,21 +48,21 @@ check_preupdate_backup_warnings_include_followup_guidance() {
       /\/opt\/cyberstrike-ai\/logs\/backup\.log/ { saw_csai_log=1 }
       /\/usr\/local\/bin\/cyberstrike-ai-backup/ { saw_csai_cmd=1 }
       END {
-        if (!(saw_newapi && saw_newapi_log && saw_newapi_cmd && saw_sub2api && saw_sub2api_log && saw_sub2api_cmd && saw_csai && saw_csai_log && saw_csai_cmd)) {
+        if (!(saw_framework && saw_framework_log && saw_sub2api && saw_sub2api_log && saw_sub2api_cmd && saw_csai && saw_csai_log && saw_csai_cmd)) {
           print "Pre-update backup warnings must tell users where to inspect backup logs and how to run a manual backup." > "/dev/stderr"
           exit 1
         }
       }
-    ' apps/newapi.sh apps/sub2api.sh apps/cyberstrikeai.sh
+    ' lib/binary_app.sh apps/sub2api.sh apps/cyberstrikeai.sh
   awk '
-      /step "\$\(t app\.newapi\.step\.pre_backup\)"/ { in_newapi=1; saw_newapi_if=0; next }
-      in_newapi && /if ! _backup_silent "pre-update"; then/ { saw_newapi_if=1 }
-      in_newapi && /warn "\$\(t app\.newapi\.warn\.pre_backup_failed\)"/ {
-        if (!saw_newapi_if) {
-          printf "%s NewAPI pre-update backup warning must come from an explicit conditional\n", FILENAME > "/dev/stderr"
+      /_ba_backup "pre-update"/ { in_framework=1; saw_framework_if=0; next }
+      in_framework && /if ! _ba_backup "pre-update"; then/ { saw_framework_if=1 }
+      in_framework && /warn "\$\(t binary_app\.warn\.pre_backup_failed\)"/ {
+        if (!saw_framework_if) {
+          printf "%s binary-app pre-update backup warning must come from an explicit conditional\n", FILENAME > "/dev/stderr"
           exit 1
         }
-        in_newapi=0
+        in_framework=0
       }
       /step "\$\(t app\.sub2api\.step\.pre_update_backup\)"/ { in_sub2api=1; saw_sub2api_if=0; next }
       in_sub2api && /if ! _backup_silent "pre-update"; then/ { saw_sub2api_if=1 }
@@ -83,7 +82,7 @@ check_preupdate_backup_warnings_include_followup_guidance() {
         }
         in_csai=0
       }
-    ' impl/install_newapi.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh
+    ' lib/binary_app.sh impl/install_sub2api.sh impl/install_cyberstrikeai.sh
   awk '
       /_backup_silent\(\)/ { in_helper=1; saw_failed_flag=0; saw_pg_fail=0; saw_config_fail=0; saw_return=0; next }
       in_helper && /if ! mkdir -p "\$BACKUP_DIR"; then/ { saw_mkdir_if=1 }
@@ -107,38 +106,34 @@ check_preupdate_backup_warnings_include_followup_guidance() {
 check_preupdate_backup_logs_match_guidance() {
   "$BASH_BIN" -c '
     set -euo pipefail
-    for file in impl/install_newapi.sh; do
-      block=$(sed -n "/^_backup_silent()/,/^_print_install_summary()/p" "$file")
+    for file in lib/binary_app.sh; do
+      block=$(sed -n "/^_ba_backup()/,/^_ba_prune_backups()/p" "$file")
       grep -Fq '\''local backup_log="${BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
-        echo "$file NewAPI silent backup helper must declare backup.log output" >&2
+        echo "$file shared backup helper must declare backup.log output" >&2
         exit 1
       }
-      grep -Fq "_log_backup_helper()" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must define a backup log helper" >&2
+      grep -Fq "_ba_backup_log()" <<<"$block" || {
+        echo "$file shared backup helper must define a backup log helper" >&2
         exit 1
       }
       grep -Fq "[[ -d \"\$BACKUP_DIR\" ]] || return 1" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must guard log writes when the backup directory cannot be created" >&2
+        echo "$file shared backup helper must guard log writes when the backup directory cannot be created" >&2
         exit 1
       }
       grep -Fq "if ! mkdir -p \"\$BACKUP_DIR\"; then" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must handle backup directory creation failures explicitly" >&2
-        exit 1
-      }
-      grep -Fq "warn \"\$(t app.newapi.warn.silent_backup_dir_failed \"\$BACKUP_DIR\")\"" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must warn explicitly when the backup directory cannot be created" >&2
+        echo "$file shared backup helper must handle backup directory creation failures explicitly" >&2
         exit 1
       }
       grep -Fq ">> \"\$backup_log\"" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must append lines to backup.log" >&2
+        echo "$file shared backup helper must append lines to backup.log" >&2
         exit 1
       }
-      grep -Fq "_log_backup_helper \"\$(t app.newapi.backup.log.data_missing \"\$DATA_DIR\")\"" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must log missing data directory failures" >&2
+      grep -Fq "_ba_backup_log \"\$(t binary_app.error.data_missing \"\$DATA_DIR\")\"" <<<"$block" || {
+        echo "$file shared backup helper must log missing data directory failures" >&2
         exit 1
       }
-      grep -Fq "_log_backup_helper \"\$(t app.newapi.backup.log.tar_failed)\"" <<<"$block" || {
-        echo "$file NewAPI silent backup helper must log tar failures" >&2
+      grep -Fq "_ba_backup_log \"\$(t binary_app.error.backup_failed)\"" <<<"$block" || {
+        echo "$file shared backup helper must log tar failures" >&2
         exit 1
       }
     done

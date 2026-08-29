@@ -269,8 +269,8 @@ i18n_register_many \
   "Inspect the failure: journalctl -u %s -n 50 --no-pager" \
   "请检查失败原因：journalctl -u %s -n 50 --no-pager" \
   binary_app.warn.pre_backup_failed \
-  "Pre-update backup failed; continuing anyway." \
-  "更新前备份失败，继续执行更新。" \
+  "Pre-update backup failed; continuing anyway. Inspect the backup log or run backup again after fixing the issue." \
+  "更新前备份失败，继续执行更新。请检查备份日志，或修复问题后重新执行 backup。" \
   binary_app.error.stop_service_failed \
   "Failed to stop %s before replacing the binary." \
   "替换二进制前停止 %s 失败。" \
@@ -332,8 +332,8 @@ i18n_register_many \
   "Backup created: %s (%s)" \
   "备份已创建：%s（%s）" \
   binary_app.warn.silent_backup_failed \
-  "Backup failed; see %s for details." \
-  "备份失败，详见 %s。" \
+  "Backup failed; inspect %s/backup.log for details." \
+  "备份失败，详见 %s/backup.log。" \
   binary_app.warn.integrity_failed \
   "Backup created but integrity metadata (sha256/manifest) could not be written: %s" \
   "备份已创建，但完整性元数据（sha256/manifest）写入失败：%s" \
@@ -541,6 +541,10 @@ _binary_app_derive_paths() {
   # to the network.  Publish through a reverse proxy, or set BA_BIND_ADDR
   # explicitly when the app is designed to listen publicly (e.g. frps).
   BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
+  # Backup archive prefix; defaults to APP_ID. Apps migrating from a
+  # hand-written lifecycle may pin the historical prefix to keep existing
+  # backup archives discoverable (e.g. BA_ARCHIVE_PREFIX=new-api).
+  BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-${APP_ID}}"
 }
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
@@ -613,7 +617,7 @@ binary_app_bootstrap() {
 # with custom update logic must opt in with their own adapter instead.
 bapp_status_backup_json() {
   app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
-    "backup directory is unsafe or missing" "${APP_ID}_*.tar.gz"
+    "backup directory is unsafe or missing" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz"
 }
 bapp_status_version_json() {
   local conf_file installed
@@ -1203,7 +1207,7 @@ _ba_backup() {
     fi
   fi
   local archive archive_tmp
-  archive="${BACKUP_DIR}/${APP_ID}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
   archive_tmp="${archive}.tmp"
   if tar -czf "$archive_tmp" \
       --exclude="*.log" --exclude="*.log.*" \
@@ -1244,7 +1248,7 @@ _ba_prune_backups() {
       else
         warn "$(t binary_app.warn.backup_cleanup_failed "$f")"
       fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${APP_ID}_*.tar.gz" \
+    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" \
              -mtime "+${keep_days}" -type f -print0 2>/dev/null)
     if [[ "$cleaned" -gt 0 ]]; then
       info "$(t binary_app.info.cleaned_backups "$cleaned" "$keep_days")"
@@ -1267,7 +1271,7 @@ bapp_backup() {
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
     printf '  %s\n' "$f"
-  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${APP_ID}_*.tar.gz" -type f \
+  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" -type f \
            -printf '%T@ %f\n' 2>/dev/null | sort -rn | sed 's/^[0-9.]* //')
   echo ""
 }
@@ -1282,7 +1286,7 @@ bapp_verify() {
   app_load_config _binary_app_derive_paths
   step "$(t backup.verify.step)"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
-  app_verify_latest_backup "$BACKUP_DIR" "${APP_ID}_*.tar.gz"
+  app_verify_latest_backup "$BACKUP_DIR" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz"
 }
 
 # Shared restore lifecycle for binary-app data directories. Selects the newest
@@ -1302,10 +1306,10 @@ bapp_restore() {
   local archive restore_env="${APP_ID^^}_RESTORE_ARCHIVE"
   archive="${!restore_env:-}"
   if [[ -n "$archive" ]]; then
-    [[ "$archive" == "$BACKUP_DIR"/${APP_ID}_*.tar.gz && -f "$archive" ]] \
+    [[ "$archive" == "$BACKUP_DIR"/${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz && -f "$archive" ]] \
       || error "$(t backup.restore.invalid_archive "$archive")"
   else
-    archive="$(backup_latest_archive "$BACKUP_DIR" "${APP_ID}_*.tar.gz" || true)"
+    archive="$(backup_latest_archive "$BACKUP_DIR" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
   backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
