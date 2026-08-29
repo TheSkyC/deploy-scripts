@@ -5835,6 +5835,9 @@ i18n_register_many \
   app.cpa_stack.success.installed \
   "CPA Stack installed. API: %s/v1 ; management: %s/management.html" \
   "CPA Stack 已安装。API：%s/v1；管理面板：%s/management.html" \
+  app.cpa_stack.success.installed_pending \
+  "CPA Stack files installed; service health check is pending (verify after firewall/network is ready). API: %s/v1 ; management: %s/management.html" \
+  "CPA Stack 文件已安装；服务健康检查待确认（请在网络/防火墙就绪后核验）。API：%s/v1；管理面板：%s/management.html" \
   app.cpa_stack.success.updated \
   "CPA Stack update completed." \
   "CPA Stack 更新完成。" \
@@ -6694,9 +6697,10 @@ cpa_stack_verify_health() {
   code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "$url" 2>/dev/null || echo 000)"
   if [[ "$code" =~ ^2 ]]; then
     success "$(t app.cpa_stack.success.health "$name" "$code")"
-  else
-    warn "$(t app.cpa_stack.warn.http_health "$name" "$code")"
+    return 0
   fi
+  warn "$(t app.cpa_stack.warn.http_health "$name" "$code")"
+  return 1
 }
 
 cpa_stack_prune_backups() {
@@ -6720,11 +6724,19 @@ do_install() {
   cpa_stack_write_services
   cpa_stack_write_nginx_http
   cpa_stack_configure_https
-  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
-  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  # Health verification failures are non-fatal (firewall/dependency timing),
+  # but the summary must reflect the actual state: a pending title instead of
+  # a success title, matching the binary_app/newapi convention.
+  local health_ok=true
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || health_ok=false
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || health_ok=false
   local scheme="http"
   cpa_stack_truthy "$ENABLE_HTTPS" && [[ -f "/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem" ]] && scheme="https"
-  success "$(t app.cpa_stack.success.installed "${scheme}://${CPA_DOMAIN}" "${scheme}://${CPAMP_DOMAIN}")"
+  if [[ "$health_ok" == true ]]; then
+    success "$(t app.cpa_stack.success.installed "${scheme}://${CPA_DOMAIN}" "${scheme}://${CPAMP_DOMAIN}")"
+  else
+    info "$(t app.cpa_stack.success.installed_pending "${scheme}://${CPA_DOMAIN}" "${scheme}://${CPAMP_DOMAIN}")"
+  fi
   info "$(t app.cpa_stack.info.oauth)"
   info "$(t app.cpa_stack.info.login_command "$CPA_SERVICE_USER" "$CPA_BIN" "$CPA_CONFIG_FILE")"
 }
@@ -6746,8 +6758,8 @@ do_update() {
   cpa_stack_write_services
   cpa_stack_write_nginx_http
   cpa_stack_configure_https
-  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
-  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
   success "$(t app.cpa_stack.success.updated)"
 }
 
@@ -6762,8 +6774,8 @@ do_cert() {
   cpa_stack_install_dependencies
   cpa_stack_write_nginx_http
   cpa_stack_configure_https
-  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
-  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
   local scheme="http"
   cpa_stack_truthy "$ENABLE_HTTPS" && [[ -f "/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem" ]] && scheme="https"
   if [[ "$scheme" == "https" ]]; then
@@ -6827,8 +6839,8 @@ do_status() {
   printf '  %s: %s\n' "$CPAMP_SERVICE_NAME" "$(service_status_label "$CPAMP_SERVICE_NAME")"
   printf '  nginx: %s\n' "$(service_status_label nginx)"
   printf '\n[%s]\n' "$(t app.cpa_stack.status.local_health)"
-  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
-  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
   printf '\n[%s]\n' "$(t app.cpa_stack.status.paths)"
   for path in "$CPA_CONFIG_FILE" "$CPA_AUTH_DIR" "$CPAMP_ENV_FILE" "$CPAMP_DATA_DIR" "$NGINX_SITE" "$CPA_STACK_BACKUP_DIR"; do
     [[ -e "$path" ]] && printf '  [ok] %s\n' "$path" || printf '  [--] %s\n' "$path"
@@ -6883,8 +6895,8 @@ do_doctor() {
       fi
     fi
   fi
-  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz
-  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health
+  cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
+  cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
   if (( failures > 0 )); then
     warn "$(t app.cpa_stack.doctor.done_blocking "$failures" "$warnings")"
     return 1
