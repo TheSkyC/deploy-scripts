@@ -334,6 +334,15 @@ The verification script checks:
 - Shellcheck static analysis on source scripts (skipped when shellcheck is not installed).
 - Release scripts in `dist/` match the current source tree.
 
+Structural guardrails assert against the **source** scripts
+(`impl/`, `lib/`, `apps/`) and never duplicate the same assertions against
+`dist/` text: `dist/` files are generated from the source, and
+`check_dist_is_up_to_date` already proves they match the committed source
+tree by rebuilding them deterministically and diffing. Keeping structural
+assertions source-only means app functions do not need to dodge substrings
+picked up by generated-text regexes, and one framework change rebuilds the
+bundle once instead of chasing per-app dist snapshots.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
