@@ -409,7 +409,10 @@ main() {
       return 0
       ;;
     guards)
-      trap 'status=$?; printf "guards verification failed while running: %s\n" "$BASH_COMMAND" >&2; exit "$status"' ERR
+      set -E
+      local current_guard=""
+      trap 'case "${BASH_COMMAND%% *}" in check_*) current_guard="${BASH_COMMAND%% *}" ;; esac' DEBUG
+      trap 'status=$?; printf "guards verification failed in %s while executing: %s\n" "${current_guard:-unknown}" "$BASH_COMMAND" >&2; exit "$status"' ERR
       check_shell_syntax
       build_verified_release
       check_dist_is_up_to_date
