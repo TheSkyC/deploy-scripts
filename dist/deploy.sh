@@ -194,8 +194,31 @@ i18n_register manager.problems "problems only" "仅查看异常"
 i18n_register manager.check_updates "check application updates" "检查应用更新"
 i18n_register manager.check_self_update "check framework updates" "检查中控更新"
 i18n_register manager.title "Deployment Scheduler" "部署调度器"
+i18n_register security_doctor.usage "Usage: sudo bash %s doctor security [--json]" "用法：sudo bash %s doctor security [--json]"
+i18n_register security_doctor.token.inspect_error "Cannot inspect the root home directory." "无法检查 root 主目录。"
+i18n_register security_doctor.token.tmp_inspect_error "Cannot inspect the temporary directory." "无法检查临时目录。"
+i18n_register security_doctor.token.found "Legacy Vaultwarden token temporary file(s) found; remove after rotating the admin token." "发现旧版 Vaultwarden Token 临时文件；轮换管理员 Token 后请删除。"
+i18n_register security_doctor.token.none "No legacy Vaultwarden token temporary files found." "未发现旧版 Vaultwarden Token 临时文件。"
+i18n_register security_doctor.dsn.missing "Sub2API backup script is not present." "未找到 Sub2API 备份脚本。"
+i18n_register security_doctor.dsn.inspect_error "Cannot inspect the Sub2API backup script." "无法检查 Sub2API 备份脚本。"
+i18n_register security_doctor.dsn.found "Legacy plaintext PostgreSQL DSN found; rotate the database password and regenerate the backup script." "发现旧版明文 PostgreSQL DSN；请轮换数据库密码并重新生成备份脚本。"
+i18n_register security_doctor.dsn.none "No plaintext PostgreSQL DSN found in the Sub2API backup script." "Sub2API 备份脚本中未发现明文 PostgreSQL DSN。"
+i18n_register security_doctor.listener.missing_dir "Managed deployment configuration directory is not present." "受管部署配置目录不存在。"
+i18n_register security_doctor.listener.inspect_error "Cannot inspect managed deployment configuration files." "无法检查受管部署配置文件。"
+i18n_register security_doctor.listener.not_wildcard "%s is not a wildcard listener." "%s 不是通配监听地址。"
+i18n_register security_doctor.listener.frps_exception "frps public TCP listener is an intentional exception." "frps 公网 TCP 监听属于明确例外。"
+i18n_register security_doctor.listener.tls "%s uses a wildcard listener with TLS enabled." "%s 使用通配监听地址且已启用 TLS。"
+i18n_register security_doctor.listener.plain "%s records a public wildcard listener; review TLS and firewall exposure." "%s 记录了公网通配监听地址；请检查 TLS 和防火墙暴露情况。"
+i18n_register security_doctor.listener.none "No supported listener setting was recorded in managed deployment configurations." "受管部署配置中未记录支持的监听设置。"
+i18n_register security_doctor.cron.empty "Root crontab has no entries." "root crontab 没有任务。"
+i18n_register security_doctor.cron.inspect_error "Root crontab could not be inspected." "无法检查 root crontab。"
+i18n_register security_doctor.cron.legacy_root "Legacy application backup schedule found in root crontab; migrate it to the managed /etc/cron.d job." "root crontab 中发现旧版应用备份任务；请迁移到受管的 /etc/cron.d 任务。"
+i18n_register security_doctor.cron.dir_missing "Cron drop-in directory is not present." "cron drop-in 目录不存在。"
+i18n_register security_doctor.cron.dir_error "Cannot inspect cron drop-in files." "无法检查 cron drop-in 文件。"
+i18n_register security_doctor.cron.legacy_file "Unmanaged legacy application backup schedule found in /etc/cron.d." "/etc/cron.d 中发现未受管的旧版应用备份任务。"
+i18n_register security_doctor.cron.none "No unmanaged legacy application backup schedules found in /etc/cron.d." "/etc/cron.d 中未发现未受管的旧版应用备份任务。"
 i18n_register manager.usage "Usage: sudo bash %s <app> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" "用法：sudo bash %s <应用> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]"
-i18n_register manager.usage_central "Central commands: status-all, backup-all, update-all, check-update, notify-config, schedule, unschedule, export, import, fleet, list, self-version, self-update" "中央命令：status-all、backup-all、update-all、check-update、notify-config、schedule、unschedule、export、import、fleet、list、self-version、self-update"
+i18n_register manager.usage_central "Central commands: status-all, backup-all, update-all, check-update, doctor security, notify-config, schedule, unschedule, export, import, fleet, list, self-version, self-update" "中央命令：status-all、backup-all、update-all、check-update、doctor security、notify-config、schedule、unschedule、export、import、fleet、list、self-version、self-update"
 i18n_register manager.usage_examples "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list" "示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list"
 i18n_register status.active "active" "运行中"
 i18n_register status.inactive "inactive" "未运行"
@@ -7128,6 +7151,126 @@ deploy_app_id_from_selection() {
   return 1
 }
 
+# ----- lib/manager_args.sh -----
+
+# Shared CLI argument parsing for the central batch commands
+# (status-all / doctor-all / backup-all / check-update / update-all).
+#
+# Every central command used to implement its own --json/--include/--exclude
+# (plus command-specific flags) loop, and some accepted flags were silently
+# ignored.  This helper centralizes the common subset and rejects unknown
+# flags uniformly.
+#
+# Usage:
+#   manager_parse_args <spec> <usage_fn> [args...]
+#
+# <spec> is a whitespace-separated list of supported flags:
+#   --json --short --strict --errors-only --only-installed --no-probe
+#   --no-network --dry-run --yes --refresh --continue-on-error --help
+#   --include --exclude
+# Flags with values (--include/--exclude) consume the next argument or an
+# =value form.  Parsed values are exported as MANAGER_ARG_* variables:
+#   MANAGER_ARG_JSON              0|1
+#   MANAGER_ARG_SHORT             0|1
+#   MANAGER_ARG_STRICT            0|1
+#   MANAGER_ARG_ERRORS_ONLY       0|1
+#   MANAGER_ARG_ONLY_INSTALLED    0|1
+#   MANAGER_ARG_NO_PROBE          0|1
+#   MANAGER_ARG_NO_NETWORK        0|1
+#   MANAGER_ARG_DRY_RUN           0|1
+#   MANAGER_ARG_YES               0|1
+#   MANAGER_ARG_REFRESH           0|1
+#   MANAGER_ARG_CONTINUE_ON_ERROR 0|1
+#   MANAGER_ARG_INCLUDE           CSV string ("" when unset)
+#   MANAGER_ARG_EXCLUDE           CSV string ("" when unset)
+# Returns 0 on success, 2 on a usage error (after calling the usage fn).
+
+manager_parse_args() {
+  local spec="$1" usage_fn="$2"
+  shift 2
+  local arg value
+  local -a specs=()
+  local f
+  for f in $spec; do specs+=("$f"); done
+  _manager_arg_supported() {
+    local needle="$1"; shift
+    local x
+    for x in "$@"; do [[ "$x" == "$needle" ]] && return 0; done
+    return 1
+  }
+  MANAGER_ARG_JSON=0
+  MANAGER_ARG_SHORT=0
+  MANAGER_ARG_STRICT=0
+  MANAGER_ARG_ERRORS_ONLY=0
+  MANAGER_ARG_ONLY_INSTALLED=0
+  MANAGER_ARG_NO_PROBE=0
+  MANAGER_ARG_NO_NETWORK=0
+  MANAGER_ARG_DRY_RUN=0
+  MANAGER_ARG_YES=0
+  MANAGER_ARG_REFRESH=0
+  MANAGER_ARG_CONTINUE_ON_ERROR=0
+  MANAGER_ARG_INCLUDE=""
+  MANAGER_ARG_EXCLUDE=""
+  while (($#)); do
+    arg="$1"; shift
+    case "$arg" in
+      --json)
+        _manager_arg_supported --json "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_JSON=1 ;;
+      --short)
+        _manager_arg_supported --short "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_SHORT=1 ;;
+      --strict)
+        _manager_arg_supported --strict "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_STRICT=1 ;;
+      --errors-only)
+        _manager_arg_supported --errors-only "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_ERRORS_ONLY=1 ;;
+      --only-installed)
+        _manager_arg_supported --only-installed "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_ONLY_INSTALLED=1 ;;
+      --no-probe)
+        _manager_arg_supported --no-probe "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_NO_PROBE=1 ;;
+      --no-network)
+        _manager_arg_supported --no-network "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_NO_NETWORK=1 ;;
+      --dry-run)
+        _manager_arg_supported --dry-run "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_DRY_RUN=1 ;;
+      --yes)
+        _manager_arg_supported --yes "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_YES=1 ;;
+      --refresh)
+        _manager_arg_supported --refresh "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_REFRESH=1 ;;
+      --continue-on-error)
+        _manager_arg_supported --continue-on-error "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_CONTINUE_ON_ERROR=1 ;;
+      --include)
+        _manager_arg_supported --include "${specs[@]}" || { "$usage_fn"; return 2; }
+        (($#)) || { "$usage_fn"; return 2; }
+        value="$1"; shift; MANAGER_ARG_INCLUDE="$value" ;;
+      --exclude)
+        _manager_arg_supported --exclude "${specs[@]}" || { "$usage_fn"; return 2; }
+        (($#)) || { "$usage_fn"; return 2; }
+        value="$1"; shift; MANAGER_ARG_EXCLUDE="$value" ;;
+      --include=*)
+        _manager_arg_supported --include "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_INCLUDE="${arg#*=}" ;;
+      --exclude=*)
+        _manager_arg_supported --exclude "${specs[@]}" || { "$usage_fn"; return 2; }
+        MANAGER_ARG_EXCLUDE="${arg#*=}" ;;
+      --help|-h)
+        _manager_arg_supported --help "${specs[@]}" || { "$usage_fn"; return 2; }
+        "$usage_fn"; return 0 ;;
+      *)
+        "$usage_fn"; return 2 ;;
+    esac
+  done
+  return 0
+}
+
 # ----- lib/notify.sh -----
 
 # Global notification integration: ntfy / Gotify push backends with a
@@ -8314,6 +8457,315 @@ dispatch_action() {
   esac
 }
 
+# ----- lib/manager_security_doctor.sh -----
+
+manager_security_doctor_print_usage() {
+  printf '%s\n' "$(t security_doctor.usage "${DEPLOY_SCRIPT_NAME:-deploy.sh}")" >&2
+}
+
+security_doctor_path() {
+  local relative_path="$1" root="${DEPLOY_SECURITY_AUDIT_ROOT:-/}"
+  if [[ "$root" == "/" ]]; then
+    printf '/%s\n' "${relative_path#/}"
+  else
+    printf '%s/%s\n' "${root%/}" "${relative_path#/}"
+  fi
+}
+
+security_doctor_reset() {
+  SECURITY_DOCTOR_CHECKS=()
+  SECURITY_DOCTOR_STATES=()
+  SECURITY_DOCTOR_PATHS=()
+  SECURITY_DOCTOR_MESSAGES=()
+  SECURITY_DOCTOR_OK=0
+  SECURITY_DOCTOR_WARNING=0
+  SECURITY_DOCTOR_ERROR=0
+  SECURITY_DOCTOR_NOT_CHECKED=0
+}
+
+security_doctor_record() {
+  local check="$1" state="$2" path="$3" message="$4"
+  SECURITY_DOCTOR_CHECKS+=("$check")
+  SECURITY_DOCTOR_STATES+=("$state")
+  SECURITY_DOCTOR_PATHS+=("$path")
+  SECURITY_DOCTOR_MESSAGES+=("$message")
+  case "$state" in
+    ok) SECURITY_DOCTOR_OK=$((SECURITY_DOCTOR_OK + 1)) ;;
+    warning) SECURITY_DOCTOR_WARNING=$((SECURITY_DOCTOR_WARNING + 1)) ;;
+    error) SECURITY_DOCTOR_ERROR=$((SECURITY_DOCTOR_ERROR + 1)) ;;
+    not_checked) SECURITY_DOCTOR_NOT_CHECKED=$((SECURITY_DOCTOR_NOT_CHECKED + 1)) ;;
+  esac
+}
+
+security_doctor_file_contains_plain_sub2api_dsn() {
+  local path="$1"
+  grep -Eq '^[[:space:]]*(export[[:space:]]+)?PG_DSN[[:space:]]*=[[:space:]]*(postgres|postgresql)://' "$path" 2>/dev/null \
+    || grep -Eq '(postgres|postgresql)://[^[:space:]]+@' "$path" 2>/dev/null
+}
+
+security_doctor_check_vaultwarden_tokens() {
+  local root_dir tmp_dir candidate
+  local -a matches=()
+  root_dir="$(security_doctor_path /root)"
+  tmp_dir="$(security_doctor_path /tmp)"
+
+  if [[ -d "$root_dir" && ! -r "$root_dir" ]]; then
+    security_doctor_record vaultwarden_legacy_token error "$root_dir" "$(t security_doctor.token.inspect_error)"
+    return
+  fi
+  if [[ -d "$tmp_dir" && ! -r "$tmp_dir" ]]; then
+    security_doctor_record vaultwarden_legacy_token error "$tmp_dir" "$(t security_doctor.token.tmp_inspect_error)"
+    return
+  fi
+
+  shopt -s nullglob
+  for candidate in "$root_dir"/.vaultwarden-admin-token.* "$tmp_dir"/vaultwarden-admin-token* "$tmp_dir"/vaultwarden-token*; do
+    [[ -e "$candidate" || -L "$candidate" ]] && matches+=("$candidate")
+  done
+  shopt -u nullglob
+
+  if ((${#matches[@]})); then
+    security_doctor_record vaultwarden_legacy_token warning "${matches[0]}" "$(t security_doctor.token.found)"
+  else
+    security_doctor_record vaultwarden_legacy_token ok "$root_dir" "$(t security_doctor.token.none)"
+  fi
+}
+
+security_doctor_check_sub2api_dsn() {
+  local candidate inspected=0
+  local -a candidates=()
+  candidates=(
+    "$(security_doctor_path /usr/local/bin/sub2api-backup)"
+    "$(security_doctor_path /etc/sub2api-deploy.conf)"
+  )
+  for candidate in "${candidates[@]}"; do
+    [[ -e "$candidate" ]] || continue
+    inspected=1
+    if [[ ! -r "$candidate" ]]; then
+      security_doctor_record sub2api_plaintext_dsn error "$candidate" "$(t security_doctor.dsn.inspect_error)"
+      return
+    fi
+    if security_doctor_file_contains_plain_sub2api_dsn "$candidate"; then
+      security_doctor_record sub2api_plaintext_dsn warning "$candidate" "$(t security_doctor.dsn.found)"
+      return
+    fi
+  done
+  if ((inspected == 0)); then
+    security_doctor_record sub2api_plaintext_dsn not_checked "$(security_doctor_path /usr/local/bin/sub2api-backup)" "$(t security_doctor.dsn.missing)"
+  else
+    security_doctor_record sub2api_plaintext_dsn ok "$(security_doctor_path /usr/local/bin/sub2api-backup)" "$(t security_doctor.dsn.none)"
+  fi
+}
+
+security_doctor_config_value() {
+  local path="$1" key="$2" line value
+  line="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$path" 2>/dev/null | head -n 1 || true)"
+  [[ -n "$line" ]] || return 1
+  value="${line#*=}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  if [[ "$value" == '"'*'"' && ${#value} -ge 2 ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s\n' "$value"
+}
+
+security_doctor_check_public_binds() {
+  local etc_dir conf_file key bind_addr tls_enabled inspected=0
+  local -a conf_files=()
+  etc_dir="$(security_doctor_path /etc)"
+  if [[ ! -d "$etc_dir" ]]; then
+    security_doctor_record public_listener not_checked "$etc_dir" "$(t security_doctor.listener.missing_dir)"
+    return
+  fi
+  if [[ ! -r "$etc_dir" ]]; then
+    security_doctor_record public_listener error "$etc_dir" "$(t security_doctor.listener.inspect_error)"
+    return
+  fi
+
+  shopt -s nullglob
+  conf_files=("$etc_dir"/*-deploy.conf "$etc_dir"/vaultwarden_deploy.conf "$etc_dir"/tickflow-deploy.conf "$etc_dir"/cyberstrike-ai-deploy.conf "$etc_dir"/sub2api-deploy.conf)
+  shopt -u nullglob
+  if ((${#conf_files[@]} == 0)); then
+    security_doctor_record public_listener not_checked "$etc_dir" "No managed deployment configuration files found."
+    return
+  fi
+
+  declare -A seen_conf_files=()
+  for conf_file in "${conf_files[@]}"; do
+    [[ -f "$conf_file" ]] || continue
+    [[ -n "${seen_conf_files[$conf_file]:-}" ]] && continue
+    seen_conf_files["$conf_file"]=1
+    if [[ ! -r "$conf_file" ]]; then
+      security_doctor_record public_listener error "$conf_file" "Cannot read the managed deployment configuration."
+      continue
+    fi
+    for key in BA_BIND_ADDR SUB2API_BIND_ADDR TICKFLOW_BIND_ADDR; do
+      bind_addr="$(security_doctor_config_value "$conf_file" "$key" 2>/dev/null || true)"
+      [[ -n "$bind_addr" ]] || continue
+      inspected=$((inspected + 1))
+      if ! app_public_bind_is_wildcard "$bind_addr"; then
+        security_doctor_record public_listener ok "$conf_file" "$(t security_doctor.listener.not_wildcard "$key")"
+        continue
+      fi
+      if [[ "$key" == BA_BIND_ADDR && "${conf_file##*/}" == "frps-deploy.conf" ]]; then
+        security_doctor_record public_listener ok "$conf_file" "$(t security_doctor.listener.frps_exception)"
+        continue
+      fi
+      tls_enabled=0
+      if [[ "$key" == BA_BIND_ADDR ]]; then
+        tls_enabled="$(security_doctor_config_value "$conf_file" BA_ENABLE_HTTPS 2>/dev/null || true)"
+        if deploy_value_truthy "$tls_enabled"; then
+          security_doctor_record public_listener ok "$conf_file" "$(t security_doctor.listener.tls "$key")"
+          continue
+        fi
+      fi
+      security_doctor_record public_listener warning "$conf_file" "$(t security_doctor.listener.plain "$key")"
+    done
+  done
+
+  if ((inspected == 0)); then
+    security_doctor_record public_listener not_checked "$etc_dir" "$(t security_doctor.listener.none)"
+  fi
+}
+
+security_doctor_root_crontab_content() {
+  local override_path="$1" output status
+  SECURITY_DOCTOR_CRONTAB_SOURCE=""
+  if [[ -n "$override_path" ]]; then
+    if [[ ! -e "$override_path" ]]; then
+      return 2
+    fi
+    [[ -r "$override_path" ]] || return 3
+    SECURITY_DOCTOR_CRONTAB_SOURCE="$override_path"
+    cat "$override_path"
+    return 0
+  fi
+  command -v crontab >/dev/null 2>&1 || return 4
+  set +e
+  output="$(crontab -l -u root 2>/dev/null)"
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    SECURITY_DOCTOR_CRONTAB_SOURCE="root crontab"
+    printf '%s\n' "$output"
+    return 0
+  fi
+  [[ "$status" -eq 1 ]] && return 2
+  return 4
+}
+
+security_doctor_contains_legacy_backup_schedule() {
+  grep -Eq '(/usr/local/bin/(vaultwarden-backup|sub2api-backup)|new-api-backup|cyberstrike-ai-backup)' 2>/dev/null
+}
+
+security_doctor_check_cron_residue() {
+  local crontab_content status cron_dir cron_file base found=0
+  local -a expected_files=(vaultwarden-backup certbot-renew sub2api-backup new-api-backup cyberstrike-ai-backup deploy-scripts-batch)
+
+  set +e
+  crontab_content="$(security_doctor_root_crontab_content "${DEPLOY_SECURITY_AUDIT_ROOT_CRONTAB_FILE:-}")"
+  status=$?
+  set -e
+  case "$status" in
+    0)
+      if printf '%s\n' "$crontab_content" | security_doctor_contains_legacy_backup_schedule; then
+        security_doctor_record legacy_root_crontab warning "${SECURITY_DOCTOR_CRONTAB_SOURCE:-root crontab}" "$(t security_doctor.cron.legacy_root)"
+      else
+        security_doctor_record legacy_root_crontab ok "${SECURITY_DOCTOR_CRONTAB_SOURCE:-root crontab}" "No legacy application backup schedule found in root crontab."
+      fi
+      ;;
+    2) security_doctor_record legacy_root_crontab ok "root crontab" "$(t security_doctor.cron.empty)" ;;
+    3) security_doctor_record legacy_root_crontab error "${DEPLOY_SECURITY_AUDIT_ROOT_CRONTAB_FILE}" "Cannot inspect the supplied root crontab fixture." ;;
+    *) security_doctor_record legacy_root_crontab not_checked "root crontab" "$(t security_doctor.cron.inspect_error)"
+       ;;
+  esac
+
+  cron_dir="$(security_doctor_path /etc/cron.d)"
+  if [[ ! -d "$cron_dir" ]]; then
+    security_doctor_record legacy_cron_file not_checked "$cron_dir" "$(t security_doctor.cron.dir_missing)"
+    return
+  fi
+  if [[ ! -r "$cron_dir" ]]; then
+    security_doctor_record legacy_cron_file error "$cron_dir" "$(t security_doctor.cron.dir_error)"
+    return
+  fi
+
+  shopt -s nullglob
+  for cron_file in "$cron_dir"/*; do
+    [[ -f "$cron_file" && -r "$cron_file" ]] || continue
+    base="${cron_file##*/}"
+    case " ${expected_files[*]} " in
+      *" ${base} "*) continue ;;
+    esac
+    if security_doctor_contains_legacy_backup_schedule < "$cron_file"; then
+      security_doctor_record legacy_cron_file warning "$cron_file" "$(t security_doctor.cron.legacy_file)"
+      found=1
+    fi
+  done
+  shopt -u nullglob
+  if ((found == 0)); then
+    security_doctor_record legacy_cron_file ok "$cron_dir" "$(t security_doctor.cron.none)"
+  fi
+}
+
+security_doctor_print_json() {
+  local index first=1
+  printf '{"schema_version":1,"generated_at":%s,"summary":{"ok":%s,"warning":%s,"error":%s,"not_checked":%s},"records":[' \
+    "$(app_json_string "$(state_now)")" "$SECURITY_DOCTOR_OK" "$SECURITY_DOCTOR_WARNING" "$SECURITY_DOCTOR_ERROR" "$SECURITY_DOCTOR_NOT_CHECKED"
+  for index in "${!SECURITY_DOCTOR_CHECKS[@]}"; do
+    ((first)) || printf ','
+    first=0
+    printf '{"check":%s,"state":%s,"path":%s,"message":%s}' \
+      "$(app_json_string "${SECURITY_DOCTOR_CHECKS[$index]}")" \
+      "$(app_json_string "${SECURITY_DOCTOR_STATES[$index]}")" \
+      "$(app_json_string "${SECURITY_DOCTOR_PATHS[$index]}")" \
+      "$(app_json_string "${SECURITY_DOCTOR_MESSAGES[$index]}")"
+  done
+  printf ']}\n'
+}
+
+security_doctor_print_human() {
+  local index
+  printf '%-26s %-13s %-42s %s\n' Check State Path Detail
+  for index in "${!SECURITY_DOCTOR_CHECKS[@]}"; do
+    printf '%-26s %-13s %-42s %s\n' \
+      "${SECURITY_DOCTOR_CHECKS[$index]}" "${SECURITY_DOCTOR_STATES[$index]}" \
+      "${SECURITY_DOCTOR_PATHS[$index]}" "${SECURITY_DOCTOR_MESSAGES[$index]}"
+  done
+  printf '\nSummary: %s ok, %s warning, %s error, %s not checked.\n' \
+    "$SECURITY_DOCTOR_OK" "$SECURITY_DOCTOR_WARNING" "$SECURITY_DOCTOR_ERROR" "$SECURITY_DOCTOR_NOT_CHECKED"
+}
+
+manager_security_doctor_main() {
+  local json arg
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        manager_security_doctor_print_usage
+        return 0
+        ;;
+    esac
+  done
+  if ! manager_parse_args "--json --help" manager_security_doctor_print_usage "$@"; then
+    return $?
+  fi
+  json="$MANAGER_ARG_JSON"
+
+  security_doctor_reset
+  security_doctor_check_vaultwarden_tokens
+  security_doctor_check_sub2api_dsn
+  security_doctor_check_public_binds
+  security_doctor_check_cron_residue
+
+  if ((json)); then
+    security_doctor_print_json
+  else
+    security_doctor_print_human
+  fi
+  ((SECURITY_DOCTOR_ERROR == 0))
+}
+
 # ----- lib/manager_cli.sh -----
 
 manager_usage() {
@@ -8417,6 +8869,17 @@ manager_main() {
     doctor-all)
       shift || true
       manager_doctor_main "$@"
+      ;;
+    doctor-security|security-doctor)
+      shift || true
+      manager_security_doctor_main "$@"
+      ;;
+    doctor)
+      shift || true
+      case "${1:-}" in
+        security) shift || true; manager_security_doctor_main "$@" ;;
+        *) manager_security_doctor_print_usage; return 2 ;;
+      esac
       ;;
     backup-all)
       shift || true
