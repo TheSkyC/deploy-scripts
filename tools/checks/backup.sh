@@ -1237,23 +1237,48 @@ check_shared_impls_have_restore_delegate() {
       in_fn=0
     }
   ' lib/binary_app.sh || return 1
-  # The shared helper carries the safety-critical structure: verify before
-  # touching data, unsafe-member rejection, service stop before the swap,
-  # rollback when the restored service will not start.
+  # The shared helpers carry the safety-critical structure: archive validation
+  # must reject traversal before extraction; data restore must validate before
+  # touching data, only manage systemd when a unit was supplied, and roll back
+  # when a managed service cannot start.
   awk '
-    /^backup_restore_data_dir\(\)/ { in_fn=1; saw_verify=0; saw_members=0; saw_stop=0; saw_rollback=0; next }
-    in_fn && /backup_verify_archive "\$archive"/ { saw_verify=1 }
+    /^backup_validate_archive_members\(\)/ { in_fn=1; saw_list=0; saw_members=0; next }
+    in_fn && /tar -tzf "\$archive"/ { saw_list=1 }
     in_fn && index($0, "../*") > 0 { saw_members=1 }
-    in_fn && /systemctl stop "\$service_name" \|\| error/ { saw_stop=1 }
-    in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
     in_fn && /^}$/ {
-      if (!(saw_verify && saw_members && saw_stop && saw_rollback)) {
-        print "backup_restore_data_dir must verify archive, reject unsafe members, stop service first, and roll back on failure" > "/dev/stderr"
+      if (!(saw_list && saw_members)) {
+        print "backup_validate_archive_members must list archives and reject unsafe members" > "/dev/stderr"
         exit 1
       }
       in_fn=0
     }
-  ' lib/backup.sh
+  ' lib/backup.sh || return 1
+  awk '
+    /^backup_restore_data_dir\(\)/ { in_fn=1; saw_verify=0; saw_validate=0; saw_optional_service=0; saw_rollback=0; next }
+    in_fn && /backup_verify_archive "\$archive"/ { saw_verify=1 }
+    in_fn && /backup_validate_archive_members "\$archive"/ { saw_validate=1 }
+    in_fn && /\[\[ -n "\$service_name" \]\]/ { saw_optional_service=1 }
+    in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
+    in_fn && /^}$/ {
+      if (!(saw_verify && saw_validate && saw_optional_service && saw_rollback)) {
+        print "backup_restore_data_dir must verify and validate archives, support caller-managed services, and roll back managed services" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/backup.sh || return 1
+  awk '
+    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_config=0; next }
+    in_fn && /backup_validate_archive_members "\$data_archive"/ { saw_data=1 }
+    in_fn && /backup_validate_archive_members "\$conf_archive"/ { saw_config=1 }
+    in_fn && /^}$/ {
+      if (!(saw_data && saw_config)) {
+        print "sub2api do_restore must use shared archive-member validation for data and config" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_sub2api.sh
 }
 
 # The blog implementation must write integrity metadata after publishing the
@@ -1416,6 +1441,7 @@ check_backup_restore_data_dir_lifecycle() {
     mkdir -p "$tmp/bin" "$tmp/backups"
     cat > "$tmp/bin/systemctl" <<'"'"'STUB'"'"'
 #!/bin/bash
+printf "%s %s\n" "$1" "${2:-}" >> "$SYSTEMCTL_LOG"
 case "$1 $2" in
   "stop "*) exit 0 ;;
   "start "*)
@@ -1431,6 +1457,7 @@ STUB
     chmod +x "$tmp/bin/systemctl"
     export PATH="$tmp/bin:$PATH"
     export RESTART_STATE_FILE="$tmp/mode"
+    export SYSTEMCTL_LOG="$tmp/systemctl.log"
     DATA_DIR="$tmp/data"
     SERVICE_NAME=testsvc
 
@@ -1471,6 +1498,19 @@ STUB
     if (backup_restore_data_dir "$DATA_DIR" testsvc \
         "$tmp/backups/app_manual_20260101_000000.tar.gz") >/dev/null 2>&1; then exit 41; fi
     grep -rq newdata "$DATA_DIR" 2>/dev/null || exit 42
+
+    # Case 5: a caller-managed multi-artifact restore passes an empty unit;
+    # data is swapped but the helper must not run an invalid systemctl command.
+    rm -f "$tmp/backups"/*.tar.gz "$tmp/backups"/*.sha256
+    mkdir -p "$tmp/caller-stage/data"
+    printf caller-managed > "$tmp/caller-stage/data/f.txt"
+    tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" -C "$tmp/caller-stage" data
+    backup_write_sha256 "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null
+    : > "$SYSTEMCTL_LOG"
+    backup_restore_data_dir "$DATA_DIR" "" \
+      "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null 2>&1
+    grep -q caller-managed "$DATA_DIR/f.txt" || exit 51
+    [[ ! -s "$SYSTEMCTL_LOG" ]] || exit 52
     echo ok
   ')"
   [[ "$output" == ok ]]
