@@ -138,16 +138,9 @@ _write_admin_token_file() {
   if ! chmod 700 "$dir" 2>/dev/null; then
     return 1
   fi
-  local tmp
-  if ! tmp=$(mktemp "${VW_ADMIN_TOKEN_FILE}.XXXXXX"); then
+  if ! printf '%s\n' "$token" | atomic_write_file "$VW_ADMIN_TOKEN_FILE" 600; then
     return 1
   fi
-  if ! chmod 600 "$tmp" || ! printf '%s\n' "$token" > "$tmp" \
-      || ! mv -f "$tmp" "$VW_ADMIN_TOKEN_FILE"; then
-    rm -f "$tmp"
-    return 1
-  fi
-  return 0
 }
 # Regenerate the Admin Token, rewrite the env file hash, persist the plaintext
 # and restart the service. Never printed to the terminal; view with `token`.
@@ -164,15 +157,8 @@ _rotate_admin_token() {
       argon2 "$SALT" -e -id -k 19456 -t 2 -p 1 -l 32 2>/dev/null || true)
     [[ -z "$ADMIN_HASH" ]] && error "$(t app.vaultwarden.error.admin_token_hash)"
   fi
-  local env_tmp
-  if ! env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX"); then
-    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
-  fi
-  if ! sed "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN='${ADMIN_HASH}'|" "$VW_ENV_FILE" > "$env_tmp" \
-      || ! chmod 600 "$env_tmp" \
-      || ! chown root:root "$env_tmp" \
-      || ! mv -f "$env_tmp" "$VW_ENV_FILE"; then
-    rm -f "$env_tmp"
+  if ! sed "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN='${ADMIN_HASH}'|" "$VW_ENV_FILE" \
+      | atomic_write_file "$VW_ENV_FILE" 600 root:root; then
     error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
   fi
   if ! _write_admin_token_file "$ADMIN_PLAIN"; then
@@ -255,15 +241,9 @@ do_signups() {
 }
 # Atomically rewrite SIGNUPS_ALLOWED in the env file through a temp file.
 _signups_set_env() {
-  local value="$1" env_tmp
-  if ! env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX"); then
-    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
-  fi
-  if ! sed "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=${value}/" "$VW_ENV_FILE" > "$env_tmp" \
-      || ! chmod 600 "$env_tmp" \
-      || ! chown root:root "$env_tmp" \
-      || ! mv -f "$env_tmp" "$VW_ENV_FILE"; then
-    rm -f "$env_tmp"
+  local value="$1"
+  if ! sed "s/^SIGNUPS_ALLOWED=.*/SIGNUPS_ALLOWED=${value}/" "$VW_ENV_FILE" \
+      | atomic_write_file "$VW_ENV_FILE" 600 root:root; then
     error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
   fi
 }
@@ -733,11 +713,7 @@ do_install() {
   fi
   success "$(t app.vaultwarden.success.admin_token)"
   step "$(t app.vaultwarden.step.env_file "$VW_ENV_FILE")"
-  local _vw_env_tmp
-  if ! _vw_env_tmp=$(mktemp "$(dirname "$VW_ENV_FILE")/.vaultwarden.env.XXXXXX"); then
-    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
-  fi
-  if ! cat > "$_vw_env_tmp" << ENV
+  if ! atomic_write_file "$VW_ENV_FILE" 600 root:root << ENV
 # Vaultwarden environment file.
 # This file contains secrets; keep mode 600 and do not commit it.
 # Restart the service after changes: systemctl restart vaultwarden
@@ -800,13 +776,6 @@ USER_ATTACHMENT_LIMIT=102400
 # PUSH_INSTALLATION_KEY=
 ENV
   then
-    rm -f "$_vw_env_tmp"
-    error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
-  fi
-  if ! chmod 600 "$_vw_env_tmp" \
-      || ! chown root:root "$_vw_env_tmp" \
-      || ! mv "$_vw_env_tmp" "$VW_ENV_FILE"; then
-    rm -f "$_vw_env_tmp"
     error "$(t app.vaultwarden.error.env_file "$VW_ENV_FILE")"
   fi
   success "$(t app.vaultwarden.success.env_file "$VW_ENV_FILE")"
