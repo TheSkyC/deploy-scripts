@@ -700,3 +700,21 @@ Format per entry:
 - 提交 / Commit: f3c1e0e
 
 2026-08-30 P0-S2: added read-only `doctor security` / `doctor-security` audit for legacy Vaultwarden token temp files, plaintext Sub2API DSNs, wildcard listener configs, and unmanaged/root backup schedules. Added redacted JSON schema v1 output, fixture behavior guard, localized messages, and central command documentation.
+
+
+## 2026-08-30（自主演进批次 P1-S1）
+- 状态 / Status: completed
+- 成果 / Change: Hugo Blog 版本可复现性第一阶段：新增可选
+  `HUGO_VERSION`（不带前导 `v` 的精确 SemVer pin）与
+  `INSTALLED_VERSION` 配置记录；install/update 都按 pin 或 latest 安装并
+  校验对应 `.deb` 的 GitHub 发布 SHA-256。新增 `APP_CHECK_UPDATE_FN` 和
+  `APP_STATUS_VERSION_FN`：未 pin 时使用共享 GitHub Release 缓存/JSON
+  协议，pin 时以目标 tag 为 `latest`、`cache_state=pinned` 返回，不联网
+  漂移。旧安装在未记录版本时会 best-effort 解析本机 `hugo version`。
+  `docs/apps.md` 同步说明配置和 `check-update` 语义。
+- 验证 / Verified: `tools/verify.sh syntax` 通过；
+  `check_blog_hugo_version_contract` 覆盖 pinned 与 latest JSON 适配器；
+  `check_blog_hugo_install_failures_are_actionable`、
+  `check_blog_config_persistence` 通过；`tools/verify.sh guards` 通过
+  （预期的 `fail_check` 与脱敏 fixture 输出不表示失败）。
+- 提交 / Commit: d06b6e1, 2b0b867

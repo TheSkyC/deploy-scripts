@@ -13,7 +13,7 @@
 |---|---:|---|
 | 应用实现 | 16 个 | `apps/` 与 `impl/` 各 16 个 |
 | 单文件发布产物 | 17 个 | `dist/`：16 个应用脚本 + `deploy.sh` |
-| `dist/` 规模 | 约 135,108 行（按当前工作区统计） | 生成产物，不应手工编辑 |
+| `dist/` 规模 | 约 135,274 行（按当前工作区统计） | 生成产物，不应手工编辑 |
 | 共享库 | 约 8,979 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
 | 工作区 | 干净 | 旧安装安全审计、行为级守卫及发布产物已提交 |
 | 当前代码基线 | `af6b511` | 旧安装安全审计及发布产物刷新后的整改基线 |
@@ -56,7 +56,7 @@
 |---|---|---|---|
 | M15 | Sub2API/Vaultwarden/NewAPI/CyberStrikeAI 各自重复生命周期 | **部分完成** | New API 已迁移到共享 `binary_app`（提交 `5e52008`）。剩余三个手写应用仍保留，但已有共享 helper（备份、回滚、删除、配置、restore、版本检查）。`PLAN.md:54-62` 明确记录：Vaultwarden 是 Docker 镜像提取 + Web Vault/nginx/certbot，Sub2API 是多构件备份 + PostgreSQL/Redis，CyberStrikeAI 是源码构建，当前不适合强行套单二进制生命周期。 |
 | M1 | `dist/` 生成物可能与源码漂移 | **有防线，治理仍可优化** | `tools/verify.sh` 的 release/dispatch/guards 会确定性重建并检查 `dist`；`.github/workflows/verify.yml:3-5, 23-40` 已在 push/PR 执行 release 检查。因此提交过时 `dist` 会被 CI 拦截。风险仍存在于本地忘记重建、生成物体积大、源码与发布物双份审阅成本；后续可评估改为 release 时生成或保留提交产物但强化 pre-commit。 |
-| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；TickFlow/CyberStrikeAI 使用 git branch；Vaultwarden 使用镜像 tag；博客/Hugo 仍是 latest 语义。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
+| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；Hugo 支持 `HUGO_VERSION` 精确 pin、安装记录和统一版本输出；TickFlow/CyberStrikeAI 使用 git branch；Vaultwarden 使用镜像 tag。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
 | M11/M8 | Hugo `.deb` 无 SHA-256；Vaultwarden 用 root crontab 覆盖 | **已修复** | `impl/install_hugo_blog.sh:62-70, 308-340` 提取 GitHub asset digest 并校验后才 `dpkg -i`；Vaultwarden 使用 `/etc/cron.d/vaultwarden-backup` 与 `/etc/cron.d/certbot-renew` 原子写入，不再覆盖 root crontab。提交 `7640720`。 |
 
 ### 2.3 一致性与体验问题
@@ -72,7 +72,7 @@
 
 | 优先级 | 功能 | 完成度 | 当前实现 / 剩余工作 |
 |---|---|---|---|
-| 高 | 应用版本固定（pin）机制 | **已完成（主要覆盖）** | `BA_VERSION`、安装记录、显式 pinned update、`check-update` 已落地。剩余：为 Vaultwarden 镜像、Hugo、git branch/源码构建统一版本记录与升级策略。 |
+| 高 | 应用版本固定（pin）机制 | **已完成（主要覆盖）** | `BA_VERSION`、安装记录、显式 pinned update、`check-update` 已落地；Hugo 也已支持 `HUGO_VERSION`、`INSTALLED_VERSION` 和统一 JSON 输出。剩余：为 Vaultwarden 镜像、git branch/源码构建统一版本记录与升级策略。 |
 | 高 | 单应用 `--dry-run` + 完整 `--help` | **已完成** | 共用 `lib/cli.sh`；帮助输出 `CONFIG_KEYS`，dry-run 覆盖 install/update/backup/uninstall。 |
 | 高 | 一键 HTTPS | **已完成（框架/二进制应用）** | `BA_ENABLE_HTTPS=1` + `DOMAIN` 走共享 certbot/nginx 流程；默认 loopback。Vaultwarden/CPA Stack 等已有独立 cert 流程，需按应用设置域名和邮箱。仍不是所有自定义应用都能用同一开关。 |
 | 中 | 卸载前配置导出 | **已完成** | `lib/cli.sh:80-102` 在 uninstall 前 best-effort 导出 mode 600 配置并提示恢复；中央 `export/import` 也支持整机配置迁移。 |
@@ -108,7 +108,7 @@
 当前 `BA_VERSION` 只对共享 GitHub Release 二进制应用提供通用 pin。当前共有 10 个应用使用该共享生命周期。仍有几类版本来源需要独立策略：
 
 - Vaultwarden：`VW_IMAGE_TAG` 已可指定镜像 tag，但镜像 tag 不等同于不可变 digest；
-- Hugo：依赖 GitHub latest 元数据，尚无统一 `HUGO_VERSION` 配置；
+- Hugo：已支持 `HUGO_VERSION` 精确 release pin，并保存 `INSTALLED_VERSION`；未设置时仍采用 GitHub latest，`check-update` 使用共享 JSON 协议；
 - TickFlow/CyberStrikeAI：git branch 模式，branch 会移动，尚非 commit pin；
 - CPA Stack/Sub2API：多组件或自定义版本来源，需记录完整组件版本。
 
@@ -122,8 +122,8 @@
 
 ### P1：版本与部署可复现性
 
-- [ ] 为 Vaultwarden/Hugo/TickFlow/CyberStrikeAI/CPA Stack/Sub2API 定义统一版本记录字段；优先支持不可变镜像 digest、git commit pin 和组件版本 manifest。
-- [ ] 为 `check-update` 补齐非 GitHub Release 应用的统一输出协议，明确 latest/tag/branch/commit 的语义。
+- [ ] 为 Vaultwarden/TickFlow/CyberStrikeAI/CPA Stack/Sub2API 定义统一版本记录字段；Hugo 已具备 `HUGO_VERSION`、`INSTALLED_VERSION` 和 GitHub release tag 语义。后续优先支持不可变镜像 digest、git commit pin 和组件版本 manifest。
+- [ ] 为 `check-update` 补齐其余非 GitHub Release 应用的统一输出协议，明确 latest/tag/branch/commit 的语义；Hugo 已接入 `github_release` 输出，pinned target 使用 `cache_state=pinned` 且不联网查询 latest。
 - [ ] 将 E2E smoke 从当前代表性矩阵扩展到真实依赖服务或可复用容器 fixture。
 
 ### P2：维护成本与发布流程
