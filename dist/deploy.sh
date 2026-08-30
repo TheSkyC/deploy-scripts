@@ -14291,12 +14291,7 @@ NGINX
   if [[ "$PKG_MANAGER" != "apt" ]]; then
     if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
       local nginx_main_conf="/etc/nginx/nginx.conf"
-      local nginx_main_tmp
-      if ! nginx_main_tmp=$(mktemp "${nginx_main_conf}.XXXXXX"); then
-        warn "$(t app.sub2api.warn.nginx_include)"
-        return 0
-      fi
-      if awk '
+      if ! awk '
           /^[[:space:]]*http[[:space:]]*{/ && !inserted {
             print
             print "    include /etc/nginx/sites-enabled/*;"
@@ -14305,13 +14300,7 @@ NGINX
           }
           { print }
           END { if (!inserted) exit 1 }
-        ' "$nginx_main_conf" > "$nginx_main_tmp" 2>/dev/null \
-          && chmod 644 "$nginx_main_tmp" \
-          && chown root:root "$nginx_main_tmp" \
-          && mv "$nginx_main_tmp" "$nginx_main_conf"; then
-        :
-      else
-        rm -f "$nginx_main_tmp"
+        ' "$nginx_main_conf" 2>/dev/null | atomic_write_file "$nginx_main_conf" 644 root:root; then
         warn "$(t app.sub2api.warn.nginx_include)"
       fi
     fi
