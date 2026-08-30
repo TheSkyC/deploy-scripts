@@ -405,6 +405,10 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
     echo "Sub2API pg_dump backups must preserve stderr diagnostics instead of discarding them." >&2
     return 1
   fi
+  grep -Fq 'pg_dump "$@" 2> >(sed' impl/install_sub2api.sh || {
+    echo "Sub2API silent backup must preserve pg_dump stderr through its gzip producer wrapper" >&2
+    return 1
+  }
   awk '
       /PG_DUMP_FILE="\$\{BACKUP_DIR\}\/sub2api_db_\$\{TS\}\.sql\.gz"/ { in_script=1; saw_stderr_log=0; saw_archive=0; next }
       in_script && /pg_dump "\$\{PG_DSN\}" 2> >\(/ { saw_stderr_log=1 }
@@ -417,7 +421,7 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
         in_script=0
       }
       /do_backup\(\)/ { in_manual=1; saw_manual_archive=0; next }
-      in_manual && /pg_dump "\$\{PG_DSN\}" \| gzip > "\$PG_TMP"/ { saw_manual_archive=1 }
+      in_manual && /backup_create_gzip_archive "\$PG_ARCHIVE" pg_dump "\$\{PG_DSN\}"/ { saw_manual_archive=1 }
       in_manual && /^}/ {
         if (!saw_manual_archive) {
           printf "%s Sub2API manual backup must archive only pg_dump stdout\n", FILENAME > "/dev/stderr"
@@ -426,7 +430,7 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
         in_manual=0
       }
       /_backup_silent\(\)/ { in_silent=1; saw_silent_stderr=0; next }
-      in_silent && /pg_dump "\$\{PG_DSN\}" 2> >\(sed .* >&2\) \| gzip > "\$pg_tmp"/ { saw_silent_stderr=1 }
+      in_silent && /backup_create_gzip_archive "\$pg_archive" _sub2api_pg_dump_prefixed_stderr "\$\{PG_DSN\}"/ { saw_silent_stderr=1 }
       in_silent && /^}/ {
         if (!saw_silent_stderr) {
           printf "%s Sub2API silent backup must preserve pg_dump stderr while archiving only stdout\n", FILENAME > "/dev/stderr"
