@@ -420,7 +420,7 @@ extract_binary() {
   fi
   local image_reference
   image_reference="$(_vw_image_reference)"
-  info "$(t app.vaultwarden.info.extract_image "$VW_IMAGE_REPO" "${image_reference#${VW_IMAGE_REPO}:}" "$platform")"
+  info "$(t app.vaultwarden.info.extract_image "$VW_IMAGE_REPO" "${image_reference#"${VW_IMAGE_REPO}":}" "$platform")"
   info "$(t app.vaultwarden.info.first_download_wait)"
   local out_dir="${workdir}/image_output"
   if ! mkdir -p "$out_dir"; then
