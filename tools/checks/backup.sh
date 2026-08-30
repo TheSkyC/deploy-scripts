@@ -1609,9 +1609,9 @@ check_schedule_units_are_atomic_and_cleaned_up() {
   # Behavioral: schedule --disable writes config but installs no units;
   # unschedule removes everything. systemctl is absent on the test host, so
   # the cron fallback runs — assert its output file lifecycle.
-  "$BASH_BIN" -c '
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -1675,9 +1675,9 @@ check_schedule_retries_are_configurable() {
     }
   ' lib/schedule.sh || return 1
 
-  "$BASH_BIN" -c '
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -1751,9 +1751,9 @@ check_per_app_event_notifications() {
   # Behavioral: a stubbed action whose function name is provided must route
   # the notification through notify_send (stubbed to capture), once for a
   # success and once for a failure, without altering the exit status.
-  "$BASH_BIN" -c '
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -1835,9 +1835,9 @@ check_compose_shared_layer_and_tickflow_delegation() {
     in_r && /^}$/ { if (!saw_r) { print "tickflow _require_compose_runtime must delegate to compose_require_runtime" > "/dev/stderr"; exit 1 }; in_r=0 }
   ' impl/install_tickflow.sh || return 1
 
-  "$BASH_BIN" -c '
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -1884,9 +1884,9 @@ check_compose_lifecycle_and_health() {
     in_fn && /^}$/ { if (!saw) { print "tickflow unit template must use shared compose_command" > "/dev/stderr"; exit 1 }; in_fn=0 }
   ' impl/install_tickflow.sh || return 1
 
-  "$BASH_BIN" -c '
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -1949,9 +1949,9 @@ check_fleet_host_validation_and_isolation() {
     }
   ' lib/fleet.sh || return 1
 
-  "$BASH_BIN" -c '
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
@@ -2036,9 +2036,9 @@ PY
     }
   ' lib/migrate.sh || { rm -rf "$evil_tmp"; return 1; }
 
-  EVIL_BUNDLE="$evil_bundle" "$BASH_BIN" -c '
+  EVIL_BUNDLE="$evil_bundle" DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
-    cd /e/workspace/deploy-scripts
+    cd "$DEPLOY_TEST_ROOT"
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT

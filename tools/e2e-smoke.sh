@@ -270,6 +270,10 @@ if [[ "\$1" == "clone" ]]; then
   printf "services: []\\n" > "\${@: -1}/docker-compose.yml"
   exit 0
 fi
+if [[ " \$* " == *" rev-parse --verify HEAD "* ]]; then
+  printf "0123456789abcdef0123456789abcdef01234567\\n"
+  exit 0
+fi
 exit 0
 GIT
 cat > /usr/local/bin/docker <<DOCKER
