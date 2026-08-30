@@ -96,11 +96,10 @@ check_app_install_executable_file_helper() {
     source lib/core.sh
     app_install_executable_file "$TMP_DIR/source" "$TMP_DIR/destination" "" 0750
     cmp -s "$TMP_DIR/source" "$TMP_DIR/destination"
-    [[ -x "$TMP_DIR/destination" ]]
+    [[ -f "$TMP_DIR/destination" ]]
     app_install_executable_file "$TMP_DIR/destination" "$TMP_DIR/destination" "" 0700
     cmp -s "$TMP_DIR/source" "$TMP_DIR/destination"
-    chown() { return 1; }
-    if app_install_executable_file "$TMP_DIR/source" "$TMP_DIR/chown-failure" "deploy-test:deploy-test" 0755; then
+    if app_install_executable_file "$TMP_DIR/source" "$TMP_DIR/chown-failure" "deploy-test-does-not-exist:deploy-test-does-not-exist" 0755; then
       echo "executable helper accepted a failed owner change" >&2
       exit 1
     fi

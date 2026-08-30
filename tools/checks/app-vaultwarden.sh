@@ -548,7 +548,8 @@ check_vaultwarden_binary_installs_are_atomic() {
       }
     ' apps/vaultwarden.sh
   awk '
-      /install_vaultwarden_binary\(\)/ { in_func=1; saw_dir=0; saw_dir_return=0; saw_tmp=0; saw_tmp_return=0; saw_install=0; saw_mv=0; saw_cleanup=0; saw_cleanup_warn=0; next }
+      /install_vaultwarden_binary\(\)/ { in_func=1; saw_helper=0; saw_dir=0; saw_dir_return=0; saw_tmp=0; saw_tmp_return=0; saw_install=0; saw_mv=0; saw_cleanup=0; saw_cleanup_warn=0; next }
+      in_func && /app_install_executable_file "\$source_bin" "\$VW_BIN" root:root 0755/ { saw_helper=1 }
       in_func && /if ! mkdir -p "\$VW_BIN_DIR"; then/ { saw_dir=1 }
       in_func && saw_dir && /return 1/ { saw_dir_return=1 }
       in_func && /if ! bin_tmp=\$\(mktemp "\$\{VW_BIN\}\.XXXXXX"\); then/ { saw_tmp=1 }
@@ -558,8 +559,8 @@ check_vaultwarden_binary_installs_are_atomic() {
       in_func && /if ! rm -f "\$bin_tmp"; then/ { saw_cleanup=1 }
       in_func && /warn "\$\(t app\.vaultwarden\.warn\.tmp_binary_cleanup_failed "\$bin_tmp"\)"/ { saw_cleanup_warn=1 }
       in_func && /^}/ {
-        if (!(saw_dir && saw_dir_return && saw_tmp && saw_tmp_return && saw_install && saw_mv && saw_cleanup && saw_cleanup_warn)) {
-          print "Vaultwarden binary install helper must stage, replace, and surface temporary cleanup failures." > "/dev/stderr"
+        if (!(saw_helper || (saw_dir && saw_dir_return && saw_tmp && saw_tmp_return && saw_install && saw_mv && saw_cleanup && saw_cleanup_warn))) {
+          print "Vaultwarden binary install helper must delegate to the shared executable staging helper or preserve its atomic cleanup contract." > "/dev/stderr"
           exit 1
         }
         in_func=0
