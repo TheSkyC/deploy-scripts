@@ -1527,6 +1527,36 @@ backup_create_tar_archive() {
   fi
 }
 
+# Run PRODUCER_ARGS, compress its stdout to a gzip archive in a unique sibling
+# temporary file, and publish it atomically at ARCHIVE. The producer and gzip
+# statuses are checked before publication so a failed producer cannot leave a
+# partial final archive behind. The caller controls producer stderr by passing
+# a command or shell function with the desired redirection.
+# Any failed producer, gzip, or publish step removes the temporary file and
+# leaves an existing final archive untouched.
+backup_create_gzip_archive() {
+  local archive="$1" archive_tmp producer_status gzip_status
+  local -a pipeline_status=()
+  shift
+  [[ -n "$archive" && "$#" -gt 0 ]] || return 1
+  archive_tmp="$(mktemp "${archive}.tmp.XXXXXX")" || return 1
+  if "$@" | gzip >"$archive_tmp"; then
+    pipeline_status=("${PIPESTATUS[@]}")
+  else
+    pipeline_status=("${PIPESTATUS[@]}")
+  fi
+  producer_status="${pipeline_status[0]:-1}"
+  gzip_status="${pipeline_status[1]:-1}"
+  if (( producer_status != 0 || gzip_status != 0 )); then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+  if ! mv "$archive_tmp" "$archive"; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+}
+
 backup_write_manifest() {
   local archive="$1" app_id="$2" schema_version="$3" installed_version="${4:-}"
   local digest name created_at
@@ -14557,6 +14587,11 @@ BKSH_BODY
   fi
   success "$(t app.sub2api.success.backup_script)"
 }
+
+_sub2api_pg_dump_prefixed_stderr() {
+  pg_dump "$@" 2> >(sed 's/^/  /' >&2)
+}
+
 _backup_silent() {
   local label="${1:-manual}"
   local backup_failed=0
@@ -14572,19 +14607,10 @@ _backup_silent() {
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive
     pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
-    local pg_tmp="${pg_archive}.tmp"
-    if pg_dump "${PG_DSN}" 2> >(sed 's/^/  /' >&2) | gzip > "$pg_tmp"; then
-      if mv "$pg_tmp" "$pg_archive"; then
-        local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
-        success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
-      else
-        rm -f "$pg_tmp"
-        _log_backup_helper "$(t app.sub2api.backup.log.pg_dump_failed)"
-        warn "$(t app.sub2api.warn.pg_dump_failed)"
-        backup_failed=1
-      fi
+    if backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr "${PG_DSN}"; then
+      local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
+      success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
     else
-      rm -f "$pg_tmp"
       _log_backup_helper "$(t app.sub2api.backup.log.pg_dump_failed)"
       warn "$(t app.sub2api.warn.pg_dump_failed)"
       backup_failed=1
@@ -14954,21 +14980,14 @@ do_backup() {
   if [[ -n "${PG_DSN:-}" ]]; then
     if command -v pg_dump &>/dev/null; then
       local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_$(date +%Y%m%d_%H%M%S).sql.gz"
-      local PG_TMP="${PG_ARCHIVE}.tmp"
       info "$(t app.sub2api.info.pg_dump)"
-      if pg_dump "${PG_DSN}" | gzip > "$PG_TMP"; then
-        if mv "$PG_TMP" "$PG_ARCHIVE"; then
-          if ! backup_finalize_archive "$PG_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
-            warn "$(t app.sub2api.warn.backup_integrity "$PG_ARCHIVE")"
-          fi
-          local pg_sz; pg_sz=$(du -sh "$PG_ARCHIVE" 2>/dev/null | awk '{print $1}')
-          success "$(t app.sub2api.success.db_backup "$PG_ARCHIVE" "$pg_sz")"
-        else
-          rm -f "$PG_TMP"
-          warn "$(t app.sub2api.warn.pg_dump_check_dsn)"
+      if backup_create_gzip_archive "$PG_ARCHIVE" pg_dump "${PG_DSN}"; then
+        if ! backup_finalize_archive "$PG_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+          warn "$(t app.sub2api.warn.backup_integrity "$PG_ARCHIVE")"
         fi
+        local pg_sz; pg_sz=$(du -sh "$PG_ARCHIVE" 2>/dev/null | awk '{print $1}')
+        success "$(t app.sub2api.success.db_backup "$PG_ARCHIVE" "$pg_sz")"
       else
-        rm -f "$PG_TMP"
         warn "$(t app.sub2api.warn.pg_dump_check_dsn)"
       fi
     else

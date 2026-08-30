@@ -1189,6 +1189,48 @@ check_backup_create_tar_archive_delegates() {
   }
 }
 
+check_backup_create_gzip_archive_helper() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf \"$temp_dir\"" EXIT
+    mkdir -p "$temp_dir/backups"
+    archive="$temp_dir/backups/app.sql.gz"
+    backup_create_gzip_archive "$archive" printf payload
+    [[ "$(gzip -dc "$archive")" == payload ]]
+    compgen -G "$archive.tmp.*" >/dev/null && exit 11 || true
+
+    printf old > "$archive"
+    if backup_create_gzip_archive "$archive" sh -c "printf partial; exit 1"; then
+      exit 12
+    fi
+    [[ "$(cat "$archive")" == old ]]
+    compgen -G "$archive.tmp.*" >/dev/null && exit 13 || true
+
+    gzip() { return 1; }
+    if backup_create_gzip_archive "$archive" printf replacement; then
+      exit 14
+    fi
+    [[ "$(cat "$archive")" == old ]]
+    compgen -G "$archive.tmp.*" >/dev/null && exit 15 || true
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+check_backup_create_gzip_archive_delegates() {
+  grep -Fq 'backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr' impl/install_sub2api.sh || {
+    echo "Sub2API silent PostgreSQL backup must use shared gzip publisher" >&2
+    return 1
+  }
+  grep -Fq 'backup_create_gzip_archive "$PG_ARCHIVE" pg_dump' impl/install_sub2api.sh || {
+    echo "Sub2API manual PostgreSQL backup must use shared gzip publisher" >&2
+    return 1
+  }
+}
+
 check_sub2api_manual_backups_finalize_integrity() {
   local file=impl/install_sub2api.sh
   local count
