@@ -208,6 +208,7 @@ i18n_register warn.config_unknown_key "Ignoring unknown config key: %s" "已忽�
 i18n_register warn.port_in_use "Port %s is already in use by %s." "端口 %s 已被 %s 占用。"
 i18n_register warn.port_release_hint "If this is not the application you are deploying, free the port first or the service will fail to bind." "若非你要部署的应用，请先释放端口，否则服务将无法绑定。"
 i18n_register warn.port_conflict_abort "Aborting before installation because DEPLOY_FAIL_ON_PORT_CONFLICT=1 is set. Free the port or unset the variable to proceed." "因已设置 DEPLOY_FAIL_ON_PORT_CONFLICT=1，将在安装前中止。请先释放端口，或取消该变量后继续。"
+i18n_register error.insecure_public_bind "Refusing to deploy %s on %s without TLS because DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1 is set. Use loopback, enable TLS, or unset the guard." "因已设置 DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1，拒绝将 %s 以无 TLS 方式绑定到 %s。请改用回环地址、启用 TLS，或取消该门禁。"
 
 t() {
   local key="$1"
@@ -3627,13 +3628,38 @@ app_nginx_default_site_restore() {
   fi
 }
 
-deploy_env_truthy() {
-  local name="$1"
-  local value="${!name:-}"
-  case "${value,,}" in
+deploy_value_truthy() {
+  case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+deploy_env_truthy() {
+  local name="$1"
+  deploy_value_truthy "${!name:-}"
+}
+
+# Return success when a service binds all IPv4 or IPv6 interfaces. Keep this
+# separate from URL validation: a wildcard listener is valid syntax, but it is
+# a security-sensitive deployment choice.
+app_public_bind_is_wildcard() {
+  case "${1:-}" in
+    0.0.0.0|::) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Optional fail-closed guard for deployments that intentionally expose an
+# application listener. Existing explicit public bindings remain compatible by
+# default, while operators and CI can opt into rejecting plain HTTP:
+# DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1.
+app_enforce_secure_public_bind() {
+  local bind_addr="${1:-}" tls_enabled="${2:-0}" app_name="${3:-app}"
+  app_public_bind_is_wildcard "$bind_addr" || return 0
+  deploy_value_truthy "$tls_enabled" && return 0
+  deploy_env_truthy DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND || return 0
+  error "$(t error.insecure_public_bind "$app_name" "$bind_addr")"
 }
 
 deploy_assume_yes() {
@@ -4728,6 +4754,7 @@ bapp_validate_cfg() {
     error "$(t binary_app.error.pinned_version_invalid "$BA_VERSION")"
   fi
   app_validate_bool "BA_ENABLE_HTTPS" "${BA_ENABLE_HTTPS:-0}"
+  app_enforce_secure_public_bind "${BA_BIND_ADDR:-127.0.0.1}" "${BA_ENABLE_HTTPS:-0}" "${APP_NAME:-app}"
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -5172,10 +5199,10 @@ bapp_summary() {
     ba_summary_extra
   fi
   echo "  =========================================================="
-  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_ENABLE_HTTPS:-0}" != "1" ]]; then
+  if app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}" && ! deploy_value_truthy "${BA_ENABLE_HTTPS:-0}"; then
     echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
     echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
-  elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
+  elif app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}"; then
     echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
   else
     echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
@@ -19228,6 +19255,7 @@ _validate_config_values() {
     127.0.0.1|0.0.0.0|::1|::) : ;;
     *) error "$(t app.tickflow.error.bind_addr "${TICKFLOW_BIND_ADDR:-unset}")" ;;
   esac
+  app_enforce_secure_public_bind "${TICKFLOW_BIND_ADDR:-127.0.0.1}" 0 "TickFlow"
 }
 
 _compose_bin() {

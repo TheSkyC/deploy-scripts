@@ -194,6 +194,7 @@ i18n_register warn.config_unknown_key "Ignoring unknown config key: %s" "已忽�
 i18n_register warn.port_in_use "Port %s is already in use by %s." "端口 %s 已被 %s 占用。"
 i18n_register warn.port_release_hint "If this is not the application you are deploying, free the port first or the service will fail to bind." "若非你要部署的应用，请先释放端口，否则服务将无法绑定。"
 i18n_register warn.port_conflict_abort "Aborting before installation because DEPLOY_FAIL_ON_PORT_CONFLICT=1 is set. Free the port or unset the variable to proceed." "因已设置 DEPLOY_FAIL_ON_PORT_CONFLICT=1，将在安装前中止。请先释放端口，或取消该变量后继续。"
+i18n_register error.insecure_public_bind "Refusing to deploy %s on %s without TLS because DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1 is set. Use loopback, enable TLS, or unset the guard." "因已设置 DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1，拒绝将 %s 以无 TLS 方式绑定到 %s。请改用回环地址、启用 TLS，或取消该门禁。"
 
 t() {
   local key="$1"

@@ -599,6 +599,7 @@ bapp_validate_cfg() {
     error "$(t binary_app.error.pinned_version_invalid "$BA_VERSION")"
   fi
   app_validate_bool "BA_ENABLE_HTTPS" "${BA_ENABLE_HTTPS:-0}"
+  app_enforce_secure_public_bind "${BA_BIND_ADDR:-127.0.0.1}" "${BA_ENABLE_HTTPS:-0}" "${APP_NAME:-app}"
   if declare -f ba_validate_extra >/dev/null 2>&1; then
     ba_validate_extra
   fi
@@ -1043,10 +1044,10 @@ bapp_summary() {
     ba_summary_extra
   fi
   echo "  =========================================================="
-  if [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" && "${BA_ENABLE_HTTPS:-0}" != "1" ]]; then
+  if app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}" && ! deploy_value_truthy "${BA_ENABLE_HTTPS:-0}"; then
     echo -e "  ${RED}${BOLD}$(t binary_app.summary.plaintext_warning "${PORT}")${NC}"
     echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
-  elif [[ "${BA_BIND_ADDR:-127.0.0.1}" == "0.0.0.0" ]]; then
+  elif app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}"; then
     echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
   else
     echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
