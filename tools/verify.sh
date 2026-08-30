@@ -567,6 +567,7 @@ main() {
       check_tickflow_dependency_failures_are_reported
       check_tickflow_directory_setup_failures_are_explicit
       check_tickflow_env_rewrites_preserve_existing_secrets
+      check_tickflow_git_commit_version_contract
       check_tickflow_manual_backup_is_explicit
       check_tickflow_paths_are_guarded
       check_tickflow_preflight_defers_docker_runtime_checks

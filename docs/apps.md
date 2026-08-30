@@ -116,8 +116,15 @@ App-specific defaults:
 - **Bind**: `TICKFLOW_BIND_ADDR` defaults to `127.0.0.1`; the compose port
   mapping follows it. Put the panel behind an HTTPS reverse proxy to publish
   it.
-- Other keys: `TICKFLOW_REPO`, `TICKFLOW_BRANCH`, `TICKFLOW_BACKEND_EXTRAS`,
-  `TICKFLOW_DOMAIN` (summary only).
+- Source: `TICKFLOW_REPO` defaults to `shy3130/tickflow-stock-panel` and
+  `TICKFLOW_BRANCH` defaults to `main`. Set `TICKFLOW_COMMIT` to a full
+  40-character git SHA to check out that exact source revision. In this pinned
+  mode, `update` re-applies the configured commit rather than moving to branch
+  HEAD; the successful checkout is saved as `INSTALLED_VERSION`, and
+  `check-update`/`status-json` compare locally with the configured pin
+  (`source: git_commit`, `cache_state: pinned`) without a network request.
+  Leave `TICKFLOW_COMMIT` empty to retain the moving-branch model. Other keys:
+  `TICKFLOW_BACKEND_EXTRAS`, `TICKFLOW_DOMAIN` (summary only).
 
 ### Hugo blog (`hugo_blog`)
 

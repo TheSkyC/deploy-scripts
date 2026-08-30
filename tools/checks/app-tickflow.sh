@@ -502,3 +502,55 @@ check_tickflow_manual_backup_is_explicit() {
       }
     ' impl/install_tickflow.sh
 }
+
+
+check_tickflow_git_commit_version_contract() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    trap '"'"'rm -rf "$tmp_dir"'"'"' EXIT
+    repo="$tmp_dir/repo"
+    git init -q "$repo"
+    git -C "$repo" config user.email test@example.invalid
+    git -C "$repo" config user.name test
+    printf base > "$repo/version.txt"
+    git -C "$repo" add version.txt
+    git -C "$repo" commit -q -m base
+    base="$(git -C "$repo" rev-parse HEAD)"
+    printf target > "$repo/version.txt"
+    git -C "$repo" commit -qa -m target
+    target="$(git -C "$repo" rev-parse HEAD)"
+    git -C "$repo" checkout -q "$base"
+
+    source lib/core.sh
+    APP_ID=tickflow
+    APP_NAME=TickFlow
+    TICKFLOW_INSTALL_DIR="$repo"
+    TICKFLOW_COMMIT="$target"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    source impl/install_tickflow.sh
+
+    result="$(_tickflow_check_update_json "" "" 0)"
+    [[ "$(state_json_field "$result" installed)" == "$base" ]]
+    [[ "$(state_json_field "$result" latest)" == "$target" ]]
+    [[ "$(state_json_field "$result" update_state)" == update_available ]]
+    [[ "$(state_json_field "$result" source)" == git_commit ]]
+    [[ "$(state_json_field "$result" cache_state)" == pinned ]]
+
+    status="$(_tickflow_status_version_json)"
+    [[ "$(state_json_field "$status" update_state)" == update_available ]]
+    [[ "$(state_json_field "$status" source)" == git_commit ]]
+    git -C "$repo" checkout -q --detach "$target"
+    result="$(_tickflow_check_update_json "" "" 0)"
+    [[ "$(state_json_field "$result" update_state)" == up_to_date ]]
+
+    invalid="$(version_check_git_commit_json "$repo" short)"
+    [[ "$(state_json_field "$invalid" update_state)" == unsupported ]]
+  '
+  grep -Fq 'TICKFLOW_COMMIT INSTALLED_VERSION' impl/install_tickflow.sh
+  grep -Fq 'APP_STATUS_VERSION_FN=_tickflow_status_version_json' impl/install_tickflow.sh
+  grep -Fq 'version_check_git_commit_json "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_COMMIT"' impl/install_tickflow.sh
+  grep -Fq 'git -C "$repo_dir" fetch --quiet --depth 1 origin "$TICKFLOW_COMMIT"' impl/install_tickflow.sh
+  grep -Fq 'git -C "$repo_dir" checkout --detach "$TICKFLOW_COMMIT"' impl/install_tickflow.sh
+  grep -Fq 'app.tickflow.error.commit_invalid' apps/tickflow.sh
+}

@@ -24,6 +24,18 @@ i18n_register_many \
   app.tickflow.error.repo_update \
   "Failed to update %s. Check local changes or network access and retry." \
   "无法更新 %s。请检查本地改动或网络访问后重试。" \
+  app.tickflow.error.commit_invalid \
+  "TICKFLOW_COMMIT must be a full 40-character git commit SHA when set: %s" \
+  "设置 TICKFLOW_COMMIT 时必须提供完整的 40 位 git 提交 SHA：%s" \
+  app.tickflow.error.commit_fetch \
+  "Failed to fetch pinned commit %s from %s. Confirm that the commit exists in the configured repository and is accessible, then retry." \
+  "无法获取固定提交 %s（仓库：%s）。请确认该提交存在于配置的仓库且可访问后重试。" \
+  app.tickflow.error.commit_checkout \
+  "Failed to check out pinned commit %s in %s. Check local changes or restore the checkout, then retry." \
+  "无法检出固定提交 %s（目录：%s）。请检查本地改动或修复检出目录后重试。" \
+  app.tickflow.error.installed_version \
+  "Cannot determine the checked-out TickFlow commit in %s." \
+  "无法确定 %s 中已检出的 TickFlow 提交。" \
   app.tickflow.error.install_parent_dir \
   "Cannot prepare install parent directory: %s. Check filesystem permissions and retry." \
   "无法准备安装父目录：%s。请检查文件系统权限后重试。" \
@@ -207,6 +219,9 @@ i18n_register_many \
   app.tickflow.info.repo_exists \
   "Repository exists, updating branch %s" \
   "仓库已存在，正在更新分支 %s" \
+  app.tickflow.info.repo_pinned \
+  "Checking out pinned commit %s" \
+  "正在检出固定提交 %s" \
   app.tickflow.success.source_ready \
   "Source ready: %s" \
   "源码已就绪：%s" \
