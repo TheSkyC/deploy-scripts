@@ -735,3 +735,19 @@ Format per entry:
   `check_tickflow_git_commit_version_contract` 覆盖落后/已对齐 pin、
   `status-json` 适配器和非法 SHA；`tools/verify.sh release` 通过。
 - 提交 / Commit: c0e8a56, d51b4cc
+
+
+## 2026-08-30（自主演进批次 P1-S3）
+- 状态 / Status: completed
+- 成果 / Change: CyberStrikeAI 版本可复现性第三阶段：新增可选
+  `GITHUB_COMMIT`（完整 40 位 git SHA）与 `INSTALLED_VERSION`。配置 pin
+  时源码获取、更新和源码构建均基于指定提交，更新不会跟随
+  `GITHUB_BRANCH`；成功检出会记录完整 SHA。复用共享
+  `version_check_git_commit_json`，`check-update` 与 `status-json` 在 pinned
+  模式本地返回 `source=git_commit`、`cache_state=pinned`，不查询移动分支。
+  未配置 pin 时保留原有 branch 模式，并同步补足 update 后配置持久化。
+  新增本地 git fixture 守卫，更新应用文档和整改路线。
+- 验证 / Verified: `tools/verify.sh syntax` 通过；
+  `check_cyberstrikeai_git_commit_version_contract` 与既有源码失败处理守卫
+  通过；`tools/verify.sh release` 通过。
+- 提交 / Commit: 6ae17bf, 0dfe154
