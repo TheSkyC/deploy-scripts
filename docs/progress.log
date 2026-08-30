@@ -888,3 +888,9 @@ Format per entry:
   `check_run_checks_parallel_cleans_tmpdir` 的 `check failed: fail_check` 仍是故意失败
   探测的预期内部输出，不影响最终结果。
 - 提交 / Commit: db27578
+## 2026-08-30（自主演进批次 P2-S2 续 2）
+- 状态 / Status: completed
+- 成果 / Change: 继续收敛共享备份/回滚原语。新增 `backup_validate_archive_members`，统一 gzip tar 可读性与路径遍历成员校验；`backup_restore_data_dir` 现在明确支持两种生命周期契约：传入 systemd unit 时负责 stop/start 与失败回滚，传入空 unit 时仅执行校验、原子数据目录替换和清理，由多构件应用自行管理服务生命周期。Sub2API 的数据恢复路径改为使用共享成员校验，并移除空 unit 下无效的 `systemctl` 调用。
+- 验证 / Verified: 新增/更新共享恢复结构守卫与行为守卫（含 caller-managed 空 unit 不调用 systemctl）；`tools/verify.sh syntax`、focused backup guards、`tools/verify.sh shellcheck`、`git diff --check` 通过。完整 guards 在提交前因暂存源码与 dist 的 HEAD 尚未一致而正确拒绝，生成物与源码一并提交后 pre-commit 的 `tools/verify.sh release` 通过；完整 guards 应在干净提交后复跑。
+- 提交 / Commit: 4086551
+
