@@ -637,6 +637,7 @@ main() {
       check_filebrowser_root_directory_is_prepared
       check_alist_uses_shared_binary_lifecycle
       check_alist_release_asset_mapping
+      check_alist_config_rewrites_use_shared_atomic_write
       check_meilisearch_uses_shared_binary_lifecycle
       check_meilisearch_release_asset_mapping
       check_meilisearch_config_is_managed_atomically

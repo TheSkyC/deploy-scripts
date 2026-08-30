@@ -22164,10 +22164,6 @@ EOF
   elif ! grep -q "\"address\"" "$config_file"; then
     # Existing config without a scheme block: append one before the closing
     # brace so the listener stays pinned to BA_BIND_ADDR.
-    local tmp
-    if ! tmp=$(mktemp "${config_file}.XXXXXX"); then
-      error "$(t app.alist.error.config_write "$config_file")"
-    fi
     if ! awk -v addr="${BA_BIND_ADDR}" -v port="${PORT}" '
         { print }
         /^[[:space:]]*}[[:space:]]*$/ && !done {
@@ -22183,34 +22179,16 @@ EOF
           print "  }"
           done = 1
         }
-      ' "$config_file" > "$tmp"; then
-      rm -f "$tmp"
-      error "$(t app.alist.error.config_write "$config_file")"
-    fi
-    if ! chown "root:${SERVICE_USER}" "$tmp" 2>/dev/null \
-        || ! chmod 600 "$tmp" \
-        || ! mv -f "$tmp" "$config_file"; then
-      rm -f "$tmp"
+      ' "$config_file" | atomic_write_file "$config_file" 600 "root:${SERVICE_USER}"; then
       error "$(t app.alist.error.config_write "$config_file")"
     fi
     success "$(t app.alist.success.config_written "$config_file")"
   else
     # Existing scheme block: rewrite only the address field.
-    local tmp2
-    if ! tmp2=$(mktemp "${config_file}.XXXXXX"); then
-      error "$(t app.alist.error.config_write "$config_file")"
-    fi
     if ! awk -v addr="${BA_BIND_ADDR}" '
         /"address"[[:space:]]*:/ { sub(/"address"[[:space:]]*:[[:space:]]*"[^"]*"/, "\"address\": \"" addr "\""); }
         { print }
-      ' "$config_file" > "$tmp2"; then
-      rm -f "$tmp2"
-      error "$(t app.alist.error.config_write "$config_file")"
-    fi
-    if ! chown "root:${SERVICE_USER}" "$tmp2" 2>/dev/null \
-        || ! chmod 600 "$tmp2" \
-        || ! mv -f "$tmp2" "$config_file"; then
-      rm -f "$tmp2"
+      ' "$config_file" | atomic_write_file "$config_file" 600 "root:${SERVICE_USER}"; then
       error "$(t app.alist.error.config_write "$config_file")"
     fi
     success "$(t app.alist.success.config_written "$config_file")"

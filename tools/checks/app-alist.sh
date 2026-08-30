@@ -37,3 +37,16 @@ check_alist_release_asset_mapping() {
       }
   done
 }
+
+
+check_alist_config_rewrites_use_shared_atomic_write() {
+  local file=impl/install_alist.sh
+  grep -Fq '"$config_file" | atomic_write_file "$config_file" 600 "root:${SERVICE_USER}"' "$file"     || {
+      echo "${file} Alist config rewrites must publish through atomic_write_file." >&2
+      return 1
+    }
+  if grep -nE '^[[:space:]]*(local (tmp|tmp2)|if ! (tmp|tmp2)=\$\(mktemp "\$\{config_file\})|chown "root:\$\{SERVICE_USER\}" "\$tmp|mv -f "\$tmp' "$file"; then
+    echo "${file} must not stage config rewrites with a private mktemp/chown/mv sequence." >&2
+    return 1
+  fi
+}
