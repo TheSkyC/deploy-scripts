@@ -307,13 +307,11 @@ check_nginx_main_config_edits_are_atomic() {
     return 1
   fi
   awk '
-      /nginx_main_tmp=\$\(mktemp "\$\{nginx_main_conf\}\.XXXXXX"\)/ { saw_tmp=1 }
       /awk .*/ { saw_render=1 }
-      /mv "\$nginx_main_tmp" "\$nginx_main_conf"/ { saw_mv=1 }
-      /rm -f "\$nginx_main_tmp"/ { saw_cleanup=1 }
+      /atomic_write_file "\$nginx_main_conf" 644 root:root/ { saw_atomic=1 }
       END {
-        if (!(saw_tmp && saw_render && saw_mv && saw_cleanup)) {
-          print "Nginx main config edits must stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_render && saw_atomic)) {
+          print "Nginx main config edits must render then publish through atomic_write_file." > "/dev/stderr"
           exit 1
         }
       }
