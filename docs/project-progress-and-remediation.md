@@ -153,7 +153,7 @@
   `app_http_status_code` 统一二进制应用与上述三个自定义应用的本地 HTTP
   状态探测（保留各自的重试、成功码、Host header、TLS 与用户提示语义）；仍待继续
   下沉回滚和备份编排的重复部分。
-- [ ] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档。
+- [x] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档：新增 `docs/instances-tls-migration.md`，明确 `@instance` 仅隔离配置/锁而非运行时资源，提供 shared binary/Vaultwarden/CPA Stack/CyberStrikeAI 的 TLS 入口边界，以及 export/import + 备份 verify + restore + cutover 的演练顺序。
 
 ## 6. 推荐验证命令
 
