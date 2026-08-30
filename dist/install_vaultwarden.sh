@@ -7857,14 +7857,7 @@ install_vaultwarden_binary() {
 }
 backup_vaultwarden_binary() {
   local backup_path="$1"
-  local backup_tmp
-  if ! backup_tmp=$(mktemp "${backup_path}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.binary_install "$VW_BIN")"
-  fi
-  if ! cp "$VW_BIN" "$backup_tmp" || ! mv "$backup_tmp" "$backup_path"; then
-    rm -f "$backup_tmp"
-    return 1
-  fi
+  atomic_copy_file "$VW_BIN" "$backup_path"
 }
 _write_fail2ban_config_file() {
   local fail2ban_conf="$1"
