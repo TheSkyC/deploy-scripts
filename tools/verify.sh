@@ -466,6 +466,7 @@ main() {
       check_cyberstrikeai_build_temp_cleanup
       check_cyberstrikeai_config_patch_is_atomic
       check_cyberstrikeai_dependency_failures_are_reported
+      check_cyberstrikeai_git_commit_version_contract
       check_cyberstrikeai_display_sizes_are_nonfatal
       check_cyberstrikeai_enable_failures_are_reported
       check_cyberstrikeai_go_restore_failures_are_reported

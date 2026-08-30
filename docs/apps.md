@@ -98,6 +98,13 @@ App-specific defaults:
   (`CSAI_HTTPS`), pip index / Go proxy mirrors (`PIP_INDEX_URL`, `GOPROXY`).
 - The backend binds `127.0.0.1`; nginx (when enabled) is the public entry.
 - `OPEN_FIREWALL` controls firewall port opening (default off).
+- Source: `GITHUB_BRANCH` defaults to `main`. Set `GITHUB_COMMIT` to a full
+  40-character git SHA to build from that exact source revision. In pinned
+  mode, `update` re-applies the configured commit; the successful checkout is
+  recorded as `INSTALLED_VERSION`, and `check-update`/`status-json` compare it
+  locally with the configured pin (`source: git_commit`, `cache_state: pinned`)
+  without a network request. Leave `GITHUB_COMMIT` empty to follow the moving
+  branch.
 
 ### CPA Stack (`cpa_stack`)
 
