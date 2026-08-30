@@ -801,3 +801,16 @@ Format per entry:
   `git diff --check` 均通过。当前 Windows 本地 Docker Linux daemon 不可用，完整 E2E
   交由本次 push 的 GitHub Actions Ubuntu runner 验证。
 - 提交 / Commit: 8441d97, 96f160e, 8ff9702
+## 2026-08-30（自主演进批次 P1-S6 CI 修复）
+- 状态 / Status: in_progress
+- 成果 / Change: GitHub Actions 的真实依赖 E2E 首先揭示 Sub2API PostgreSQL
+  密码变量不能在 `psql -c` 中按预期插值的问题，已改为带 `ON_ERROR_STOP=1` 的 stdin
+  SQL 并发布对应产物（`96f160e` / `8ff9702`）。随后 CI 揭示 fixture 自身将含 SQL
+  单引号的测试体嵌入外层 `bash -c` 会被宿主 shell 重解释；现在把 fixture 写成只读挂载
+  的独立脚本，以保持 SQL 字符串与 Python JSON 断言原样传入容器。该改动不削弱真实
+  PostgreSQL/Redis/`pg_dump` 覆盖。
+- 验证 / Verified: `bash -n tools/e2e-smoke.sh` 与提取后的容器 fixture 语法检查通过；
+  focused Sub2API guards、`tools/verify.sh syntax`、`tools/verify.sh guards`、
+  `git diff --check` 均通过。Windows 本地 Docker Linux daemon 不可用；下一次 GitHub
+  Actions `e2e-smoke` 是该 fixture 修复的权威验证，成功前本条保持 in_progress。
+- 提交 / Commit: c82c267
