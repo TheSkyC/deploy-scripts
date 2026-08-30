@@ -7833,11 +7833,13 @@ _setup_postgres() {
     "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" 2>/dev/null || echo "")
   if [[ "$user_exists" == "1" ]]; then
     info "$(t app.sub2api.info.pg_user_exists "$PG_USER")"
-    sudo -u postgres psql -v pg_pass="$PG_PASS" -c \
-      "ALTER USER ${PG_USER} WITH PASSWORD :'pg_pass';" > /dev/null
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -v pg_pass="$PG_PASS" > /dev/null <<SQL
+ALTER USER ${PG_USER} WITH PASSWORD :'pg_pass';
+SQL
   else
-    sudo -u postgres psql -v pg_pass="$PG_PASS" -c \
-      "CREATE USER ${PG_USER} WITH PASSWORD :'pg_pass';" > /dev/null
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -v pg_pass="$PG_PASS" > /dev/null <<SQL
+CREATE USER ${PG_USER} WITH PASSWORD :'pg_pass';
+SQL
     success "$(t app.sub2api.success.pg_user_created "$PG_USER")"
   fi
   local db_exists
