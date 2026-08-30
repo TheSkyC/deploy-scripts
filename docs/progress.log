@@ -921,3 +921,16 @@ Format per entry:
   变更的 GitHub Actions Verify run `33332418888` 已成功；本批 gzip 变更待后续 push
   后接受新的远端 CI 验证。
 - 提交 / Commit: ff78aea
+
+## 2026-08-31（自主演进批次 P2-S2 续 6）
+- 状态 / Status: completed
+- 成果 / Change: 修复共享保留期清理在归档已删除后遗留 `.sha256` 与
+  `.manifest.json` sidecar 的问题。新增 `backup_remove_archive_with_metadata`，仅在归档
+  删除成功后清理其完整性元数据，并将共享二进制生命周期与 Sub2API 手动备份的过期清理
+  接入该 helper；sidecar 清理失败仍返回非零，由调用方保留逐文件告警语义。该改动没有
+  迁移必须自包含的独立 cron 生成脚本。
+- 验证 / Verified: 新增行为守卫覆盖归档、sidecar 和孤立 sidecar 清理；更新保留期结构
+  守卫；`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused metadata guard、
+  `tools/verify.sh guards`、`tools/verify.sh release`（提交 hook）与 `git diff --check`
+  均通过。本批源码已提交，待下一次批量 push 后接受 GitHub Actions 验证。
+- 提交 / Commit: d0605a3
