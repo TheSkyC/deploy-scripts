@@ -15,6 +15,10 @@ compose_command() {
   elif command -v docker-compose >/dev/null 2>&1; then
     printf '%s' "docker-compose"
   fi
+  # An absent backend is a valid probe result. Callers that require compose
+  # use compose_require_runtime(), while status-style callers can treat an
+  # empty command as unavailable without triggering errexit.
+  return 0
 }
 
 # Require a usable compose runtime; errors out when neither backend exists.
