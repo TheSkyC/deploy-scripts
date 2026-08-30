@@ -514,6 +514,20 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
     ' impl/install_vaultwarden.sh
 }
 
+check_vaultwarden_binary_backups_use_shared_atomic_copy() {
+  awk '
+      /^backup_vaultwarden_binary\(\) \{/ { in_func=1; saw_atomic=0; next }
+      in_func && /atomic_copy_file "\$VW_BIN" "\$backup_path"/ { saw_atomic=1 }
+      in_func && /^}/ {
+        if (!saw_atomic) {
+          print "Vaultwarden binary backups must delegate atomic staging to atomic_copy_file." > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_vaultwarden.sh
+}
+
 check_vaultwarden_env_file_is_atomic() {
   if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden env files contain secrets and must be written through a temporary file before replacement." >&2
