@@ -1431,7 +1431,7 @@ do_backup() {
   if [[ "$_keep_days" -gt 0 ]]; then
     local _cleaned=0 _old_backup
     while IFS= read -r -d '' _old_backup; do
-      if rm -f "$_old_backup"; then
+      if backup_remove_archive_with_metadata "$_old_backup"; then
         _cleaned=$(( _cleaned + 1 ))
       else
         warn "$(t app.sub2api.warn.backup_cleanup_failed "$_old_backup")"

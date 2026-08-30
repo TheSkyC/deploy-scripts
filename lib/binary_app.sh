@@ -1237,7 +1237,7 @@ _ba_prune_backups() {
   if [[ "$keep_days" -gt 0 ]]; then
     local cleaned=0 f
     while IFS= read -r -d '' f; do
-      if rm -f "$f"; then
+      if backup_remove_archive_with_metadata "$f"; then
         cleaned=$((cleaned + 1))
       else
         warn "$(t binary_app.warn.backup_cleanup_failed "$f")"
