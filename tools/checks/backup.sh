@@ -1612,8 +1612,8 @@ check_schedule_units_are_atomic_and_cleaned_up() {
   ' lib/schedule.sh || return 1
 
   # Behavioral: schedule --disable writes config but installs no units;
-  # unschedule removes everything. systemctl is absent on the test host, so
-  # the cron fallback runs — assert its output file lifecycle.
+  # unschedule removes everything. Force the cron fallback even when the
+  # verification host exposes a systemctl binary (for example CI runners).
   DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
     set -euo pipefail
     cd "$DEPLOY_TEST_ROOT"
@@ -1624,6 +1624,7 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     export DEPLOY_SCHEDULE_CRON_FILE="$tmp/deploy-scripts-batch"
     export DEPLOY_SCHEDULE_RUNNER="$tmp/runner"
     require_root() { :; }
+    systemctl() { return 1; }
     error() { echo "ERROR: $*" >&2; exit 9; }
     success() { :; }
     DEPLOY_ROOT_DIR="$tmp/root"
