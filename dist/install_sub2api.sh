@@ -1489,6 +1489,17 @@ backup_read_sha256() {
 # The sha256 sidecar must already exist; its digest is embedded so consumers
 # can cross-check manifest and sidecar for tampering. Written atomically with
 # mode 600 via the shared escaper, matching status-JSON conventions.
+# Finalize a completed archive with the shared integrity metadata contract.
+# The archive must already have been moved to its final path. This helper keeps
+# checksum/manifest orchestration identical for application-specific backups;
+# callers can decide whether metadata failure is fatal for their workflow.
+backup_finalize_archive() {
+  local archive="$1" app_id="$2" installed_version="${3:-}" schema_version="${4:-1}"
+  [[ -f "$archive" ]] || return 1
+  backup_write_sha256 "$archive" >/dev/null \
+    && backup_write_manifest "$archive" "$app_id" "$schema_version" "$installed_version"
+}
+
 backup_write_manifest() {
   local archive="$1" app_id="$2" schema_version="$3" installed_version="${4:-}"
   local digest name created_at
@@ -6605,6 +6616,9 @@ i18n_register_many \
   app.sub2api.warn.config_backup_failed \
   "Config directory backup failed. Inspect the tar output above; partial archives may still exist in the backup directory." \
   "配置目录备份失败。请检查上方 tar 输出；备份目录中可能仍保留了部分归档。" \
+  app.sub2api.warn.backup_integrity \
+  "Backup created but integrity metadata could not be written: %s" \
+  "备份已创建，但完整性元数据写入失败：%s" \
   app.sub2api.summary.title_ready \
   "Sub2API deployment complete!" \
   "Sub2API 部署完成！" \
@@ -8666,6 +8680,9 @@ do_backup() {
       info "$(t app.sub2api.info.pg_dump)"
       if pg_dump "${PG_DSN}" | gzip > "$PG_TMP"; then
         if mv "$PG_TMP" "$PG_ARCHIVE"; then
+          if ! backup_finalize_archive "$PG_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+            warn "$(t app.sub2api.warn.backup_integrity "$PG_ARCHIVE")"
+          fi
           local pg_sz; pg_sz=$(du -sh "$PG_ARCHIVE" 2>/dev/null | awk '{print $1}')
           success "$(t app.sub2api.success.db_backup "$PG_ARCHIVE" "$pg_sz")"
         else
@@ -8688,6 +8705,9 @@ do_backup() {
     if tar -czf "$CONF_TMP" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
       if mv "$CONF_TMP" "$CONF_ARCHIVE"; then
+        if ! backup_finalize_archive "$CONF_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+          warn "$(t app.sub2api.warn.backup_integrity "$CONF_ARCHIVE")"
+        fi
         local cf_sz; cf_sz=$(du -sh "$CONF_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.config_backup "$CONF_ARCHIVE" "$cf_sz")"
       else
@@ -8708,6 +8728,9 @@ do_backup() {
         --exclude="*.log" --exclude="*.log.*" \
         -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
       if mv "$DATA_TMP" "$DATA_ARCHIVE"; then
+        if ! backup_finalize_archive "$DATA_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+          warn "$(t app.sub2api.warn.backup_integrity "$DATA_ARCHIVE")"
+        fi
         local da_sz; da_sz=$(du -sh "$DATA_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.data_backup "$DATA_ARCHIVE" "$da_sz")"
       else
