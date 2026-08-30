@@ -875,3 +875,16 @@ Format per entry:
   Verify run `33315739478`（head `90a2798`）成功，syntax/release/dispatch/guards/
   shellcheck/e2e-smoke 全部通过，nightly-all 按 push 触发条件跳过。
 - 提交 / Commit: 1c95499, 613e08e
+
+## 2026-08-30（自主演进批次 P2-S2 守卫修复）
+- 状态 / Status: completed
+- 成果 / Change: CI 前本地全量 guards 暴露两处与新共享 helper 不一致的回归守卫：
+  `app_install_executable_file` 在 Windows Git Bash 上不应以 Unix executable bit
+  作为行为断言；CyberStrikeAI 与 Vaultwarden 的旧结构守卫也需要接受共享可执行文件
+  staging helper。已分别改为跨平台文件存在性/owner 失败断言，并将两个结构守卫更新为
+  同时验证共享委托与配置恢复契约。
+- 验证 / Verified: `tools/verify.sh guards` 通过（输出 `Guards verification passed`）；
+  focused helper、CyberStrikeAI/Vaultwarden guards、`git diff --check` 通过。guards 中
+  `check_run_checks_parallel_cleans_tmpdir` 的 `check failed: fail_check` 仍是故意失败
+  探测的预期内部输出，不影响最终结果。
+- 提交 / Commit: （随后提交）
