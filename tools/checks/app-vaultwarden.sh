@@ -529,18 +529,21 @@ check_vaultwarden_binary_backups_use_shared_atomic_copy() {
 }
 
 check_vaultwarden_env_file_is_atomic() {
-  if grep -R -n '^[[:space:]]*cat > "\$VW_ENV_FILE"' impl/install_vaultwarden.sh 2>/dev/null; then
-    echo "Vaultwarden env files contain secrets and must be written through a temporary file before replacement." >&2
+  if grep -R -nE '^[[:space:]]*cat > "\$(VW_ENV_FILE|_vw_env_tmp)"' impl/install_vaultwarden.sh 2>/dev/null; then
+    echo "Vaultwarden env files contain secrets and must be published through atomic_write_file." >&2
     return 1
   fi
   awk '
-      /if ! _vw_env_tmp=\$\(mktemp "\$\(dirname "\$VW_ENV_FILE"\)\/\.vaultwarden\.env\./ { saw_tmp=1 }
-      /error "\$\(t app\.vaultwarden\.error\.env_file "\$VW_ENV_FILE"\)"/ { saw_tmp_error=1 }
-      /mv "\$_vw_env_tmp" "\$VW_ENV_FILE"/ { saw_mv=1 }
-      /rm -f "\$_vw_env_tmp"/ { saw_cleanup=1 }
+      /atomic_write_file "\$VW_ENV_FILE" 600 root:root/ { saw_atomic++ }
+      /mktemp "\$\(dirname "\$VW_ENV_FILE"\)\/\.vaultwarden\.env\./ { saw_private_tmp=1 }
+      /error "\$\(t app\.vaultwarden\.error\.env_file "\$VW_ENV_FILE"\)"/ { saw_error=1 }
       END {
-        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
-          print "Vaultwarden env file writes must report temp creation failures, stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (saw_atomic < 3 || !saw_error) {
+          print "Vaultwarden env file writes must use atomic_write_file with mode 600, root ownership, and localized errors." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_private_tmp) {
+          print "Vaultwarden env rewrites must not retain private mktemp/chown/mv publication sequences." > "/dev/stderr"
           exit 1
         }
       }
@@ -592,16 +595,14 @@ check_vaultwarden_admin_token_file_is_private() {
   # throwaway /root/.vaultwarden-admin-token.* file.
   awk '
       /^_write_admin_token_file\(\) \{/ { in_func=1 }
-      in_func && /chmod 600 "\$tmp"/ { saw_chmod=1 }
-      in_func && /mv -f "\$tmp" "\$VW_ADMIN_TOKEN_FILE"/ { saw_mv=1 }
-      in_func && /rm -f "\$tmp"/ { saw_cleanup=1 }
+      in_func && /atomic_write_file "\$VW_ADMIN_TOKEN_FILE" 600/ { saw_atomic=1 }
       in_func && /^}/ { in_func=0 }
       /mktemp \/root\/\.vaultwarden-admin-token\.XXXXXX/ { saw_legacy_tmp=1 }
       /cat "\$\{_token_tmp\}"/ { saw_terminal_print=1 }
       /echo.*\$ADMIN_PLAIN/ { saw_terminal_print=1 }
       END {
-        if (!(saw_chmod && saw_mv && saw_cleanup)) {
-          print "Vaultwarden admin token file helper must be atomic and mode 600." > "/dev/stderr"
+        if (!saw_atomic) {
+          print "Vaultwarden admin token file helper must publish through atomic_write_file with mode 600." > "/dev/stderr"
           exit 1
         }
         if (saw_legacy_tmp) {
