@@ -1266,7 +1266,7 @@ LOGR
   app_save_config
   local _hc_elapsed=0
   local HTTP_CODE
-  until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${VW_PORT}/" || echo "000") \
+  until HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${VW_PORT}/" 5) \
       && [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; do
     sleep 1; _hc_elapsed=$(( _hc_elapsed + 1 ))
     [[ $_hc_elapsed -ge 10 ]] && break
@@ -1793,7 +1793,7 @@ do_status() {
     echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.fail2ban_stopped)"
   fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.http_health)]${NC}"
-  HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${VW_PORT}/" 2>/dev/null || echo "000")
+  HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${VW_PORT}/" 5)
   [[ "$HTTP_CODE" =~ ^(200|302|301)$ ]] \
     && echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.local_response "$HTTP_CODE")" \
     || echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.local_response_warn "$HTTP_CODE")"

@@ -3611,6 +3611,28 @@ app_validate_db_identifier() {
   fi
 }
 
+# Emit the HTTP status code returned by a local application probe. The helper
+# always emits a three-digit fallback (000) on curl errors so health/reporting
+# callers can decide whether a failed probe is fatal without special-casing
+# command failures. Extra curl options (for example `-k` or `-H`) are passed
+# before the URL and are intended only for application-controlled probes.
+# Usage: app_http_status_code URL [timeout_seconds] [curl_option ...]
+app_http_status_code() {
+  local url="${1:-}" timeout="${2:-5}"
+  if [[ $# -ge 2 ]]; then
+    shift 2
+  else
+    set --
+  fi
+  [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
+  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+    printf '000\n'
+    return 0
+  fi
+  curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
+    || printf '000\n'
+}
+
 # Echo the standard deployment config path for the current app. With
 # APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
 # config file so independent instances do not clobber each other.
@@ -5119,7 +5141,7 @@ bapp_health_probe() {
   local url="${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
-  until code="$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")" \
+  until code="$(app_http_status_code "$url" 5)" \
       && [[ "$code" =~ $codes ]]; do
     sleep 1
     elapsed=$((elapsed + 1))
@@ -7558,8 +7580,7 @@ _backup_current_binary() {
 }
 _health_check() {
   local elapsed=0 HTTP_CODE
-  until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
-      "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000") \
+  until HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${PORT}/" 5) \
       && [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; do
     sleep 1; elapsed=$(( elapsed + 1 ))
     [[ $elapsed -ge 20 ]] && break
@@ -8849,8 +8870,7 @@ do_status() {
     | awk -v fmt="$disk_fmt" 'NR==2{printf "  " fmt "\n", $6,$3,$2,$5}' || true
   echo -e "\n${BOLD}[$(t app.sub2api.status.http_health "$PORT")]${NC}"
   local HTTP_CODE
-  HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
-    "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000")
+  HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${PORT}/" 5)
   if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
     echo -e "  ${GREEN}[✓]${NC} $(t app.sub2api.status.local_ok "$HTTP_CODE")"
   else

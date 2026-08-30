@@ -309,8 +309,7 @@ _backup_current_binary() {
 }
 _health_check() {
   local elapsed=0 HTTP_CODE
-  until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
-      "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000") \
+  until HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${PORT}/" 5) \
       && [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; do
     sleep 1; elapsed=$(( elapsed + 1 ))
     [[ $elapsed -ge 20 ]] && break
@@ -1600,8 +1599,7 @@ do_status() {
     | awk -v fmt="$disk_fmt" 'NR==2{printf "  " fmt "\n", $6,$3,$2,$5}' || true
   echo -e "\n${BOLD}[$(t app.sub2api.status.http_health "$PORT")]${NC}"
   local HTTP_CODE
-  HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 \
-    "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000")
+  HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${PORT}/" 5)
   if [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; then
     echo -e "  ${GREEN}[✓]${NC} $(t app.sub2api.status.local_ok "$HTTP_CODE")"
   else

@@ -3611,6 +3611,28 @@ app_validate_db_identifier() {
   fi
 }
 
+# Emit the HTTP status code returned by a local application probe. The helper
+# always emits a three-digit fallback (000) on curl errors so health/reporting
+# callers can decide whether a failed probe is fatal without special-casing
+# command failures. Extra curl options (for example `-k` or `-H`) are passed
+# before the URL and are intended only for application-controlled probes.
+# Usage: app_http_status_code URL [timeout_seconds] [curl_option ...]
+app_http_status_code() {
+  local url="${1:-}" timeout="${2:-5}"
+  if [[ $# -ge 2 ]]; then
+    shift 2
+  else
+    set --
+  fi
+  [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
+  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+    printf '000\n'
+    return 0
+  fi
+  curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
+    || printf '000\n'
+}
+
 # Echo the standard deployment config path for the current app. With
 # APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
 # config file so independent instances do not clobber each other.
@@ -5119,7 +5141,7 @@ bapp_health_probe() {
   local url="${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
-  until code="$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")" \
+  until code="$(app_http_status_code "$url" 5)" \
       && [[ "$code" =~ $codes ]]; do
     sleep 1
     elapsed=$((elapsed + 1))
@@ -7675,7 +7697,7 @@ health_check() {
   local code backend_url public_url
   local health_pending=0
   backend_url="${scheme}://127.0.0.1:${PORT}/"
-  code=$(curl -k -o /dev/null -s -w "%{http_code}" --max-time 8 "$backend_url" || echo "000")
+  code=$(app_http_status_code "$backend_url" 8 -k)
   if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
     success "$(t app.cyberstrikeai.success.backend_health "$backend_url" "$code")"
   else
@@ -7684,7 +7706,7 @@ health_check() {
   fi
   if _bool_true "$ENABLE_NGINX"; then
     public_url="http://127.0.0.1:${PUBLIC_PORT}/"
-    code=$(curl -H "Host: ${CSAI_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
+    code=$(app_http_status_code "$public_url" 8 -H "Host: ${CSAI_DOMAIN:-localhost}")
     if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
       success "$(t app.cyberstrikeai.success.nginx_health "$public_url" "$code")"
     else

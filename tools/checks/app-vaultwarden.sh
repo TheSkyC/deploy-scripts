@@ -895,7 +895,7 @@ check_vaultwarden_status_health_guidance_matches_local_probe() {
     ' apps/vaultwarden.sh
   awk '
       /app\.vaultwarden\.status\.http_health/ { in_status=1; next }
-      in_status && /HTTP_CODE=\$\(curl -o \/dev\/null -s -w "%\{http_code\}" --max-time 5 "http:\/\/127\.0\.0\.1:\$\{VW_PORT\}\// { saw_local_probe=1 }
+      in_status && /HTTP_CODE=\$\(app_http_status_code "http:\/\/127\.0\.0\.1:\$\{VW_PORT\}\/" 5\)/ { saw_local_probe=1 }
       in_status && /app\.vaultwarden\.status\.local_response_warn/ { saw_warn=1 }
       in_status && /echo -e "\\n\$\{BOLD\}\[\$\(t app\.vaultwarden\.status\.tls\)\]\$\{NC\}"/ {
         if (!(saw_local_probe && saw_warn)) {

@@ -420,6 +420,8 @@ main() {
       check_api_ports_are_validated
       check_api_status_directory_sizes_are_nonfatal
       check_app_json_string_escapes_controls
+      check_app_http_status_code_helper
+      check_custom_app_http_health_probes_use_shared_helper
       check_apt_sources_are_atomic
       check_atomic_helpers_are_atomic
       check_backup_retention_cleanup_reports_failures
