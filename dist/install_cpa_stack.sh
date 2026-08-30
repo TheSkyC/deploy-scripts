@@ -2216,6 +2216,40 @@ version_check_emit_json() {
     "$(state_json_nullable "$(operation_safe_summary "$error_summary")")"
 }
 
+# Emit a component entry from a normal version-check payload. This keeps the
+# top-level JSON contract stable while custom multi-component deployments can
+# expose typed, independently checked records to status and manager tooling.
+version_check_component_json() {
+  local component_id="$1" repository="$2" check_json="$3"
+  local installed latest checked_at update_state source cache_state error
+  installed="$(state_json_raw_field "$check_json" installed 2>/dev/null || printf null)"
+  latest="$(state_json_raw_field "$check_json" latest 2>/dev/null || printf null)"
+  checked_at="$(state_json_raw_field "$check_json" checked_at 2>/dev/null || printf null)"
+  update_state="$(state_json_raw_field "$check_json" update_state 2>/dev/null || app_json_string unknown)"
+  source="$(state_json_raw_field "$check_json" source 2>/dev/null || app_json_string unknown)"
+  cache_state="$(state_json_raw_field "$check_json" cache_state 2>/dev/null || app_json_string miss)"
+  error="$(state_json_raw_field "$check_json" error 2>/dev/null || printf null)"
+  printf '{"id":%s,"repository":%s,"installed":%s,"latest":%s,"checked_at":%s,"update_state":%s,"source":%s,"cache_state":%s,"error":%s}' \
+    "$(app_json_string "$component_id")" "$(state_json_nullable "$repository")" \
+    "$installed" "$latest" "$checked_at" "$update_state" "$source" "$cache_state" "$error"
+}
+
+# Attach a component manifest to a version payload. The helper is append-only
+# so existing consumers reading the original top-level fields stay compatible.
+version_check_attach_components_json() {
+  local check_json="$1" components_json="$2"
+  [[ "$check_json" == \{*\} && "$components_json" == \{*\} ]] || return 1
+  printf '%s,"components":%s}' "${check_json%\}}" "$components_json"
+}
+
+# Emit a locally recorded dependency component. Package/runtime dependencies
+# intentionally report not_checked rather than implying an upstream check.
+version_check_runtime_component_json() {
+  local component_id="$1" installed="$2" source="${3:-system_runtime}"
+  printf '{"id":%s,"repository":null,"installed":%s,"latest":null,"checked_at":null,"update_state":"not_checked","source":%s,"cache_state":"local","error":null}' \
+    "$(app_json_string "$component_id")" "$(state_json_nullable "$installed")" "$(app_json_string "$source")"
+}
+
 version_cache_write() {
   local app_id="$1" latest="$2" checked_at="$3" result="$4" source="$5" now expires_at_epoch expires_at file
   now="$(version_check_now_epoch)"
@@ -6601,10 +6635,13 @@ _cpa_stack_merge_version_json() {
   else
     merged_latest="$(state_json_field "$a" latest 2>/dev/null || printf null)/$(state_json_field "$b" latest 2>/dev/null || printf null)"
   fi
-  version_check_emit_json \
+  local merged_json components_json
+  merged_json="$(version_check_emit_json \
     "$merged_installed" \
     "$merged_latest" \
-    "$checked_at" "$verdict_state" github_release "$cache_state" "$error_summary"
+    "$checked_at" "$verdict_state" github_release "$cache_state" "$error_summary")"
+  components_json="{\"cpa\":$(version_check_component_json cpa "$CPA_REPOSITORY" "$a"),\"cpamp\":$(version_check_component_json cpamp "$CPAMP_REPOSITORY" "$b")}"
+  version_check_attach_components_json "$merged_json" "$components_json"
 }
 _cpa_stack_load_installed_versions() {
   local conf_file
