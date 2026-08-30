@@ -85,6 +85,38 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+
+check_app_install_executable_file_helper() {
+  local tmp_dir output
+  tmp_dir="$(mktemp -d)"
+  printf 'first executable\n' > "${tmp_dir}/source"
+
+  output="$(TMP_DIR="$tmp_dir" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    app_install_executable_file "$TMP_DIR/source" "$TMP_DIR/destination" "" 0750
+    cmp -s "$TMP_DIR/source" "$TMP_DIR/destination"
+    [[ -x "$TMP_DIR/destination" ]]
+    app_install_executable_file "$TMP_DIR/destination" "$TMP_DIR/destination" "" 0700
+    cmp -s "$TMP_DIR/source" "$TMP_DIR/destination"
+    chown() { return 1; }
+    if app_install_executable_file "$TMP_DIR/source" "$TMP_DIR/chown-failure" "deploy-test:deploy-test" 0755; then
+      echo "executable helper accepted a failed owner change" >&2
+      exit 1
+    fi
+    [[ ! -e "$TMP_DIR/chown-failure" ]]
+  ')" || {
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  [[ -z "$output" ]] || {
+    echo "Executable install helper unexpectedly wrote to stdout: ${output}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  rm -rf "$tmp_dir"
+}
+
 check_custom_app_http_health_probes_use_shared_helper() {
   local file
   for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do

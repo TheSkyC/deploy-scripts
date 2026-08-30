@@ -426,24 +426,37 @@ atomic_symlink() {
 
 # ----- lib/binary.sh -----
 
+# Atomically copy an executable into place with the caller's required mode and
+# ownership. Unlike atomic_copy_file, an owner is mandatory when supplied: a
+# rollback must never appear successful while leaving a service binary owned
+# by the wrong account. Source and destination may be the same path.
+# Usage: app_install_executable_file SOURCE DESTINATION OWNER MODE
+app_install_executable_file() {
+  local source_path="$1" destination_path="$2" owner="${3:-}" mode="${4:-0755}"
+  local destination_dir restore_tmp
+  [[ -f "$source_path" ]] || return 1
+  destination_dir="$(dirname "$destination_path")"
+  if ! mkdir -p "$destination_dir"; then
+    return 1
+  fi
+  if ! restore_tmp="$(mktemp "${destination_path}.restore.XXXXXX")"; then
+    return 1
+  fi
+  if ! cp "$source_path" "$restore_tmp" \
+      || ! chmod "$mode" "$restore_tmp" \
+      || { [[ -z "$owner" ]] || chown "$owner" "$restore_tmp"; } \
+      || ! mv "$restore_tmp" "$destination_path"; then
+    rm -f "$restore_tmp"
+    return 1
+  fi
+}
+
 app_binary_restore_moved_backup() {
   local backup_path="$1"
-  local restore_tmp
   [[ -n "$backup_path" && -f "$backup_path" ]] || return 0
   [[ ! -e "$BIN_PATH" ]] || return 1
-  if ! restore_tmp="$(mktemp "${BIN_PATH}.restore.XXXXXX")"; then
-    return 1
-  fi
-  if ! cp "$backup_path" "$restore_tmp"; then
-    rm -f "$restore_tmp"
-    return 1
-  fi
-  if ! chmod +x "$restore_tmp" \
-      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$restore_tmp" \
-      || ! mv "$restore_tmp" "$BIN_PATH"; then
-    rm -f "$restore_tmp"
-    return 1
-  fi
+  app_install_executable_file "$backup_path" "$BIN_PATH" "${SERVICE_USER}:${SERVICE_USER}" 0755 \
+    || return 1
   rm -f "$backup_path"
 }
 
@@ -470,21 +483,7 @@ app_binary_install_candidate() {
 
 app_binary_restore_backup() {
   local backup_path="$1"
-  local restore_tmp
-  [[ -f "$backup_path" ]] || return 1
-  if ! restore_tmp="$(mktemp "${BIN_PATH}.restore.XXXXXX")"; then
-    return 1
-  fi
-  if ! cp "$backup_path" "$restore_tmp"; then
-    rm -f "$restore_tmp"
-    return 1
-  fi
-  if ! chmod +x "$restore_tmp" \
-      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$restore_tmp" \
-      || ! mv "$restore_tmp" "$BIN_PATH"; then
-    rm -f "$restore_tmp"
-    return 1
-  fi
+  app_install_executable_file "$backup_path" "$BIN_PATH" "${SERVICE_USER}:${SERVICE_USER}" 0755
 }
 
 app_binary_backup_current() {
@@ -7381,18 +7380,9 @@ build_binary() {
 }
 restore_update_backup() {
   local bin_backup="$1" config_backup="$2"
-  local bin_restore_tmp config_restore_tmp
-  [[ -f "$bin_backup" ]] || return 1
-  if ! bin_restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX"); then
-    return 1
-  fi
-  if ! cp "$bin_backup" "$bin_restore_tmp" \
-      || ! chmod 0755 "$bin_restore_tmp" \
-      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$bin_restore_tmp" \
-      || ! mv "$bin_restore_tmp" "$BIN_PATH"; then
-    rm -f "$bin_restore_tmp"
-    return 1
-  fi
+  local config_restore_tmp
+  app_install_executable_file "$bin_backup" "$BIN_PATH" "${SERVICE_USER}:${SERVICE_USER}" 0755 \
+    || return 1
   if [[ -f "$config_backup" ]]; then
     if ! config_restore_tmp=$(mktemp "${CONFIG_FILE}.restore.XXXXXX"); then
       return 1
