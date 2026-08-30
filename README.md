@@ -130,6 +130,22 @@ changes instead of failing at `systemctl start` (which triggers rollback):
 sudo DEPLOY_FAIL_ON_PORT_CONFLICT=1 bash deploy.sh newapi install
 ```
 
+## Public bind safety guard
+
+Web services default to loopback listeners and shared binary apps disable automatic
+firewall opening. If a deployment explicitly sets a wildcard listener
+(`BA_BIND_ADDR=0.0.0.0`/`::`, or `TICKFLOW_BIND_ADDR=0.0.0.0`/`::`), set
+`DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1` to reject plain-HTTP exposure during
+validation. Enable the app's HTTPS mode or use a loopback listener instead:
+
+```bash
+sudo DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1 \
+  BA_BIND_ADDR=0.0.0.0 BA_ENABLE_HTTPS=0 bash deploy.sh newapi install
+```
+
+The guard is opt-in for compatibility with existing explicit public deployments;
+`frps` remains the documented public TCP listener exception.
+
 ## China mirrors (opt-in)
 
 CyberStrikeAI builds from source and needs PyPI and Go module proxies. The
