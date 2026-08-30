@@ -466,12 +466,13 @@ check_sub2api_pg_password_is_escaped() {
   fi
   awk '
       /_uri_encode\(\)/ { saw_encoder=1 }
-      /psql -v pg_pass="\$PG_PASS" -c/ { saw_psql_var++ }
+      /psql -v pg_pass="\$PG_PASS" -c/ { legacy_command_substitution=1 }
+      /psql -v ON_ERROR_STOP=1 -v pg_pass="\$PG_PASS" > \/dev\/null <<SQL/ { saw_psql_stdin++ }
       /WITH PASSWORD :'\''pg_pass'\'';/ { saw_literal++ }
       index($0, "PG_DSN=\"postgresql://${PG_USER}:$(_uri_encode \"$PG_PASS\")@localhost:5432/${PG_DB}?sslmode=disable\"") { saw_dsn=1 }
       END {
-        if (!(saw_encoder && saw_psql_var >= 2 && saw_literal >= 2 && saw_dsn)) {
-          printf "%s Sub2API must escape PG_PASS for SQL and URI contexts\n", FILENAME > "/dev/stderr"
+        if (legacy_command_substitution || !(saw_encoder && saw_psql_stdin >= 2 && saw_literal >= 2 && saw_dsn)) {
+          printf "%s Sub2API must pass PG_PASS through psql stdin variable substitution and URI-encode the DSN value\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
