@@ -40,7 +40,14 @@ compose_validate_project() {
   project_name="$(basename "$project_file")"
   is_safe_path "$work_dir" || return 1
   is_safe_path "$project_file" || return 1
-  [[ -f "$project_file" ]] || return 1
+  [[ -d "$work_dir" && -f "$project_file" ]] || return 1
+  # Compose may resolve relative paths from --project-directory; keep the
+  # project file inside that validated directory rather than accepting an
+  # unrelated existing system file such as /etc/passwd.
+  while [[ "$work_dir" != "/" && "$work_dir" == */ ]]; do
+    work_dir="${work_dir%/}"
+  done
+  [[ "$project_file" == "$work_dir/"* ]] || return 1
 }
 
 # Echo an argv-ready compose invocation prefix given the working directory
