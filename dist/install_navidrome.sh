@@ -2325,6 +2325,29 @@ version_check_git_branch_json() {
   version_check_emit_json "$local_rev" "$remote_rev" "$(state_now)" "$result" git_branch not_persisted
 }
 
+# Check an application pinned to an immutable git commit. This is deliberately
+# local-only: the configured full commit SHA is the desired version, so a
+# comparison must not fetch a moving branch or silently change the target.
+version_check_git_commit_json() {
+  local repo_dir="$1" target_commit="$2" local_rev="" result
+  if ! [[ "$target_commit" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+    version_check_emit_json "" "$target_commit" "" unsupported git_commit pinned "pinned commit must be a full 40-character SHA"
+    return 0
+  fi
+  if [[ -z "$repo_dir" || ! -d "$repo_dir/.git" ]]; then
+    version_check_emit_json "" "$target_commit" "" check_failed git_commit pinned "installation is not a git checkout"
+    return 0
+  fi
+  local_rev="$(git -C "$repo_dir" rev-parse --verify HEAD 2>/dev/null || true)"
+  if ! [[ "$local_rev" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+    version_check_emit_json "" "$target_commit" "" check_failed git_commit pinned "cannot resolve installed commit"
+    return 0
+  fi
+  result=up_to_date
+  [[ "${local_rev,,}" != "${target_commit,,}" ]] && result=update_available
+  version_check_emit_json "$local_rev" "$target_commit" "" "$result" git_commit pinned
+}
+
 # ----- lib/manager_status.sh -----
 
 MANAGER_STATUS_USAGE="Usage: deploy.sh status-all|overview|problems [--json] [--short] [--strict] [--errors-only] [--only-installed] [--no-probe] [--no-network] [--include id,id,...] [--exclude id,id,...]"
