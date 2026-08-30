@@ -680,3 +680,21 @@ Format per entry:
     running 通过/exited fail-closed；fleet 信任门+token 校验+端口目标+
     非 JSON 记录包装+历史 JSONL
 - 提交 / Commit: 9ee6682, 412a256, 1f46dc6
+
+## 2026-08-30（自主演进批次 P0-S1）
+- 状态 / Status: completed
+- 成果 / Change: P0 安全默认行为门禁第一阶段：共享 `lib/app.sh` 新增统一
+  `deploy_value_truthy`、wildcard listener 判定和可选 fail-closed 原语；
+  `lib/binary_app.sh` 在配置校验阶段拒绝
+  `DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1` + `BA_BIND_ADDR=0.0.0.0/::` +
+  无 TLS，且摘要对 IPv6 wildcard 同样显示明文警告；TickFlow 接入同一门禁。
+  新增 `tools/checks/security.sh`，行为验证 9 个共享 Web 二进制默认
+  `127.0.0.1`/`BA_FIREWALL=0`、frps 公网例外、TickFlow/Sub2API 回环、
+  strict guard、TickFlow 随机密码和 New API 摘要脱敏。
+  README 与整改方案同步记录。
+- 验证 / Verified: `tools/verify.sh syntax` 通过；security 行为守卫通过；
+  `tools/verify.sh guards` 通过（其中 `fail_check` 仅为守卫自身的预期失败探测；
+  其输出中已有的敏感测试样例为脱敏回归测试输入）；`git diff --check` 通过。
+  `tools/verify.sh shellcheck` 仍受仓库既有 SC2043 warning 阻断，未发现本批次
+  新增文件的 warning。
+- 提交 / Commit: f3c1e0e
