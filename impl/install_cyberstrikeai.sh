@@ -539,18 +539,9 @@ build_binary() {
 }
 restore_update_backup() {
   local bin_backup="$1" config_backup="$2"
-  local bin_restore_tmp config_restore_tmp
-  [[ -f "$bin_backup" ]] || return 1
-  if ! bin_restore_tmp=$(mktemp "${BIN_PATH}.restore.XXXXXX"); then
-    return 1
-  fi
-  if ! cp "$bin_backup" "$bin_restore_tmp" \
-      || ! chmod 0755 "$bin_restore_tmp" \
-      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$bin_restore_tmp" \
-      || ! mv "$bin_restore_tmp" "$BIN_PATH"; then
-    rm -f "$bin_restore_tmp"
-    return 1
-  fi
+  local config_restore_tmp
+  app_install_executable_file "$bin_backup" "$BIN_PATH" "${SERVICE_USER}:${SERVICE_USER}" 0755 \
+    || return 1
   if [[ -f "$config_backup" ]]; then
     if ! config_restore_tmp=$(mktemp "${CONFIG_FILE}.restore.XXXXXX"); then
       return 1

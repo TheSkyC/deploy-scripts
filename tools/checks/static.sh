@@ -299,45 +299,51 @@ check_atomic_helpers_are_atomic() {
 
 check_binary_helpers_are_atomic() {
   awk '
-      /app_binary_restore_moved_backup\(\)/ { in_moved=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
-      in_moved && /mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"/ { saw_tmp=1 }
-      in_moved && saw_tmp && /return 1/ { saw_tmp_return=1 }
-      in_moved && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
-      in_moved && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
-      in_moved && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
-      in_moved && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
-      in_moved && /rm -f "\$backup_path"/ { saw_cleanup=1 }
-      in_moved && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
-          printf "%s app_binary_restore_moved_backup must stage, restore atomically, and remove moved backups\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        in_moved=0
-      }
-      /app_binary_install_candidate\(\)/ { in_install=1; saw_backup=0; saw_mv=0; saw_restore=0; saw_chmod=0; saw_chown=0; saw_cleanup=0; next }
-      in_install && /mv "\$BIN_PATH" "\$backup_path"/ { saw_backup=1 }
-      in_install && /mv "\$tmp_bin" "\$BIN_PATH"/ { saw_mv=1 }
-      in_install && /app_binary_restore_moved_backup "\$backup_path"/ { saw_restore=1 }
-      in_install && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
-      in_install && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_chown=1 }
-      in_install && /rm -f "\$tmp_bin"/ { saw_cleanup=1 }
+      /app_install_executable_file\(\)/ { in_install=1; saw_source=0; saw_dir=0; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_install && /\[\[ -f "\$source_path" \]\]/ { saw_source=1 }
+      in_install && /mkdir -p "\$destination_dir"/ { saw_dir=1 }
+      in_install && /mktemp "\$\{destination_path\}\.restore\.XXXXXX"/ { saw_tmp=1 }
+      in_install && /cp "\$source_path" "\$restore_tmp"/ { saw_cp=1 }
+      in_install && /chmod "\$mode" "\$restore_tmp"/ { saw_chmod=1 }
+      in_install && /chown "\$owner" "\$restore_tmp"/ { saw_chown=1 }
+      in_install && /mv "\$restore_tmp" "\$destination_path"/ { saw_mv=1 }
+      in_install && /rm -f "\$restore_tmp"/ { saw_cleanup=1 }
       in_install && /^}/ {
-        if (!(saw_backup && saw_mv && saw_restore && saw_chmod && saw_chown && saw_cleanup)) {
-          printf "%s app_binary_install_candidate must back up, replace, restore on failure, and clean up candidates\n", FILENAME > "/dev/stderr"
+        if (!(saw_source && saw_dir && saw_tmp && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+          printf "%s app_install_executable_file must stage, apply strict ownership, replace, and clean up executable files\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_install=0
       }
-      /app_binary_restore_backup\(\)/ { in_restore=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; next }
-      in_restore && /mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"/ { saw_tmp=1 }
-      in_restore && saw_tmp && /return 1/ { saw_tmp_return=1 }
-      in_restore && /cp "\$backup_path" "\$restore_tmp"/ { saw_cp=1 }
-      in_restore && /chmod \+x "\$restore_tmp"/ { saw_chmod=1 }
-      in_restore && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$restore_tmp"/ { saw_chown=1 }
-      in_restore && /mv "\$restore_tmp" "\$BIN_PATH"/ { saw_mv=1 }
+      /app_binary_restore_moved_backup\(\)/ { in_moved=1; saw_helper=0; saw_cleanup=0; next }
+      in_moved && /app_install_executable_file "\$backup_path" "\$BIN_PATH" "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" 0755/ { saw_helper=1 }
+      in_moved && /rm -f "\$backup_path"/ { saw_cleanup=1 }
+      in_moved && /^}/ {
+        if (!(saw_helper && saw_cleanup)) {
+          printf "%s app_binary_restore_moved_backup must delegate to the atomic executable helper and remove moved backups\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_moved=0
+      }
+      /app_binary_install_candidate\(\)/ { in_candidate=1; saw_backup=0; saw_mv=0; saw_restore=0; saw_chmod=0; saw_chown=0; saw_cleanup=0; next }
+      in_candidate && /mv "\$BIN_PATH" "\$backup_path"/ { saw_backup=1 }
+      in_candidate && /mv "\$tmp_bin" "\$BIN_PATH"/ { saw_mv=1 }
+      in_candidate && /app_binary_restore_moved_backup "\$backup_path"/ { saw_restore=1 }
+      in_candidate && /chmod \+x "\$BIN_PATH"/ { saw_chmod=1 }
+      in_candidate && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$BIN_PATH"/ { saw_chown=1 }
+      in_candidate && /rm -f "\$tmp_bin"/ { saw_cleanup=1 }
+      in_candidate && /^}/ {
+        if (!(saw_backup && saw_mv && saw_restore && saw_chmod && saw_chown && saw_cleanup)) {
+          printf "%s app_binary_install_candidate must back up, replace, restore on failure, and clean up candidates\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_candidate=0
+      }
+      /app_binary_restore_backup\(\)/ { in_restore=1; saw_helper=0; next }
+      in_restore && /app_install_executable_file "\$backup_path" "\$BIN_PATH" "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" 0755/ { saw_helper=1 }
       in_restore && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_cp && saw_chmod && saw_chown && saw_mv)) {
-          printf "%s app_binary_restore_backup must stage and atomically restore binary mode and ownership\n", FILENAME > "/dev/stderr"
+        if (!saw_helper) {
+          printf "%s app_binary_restore_backup must delegate to app_install_executable_file\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_restore=0
@@ -351,8 +357,34 @@ check_binary_helpers_are_atomic() {
         }
         in_backup=0
       }
- ' lib/binary.sh 
+  ' lib/binary.sh
 }
+
+check_custom_executable_installs_use_shared_helper() {
+  awk '
+      /restore_update_backup\(\)/ { in_func=1; saw_helper=0; next }
+      in_func && /app_install_executable_file "\$bin_backup" "\$BIN_PATH" "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" 0755/ { saw_helper=1 }
+      in_func && /^}/ {
+        if (!saw_helper) {
+          printf "%s CyberStrikeAI rollback must delegate binary restoration to app_install_executable_file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+  ' impl/install_cyberstrikeai.sh
+  awk '
+      /install_vaultwarden_binary\(\)/ { in_func=1; saw_helper=0; next }
+      in_func && /app_install_executable_file "\$source_bin" "\$VW_BIN" root:root 0755/ { saw_helper=1 }
+      in_func && /^}/ {
+        if (!saw_helper) {
+          printf "%s Vaultwarden binary installs and rollbacks must delegate to app_install_executable_file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+  ' impl/install_vaultwarden.sh
+}
+
 
 check_systemd_helper_is_atomic() {
   awk '

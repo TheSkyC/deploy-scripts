@@ -514,20 +514,7 @@ deploy_web_vault_from_dir() {
 }
 install_vaultwarden_binary() {
   local source_bin="$1"
-  local bin_tmp
-  if ! mkdir -p "$VW_BIN_DIR"; then
-    return 1
-  fi
-  if ! bin_tmp=$(mktemp "${VW_BIN}.XXXXXX"); then
-    return 1
-  fi
-  if ! install -m 755 -o root -g root "$source_bin" "$bin_tmp" \
-      || ! mv "$bin_tmp" "$VW_BIN"; then
-    if ! rm -f "$bin_tmp"; then
-      warn "$(t app.vaultwarden.warn.tmp_binary_cleanup_failed "$bin_tmp")"
-    fi
-    return 1
-  fi
+  app_install_executable_file "$source_bin" "$VW_BIN" root:root 0755
 }
 backup_vaultwarden_binary() {
   local backup_path="$1"
