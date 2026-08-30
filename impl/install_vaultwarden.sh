@@ -1639,7 +1639,6 @@ _backup_silent() {
   fi
   local archive
   archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
-  local archive_tmp="${archive}.tmp"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
     _log_backup_helper "$(t app.vaultwarden.backup.script.data_missing "$VW_DATA_DIR")"
     warn "$(t app.vaultwarden.warn.backup_data_missing "$VW_DATA_DIR")"
@@ -1656,19 +1655,11 @@ _backup_silent() {
   fi
   local tar_extra=()
   [[ -f "$VW_ENV_FILE" ]] && tar_extra=(-C / "${VW_ENV_FILE#/}")
-  if tar -czf "$archive_tmp" --exclude="*.log" --exclude="*.log.*" \
+  if backup_create_tar_archive "$archive" --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
-    "${tar_extra[@]+"${tar_extra[@]}"}" >&2; then
-    if mv "$archive_tmp" "$archive"; then
-      success "$(t app.vaultwarden.success.backup_created "$archive")"
-    else
-      rm -f "$archive_tmp"
-      _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
-      warn "$(t app.vaultwarden.warn.backup_failed_continue)"
-      return 1
-    fi
+    "${tar_extra[@]+"${tar_extra[@]}"}"; then
+    success "$(t app.vaultwarden.success.backup_created "$archive")"
   else
-    rm -f "$archive_tmp"
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"
     return 1

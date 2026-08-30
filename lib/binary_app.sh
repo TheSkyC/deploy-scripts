@@ -1210,30 +1210,20 @@ _ba_backup() {
       _ba_backup_log "$(t binary_app.warn.backup_hook_failed)"
     fi
   fi
-  local archive archive_tmp
+  local archive
   archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
-  archive_tmp="${archive}.tmp"
-  if tar -czf "$archive_tmp" \
+  if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
-      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
-    if mv "$archive_tmp" "$archive"; then
-      local sz
-      sz="$(du -sh "$archive" 2>/dev/null | awk '{print $1}')"
-      _ba_backup_log "$(t binary_app.success.backup_done "$archive" "$sz")"
-      success "$(t binary_app.success.silent_backup "$archive" "$sz")"
-      if ! backup_write_sha256 "$archive" >/dev/null \
-         || ! backup_write_manifest "$archive" "$APP_ID" 1 "${INSTALLED_VERSION:-}"; then
-        warn "$(t binary_app.warn.integrity_failed "$archive")"
-        _ba_backup_log "$(t binary_app.warn.integrity_failed "$archive")"
-      fi
-    else
-      rm -f "$archive_tmp"
-      _ba_backup_log "$(t binary_app.error.backup_failed)"
-      warn "$(t binary_app.warn.silent_backup_failed "$BACKUP_DIR")"
-      return 1
+      -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
+    local sz
+    sz="$(du -sh "$archive" 2>/dev/null | awk '{print $1}')"
+    _ba_backup_log "$(t binary_app.success.backup_done "$archive" "$sz")"
+    success "$(t binary_app.success.silent_backup "$archive" "$sz")"
+    if ! backup_finalize_archive "$archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+      warn "$(t binary_app.warn.integrity_failed "$archive")"
+      _ba_backup_log "$(t binary_app.warn.integrity_failed "$archive")"
     fi
   else
-    rm -f "$archive_tmp"
     _ba_backup_log "$(t binary_app.error.backup_failed)"
     warn "$(t binary_app.warn.silent_backup_failed "$BACKUP_DIR")"
     return 1

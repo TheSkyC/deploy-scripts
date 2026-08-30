@@ -66,6 +66,26 @@ backup_finalize_archive() {
     && backup_write_manifest "$archive" "$app_id" "$schema_version" "$installed_version"
 }
 
+# Create a gzip tar archive in a unique sibling temporary file and publish it
+# atomically at ARCHIVE. Remaining arguments are passed verbatim to tar after
+# its output path, so callers retain control over excludes and source layout.
+# Any failed tar or publish step removes the temporary file and leaves an
+# existing final archive untouched.
+backup_create_tar_archive() {
+  local archive="$1" archive_tmp
+  shift
+  [[ -n "$archive" && "$#" -gt 0 ]] || return 1
+  archive_tmp="$(mktemp "${archive}.tmp.XXXXXX")" || return 1
+  if ! tar -czf "$archive_tmp" "$@" >&2; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+  if ! mv "$archive_tmp" "$archive"; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+}
+
 backup_write_manifest() {
   local archive="$1" app_id="$2" schema_version="$3" installed_version="${4:-}"
   local digest name created_at
