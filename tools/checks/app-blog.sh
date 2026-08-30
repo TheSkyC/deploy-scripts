@@ -85,6 +85,43 @@ check_blog_localized_defaults() {
   expect_blog_defaults zh "Abyte 的个人博客" "zh-cn"
 }
 
+check_blog_hugo_version_contract() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    temp_root="$(mktemp -d)"
+    trap "rm -rf \"$temp_root\"" EXIT
+    export DEPLOY_VERSION_CACHE_ROOT="${temp_root}/version-cache"
+    source lib/core.sh
+    APP_ID=blog
+    APP_NAME="Hugo Blog"
+    app_conf_file() { printf "%s" "/nonexistent/blog-deploy.conf"; }
+    HUGO_VERSION=1.2.3
+    INSTALLED_VERSION=1.0.0
+    source impl/install_hugo_blog.sh
+
+    pinned="$(_blog_check_update_json "$INSTALLED_VERSION" 0 1)"
+    [[ "$(state_json_field "$pinned" installed)" == 1.0.0 ]]
+    [[ "$(state_json_field "$pinned" latest)" == 1.2.3 ]]
+    [[ "$(state_json_field "$pinned" update_state)" == update_available ]]
+    [[ "$(state_json_field "$pinned" source)" == github_release ]]
+    [[ "$(state_json_field "$pinned" cache_state)" == pinned ]]
+
+    HUGO_VERSION=""
+    INSTALLED_VERSION=1.2.3
+    github_latest_release_tag_checked() { printf "v1.3.0\\n"; }
+    latest="$(_blog_check_update_json "$INSTALLED_VERSION" 1 0)"
+    [[ "$(state_json_field "$latest" latest)" == v1.3.0 ]]
+    [[ "$(state_json_field "$latest" update_state)" == update_available ]]
+    [[ "$(state_json_field "$latest" source)" == github_release ]]
+    printf ok
+  ')"
+  [[ "$output" == ok ]]
+  grep -Fq 'HUGO_VERSION INSTALLED_VERSION' impl/install_hugo_blog.sh
+  grep -Fq 'APP_CHECK_UPDATE_FN=_blog_check_update_json' impl/install_hugo_blog.sh
+  grep -Fq 'APP_STATUS_VERSION_FN=_blog_status_version_json' impl/install_hugo_blog.sh
+}
+
 check_blog_config_persistence() {
   awk '
       /^CONFIG_KEYS=\(/ { saw_keys=1; next }
@@ -195,11 +232,11 @@ check_blog_hugo_install_failures_are_actionable() {
       }
     ' apps/blog.sh
   awk '
-      /if ! HUGO_DEB="\$\(mktemp \/tmp\/hugo\.XXXXXX\.deb\)"; then/ { saw_tmp_if=1 }
+      /if ! hugo_deb="\$\(mktemp \/tmp\/hugo\.XXXXXX\.deb\)"; then/ { saw_tmp_if=1 }
       /error "\$\(t app\.blog\.error\.hugo_download\)"/ { saw_tmp_error=1 }
-      /if ! wget -q --show-progress -O "\$HUGO_DEB" "\$DEB_URL"; then/ { in_download_fail=1; saw_download_cleanup_if=0; saw_download_warn=0; next }
-      in_download_fail && /if ! rm -f "\$HUGO_DEB"; then/ { saw_download_cleanup_if=1 }
-      in_download_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$HUGO_DEB"\)"/ { saw_download_warn=1 }
+      /if ! wget -q --show-progress -O "\$hugo_deb" "\$deb_url"; then/ { in_download_fail=1; saw_download_cleanup_if=0; saw_download_warn=0; next }
+      in_download_fail && /if ! rm -f "\$hugo_deb"; then/ { saw_download_cleanup_if=1 }
+      in_download_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$hugo_deb"\)"/ { saw_download_warn=1 }
       in_download_fail && /error "\$\(t app\.blog\.error\.hugo_download\)"/ {
         if (!(saw_download_cleanup_if && saw_download_warn)) {
           printf "%s Blog Hugo download failure must warn when temporary package cleanup fails\n", FILENAME > "/dev/stderr"
@@ -207,9 +244,9 @@ check_blog_hugo_install_failures_are_actionable() {
         }
         in_download_fail=0
       }
-      /if \[\[ ! -s "\$HUGO_DEB" \]\]; then/ { in_empty_fail=1; saw_empty_if=1; saw_empty_cleanup_if=0; saw_empty_cleanup_warn=0; next }
-      in_empty_fail && /if ! rm -f "\$HUGO_DEB"; then/ { saw_empty_cleanup_if=1 }
-      in_empty_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$HUGO_DEB"\)"/ { saw_empty_cleanup_warn=1 }
+      /if \[\[ ! -s "\$hugo_deb" \]\]; then/ { in_empty_fail=1; saw_empty_if=1; saw_empty_cleanup_if=0; saw_empty_cleanup_warn=0; next }
+      in_empty_fail && /if ! rm -f "\$hugo_deb"; then/ { saw_empty_cleanup_if=1 }
+      in_empty_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$hugo_deb"\)"/ { saw_empty_cleanup_warn=1 }
       in_empty_fail && /error "\$\(t app\.blog\.error\.hugo_download\)"/ {
         if (!(saw_empty_cleanup_if && saw_empty_cleanup_warn)) {
           printf "%s Blog Hugo empty download failure must warn when temporary package cleanup fails\n", FILENAME > "/dev/stderr"
@@ -217,11 +254,11 @@ check_blog_hugo_install_failures_are_actionable() {
         }
         in_empty_fail=0
       }
-      /if ! dpkg -i "\$HUGO_DEB"; then/ { in_block=1; saw_error=0; saw_cleanup_if=0; saw_cleanup_warn=0; next }
-      in_block && /if ! rm -f "\$HUGO_DEB"; then/ { saw_cleanup_if=1 }
-      in_block && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$HUGO_DEB"\)"/ { saw_cleanup_warn=1 }
-      in_block && /error "\$\(t app\.blog\.error\.hugo_install\)"/ { saw_error=1 }
-      in_block && /^fi$/ {
+      /if ! dpkg -i "\$hugo_deb"; then/ { in_block=1; saw_error=0; saw_cleanup_if=0; saw_cleanup_warn=0; next }
+      in_block && /if ! rm -f "\$hugo_deb"; then/ { saw_cleanup_if=1 }
+      in_block && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$hugo_deb"\)"/ { saw_cleanup_warn=1 }
+      in_block && /error "\$\(t app\.blog\.error\.hugo_install\)"/ {
+        saw_error=1
         if (!(saw_error && saw_cleanup_if && saw_cleanup_warn)) {
           printf "%s Blog Hugo package install failure must warn when temporary package cleanup fails and report an actionable error\n", FILENAME > "/dev/stderr"
           exit 1
@@ -229,8 +266,8 @@ check_blog_hugo_install_failures_are_actionable() {
         expect_success_cleanup=1
         in_block=0
       }
-      expect_success_cleanup && /if ! rm -f "\$HUGO_DEB"; then/ { saw_success_cleanup_if=1; in_success_cleanup=1; expect_success_cleanup=0; next }
-      in_success_cleanup && /error "\$\(t app\.blog\.error\.hugo_cleanup "\$HUGO_DEB"\)"/ { saw_success_cleanup_error=1 }
+      expect_success_cleanup && /if ! rm -f "\$hugo_deb"; then/ { saw_success_cleanup_if=1; in_success_cleanup=1; expect_success_cleanup=0; next }
+      in_success_cleanup && /error "\$\(t app\.blog\.error\.hugo_cleanup "\$hugo_deb"\)"/ { saw_success_cleanup_error=1 }
       /success "\$\(t app\.blog\.hugo_installed "\$\(hugo version \| head -1\)"\)"/ {
         if (!(saw_success_cleanup_if && saw_success_cleanup_error)) {
           printf "%s Blog Hugo install must surface temporary package cleanup failures before reporting success\n", FILENAME > "/dev/stderr"

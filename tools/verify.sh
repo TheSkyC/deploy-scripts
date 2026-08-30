@@ -428,6 +428,7 @@ main() {
       check_binary_app_pre_backup_hook_is_best_effort
       check_binary_app_health_results_are_surfaced
       check_blog_config_persistence
+      check_blog_hugo_version_contract
       check_blog_dependency_failures_are_reported
       check_blog_enable_failures_are_reported
       check_blog_hugo_install_failures_are_actionable
