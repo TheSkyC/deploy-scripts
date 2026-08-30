@@ -1853,6 +1853,14 @@ check_compose_shared_layer_and_tickflow_delegation() {
     source lib/core.sh
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin"
+    cat > "$tmp/bin/docker" <<'"'"'DOCKER'"'"'
+#!/bin/bash
+[[ "$1 $2" == "compose version" ]] && exit 0
+exit 1
+DOCKER
+    chmod +x "$tmp/bin/docker"
+    export PATH="$tmp/bin:$PATH"
     # Missing project file: compose_try must fail (validation precedes run).
     if compose_try "$tmp" "$tmp/missing.yml" config >/dev/null 2>&1; then
       echo TRY_SHOULD_FAIL; exit 102
