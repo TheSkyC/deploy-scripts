@@ -1358,13 +1358,14 @@ check_blog_backup_writes_integrity_metadata() {
 # warning when it cannot, so silent corruption never looks like success.
 check_binary_app_backup_writes_integrity_metadata() {
   awk '
-    /_ba_backup\(\)/ { in_fn=1; saw_sidecar=0; saw_manifest=0; saw_warn=0; next }
+    /_ba_backup\(\)/ { in_fn=1; saw_integrity=0; saw_sidecar=0; saw_manifest=0; saw_warn=0; next }
+    in_fn && /backup_finalize_archive "\$archive"/ { saw_integrity=1 }
     in_fn && /backup_write_sha256 "\$archive"/ { saw_sidecar=1 }
     in_fn && /backup_write_manifest "\$archive"/ { saw_manifest=1 }
     in_fn && /warn\.integrity_failed/ { saw_warn=1 }
     in_fn && /^}/ {
-      if (!(saw_sidecar && saw_manifest && saw_warn)) {
-        print "_ba_backup must write sha256+manifest and warn on failure" > "/dev/stderr"
+      if (!((saw_integrity || (saw_sidecar && saw_manifest)) && saw_warn)) {
+        print "_ba_backup must finalize sha256+manifest and warn on failure" > "/dev/stderr"
         exit 1
       }
       in_fn=0
