@@ -117,6 +117,21 @@ i18n_register_many \
   app.cyberstrikeai.error.repo_clone \
   "Failed to clone %s into %s. Remove any partial checkout, then retry: git clone --depth 1 --branch %s https://github.com/%s.git %s" \
   "无法将 %s 克隆到 %s。请移除任何不完整的检出目录后重试：git clone --depth 1 --branch %s https://github.com/%s.git %s" \
+  app.cyberstrikeai.error.commit_invalid \
+  "GITHUB_COMMIT must be a full 40-character git commit SHA when set: %s" \
+  "设置 GITHUB_COMMIT 时必须提供完整的 40 位 git 提交 SHA：%s" \
+  app.cyberstrikeai.info.repo_pinned \
+  "Checking out pinned commit %s" \
+  "正在检出固定提交 %s" \
+  app.cyberstrikeai.error.commit_fetch \
+  "Failed to fetch pinned commit %s from %s. Confirm that the commit exists in the configured repository and is accessible, then retry." \
+  "无法获取固定提交 %s（仓库：%s）。请确认该提交存在于配置的仓库且可访问后重试。" \
+  app.cyberstrikeai.error.commit_checkout \
+  "Failed to check out pinned commit %s in %s. Check local changes or restore the checkout, then retry." \
+  "无法检出固定提交 %s（目录：%s）。请检查本地改动或修复检出目录后重试。" \
+  app.cyberstrikeai.error.installed_version \
+  "Cannot determine the checked-out CyberStrikeAI commit in %s." \
+  "无法确定 %s 中已检出的 CyberStrikeAI 提交。" \
   app.cyberstrikeai.error.nonempty_dir \
   "%s exists and is not an empty git checkout" \
   "%s 已存在且不是空的 Git 检出目录" \
