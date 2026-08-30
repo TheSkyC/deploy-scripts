@@ -899,3 +899,9 @@ Format per entry:
 - 成果 / Change: 继续收敛备份归档发布流程。新增 `backup_create_tar_archive`：使用归档旁的随机临时文件执行 gzip tar，只有 tar 成功后才原子移动到最终路径，失败会清理临时文件并保持既有归档不变。共享二进制应用的 `_ba_backup`、Sub2API 的 pre-update/manual config/data 归档、Vaultwarden 的手动归档均改为委托该 helper；独立 cron 生成脚本仍保留自包含实现，不强行引入运行时依赖。新增行为守卫覆盖成功发布、失败清理、既有归档保护、参数校验及委托关系。
 - 验证 / Verified: `tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused backup guards、`git diff --check` 通过；干净提交后的 `tools/verify.sh guards` 通过。首次完整 guards 暴露旧守卫仍要求调用方直接写 sidecar/直接向 tar 重定向 stderr，已在守卫修复提交中改为识别共享 finalization/publisher 契约；最终输出 `Guards verification passed`。
 - 提交 / Commit: f5ad69c, da1ccd6, c431589
+
+## 2026-08-30（自主演进批次 P2-S2 续 4）
+- 状态 / Status: completed
+- 成果 / Change: 进一步统一备份保留期选择。新增 `backup_list_expired_archives`，集中规范 `BACKUP_KEEP_DAYS` 的非法值/零值处理、直接子文件筛选、NUL 分隔输出和 staging 文件排除；共享二进制应用与 Sub2API 手动备份的清理逻辑改为委托该 helper，同时保留各自的逐文件失败告警和本地化统计。
+- 验证 / Verified: 新增行为守卫验证旧/新文件、嵌套目录、非法/零保留期和 NUL 安全；`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused backup guards、`tools/verify.sh guards`、`git diff --check` 均通过。前一批推送的 GitHub Actions Verify run `33330962189`（head `8a68da9`）已通过 syntax/release/dispatch/guards/shellcheck/e2e-smoke，nightly-all 按 push 条件跳过；本批 retention 变更待本次 push 后接受新的远端 CI 验证。
+- 提交 / Commit: 3769d12, 1b90add
