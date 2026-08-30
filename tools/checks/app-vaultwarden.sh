@@ -1202,3 +1202,19 @@ check_vaultwarden_image_digest_version_contract() {
   grep -Fq '"$image_reference" >&2' impl/install_vaultwarden.sh
   grep -Fq '_vw_pinned_image_json' impl/install_vaultwarden.sh
 }
+
+
+check_vaultwarden_fail2ban_configs_use_shared_atomic_write() {
+  awk '
+      /^_write_fail2ban_config_file\(\) \{/ { in_func=1; saw_atomic=0; saw_error=0; next }
+      in_func && /atomic_write_file "\$fail2ban_conf" 644 root:root/ { saw_atomic=1 }
+      in_func && /error "\$\(t app\.vaultwarden\.error\.fail2ban_write "\$fail2ban_conf"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_atomic && saw_error)) {
+          print "Vaultwarden Fail2Ban configs must publish through atomic_write_file with mode 644, root ownership, and localized errors." > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_vaultwarden.sh
+}

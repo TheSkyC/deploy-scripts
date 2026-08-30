@@ -614,6 +614,7 @@ main() {
       check_vaultwarden_image_digest_version_contract
       check_vaultwarden_legacy_extract_tool_config_is_usable
       check_vaultwarden_fail2ban_restart_failures_are_reported
+      check_vaultwarden_fail2ban_configs_use_shared_atomic_write
       check_vaultwarden_find_head_pipelines_are_nonfatal
       check_vaultwarden_install_cleanup_reports_systemctl_failures
       check_vaultwarden_install_summary_matches_health_state
