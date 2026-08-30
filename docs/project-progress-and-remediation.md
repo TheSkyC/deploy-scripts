@@ -1,6 +1,6 @@
 # 项目当前进度与整改路线
 
-> **审计基准**：`master` 当前 HEAD `aec3963`（2026-08-30）。
+> **审计基准**：`master` 代码基线提交 `af6b511`（2026-08-30）。
 > **文档目的**：将另一 AI 提出的安全、架构和体验问题与当前代码逐项对照，区分“已修复”“部分完成”“仍待处理”，并给出下一阶段可执行顺序。
 >
 > **结论先行**：这份建议对应的是修复前状态。高优先级安全项 1–4 已在 2026-08-29 的连续提交中完成主要修复；功能建议中的版本固定、单应用 dry-run/help、一键 HTTPS、卸载前导出、多实例、配置 diff、CI push 校验也已经落地。当前最大的未完成项不是原建议中的安全基线，而是：**真实生产环境验证仍有限、四个手写应用的架构取舍尚未进一步推进、`dist/` 生成物的治理仍保留漂移风险、部分应用仍采用浮动分支/镜像版本语义**。
@@ -13,17 +13,17 @@
 |---|---:|---|
 | 应用实现 | 16 个 | `apps/` 与 `impl/` 各 16 个 |
 | 单文件发布产物 | 17 个 | `dist/`：16 个应用脚本 + `deploy.sh` |
-| `dist/` 规模 | 约 126,532 行（按当前工作区统计） | 生成产物，不应手工编辑 |
-| 共享库 | 约 8,164 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
+| `dist/` 规模 | 约 135,108 行（按当前工作区统计） | 生成产物，不应手工编辑 |
+| 共享库 | 约 8,979 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
 | 工作区 | 干净 | 旧安装安全审计、行为级守卫及发布产物已提交 |
-| 当前提交 | `aec3963` | 旧安装安全审计及发布产物刷新 |
+| 当前代码基线 | `af6b511` | 旧安装安全审计及发布产物刷新后的整改基线 |
 
 ### 1.2 已完成的主线能力
 
 截至当前 HEAD，项目已经从“单应用安装脚本集合”发展为“共享生命周期框架 + 应用适配器 + 中央管理命令”：
 
 - **16 个应用统一动作面**：`install`、`update`、`backup`、`restore`、`status`、`status-json`、`doctor`、`verify`、`uninstall`；能力由应用注册表声明。
-- **9 个 GitHub Release 二进制应用**已经接入 `lib/binary_app.sh`：alist、beszel、filebrowser、frps、gitea、gotify、meilisearch、navidrome、ntfy。
+- **10 个 GitHub Release 二进制应用**已经接入 `lib/binary_app.sh`：alist、beszel、filebrowser、frps、gitea、gotify、meilisearch、navidrome、newapi、ntfy。
 - **New API 已完成迁移**：`impl/install_newapi.sh` 从约 1,074 行缩减至约 310 行源码，主要生命周期委托共享库；保留 SQLite WAL 备份、cron 备份和历史 `new-api_` 归档前缀兼容。对应提交 `5e52008`，并在 `39a2861` 增加真实安装 smoke 场景。
 - **备份可靠性闭环已完成**：归档 SHA-256、`manifest.json`、`verify`、安全 restore、损坏/路径穿越防护；16/16 应用均具备 backup + verify + restore 能力（不同应用可通过自定义适配实现）。
 - **中央运维能力已完成**：`status-all`、`backup-all`、`update-all`、`doctor-all`、`check-update`、`doctor security`、通知、systemd timer/cron 调度、export/import、Fleet 多机执行、JSON 状态与操作历史。
@@ -56,7 +56,7 @@
 |---|---|---|---|
 | M15 | Sub2API/Vaultwarden/NewAPI/CyberStrikeAI 各自重复生命周期 | **部分完成** | New API 已迁移到共享 `binary_app`（提交 `5e52008`）。剩余三个手写应用仍保留，但已有共享 helper（备份、回滚、删除、配置、restore、版本检查）。`PLAN.md:54-62` 明确记录：Vaultwarden 是 Docker 镜像提取 + Web Vault/nginx/certbot，Sub2API 是多构件备份 + PostgreSQL/Redis，CyberStrikeAI 是源码构建，当前不适合强行套单二进制生命周期。 |
 | M1 | `dist/` 生成物可能与源码漂移 | **有防线，治理仍可优化** | `tools/verify.sh` 的 release/dispatch/guards 会确定性重建并检查 `dist`；`.github/workflows/verify.yml:3-5, 23-40` 已在 push/PR 执行 release 检查。因此提交过时 `dist` 会被 CI 拦截。风险仍存在于本地忘记重建、生成物体积大、源码与发布物双份审阅成本；后续可评估改为 release 时生成或保留提交产物但强化 pre-commit。 |
-| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；TickFlow/CyberStrikeAI 使用 git branch；Vaultwarden 使用镜像 tag；博客/Hugo 仍是 latest 语义。故“全部 9 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
+| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；TickFlow/CyberStrikeAI 使用 git branch；Vaultwarden 使用镜像 tag；博客/Hugo 仍是 latest 语义。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
 | M11/M8 | Hugo `.deb` 无 SHA-256；Vaultwarden 用 root crontab 覆盖 | **已修复** | `impl/install_hugo_blog.sh:62-70, 308-340` 提取 GitHub asset digest 并校验后才 `dpkg -i`；Vaultwarden 使用 `/etc/cron.d/vaultwarden-backup` 与 `/etc/cron.d/certbot-renew` 原子写入，不再覆盖 root crontab。提交 `7640720`。 |
 
 ### 2.3 一致性与体验问题
@@ -105,7 +105,7 @@
 
 ### 4.3 版本可复现性的剩余边界
 
-当前 `BA_VERSION` 只对共享 GitHub Release 二进制应用提供通用 pin。仍有几类版本来源需要独立策略：
+当前 `BA_VERSION` 只对共享 GitHub Release 二进制应用提供通用 pin。当前共有 10 个应用使用该共享生命周期。仍有几类版本来源需要独立策略：
 
 - Vaultwarden：`VW_IMAGE_TAG` 已可指定镜像 tag，但镜像 tag 不等同于不可变 digest；
 - Hugo：依赖 GitHub latest 元数据，尚无统一 `HUGO_VERSION` 配置；
