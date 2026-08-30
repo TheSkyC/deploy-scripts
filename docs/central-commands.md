@@ -35,6 +35,22 @@ deploy.sh doctor-all [--json] [--only-installed] [--include id,...] [--exclude i
 
 Runs each installed app's `doctor` and aggregates JSON records.
 
+### `doctor security` / `doctor-security`
+
+```text
+deploy.sh doctor security [--json]
+deploy.sh doctor-security [--json]
+```
+
+Runs a read-only legacy-install security audit. It checks for Vaultwarden
+Admin Token temporary files, plaintext Sub2API PostgreSQL DSNs in legacy
+backup scripts, wildcard listeners recorded in deployment configs, and
+application backup jobs left in root crontab or unmanaged `/etc/cron.d`
+drop-ins. It never prints credential contents and never deletes files.
+The exit status is non-zero only when the audit cannot safely inspect a
+security-sensitive path; findings are reported as `ok`, `warning`, `error`, or
+`not_checked`. `--json` emits schema version 1 for automation.
+
 ### `backup-all`
 
 ```text

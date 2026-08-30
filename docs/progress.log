@@ -698,3 +698,5 @@ Format per entry:
   `tools/verify.sh shellcheck` 仍受仓库既有 SC2043 warning 阻断，未发现本批次
   新增文件的 warning。
 - 提交 / Commit: f3c1e0e
+
+2026-08-30 P0-S2: added read-only `doctor security` / `doctor-security` audit for legacy Vaultwarden token temp files, plaintext Sub2API DSNs, wildcard listener configs, and unmanaged/root backup schedules. Added redacted JSON schema v1 output, fixture behavior guard, localized messages, and central command documentation.

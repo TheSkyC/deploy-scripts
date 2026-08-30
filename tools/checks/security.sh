@@ -129,3 +129,56 @@ check_security_defaults_and_public_bind_guard() {
     return 1
   }
 }
+
+
+check_security_audit_contract() {
+  local temp_root fixture_output json_file status
+  temp_root="$(mktemp -d)"
+  mkdir -p "$temp_root/root" "$temp_root/tmp" "$temp_root/etc/cron.d" "$temp_root/usr/local/bin"
+  printf '%s\n' 'VALUE_ONE' > "$temp_root/root/.vaultwarden-admin-token.legacy"
+  printf '%s\n' 'PG_DSN=postgresql://user:VALUE_TWO@localhost:5432/db' > "$temp_root/usr/local/bin/sub2api-backup"
+  printf '%s\n' 'SUB2API_BIND_ADDR=0.0.0.0' > "$temp_root/etc/sub2api-deploy.conf"
+  printf '%s\n' '30 3 * * * root /usr/local/bin/sub2api-backup' > "$temp_root/etc/cron.d/legacy-job"
+  printf '%s\n' '30 3 * * * /usr/local/bin/sub2api-backup' > "$temp_root/root-crontab"
+
+  set +e
+  fixture_output="$(DEPLOY_SECURITY_AUDIT_ROOT="$temp_root" \
+    DEPLOY_SECURITY_AUDIT_ROOT_CRONTAB_FILE="$temp_root/root-crontab" \
+    "$BASH_BIN" deploy.sh doctor security --json 2>&1)"
+  status=$?
+  set -e
+  rm -rf "$temp_root"
+
+  [[ "$status" -eq 0 ]] || {
+    echo "Security audit fixture unexpectedly failed: ${fixture_output}" >&2
+    return 1
+  }
+  [[ "$fixture_output" != *VALUE_ONE* && "$fixture_output" != *VALUE_TWO* ]] || {
+    echo "Security audit output exposed fixture credential content." >&2
+    return 1
+  }
+  json_file="$(mktemp)"
+  printf '%s\n' "$fixture_output" > "$json_file"
+  python - "$json_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+assert payload["schema_version"] == 1
+assert payload["summary"]["warning"] >= 3
+checks = {record["check"]: record for record in payload["records"]}
+assert checks["vaultwarden_legacy_token"]["state"] == "warning"
+assert checks["sub2api_plaintext_dsn"]["state"] == "warning"
+assert checks["public_listener"]["state"] == "warning"
+assert checks["legacy_root_crontab"]["state"] == "warning"
+assert checks["legacy_cron_file"]["state"] == "warning"
+for record in payload["records"]:
+    assert "VALUE_ONE" not in record["message"]
+    assert "VALUE_TWO" not in record["message"]
+PY
+  status=$?
+  rm -f "$json_file"
+  return "$status"
+}

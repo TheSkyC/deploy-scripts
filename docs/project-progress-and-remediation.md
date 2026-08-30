@@ -1,6 +1,6 @@
 # 项目当前进度与整改路线
 
-> **审计基准**：`master` 当前 HEAD `39a2861`（2026-08-30）。
+> **审计基准**：`master` 当前 HEAD `0c8daa0`（2026-08-30）。
 > **文档目的**：将另一 AI 提出的安全、架构和体验问题与当前代码逐项对照，区分“已修复”“部分完成”“仍待处理”，并给出下一阶段可执行顺序。
 >
 > **结论先行**：这份建议对应的是修复前状态。高优先级安全项 1–4 已在 2026-08-29 的连续提交中完成主要修复；功能建议中的版本固定、单应用 dry-run/help、一键 HTTPS、卸载前导出、多实例、配置 diff、CI push 校验也已经落地。当前最大的未完成项不是原建议中的安全基线，而是：**真实生产环境验证仍有限、四个手写应用的架构取舍尚未进一步推进、`dist/` 生成物的治理仍保留漂移风险、部分应用仍采用浮动分支/镜像版本语义**。
@@ -15,8 +15,8 @@
 | 单文件发布产物 | 17 个 | `dist/`：16 个应用脚本 + `deploy.sh` |
 | `dist/` 规模 | 约 126,532 行（按当前工作区统计） | 生成产物，不应手工编辑 |
 | 共享库 | 约 8,164 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
-| 工作区 | 干净 | 本次文档创建前 `git status --short` 无输出 |
-| 当前提交 | `39a2861` | New API 迁移后的 E2E smoke 场景 |
+| 工作区 | 本批次改动中 | 正在加入旧安装安全审计与行为级守卫；发布产物将在验证后重新生成 |
+| 当前提交 | `0c8daa0` | 公网监听安全守卫与进度记录 |
 
 ### 1.2 已完成的主线能力
 
@@ -26,7 +26,7 @@
 - **9 个 GitHub Release 二进制应用**已经接入 `lib/binary_app.sh`：alist、beszel、filebrowser、frps、gitea、gotify、meilisearch、navidrome、ntfy。
 - **New API 已完成迁移**：`impl/install_newapi.sh` 从约 1,074 行缩减至约 310 行源码，主要生命周期委托共享库；保留 SQLite WAL 备份、cron 备份和历史 `new-api_` 归档前缀兼容。对应提交 `5e52008`，并在 `39a2861` 增加真实安装 smoke 场景。
 - **备份可靠性闭环已完成**：归档 SHA-256、`manifest.json`、`verify`、安全 restore、损坏/路径穿越防护；16/16 应用均具备 backup + verify + restore 能力（不同应用可通过自定义适配实现）。
-- **中央运维能力已完成**：`status-all`、`backup-all`、`update-all`、`doctor-all`、`check-update`、通知、systemd timer/cron 调度、export/import、Fleet 多机执行、JSON 状态与操作历史。
+- **中央运维能力已完成**：`status-all`、`backup-all`、`update-all`、`doctor-all`、`check-update`、`doctor security`、通知、systemd timer/cron 调度、export/import、Fleet 多机执行、JSON 状态与操作历史。
 - **安全基线已收紧**：Web 服务默认 loopback；二进制应用默认不自动开防火墙端口；Vaultwarden 默认关闭注册；TickFlow 默认生成随机面板密码；敏感配置 root-only；Nginx 默认站点可恢复而非卸载时直接删除。
 - **质量门禁已加强**：verify 套件从扫描生成物文本逐步解耦，源码结构检查与 `dist` 一致性检查分离；CI 的 syntax/release/dispatch/guards、shellcheck、Docker E2E smoke 已配置为 push/PR 执行，nightly 运行全量验证。
 
@@ -117,7 +117,7 @@
 ### P0：生产安全与回归防护
 
 - [x] 为安全默认增加行为级 guard：验证所有 Web 应用默认 loopback；验证 `BA_FIREWALL=0`；验证 TickFlow 自动生成非空密码；验证安装摘要不含已知凭据模式。新增 `DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1` 后，共享二进制生命周期与 TickFlow 对显式 wildcard + 无 TLS 组合支持统一 hard-fail。
-- [ ] 为旧安装提供一次性迁移/清理提示或 `doctor security` 检查，识别旧 token 临时文件、旧明文 DSN、旧公网监听和 root crontab 残留。
+- [x] 为旧安装提供一次性迁移/清理提示或 `doctor security` 检查，识别旧 token 临时文件、旧明文 DSN、旧公网监听和 root crontab 残留；审计只读、默认脱敏，并支持 `--json`。
 - [x] 为显式公网绑定 + 未启用 TLS 的组合提供统一 hard-fail 选项（当前主要是 warning），避免误部署明文服务：`DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1` 已接入共享二进制应用与 TickFlow。
 
 ### P1：版本与部署可复现性

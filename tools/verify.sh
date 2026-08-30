@@ -288,6 +288,7 @@ main() {
       check_dist_is_up_to_date
       check_localized_dispatch
       check_doctor_dispatch
+      check_security_audit_contract
       check_app_help_dispatch
       check_status_json_dispatch
       check_status_json_legacy_contract
@@ -694,6 +695,7 @@ main() {
       check_self_update_interruption_restores_activation
       check_self_update_signal_interruption
       check_security_defaults_and_public_bind_guard
+      check_security_audit_contract
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0
