@@ -1526,6 +1526,36 @@ backup_create_tar_archive() {
   fi
 }
 
+# Run PRODUCER_ARGS, compress its stdout to a gzip archive in a unique sibling
+# temporary file, and publish it atomically at ARCHIVE. The producer and gzip
+# statuses are checked before publication so a failed producer cannot leave a
+# partial final archive behind. The caller controls producer stderr by passing
+# a command or shell function with the desired redirection.
+# Any failed producer, gzip, or publish step removes the temporary file and
+# leaves an existing final archive untouched.
+backup_create_gzip_archive() {
+  local archive="$1" archive_tmp producer_status gzip_status
+  local -a pipeline_status=()
+  shift
+  [[ -n "$archive" && "$#" -gt 0 ]] || return 1
+  archive_tmp="$(mktemp "${archive}.tmp.XXXXXX")" || return 1
+  if "$@" | gzip >"$archive_tmp"; then
+    pipeline_status=("${PIPESTATUS[@]}")
+  else
+    pipeline_status=("${PIPESTATUS[@]}")
+  fi
+  producer_status="${pipeline_status[0]:-1}"
+  gzip_status="${pipeline_status[1]:-1}"
+  if (( producer_status != 0 || gzip_status != 0 )); then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+  if ! mv "$archive_tmp" "$archive"; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+}
+
 backup_write_manifest() {
   local archive="$1" app_id="$2" schema_version="$3" installed_version="${4:-}"
   local digest name created_at
