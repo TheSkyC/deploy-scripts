@@ -409,10 +409,9 @@ main() {
       return 0
       ;;
     guards)
-      set -E
-      local current_guard=""
-      trap 'case "${BASH_COMMAND%% *}" in check_*) current_guard="${BASH_COMMAND%% *}" ;; esac' DEBUG
-      trap 'status=$?; printf "guards verification failed in %s while executing: %s\n" "${current_guard:-unknown}" "$BASH_COMMAND" >&2; exit "$status"' ERR
+      GUARDS_CURRENT_CHECK=""
+      trap 'case "${BASH_COMMAND%% *}" in check_*) GUARDS_CURRENT_CHECK="${BASH_COMMAND%% *}" ;; esac' DEBUG
+      trap 'status=$?; if (( status != 0 )); then printf "guards verification failed in %s\n" "${GUARDS_CURRENT_CHECK:-unknown}" >&2; fi' EXIT
       check_shell_syntax
       build_verified_release
       check_dist_is_up_to_date
