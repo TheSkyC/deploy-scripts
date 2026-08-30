@@ -36,6 +36,7 @@ source tools/checks/state.sh
 source tools/checks/self_update.sh
 source tools/checks/update.sh
 source tools/checks/validators.sh
+source tools/checks/security.sh
 
 usage() {
   cat >&2 <<'EOF'
@@ -692,6 +693,7 @@ main() {
       check_self_update_rejects_archive_listing_failure
       check_self_update_interruption_restores_activation
       check_self_update_signal_interruption
+      check_security_defaults_and_public_bind_guard
       check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0

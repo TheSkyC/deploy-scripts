@@ -108,6 +108,7 @@ _validate_config_values() {
     127.0.0.1|0.0.0.0|::1|::) : ;;
     *) error "$(t app.tickflow.error.bind_addr "${TICKFLOW_BIND_ADDR:-unset}")" ;;
   esac
+  app_enforce_secure_public_bind "${TICKFLOW_BIND_ADDR:-127.0.0.1}" 0 "TickFlow"
 }
 
 _compose_bin() {

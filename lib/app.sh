@@ -307,13 +307,38 @@ app_nginx_default_site_restore() {
   fi
 }
 
-deploy_env_truthy() {
-  local name="$1"
-  local value="${!name:-}"
-  case "${value,,}" in
+deploy_value_truthy() {
+  case "${1,,}" in
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+deploy_env_truthy() {
+  local name="$1"
+  deploy_value_truthy "${!name:-}"
+}
+
+# Return success when a service binds all IPv4 or IPv6 interfaces. Keep this
+# separate from URL validation: a wildcard listener is valid syntax, but it is
+# a security-sensitive deployment choice.
+app_public_bind_is_wildcard() {
+  case "${1:-}" in
+    0.0.0.0|::) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Optional fail-closed guard for deployments that intentionally expose an
+# application listener. Existing explicit public bindings remain compatible by
+# default, while operators and CI can opt into rejecting plain HTTP:
+# DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND=1.
+app_enforce_secure_public_bind() {
+  local bind_addr="${1:-}" tls_enabled="${2:-0}" app_name="${3:-app}"
+  app_public_bind_is_wildcard "$bind_addr" || return 0
+  deploy_value_truthy "$tls_enabled" && return 0
+  deploy_env_truthy DEPLOY_FAIL_ON_INSECURE_PUBLIC_BIND || return 0
+  error "$(t error.insecure_public_bind "$app_name" "$bind_addr")"
 }
 
 deploy_assume_yes() {
