@@ -1599,44 +1599,56 @@ backup_verify_latest_json() {
     "$digest_state" "$(app_json_string "$(basename "$archive")")" "$(app_json_string "$message")"
 }
 
+# Validate that a gzip tar archive can be listed and has no path-traversal
+# members. Prints nothing; returns nonzero for unreadable archives, absolute
+# paths, parent-directory segments, or Windows-style backslashes. Callers keep
+# their own user-facing error text and decide when to perform checksum checks.
+backup_validate_archive_members() {
+  local archive="$1" member_list member
+  member_list="$(tar -tzf "$archive" 2>/dev/null)" || return 1
+  while IFS= read -r member; do
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*) return 1 ;;
+    esac
+  done <<< "$member_list"
+}
+
 # Restore one archive over a service's data directory, with full rollback.
-# Arguments: $1 data dir  $2 systemd unit name  $3 archive path.
+# Arguments: $1 data dir  $2 optional systemd unit name  $3 archive path.
 # Caller must already have: required root, taken the app lock, selected a
-# path-confined archive. Verifies the checksum before touching anything,
-# rejects unsafe tar members (absolute paths, "..", backslashes), stops the
-# service before swapping the directory atomically with a timestamped aside
-# copy, restarts, and rolls the previous data back when the service cannot
-# start on restored data.
+# path-confined archive. Verifies the checksum before touching anything and
+# rejects unsafe tar members. When a service name is supplied, this helper
+# manages stop/restart and rolls data back if the service cannot start. An
+# empty service name is for multi-artifact restores whose caller already owns
+# the service lifecycle (for example, Sub2API's data/config/database stages).
 backup_restore_data_dir() {
   local data_dir="$1" service_name="$2" archive="$3"
   if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
     error "$(t backup.verify.failed "$(basename "$archive")")"
   fi
-  info "$(t backup.restore.using "$archive")"
-  local member_list extract_dir
-  if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
+  if ! backup_validate_archive_members "$archive"; then
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
-  while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
-        ;;
-    esac
-  done <<< "$member_list"
+  info "$(t backup.restore.using "$archive")"
 
-  systemctl stop "$service_name" || error "$(t backup.restore.stop_failed "$service_name")"
+  if [[ -n "$service_name" ]]; then
+    systemctl stop "$service_name" || error "$(t backup.restore.stop_failed "$service_name")"
+  fi
   local data_parent data_base staged_aside restored=false
   data_parent="$(dirname "$data_dir")"
   data_base="$(basename "$data_dir")"
   staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)"
   if ! mv "$data_dir" "$staged_aside"; then
-    systemctl start "$service_name" || true
+    if [[ -n "$service_name" ]]; then
+      systemctl start "$service_name" || true
+    fi
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
   if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
     mv "$staged_aside" "$data_dir"
-    systemctl start "$service_name" || true
+    if [[ -n "$service_name" ]]; then
+      systemctl start "$service_name" || true
+    fi
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
   if tar -xzf "$archive" -C "$extract_dir"; then
@@ -1654,10 +1666,17 @@ backup_restore_data_dir() {
   if [[ "$restored" != "true" ]]; then
     rm -rf "$data_dir"
     mv "$staged_aside" "$data_dir"
-    systemctl start "$service_name" || true
+    if [[ -n "$service_name" ]]; then
+      systemctl start "$service_name" || true
+    fi
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
   chown -R root:root "$data_dir" 2>/dev/null || true
+  if [[ -z "$service_name" ]]; then
+    rm -rf "$staged_aside"
+    success "$(t backup.restore.restored "$(basename "$archive")")"
+    return 0
+  fi
   if systemctl start "$service_name"; then
     wait_for_service "$service_name" 20 || true
   fi
@@ -9120,40 +9139,19 @@ do_restore() {
   [[ -n "$data_archive" ]] \
     || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
 
-  local member_list
-  if ! member_list="$(tar -tzf "$data_archive" 2>/dev/null)"; then
+  if ! backup_validate_archive_members "$data_archive"; then
     error "$(t backup.restore.invalid_archive "$data_archive")"
   fi
-  local member
-  while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        error "$(t backup.restore.invalid_archive "$(basename "$data_archive")")"
-        ;;
-    esac
-  done <<< "$member_list"
-  if [[ -n "$conf_archive" ]]; then
-    if ! member_list="$(tar -tzf "$conf_archive" 2>/dev/null)"; then
-      error "$(t backup.restore.invalid_archive "$conf_archive")"
-    fi
-    while IFS= read -r member; do
-      case "$member" in
-        ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-          error "$(t backup.restore.invalid_archive "$(basename "$conf_archive")")"
-          ;;
-      esac
-    done <<< "$member_list"
+  if [[ -n "$conf_archive" ]] && ! backup_validate_archive_members "$conf_archive"; then
+    error "$(t backup.restore.invalid_archive "$conf_archive")"
   fi
   info "$(t backup.restore.using "$data_archive")"
 
   systemctl stop "$SERVICE_NAME" \
     || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
-  # ── data directory: atomic swap with aside copy, shared helper semantics.
-  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
-    : # helper already restarted nothing; keep going to config/db stages
-  fi
-  # The helper starts $2 (empty here) — systemctl start "" would fail, so
-  # guard by restoring the stopped state ourselves below.
+  # ── data directory: atomic swap with aside copy. The empty service argument
+  # tells the shared helper that this caller owns the service lifecycle.
+  backup_restore_data_dir "$DATA_DIR" "" "$data_archive"
 
   # ── config directory: aside + swap when a config archive exists.
   if [[ -n "$conf_archive" ]]; then

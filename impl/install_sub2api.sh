@@ -1830,40 +1830,19 @@ do_restore() {
   [[ -n "$data_archive" ]] \
     || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
 
-  local member_list
-  if ! member_list="$(tar -tzf "$data_archive" 2>/dev/null)"; then
+  if ! backup_validate_archive_members "$data_archive"; then
     error "$(t backup.restore.invalid_archive "$data_archive")"
   fi
-  local member
-  while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        error "$(t backup.restore.invalid_archive "$(basename "$data_archive")")"
-        ;;
-    esac
-  done <<< "$member_list"
-  if [[ -n "$conf_archive" ]]; then
-    if ! member_list="$(tar -tzf "$conf_archive" 2>/dev/null)"; then
-      error "$(t backup.restore.invalid_archive "$conf_archive")"
-    fi
-    while IFS= read -r member; do
-      case "$member" in
-        ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-          error "$(t backup.restore.invalid_archive "$(basename "$conf_archive")")"
-          ;;
-      esac
-    done <<< "$member_list"
+  if [[ -n "$conf_archive" ]] && ! backup_validate_archive_members "$conf_archive"; then
+    error "$(t backup.restore.invalid_archive "$conf_archive")"
   fi
   info "$(t backup.restore.using "$data_archive")"
 
   systemctl stop "$SERVICE_NAME" \
     || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
-  # ── data directory: atomic swap with aside copy, shared helper semantics.
-  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
-    : # helper already restarted nothing; keep going to config/db stages
-  fi
-  # The helper starts $2 (empty here) — systemctl start "" would fail, so
-  # guard by restoring the stopped state ourselves below.
+  # ── data directory: atomic swap with aside copy. The empty service argument
+  # tells the shared helper that this caller owns the service lifecycle.
+  backup_restore_data_dir "$DATA_DIR" "" "$data_archive"
 
   # ── config directory: aside + swap when a config archive exists.
   if [[ -n "$conf_archive" ]]; then
