@@ -15961,18 +15961,7 @@ backup_vaultwarden_binary() {
 }
 _write_fail2ban_config_file() {
   local fail2ban_conf="$1"
-  local fail2ban_tmp
-  if ! fail2ban_tmp=$(mktemp "${fail2ban_conf}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
-  fi
-  if ! cat > "$fail2ban_tmp"; then
-    rm -f "$fail2ban_tmp"
-    error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
-  fi
-  if ! chmod 644 "$fail2ban_tmp" \
-      || ! chown root:root "$fail2ban_tmp" \
-      || ! mv "$fail2ban_tmp" "$fail2ban_conf"; then
-    rm -f "$fail2ban_tmp"
+  if ! atomic_write_file "$fail2ban_conf" 644 root:root; then
     error "$(t app.vaultwarden.error.fail2ban_write "$fail2ban_conf")"
   fi
 }
