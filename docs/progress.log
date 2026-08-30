@@ -894,3 +894,8 @@ Format per entry:
 - 验证 / Verified: 新增/更新共享恢复结构守卫与行为守卫（含 caller-managed 空 unit 不调用 systemctl）；`tools/verify.sh syntax`、focused backup guards、`tools/verify.sh shellcheck`、`git diff --check` 通过。完整 guards 在提交前因暂存源码与 dist 的 HEAD 尚未一致而正确拒绝，生成物与源码一并提交后 pre-commit 的 `tools/verify.sh release` 通过；完整 guards 应在干净提交后复跑。
 - 提交 / Commit: 4086551
 
+## 2026-08-30（自主演进批次 P2-S2 续 3）
+- 状态 / Status: completed
+- 成果 / Change: 继续收敛备份归档发布流程。新增 `backup_create_tar_archive`：使用归档旁的随机临时文件执行 gzip tar，只有 tar 成功后才原子移动到最终路径，失败会清理临时文件并保持既有归档不变。共享二进制应用的 `_ba_backup`、Sub2API 的 pre-update/manual config/data 归档、Vaultwarden 的手动归档均改为委托该 helper；独立 cron 生成脚本仍保留自包含实现，不强行引入运行时依赖。新增行为守卫覆盖成功发布、失败清理、既有归档保护、参数校验及委托关系。
+- 验证 / Verified: `tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused backup guards、`git diff --check` 通过；干净提交后的 `tools/verify.sh guards` 通过。首次完整 guards 暴露旧守卫仍要求调用方直接写 sidecar/直接向 tar 重定向 stderr，已在守卫修复提交中改为识别共享 finalization/publisher 契约；最终输出 `Guards verification passed`。
+- 提交 / Commit: f5ad69c, da1ccd6, c431589
