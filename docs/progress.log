@@ -844,3 +844,17 @@ Format per entry:
   `check_release_package_artifacts` 正确拒绝 stale `dist/`；在同一提交含生成物后复跑
   全量 guards 已通过。
 - 提交 / Commit: 7d9d9f4
+
+## 2026-08-30（自主演进批次 P2-S3）
+- 状态 / Status: completed
+- 成果 / Change: 完成实例、TLS 与迁移运行手册。新增 `docs/instances-tls-migration.md`，明确
+  `<app>@<instance>` 当前只隔离配置和锁，端口、systemd 单元、用户、数据/日志/备份目录、
+  Nginx 与 cron 等运行资源不会因 suffix 自动隔离；对 Sub2API、Vaultwarden、CyberStrikeAI、
+  CPA Stack、TickFlow 维持“每主机一个运行时”的保守操作边界。文档补充共享二进制应用 TLS
+  示例、各手写应用 HTTPS 边界、导出/导入限制、恢复与切换演练步骤和检查清单；README、应用与
+  中央命令索引均已链接该手册。路线图将 P2 的实例/TLS/export-import 文档项标为完成。
+- 验证 / Verified: Python 本地 Markdown 相对链接检查通过，`git diff --check` 通过。
+  前一 P2-S1/P2-S2 代码批次的 GitHub Actions Verify run `33315360750`（head `3da2d08`）
+  成功，syntax/release/dispatch/guards/shellcheck/e2e-smoke 全部通过，nightly-all 按 push
+  触发条件跳过；本次文档批次将在后续 push 后接受独立 CI 确认。
+- 提交 / Commit: 6638b72
