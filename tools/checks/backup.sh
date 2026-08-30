@@ -956,24 +956,22 @@ check_silent_backup_tar_diagnostics_use_stderr() {
     return 1
   fi
   awk '
-      /_ba_backup\(\)/ { in_func=1; saw_tar=0; saw_stderr=0; next }
-      in_func && /if tar -czf/ { saw_tar=1 }
-      in_func && / >&2; then/ { saw_stderr=1 }
+      /_ba_backup\(\)/ { in_func=1; saw_tar=0; next }
+      in_func && /backup_create_tar_archive/ { saw_tar=1 }
       in_func && /^}/ {
-        if (!(saw_tar && saw_stderr)) {
-          printf "%s shared backup helper must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+        if (!saw_tar) {
+          printf "%s shared backup helper must use the shared tar publisher\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
     ' lib/binary_app.sh
   awk '
-      /_backup_silent\(\)/ { in_func=1; saw_tar=0; saw_stderr=0; next }
-      in_func && /if tar -czf/ { saw_tar=1 }
-      in_func && / >&2; then/ { saw_stderr=1 }
+      /_backup_silent\(\)/ { in_func=1; saw_tar=0; next }
+      in_func && /(if tar -czf|backup_create_tar_archive)/ { saw_tar=1 }
       in_func && /^}/ {
-        if (!(saw_tar && saw_stderr)) {
-          printf "%s silent backup helper must send tar diagnostics to stderr\n", FILENAME > "/dev/stderr"
+        if (!saw_tar) {
+          printf "%s silent backup helper must publish through a tar helper\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
@@ -1009,14 +1007,12 @@ check_tar_diagnostics_use_stderr() {
       }
     ' impl/install_sub2api.sh
   awk '
-      /do_backup\(\)/ { in_backup=1; saw_conf_stderr=0; saw_data_stderr=0; next }
-      in_backup && /if tar -czf "\$CONF_TMP"/ { in_conf=1; next }
-      in_conf && / >&2; then/ { saw_conf_stderr=1; in_conf=0 }
-      in_backup && /if tar -czf "\$DATA_TMP"/ { in_data=1; next }
-      in_data && / >&2; then/ { saw_data_stderr=1; in_data=0 }
+      /do_backup\(\)/ { in_backup=1; saw_conf=0; saw_data=0; next }
+      in_backup && /backup_create_tar_archive "\$CONF_ARCHIVE"/ { saw_conf=1 }
+      in_backup && /backup_create_tar_archive "\$DATA_ARCHIVE"/ { saw_data=1 }
       in_backup && /release_lock/ {
-        if (!(saw_conf_stderr && saw_data_stderr)) {
-          printf "%s Sub2API manual backup tar diagnostics must go to stderr\n", FILENAME > "/dev/stderr"
+        if (!(saw_conf && saw_data)) {
+          printf "%s Sub2API manual backup must use the shared tar publisher for config and data\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_backup=0
@@ -1125,6 +1121,17 @@ check_backup_create_tar_archive_helper() {
     echo ok
   ')"
   [[ "$output" == ok ]]
+  awk '
+    /^backup_create_tar_archive\(\)/ { in_fn=1; saw_stderr=0; next }
+    in_fn && /tar -czf "\$archive_tmp" "\$@" >&2/ { saw_stderr=1 }
+    in_fn && /^}$/ {
+      if (!saw_stderr) {
+        print "backup_create_tar_archive must send tar diagnostics to stderr" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/backup.sh
 }
 
 check_backup_create_tar_archive_delegates() {
