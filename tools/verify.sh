@@ -386,6 +386,8 @@ main() {
       check_update_adapter_fallback_stays_unsupported
       check_update_git_branch_checker
       check_update_cpa_stack_merge_verdicts
+      check_cpa_stack_component_version_manifest
+      check_sub2api_component_version_manifest
       echo "Update verification passed"
       return 0
       ;;
