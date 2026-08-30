@@ -905,3 +905,19 @@ Format per entry:
 - 成果 / Change: 进一步统一备份保留期选择。新增 `backup_list_expired_archives`，集中规范 `BACKUP_KEEP_DAYS` 的非法值/零值处理、直接子文件筛选、NUL 分隔输出和 staging 文件排除；共享二进制应用与 Sub2API 手动备份的清理逻辑改为委托该 helper，同时保留各自的逐文件失败告警和本地化统计。
 - 验证 / Verified: 新增行为守卫验证旧/新文件、嵌套目录、非法/零保留期和 NUL 安全；`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused backup guards、`tools/verify.sh guards`、`git diff --check` 均通过。前一批推送的 GitHub Actions Verify run `33330962189`（head `8a68da9`）已通过 syntax/release/dispatch/guards/shellcheck/e2e-smoke，nightly-all 按 push 条件跳过；本批 retention 变更待本次 push 后接受新的远端 CI 验证。
 - 提交 / Commit: 3769d12, 1b90add
+
+## 2026-08-31（自主演进批次 P2-S2 续 5）
+- 状态 / Status: completed
+- 成果 / Change: 继续下沉 PostgreSQL gzip 备份的低层发布原语。新增
+  `backup_create_gzip_archive`，由 helper 负责 producer stdout 的 gzip 临时落盘、
+  producer/gzip 双重退出状态检查、成功后的原子发布和失败清理；因此 producer 失败时
+  不会把部分 SQL dump 发布成最终归档，既有归档也保持不变。Sub2API 的手动备份与
+  pre-update 静默备份均已委托该 helper，静默路径通过独立 wrapper 保留 pg_dump stderr
+  的前缀诊断；生成的独立 cron 脚本继续保持自包含实现。
+- 验证 / Verified: 新增 gzip helper 行为守卫，覆盖成功解压、producer 失败、gzip 失败、
+  临时文件清理和既有归档保护，并更新 Sub2API stderr/委托结构守卫；`tools/verify.sh
+  syntax`、`tools/verify.sh shellcheck`、focused gzip guards、`tools/verify.sh guards`、
+  `tools/verify.sh release`（提交 hook）与 `git diff --check` 均通过。最新 retention
+  变更的 GitHub Actions Verify run `33332418888` 已成功；本批 gzip 变更待后续 push
+  后接受新的远端 CI 验证。
+- 提交 / Commit: ff78aea

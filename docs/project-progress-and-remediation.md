@@ -149,10 +149,14 @@
   `tools/build-release.sh` 改动，hook 会运行 `tools/verify.sh release`；它绝不自动
   stage 生成物。`tools/install-git-hooks.sh` 在每个 clone 显式、安全地启用本地
   `core.hooksPath`，README/CONTRIBUTING 记录安装和冲突处理。
-- [ ] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。已完成第一小步：
-  `app_http_status_code` 统一二进制应用与上述三个自定义应用的本地 HTTP
-  状态探测（保留各自的重试、成功码、Host header、TLS 与用户提示语义）；仍待继续
-  下沉回滚和备份编排的重复部分。
+- [ ] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。已完成若干边界明确的小步：
+  `app_http_status_code` 统一 HTTP 状态探测；`app_install_executable_file` 统一可执行文件
+  staging/原子替换；`backup_validate_archive_members`、`backup_restore_data_dir`、
+  `backup_create_tar_archive`、`backup_finalize_archive`、`backup_list_expired_archives` 与
+  `backup_create_gzip_archive` 分别收敛备份校验、恢复生命周期、归档发布、完整性元数据、
+  保留期筛选和 gzip 发布。各应用仍保留自身的重试、成功码、服务/数据模型、日志与用户
+  提示语义；仍待继续审查配置/锁、回滚编排、PostgreSQL/sidecar 语义及独立 cron 脚本的
+  适配边界，不能将整项提前标记为完成。
 - [x] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档：新增 `docs/instances-tls-migration.md`，明确 `@instance` 仅隔离配置/锁而非运行时资源，提供 shared binary/Vaultwarden/CPA Stack/CyberStrikeAI 的 TLS 入口边界，以及 export/import + 备份 verify + restore + cutover 的演练顺序。
 
 ## 6. 推荐验证命令
