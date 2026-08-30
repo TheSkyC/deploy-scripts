@@ -858,3 +858,20 @@ Format per entry:
   成功，syntax/release/dispatch/guards/shellcheck/e2e-smoke 全部通过，nightly-all 按 push
   触发条件跳过；本次文档批次将在后续 push 后接受独立 CI 确认。
 - 提交 / Commit: 6638b72
+
+## 2026-08-30（自主演进批次 P2-S2 续）
+- 状态 / Status: completed
+- 成果 / Change: 在共享 HTTP 探测之后继续下沉低层生命周期原语。新增
+  `app_install_executable_file`（`lib/binary.sh`），统一可执行文件的临时落盘、
+  mode/owner 校验与原子替换；共享 binary-app、Sub2API、Vaultwarden、
+  CyberStrikeAI 的安装/回滚路径均委托该 helper，避免各自复制恢复实现。随后新增
+  `backup_finalize_archive`（`lib/backup.sh`），统一 sha256 sidecar + manifest
+  编排，Sub2API 手动 PostgreSQL/config/data 三类归档现在都会写入完整性元数据，
+  写入失败会明确告警但不丢弃已经成功生成的归档。
+- 验证 / Verified: 新增可执行文件 helper 的行为检查（包括同路径替换和 owner 失败
+  fail-closed）及 backup finalize 行为/manifest 检查；`bash -n`、focused guards、
+  `tools/verify.sh syntax`、`shellcheck`、`release` 与 `git diff --check` 通过；
+  提交 hook 在含源码和 `dist/` 的提交前再次通过。前一文档 push 的 GitHub Actions
+  Verify run `33315739478`（head `90a2798`）成功，syntax/release/dispatch/guards/
+  shellcheck/e2e-smoke 全部通过，nightly-all 按 push 触发条件跳过。
+- 提交 / Commit: 1c95499, 613e08e
