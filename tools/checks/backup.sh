@@ -1642,7 +1642,7 @@ check_schedule_units_are_atomic_and_cleaned_up() {
 
     # Default calendar (no --at) must be representable on the cron fallback:
     # the default for check-only is a plain HH:MM that converts cleanly.
-    rm -f "$DEPLOY_SCHEDULE_CRON_FILE" "$DEPLOY_SCHEDULE_RUNNER"
+    rm -f "$DEPLOY_SCHEDULE_CRON_FILE" "$DEPLOY_SCHEDULE_RUNNER" "$SCHEDULE_CONF_FILE"
     schedule_main schedule --enable --mode check-only
     [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] || { echo NO_DEFAULT_CRON; exit 66; }
     grep -qE "^0 9 \* \* \* root " "$DEPLOY_SCHEDULE_CRON_FILE" || { echo BAD_DEFAULT_CRON; cat "$DEPLOY_SCHEDULE_CRON_FILE" >&2; exit 67; }
