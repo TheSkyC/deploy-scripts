@@ -1625,6 +1625,9 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     export DEPLOY_SCHEDULE_RUNNER="$tmp/runner"
     require_root() { :; }
     systemctl() { return 1; }
+    # The root-owned mode-600 contract is asserted structurally above; this
+    # isolated behavior test writes its temporary config as the CI user.
+    app_conf_trusted_value() { return 0; }
     error() { echo "ERROR: $*" >&2; exit 9; }
     success() { :; }
     DEPLOY_ROOT_DIR="$tmp/root"
