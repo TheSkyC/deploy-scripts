@@ -5,6 +5,8 @@ also reachable through the central launcher: `deploy.sh <app> <action>`.
 Common actions: `install`, `update`, `backup`, `restore`, `status`,
 `status-json`, `doctor`, `verify`, `uninstall`.
 
+For instance-qualified commands, reverse-proxy TLS, and an export/import restore rehearsal, read the [instances, TLS, and migration runbook](instances-tls-migration.md).
+
 Every app supports `--help` (lists configuration keys with current values) and
 `--dry-run <action>` (previews what install/update/backup/uninstall would do
 without touching the system). Configuration keys are environment variables;

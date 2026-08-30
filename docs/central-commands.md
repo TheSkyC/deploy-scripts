@@ -90,6 +90,11 @@ deploy.sh self-update [--check|--dry-run|--rollback|--list] [--json] [--yes] [--
 deploy.sh <app>@<instance> <action>   # per-instance config/lock paths
 ```
 
+`@<instance>` isolates only the framework config and lock path; it does not
+make ports, unit names, data directories, cron jobs, or Nginx sites unique.
+See the [instances, TLS, and migration runbook](instances-tls-migration.md)
+before operating a second runtime.
+
 ## `notify-config`
 
 ```text
@@ -143,6 +148,7 @@ deploy.sh import [--input FILE]
   the config files.
 - Binaries/data are not migrated: install the apps on the target, replicate
   the backups, then run per-app `restore`.
+  Follow the [migration rehearsal runbook](instances-tls-migration.md#exportimport-and-restore-rehearsal) before switching production traffic.
 
 ## `fleet`
 
