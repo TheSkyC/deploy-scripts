@@ -800,4 +800,4 @@ Format per entry:
   `tools/verify.sh syntax`、`tools/verify.sh guards`、`tools/verify.sh release`、
   `git diff --check` 均通过。当前 Windows 本地 Docker Linux daemon 不可用，完整 E2E
   交由本次 push 的 GitHub Actions Ubuntu runner 验证。
-- 提交 / Commit: 8441d97
+- 提交 / Commit: 8441d97, 96f160e, 8ff9702
