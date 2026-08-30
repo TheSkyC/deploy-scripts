@@ -17,9 +17,15 @@ app_install_executable_file() {
     return 1
   fi
   if ! cp "$source_path" "$restore_tmp" \
-      || ! chmod "$mode" "$restore_tmp" \
-      || { [[ -z "$owner" ]] || chown "$owner" "$restore_tmp"; } \
-      || ! mv "$restore_tmp" "$destination_path"; then
+      || ! chmod "$mode" "$restore_tmp"; then
+    rm -f "$restore_tmp"
+    return 1
+  fi
+  if [[ -n "$owner" ]] && ! chown "$owner" "$restore_tmp"; then
+    rm -f "$restore_tmp"
+    return 1
+  fi
+  if ! mv "$restore_tmp" "$destination_path"; then
     rm -f "$restore_tmp"
     return 1
   fi
