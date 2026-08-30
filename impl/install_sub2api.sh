@@ -27,21 +27,72 @@ CONFIG_KEYS=(
   PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
   SUB2API_DOMAIN SUB2API_BIND_ADDR SUB2API_TZ INSTALLED_VERSION
+  INSTALLED_POSTGRES_VERSION INSTALLED_REDIS_VERSION
 )
 _SUB2API_DERIVE_PATHS() {
   BIN_PATH="${INSTALL_DIR}/sub2api"
 }
 APP_CONFIG_DERIVE_HOOK=_SUB2API_DERIVE_PATHS
-# Central check-update adapter: Sub2API is a GitHub-release binary whose
-# recorded version lives in INSTALLED_VERSION, so the shared release checker
-# applies with the configured repository. Saved configuration is reloaded so
-# custom install repositories are honored without running an app action.
+# Central check-update adapter: Sub2API ships one GitHub binary plus local
+# PostgreSQL and Redis dependencies. Keep the established binary release
+# verdict at the top level, and attach a typed component manifest for status
+# and automation without pretending local package versions have a release API.
+_sub2api_postgres_version() {
+  local output version
+  command -v psql >/dev/null 2>&1 || return 1
+  output="$(psql --version 2>/dev/null || true)"
+  version="$(printf '%s\n' "$output" | sed -nE 's/.*([[:space:]]|\()([0-9]+(\.[0-9]+)+).*/\2/p' | head -1)"
+  [[ -n "$version" ]] || return 1
+  printf '%s\n' "$version"
+}
+_sub2api_redis_version() {
+  local output version
+  command -v redis-server >/dev/null 2>&1 || return 1
+  output="$(redis-server --version 2>/dev/null || true)"
+  version="$(printf '%s\n' "$output" | sed -nE 's/.*v=([0-9]+(\.[0-9]+)+).*/\1/p' | head -1)"
+  [[ -n "$version" ]] || return 1
+  printf '%s\n' "$version"
+}
+_sub2api_record_runtime_versions() {
+  local version
+  version="$(_sub2api_postgres_version 2>/dev/null || true)"
+  [[ -n "$version" ]] && INSTALLED_POSTGRES_VERSION="$version"
+  version="$(_sub2api_redis_version 2>/dev/null || true)"
+  [[ -n "$version" ]] && INSTALLED_REDIS_VERSION="$version"
+}
+# Status projections source only the persisted fields they need. Lifecycle
+# actions use app_load_config, but status-json runs without an app action.
+_sub2api_load_version_config() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] || return 0
+  load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+}
+_sub2api_component_manifest_json() {
+  local release_json="$1" postgres_version redis_version
+  postgres_version="${INSTALLED_POSTGRES_VERSION:-$(_sub2api_postgres_version 2>/dev/null || true)}"
+  redis_version="${INSTALLED_REDIS_VERSION:-$(_sub2api_redis_version 2>/dev/null || true)}"
+  printf '{"sub2api":%s,"postgresql":%s,"redis":%s}' \
+    "$(version_check_component_json sub2api "$GITHUB_REPO" "$release_json")" \
+    "$(version_check_runtime_component_json postgresql "$postgres_version")" \
+    "$(version_check_runtime_component_json redis "$redis_version")"
+}
+_sub2api_attach_component_manifest() {
+  local release_json="$1" components_json
+  components_json="$(_sub2api_component_manifest_json "$release_json")"
+  version_check_attach_components_json "$release_json" "$components_json"
+}
 _sub2api_check_update_json() {
-  app_check_update_json "sub2api" "$1" "${2:-0}" "${3:-0}"
+  local release_json
+  release_json="$(app_check_update_json "sub2api" "$1" "${2:-0}" "${3:-0}")"
+  _sub2api_attach_component_manifest "$release_json"
 }
 APP_CHECK_UPDATE_FN=_sub2api_check_update_json
 _sub2api_status_version_json() {
-  version_check_cached_binary_release_json "sub2api" "${INSTALLED_VERSION:-}"
+  local release_json
+  _sub2api_load_version_config
+  release_json="$(version_check_cached_binary_release_json "sub2api" "${INSTALLED_VERSION:-}")"
+  _sub2api_attach_component_manifest "$release_json"
 }
 APP_STATUS_VERSION_FN=_sub2api_status_version_json
 _sub2api_status_backup() {
@@ -1198,6 +1249,7 @@ do_install() {
   fi
   step "$(t app.sub2api.step.health_save)"
   INSTALLED_VERSION="$LATEST"
+  _sub2api_record_runtime_versions
   app_save_config
   if ! _health_check; then
     _install_summary_state="pending"
@@ -1276,6 +1328,7 @@ do_update() {
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 25; then
     success "$(t app.sub2api.success.new_version_started)"
     INSTALLED_VERSION="$LATEST"
+    _sub2api_record_runtime_versions
     app_save_config
     local -a _old_baks
     local _old_bak_entry

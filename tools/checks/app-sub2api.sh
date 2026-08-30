@@ -944,3 +944,24 @@ check_sub2api_uri_encode_ascii() {
     fi
   done
 }
+
+check_sub2api_component_version_manifest() {
+  local output
+  output="$($BASH_BIN <<'SUB2APITEST'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_sub2api.sh >/dev/null 2>&1
+INSTALLED_POSTGRES_VERSION=15.4
+INSTALLED_REDIS_VERSION=7.2.5
+payload='{"installed":"v1.0.0","latest":"v1.1.0","checked_at":"2026-01-01T00:00:00Z","update_state":"update_available","source":"github_release","cache_state":"fresh","error":null}'
+manifest="$(_sub2api_component_manifest_json "$payload")"
+result="$(version_check_attach_components_json "$payload" "$manifest")"
+python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["components"]["sub2api"]["repository"] == "Wei-Shaw/sub2api"; assert x["components"]["postgresql"]["installed"] == "15.4"; assert x["components"]["postgresql"]["update_state"] == "not_checked"; assert x["components"]["redis"]["installed"] == "7.2.5"; assert x["latest"] == "v1.1.0"' "$result"
+printf ok
+SUB2APITEST
+  )"
+  [[ "$output" == ok ]]
+  grep -Fq 'INSTALLED_POSTGRES_VERSION INSTALLED_REDIS_VERSION' impl/install_sub2api.sh
+  grep -Fq '_sub2api_record_runtime_versions' impl/install_sub2api.sh
+}

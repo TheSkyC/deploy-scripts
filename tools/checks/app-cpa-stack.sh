@@ -51,3 +51,22 @@ check_cpa_stack_layout() {
       }
   done
 }
+
+check_cpa_stack_component_version_manifest() {
+  local output
+  output="$($BASH_BIN <<'CPATEST'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_cpa_stack.sh >/dev/null 2>&1
+fresh='{"installed":"v1","latest":"v9","checked_at":"2026-01-01T00:00:00Z","update_state":"up_to_date","source":"github_release","cache_state":"fresh","error":null}'
+available='{"installed":"v2","latest":"v8","checked_at":null,"update_state":"update_available","source":"github_release","cache_state":"refreshed","error":null}'
+merged="$(_cpa_stack_merge_version_json "$fresh" "$available")"
+python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["components"]["cpa"]["id"] == "cpa"; assert x["components"]["cpa"]["repository"] == "router-for-me/CLIProxyAPI"; assert x["components"]["cpamp"]["latest"] == "v8"; assert x["update_state"] == "update_available"' "$merged"
+printf ok
+CPATEST
+  )"
+  [[ "$output" == ok ]]
+  grep -Fq 'version_check_component_json cpa' impl/install_cpa_stack.sh
+  grep -Fq 'version_check_component_json cpamp' impl/install_cpa_stack.sh
+}

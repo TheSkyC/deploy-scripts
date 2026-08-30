@@ -131,10 +131,13 @@ _cpa_stack_merge_version_json() {
   else
     merged_latest="$(state_json_field "$a" latest 2>/dev/null || printf null)/$(state_json_field "$b" latest 2>/dev/null || printf null)"
   fi
-  version_check_emit_json \
+  local merged_json components_json
+  merged_json="$(version_check_emit_json \
     "$merged_installed" \
     "$merged_latest" \
-    "$checked_at" "$verdict_state" github_release "$cache_state" "$error_summary"
+    "$checked_at" "$verdict_state" github_release "$cache_state" "$error_summary")"
+  components_json="{\"cpa\":$(version_check_component_json cpa "$CPA_REPOSITORY" "$a"),\"cpamp\":$(version_check_component_json cpamp "$CPAMP_REPOSITORY" "$b")}"
+  version_check_attach_components_json "$merged_json" "$components_json"
 }
 _cpa_stack_load_installed_versions() {
   local conf_file
