@@ -83,6 +83,7 @@ check_ntfy_uses_shared_binary_lifecycle() {
 
 check_ntfy_release_asset_mapping() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_ntfy.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-binwiederhier/ntfy}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="ntfy"' "$file" \

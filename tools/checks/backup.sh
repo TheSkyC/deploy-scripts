@@ -107,6 +107,7 @@ check_preupdate_backup_warnings_include_followup_guidance() {
 check_preupdate_backup_logs_match_guidance() {
   "$BASH_BIN" -c '
     set -euo pipefail
+    # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
     for file in lib/binary_app.sh; do
       block=$(sed -n "/^_ba_backup()/,/^_ba_prune_backups()/p" "$file")
       grep -Fq '\''local backup_log="${BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
@@ -138,6 +139,7 @@ check_preupdate_backup_logs_match_guidance() {
         exit 1
       }
     done
+    # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
     for file in impl/install_vaultwarden.sh; do
       block=$(sed -n "/^_backup_silent()/,/^do_backup()/p" "$file")
       grep -Fq '\''local backup_log="${VW_BACKUP_DIR}/backup.log"'\'' <<<"$block" || {
@@ -330,6 +332,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       }
     ' apps/cyberstrikeai.sh
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_cyberstrikeai.sh; do
     awk '
         /while IFS= read -r -d '\'''\'' _old_bak; do/ { saw_loop=1 }
@@ -347,6 +350,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       ' "$file"
   done
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_sub2api.sh; do
     awk '
         /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
@@ -364,6 +368,7 @@ check_old_backup_cleanup_reports_failures() {
         }
       ' "$file"
   done
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_vaultwarden.sh; do
     awk '
         /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_binary_loop=1 }

@@ -370,6 +370,7 @@ check_systemd_helper_is_atomic() {
 
 check_binary_app_systemd_paths_are_validated() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in lib/binary_app.sh; do
     grep -Fq 'bapp_validate_no_whitespace' "$file" \
       && grep -Fq 'binary_app.error.path_whitespace' "$file" \
@@ -384,6 +385,7 @@ check_binary_app_systemd_paths_are_validated() {
 
 check_binary_app_pre_backup_hook_is_best_effort() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in lib/binary_app.sh; do
     grep -Fq 'declare -f ba_backup_hook' "$file" \
       && grep -Fq 'if ! ba_backup_hook; then' "$file" \
@@ -397,6 +399,7 @@ check_binary_app_pre_backup_hook_is_best_effort() {
 
 check_binary_app_health_results_are_surfaced() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in lib/binary_app.sh; do
     grep -Fq '_summary_state="ready"' "$file" \
       && grep -Fq '_summary_state="pending"' "$file" \

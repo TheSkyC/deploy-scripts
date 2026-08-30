@@ -4,6 +4,7 @@
 
 check_alist_uses_shared_binary_lifecycle() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_alist.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
@@ -22,6 +23,7 @@ check_alist_uses_shared_binary_lifecycle() {
 
 check_alist_release_asset_mapping() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_alist.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-AlistGo/alist}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="alist"' "$file" \

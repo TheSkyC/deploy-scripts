@@ -4,6 +4,7 @@
 
 check_navidrome_uses_shared_binary_lifecycle() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_navidrome.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
@@ -22,6 +23,7 @@ check_navidrome_uses_shared_binary_lifecycle() {
 
 check_navidrome_release_asset_mapping() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_navidrome.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-navidrome/navidrome}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="navidrome"' "$file" \
@@ -39,6 +41,7 @@ check_navidrome_release_asset_mapping() {
 
 check_navidrome_music_folder_is_prepared() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_navidrome.sh; do
     grep -Fq 'ba_pre_start()' "$file" \
       && grep -Fq 'mkdir -p "$MUSIC_DIR"' "$file" \
