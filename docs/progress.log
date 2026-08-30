@@ -815,3 +815,17 @@ Format per entry:
   `a43931a`）成功，syntax/release/dispatch/guards/shellcheck/e2e-smoke 全部通过，
   nightly-all 按 push 触发条件跳过。Windows 本地 Docker Linux daemon 仍不可用。
 - 提交 / Commit: c82c267
+## 2026-08-30（自主演进批次 P2-S1）
+- 状态 / Status: completed
+- 成果 / Change: 明确保留提交式 `dist/` 治理，并将本地遗漏防线纳入版本控制：新增
+  `.githooks/pre-commit`。只要暂存内容可能影响发布产物（`lib/`、`apps/`、`impl/`、
+  `dist/` 或 `tools/build-release.sh`），它就在提交前运行确定性
+  `tools/verify.sh release`，发现 stale `dist/` 时失败并要求显式审阅、stage 生成物；
+  hook 从不替用户 stage。新增 `tools/install-git-hooks.sh`，默认只写本 checkout 的
+  `core.hooksPath=.githooks`，遇到既有 hook path 拒绝覆盖，必须显式 `--force`。
+  README / CONTRIBUTING 给出启用和检查命令，release guard 锁定该约束。
+- 验证 / Verified: hook、installer、release checks 与 runner 均通过 `bash -n`；
+  installer `--check`（未启用→失败、启用→成功）通过；临时 Git worktree 中故意仅暂存
+  `lib/logging.sh` 改动，hook 重建后正确拒绝 stale `dist/`（exit 1）；
+  `tools/verify.sh syntax`、`release`、`shellcheck`、`guards` 与 `git diff --check` 通过。
+- 提交 / Commit: 5d288aa

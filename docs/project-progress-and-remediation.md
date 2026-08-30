@@ -144,7 +144,11 @@
 
 ### P2：维护成本与发布流程
 
-- [ ] 评估 `dist/` 是否继续提交：若继续，增加 pre-commit 生成检查；若不继续，改为 release pipeline 生成并在文档中明确源码入口。
+- [x] 确认继续提交 `dist/`：保留现有确定性 rebuild + CI freshness 防线，并增加
+  版本化 `.githooks/pre-commit`。对已暂存的 `lib/`、`apps/`、`impl/`、`dist/` 或
+  `tools/build-release.sh` 改动，hook 会运行 `tools/verify.sh release`；它绝不自动
+  stage 生成物。`tools/install-git-hooks.sh` 在每个 clone 显式、安全地启用本地
+  `core.hooksPath`，README/CONTRIBUTING 记录安装和冲突处理。
 - [ ] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。
 - [ ] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档。
 
