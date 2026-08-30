@@ -675,7 +675,9 @@ main() {
       check_operation_signal_interruption
       check_backup_all_dry_run
       check_backup_all_executes_serially_and_records_manager_operation
+      check_backup_finalize_archive_helper
       check_backup_integrity_primitives
+      check_sub2api_manual_backups_finalize_integrity
       check_binary_impls_have_verify_delegate
       check_custom_impls_have_verify_delegate
       check_shared_impls_have_restore_delegate

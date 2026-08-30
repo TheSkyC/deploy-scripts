@@ -1489,6 +1489,17 @@ backup_read_sha256() {
 # The sha256 sidecar must already exist; its digest is embedded so consumers
 # can cross-check manifest and sidecar for tampering. Written atomically with
 # mode 600 via the shared escaper, matching status-JSON conventions.
+# Finalize a completed archive with the shared integrity metadata contract.
+# The archive must already have been moved to its final path. This helper keeps
+# checksum/manifest orchestration identical for application-specific backups;
+# callers can decide whether metadata failure is fatal for their workflow.
+backup_finalize_archive() {
+  local archive="$1" app_id="$2" installed_version="${3:-}" schema_version="${4:-1}"
+  [[ -f "$archive" ]] || return 1
+  backup_write_sha256 "$archive" >/dev/null \
+    && backup_write_manifest "$archive" "$app_id" "$schema_version" "$installed_version"
+}
+
 backup_write_manifest() {
   local archive="$1" app_id="$2" schema_version="$3" installed_version="${4:-}"
   local digest name created_at

@@ -1078,6 +1078,40 @@ PY
 # + manifest for a real file, verify passes; flip one archive byte and verify
 # fails closed; a bare-digest sidecar is still accepted (cross-version
 # compatibility); an archive without metadata reports unverified.
+check_backup_finalize_archive_helper() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf \"$temp_dir\"" EXIT
+    archive="$temp_dir/sub2api_data_20260830_000000.tar.gz"
+    printf "payload" > "$archive"
+    backup_finalize_archive "$archive" sub2api 2.1.0
+    backup_verify_archive "$archive"
+    [[ "$(backup_manifest_field "$archive.manifest.json" app)" == sub2api ]]
+    [[ "$(backup_manifest_field "$archive.manifest.json" installed_version)" == 2.1.0 ]]
+    rm -f "$archive"
+    ! backup_finalize_archive "$archive" sub2api 2.1.0
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+check_sub2api_manual_backups_finalize_integrity() {
+  local file=impl/install_sub2api.sh
+  local count
+  count="$(grep -c 'backup_finalize_archive "\$[A-Z_]*_ARCHIVE' "$file" || true)"
+  [[ "$count" -eq 3 ]] || {
+    echo "$file must finalize database, config, and data archives with shared metadata" >&2
+    return 1
+  }
+  grep -Fq 'app.sub2api.warn.backup_integrity' "$file" || {
+    echo "$file must surface integrity metadata failures" >&2
+    return 1
+  }
+}
+
 check_backup_integrity_primitives() {
   local output
   output="$("$BASH_BIN" -c '

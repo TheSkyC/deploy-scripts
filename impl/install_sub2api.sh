@@ -1396,6 +1396,9 @@ do_backup() {
       info "$(t app.sub2api.info.pg_dump)"
       if pg_dump "${PG_DSN}" | gzip > "$PG_TMP"; then
         if mv "$PG_TMP" "$PG_ARCHIVE"; then
+          if ! backup_finalize_archive "$PG_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+            warn "$(t app.sub2api.warn.backup_integrity "$PG_ARCHIVE")"
+          fi
           local pg_sz; pg_sz=$(du -sh "$PG_ARCHIVE" 2>/dev/null | awk '{print $1}')
           success "$(t app.sub2api.success.db_backup "$PG_ARCHIVE" "$pg_sz")"
         else
@@ -1418,6 +1421,9 @@ do_backup() {
     if tar -czf "$CONF_TMP" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
       if mv "$CONF_TMP" "$CONF_ARCHIVE"; then
+        if ! backup_finalize_archive "$CONF_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+          warn "$(t app.sub2api.warn.backup_integrity "$CONF_ARCHIVE")"
+        fi
         local cf_sz; cf_sz=$(du -sh "$CONF_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.config_backup "$CONF_ARCHIVE" "$cf_sz")"
       else
@@ -1438,6 +1444,9 @@ do_backup() {
         --exclude="*.log" --exclude="*.log.*" \
         -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
       if mv "$DATA_TMP" "$DATA_ARCHIVE"; then
+        if ! backup_finalize_archive "$DATA_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+          warn "$(t app.sub2api.warn.backup_integrity "$DATA_ARCHIVE")"
+        fi
         local da_sz; da_sz=$(du -sh "$DATA_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.data_backup "$DATA_ARCHIVE" "$da_sz")"
       else
