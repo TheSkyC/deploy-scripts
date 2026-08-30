@@ -1818,7 +1818,7 @@ check_compose_shared_layer_and_tickflow_delegation() {
     }
     /^compose_validate_project\(\)/ { in_v=1; saw_safe=0; saw_exists=0; next }
     in_v && /is_safe_path/ { saw_safe=1 }
-    in_v && /\[\[ -f "\$project_file" \]\]/ { saw_exists=1 }
+    in_v && /-f "\$project_file"/ { saw_exists=1 }
     in_v && /^}$/ {
       if (!(saw_safe && saw_exists)) {
         print "compose_validate_project must check path safety and file existence" > "/dev/stderr"
