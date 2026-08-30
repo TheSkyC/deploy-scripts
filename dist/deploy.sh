@@ -10144,6 +10144,9 @@ i18n_register_many \
   app.vaultwarden.error.image_extract \
   "Image extraction failed. Check the network and retry later." \
   "镜像提取失败，请检查网络或稍后重试。" \
+  app.vaultwarden.error.image_digest_invalid \
+  "VW_IMAGE_DIGEST must be a full sha256:<64-hex> Docker image digest when set: %s" \
+  "设置 VW_IMAGE_DIGEST 时必须提供完整的 sha256:<64 位十六进制> Docker 镜像摘要：%s" \
   app.vaultwarden.error.binary_missing_image \
   "vaultwarden binary was not found in the image." \
   "未在镜像中找到 vaultwarden 二进制。" \
@@ -15304,6 +15307,12 @@ ENABLE_HTTPS="${ENABLE_HTTPS:-true}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 VW_IMAGE_REPO="${VW_IMAGE_REPO:-vaultwarden/server}"
 VW_IMAGE_TAG="${VW_IMAGE_TAG:-1.36.0-alpine}"
+# Optional immutable Docker Hub manifest digest. docker-image-extract accepts a
+# full sha256 ref as IMAGE:sha256:<digest>; when set it takes precedence over
+# the human-readable VW_IMAGE_TAG.
+VW_IMAGE_DIGEST="${VW_IMAGE_DIGEST:-}"
+INSTALLED_IMAGE_DIGEST="${INSTALLED_IMAGE_DIGEST:-}"
+INSTALLED_VERSION="${INSTALLED_VERSION:-}"
 WEB_VAULT_VER="${WEB_VAULT_VER:-}"
 EXTRACT_TOOL_COMMIT="${EXTRACT_TOOL_COMMIT:-4273b2796da5055e431b4db5efe29a71bba12b45}"
 EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
@@ -15313,7 +15322,8 @@ CONFIG_KEYS=(
   VW_DOMAIN VW_PORT VW_USER VW_GROUP VW_BIN_DIR VW_DATA_DIR VW_WEB_DIR
   VW_ENV_FILE VW_LOG_FILE VW_BACKUP_DIR BACKUP_KEEP_DAYS SIGNUPS_ALLOWED
   VW_ADMIN_TOKEN_FILE
-  ENABLE_HTTPS CERTBOT_EMAIL VW_IMAGE_REPO VW_IMAGE_TAG WEB_VAULT_VER
+  ENABLE_HTTPS CERTBOT_EMAIL VW_IMAGE_REPO VW_IMAGE_TAG VW_IMAGE_DIGEST
+  INSTALLED_IMAGE_DIGEST INSTALLED_VERSION WEB_VAULT_VER
   EXTRACT_TOOL_COMMIT EXTRACT_TOOL_SHA256
 )
 _VW_DERIVE_PATHS() {
@@ -15327,10 +15337,32 @@ _VW_DERIVE_PATHS() {
   EXTRACT_TOOL_URL="https://raw.githubusercontent.com/jjlin/docker-image-extract/${EXTRACT_TOOL_COMMIT}/docker-image-extract"
 }
 APP_CONFIG_DERIVE_HOOK=_VW_DERIVE_PATHS
-# Central check-update adapter: the binary is extracted from the Docker image
-# tagged VW_IMAGE_TAG, which tracks the upstream dani-garcia/vaultwarden
-# release. Read the version out of the installed binary and hand both ends to
-# the shared release checker so the standard cache/stale handling applies.
+# Central check-update adapter: an optional image digest is immutable and
+# therefore compared only against the recorded successfully installed digest.
+# Otherwise, the binary version follows the upstream GitHub release checker.
+_vw_image_reference() {
+  if [[ -n "${VW_IMAGE_DIGEST:-}" ]]; then
+    printf '%s:%s\n' "$VW_IMAGE_REPO" "$VW_IMAGE_DIGEST"
+  else
+    printf '%s:%s\n' "$VW_IMAGE_REPO" "$VW_IMAGE_TAG"
+  fi
+}
+
+_vw_pinned_image_json() {
+  local update_state=up_to_date
+  [[ "${INSTALLED_IMAGE_DIGEST:-}" == "$VW_IMAGE_DIGEST" ]] || update_state=update_available
+  version_check_emit_json "${INSTALLED_IMAGE_DIGEST:-}" "$VW_IMAGE_DIGEST" "" "$update_state" docker_image pinned
+}
+
+_vw_record_installed_image() {
+  INSTALLED_VERSION="$(_vw_installed_version_for_update)"
+  if [[ -n "${VW_IMAGE_DIGEST:-}" ]]; then
+    INSTALLED_IMAGE_DIGEST="$VW_IMAGE_DIGEST"
+  else
+    INSTALLED_IMAGE_DIGEST=""
+  fi
+}
+
 _vw_installed_version_for_update() {
   local version=""
   if [[ -x "${VW_BIN:-}" ]]; then
@@ -15342,12 +15374,23 @@ _vw_check_update_json() {
   local installed conf_file
   conf_file="$(app_conf_file 2>/dev/null || true)"
   [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
-  installed="$(_vw_installed_version_for_update)"
-  version_check_binary_release_json "vaultwarden" "dani-garcia/vaultwarden" "$installed" "${2:-0}" "${3:-0}"
+  if [[ -n "${VW_IMAGE_DIGEST:-}" ]]; then
+    _vw_pinned_image_json
+  else
+    installed="$(_vw_installed_version_for_update)"
+    version_check_binary_release_json "vaultwarden" "dani-garcia/vaultwarden" "$installed" "${2:-0}" "${3:-0}"
+  fi
 }
 APP_CHECK_UPDATE_FN=_vw_check_update_json
 _vw_status_version_json() {
-  version_check_cached_binary_release_json "vaultwarden" "$(_vw_installed_version_for_update)"
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  if [[ -n "${VW_IMAGE_DIGEST:-}" ]]; then
+    _vw_pinned_image_json
+  else
+    version_check_cached_binary_release_json "vaultwarden" "$(_vw_installed_version_for_update)"
+  fi
 }
 APP_STATUS_VERSION_FN=_vw_status_version_json
 _vw_doctor_service_name() {
@@ -15546,6 +15589,9 @@ _validate_config_values() {
   fi
   app_validate_image_repo "VW_IMAGE_REPO" "$VW_IMAGE_REPO"
   app_validate_image_tag "VW_IMAGE_TAG" "$VW_IMAGE_TAG"
+  if [[ -n "$VW_IMAGE_DIGEST" ]] && ! [[ "$VW_IMAGE_DIGEST" =~ ^sha256:[A-Fa-f0-9]{64}$ ]]; then
+    error "$(t app.vaultwarden.error.image_digest_invalid "$VW_IMAGE_DIGEST")"
+  fi
   app_validate_git_ref "EXTRACT_TOOL_COMMIT" "$EXTRACT_TOOL_COMMIT"
   app_validate_sha256 "EXTRACT_TOOL_SHA256" "$EXTRACT_TOOL_SHA256"
   if [[ -n "${WEB_VAULT_VER:-}" ]]; then
@@ -15657,7 +15703,9 @@ extract_binary() {
   if ! chmod +x "${workdir}/docker-image-extract"; then
     error "$(t app.vaultwarden.error.extract_tool_download)"
   fi
-  info "$(t app.vaultwarden.info.extract_image "$VW_IMAGE_REPO" "$VW_IMAGE_TAG" "$platform")"
+  local image_reference
+  image_reference="$(_vw_image_reference)"
+  info "$(t app.vaultwarden.info.extract_image "$VW_IMAGE_REPO" "${image_reference#${VW_IMAGE_REPO}:}" "$platform")"
   info "$(t app.vaultwarden.info.first_download_wait)"
   local out_dir="${workdir}/image_output"
   if ! mkdir -p "$out_dir"; then
@@ -15666,7 +15714,7 @@ extract_binary() {
   bash "${workdir}/docker-image-extract" \
     -p "$platform" \
     -o "$out_dir" \
-    "${VW_IMAGE_REPO}:${VW_IMAGE_TAG}" >&2 \
+    "$image_reference" >&2 \
     || error "$(t app.vaultwarden.error.image_extract)"
   local bin_path
   bin_path=$(find "$out_dir" -type f -name "vaultwarden" | head -1 || true)
@@ -16499,6 +16547,7 @@ LOGR
   fi
   success "$(t app.vaultwarden.success.auto_backup "$BACKUP_KEEP_DAYS")"
   step "$(t app.vaultwarden.step.health)"
+  _vw_record_installed_image
   app_save_config
   local _hc_elapsed=0
   local HTTP_CODE
@@ -16751,6 +16800,7 @@ do_update() {
       info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
     fi
   fi
+  _vw_record_installed_image
   app_save_config
 }
 _write_backup_script() {
