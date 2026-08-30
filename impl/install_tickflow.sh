@@ -5,6 +5,10 @@ umask 077
 TICKFLOW_DOMAIN="${TICKFLOW_DOMAIN:-}"
 TICKFLOW_REPO="${TICKFLOW_REPO:-shy3130/tickflow-stock-panel}"
 TICKFLOW_BRANCH="${TICKFLOW_BRANCH:-main}"
+# An optional immutable source pin. When set, the installer checks out this
+# full git commit instead of following TICKFLOW_BRANCH.
+TICKFLOW_COMMIT="${TICKFLOW_COMMIT:-}"
+INSTALLED_VERSION="${INSTALLED_VERSION:-}"
 TICKFLOW_INSTALL_DIR="${TICKFLOW_INSTALL_DIR:-/opt/tickflow-stock-panel}"
 TICKFLOW_DATA_DIR="${TICKFLOW_DATA_DIR:-${TICKFLOW_INSTALL_DIR}/data}"
 TICKFLOW_ENV_FILE="${TICKFLOW_ENV_FILE:-${TICKFLOW_INSTALL_DIR}/.env}"
@@ -22,7 +26,7 @@ TICKFLOW_BIND_ADDR="${TICKFLOW_BIND_ADDR:-127.0.0.1}"
 TICKFLOW_BACKEND_EXTRAS="${TICKFLOW_BACKEND_EXTRAS:-}"
 
 CONFIG_KEYS=(
-  TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_INSTALL_DIR
+  TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_COMMIT INSTALLED_VERSION TICKFLOW_INSTALL_DIR
   TICKFLOW_DATA_DIR TICKFLOW_ENV_FILE TICKFLOW_COMPOSE_FILE TICKFLOW_TIERS_FILE
   TICKFLOW_SERVICE_NAME TICKFLOW_PORT TICKFLOW_LOG_DIR TICKFLOW_AUTH_PASSWORD
   TICKFLOW_BIND_ADDR
@@ -38,17 +42,32 @@ _tickflow_doctor_service_name() {
   printf '%s\n' "$TICKFLOW_SERVICE_NAME"
 }
 APP_DOCTOR_SERVICE_FN=_tickflow_doctor_service_name
-# Central check-update adapter: TickFlow updates from a git branch, so the
-# shared git-branch checker compares the local HEAD with origin. Saved
-# configuration is reloaded so custom install paths are honored without
-# running an app action.
+# Central check-update adapter. A configured full commit is an immutable
+# target and therefore compares locally without querying a moving branch;
+# otherwise TickFlow retains its branch-following update behavior.
 _tickflow_check_update_json() {
   local conf_file
   conf_file="$(app_conf_file 2>/dev/null || true)"
   [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
-  version_check_git_branch_json "$TICKFLOW_INSTALL_DIR" "${TICKFLOW_BRANCH:-main}" "${3:-0}"
+  if [[ -n "${TICKFLOW_COMMIT:-}" ]]; then
+    version_check_git_commit_json "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_COMMIT"
+  else
+    version_check_git_branch_json "$TICKFLOW_INSTALL_DIR" "${TICKFLOW_BRANCH:-main}" "${3:-0}"
+  fi
 }
 APP_CHECK_UPDATE_FN=_tickflow_check_update_json
+
+_tickflow_status_version_json() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  if [[ -n "${TICKFLOW_COMMIT:-}" ]]; then
+    version_check_git_commit_json "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_COMMIT"
+  else
+    version_check_git_branch_json "$TICKFLOW_INSTALL_DIR" "${TICKFLOW_BRANCH:-main}" 1
+  fi
+}
+APP_STATUS_VERSION_FN=_tickflow_status_version_json
 
 _tickflow_status_backup() {
   local install_dir="${TICKFLOW_INSTALL_DIR:-}" backup_dir configured_dir
@@ -95,6 +114,9 @@ _validate_config_values() {
   app_validate_systemd_name "TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME"
   app_validate_github_repo "TICKFLOW_REPO" "$TICKFLOW_REPO"
   app_validate_git_ref "TICKFLOW_BRANCH" "$TICKFLOW_BRANCH"
+  if [[ -n "$TICKFLOW_COMMIT" ]] && ! [[ "$TICKFLOW_COMMIT" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+    error "$(t app.tickflow.error.commit_invalid "$TICKFLOW_COMMIT")"
+  fi
   require_safe_path "TICKFLOW_INSTALL_DIR" "$TICKFLOW_INSTALL_DIR"
   require_safe_path "TICKFLOW_DATA_DIR" "$TICKFLOW_DATA_DIR"
   require_safe_path "TICKFLOW_LOG_DIR" "$TICKFLOW_LOG_DIR"
@@ -139,6 +161,24 @@ _env_value_from_file() {
   return 1
 }
 
+_tickflow_record_installed_version() {
+  local revision
+  revision="$(git -C "$TICKFLOW_INSTALL_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+  if ! [[ "$revision" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+    error "$(t app.tickflow.error.installed_version "$TICKFLOW_INSTALL_DIR")"
+  fi
+  INSTALLED_VERSION="$revision"
+}
+
+_tickflow_checkout_pinned_commit() {
+  local repo_dir="$1"
+  info "$(t app.tickflow.info.repo_pinned "$TICKFLOW_COMMIT")"
+  git -C "$repo_dir" fetch --quiet --depth 1 origin "$TICKFLOW_COMMIT" \
+    || error "$(t app.tickflow.error.commit_fetch "$TICKFLOW_COMMIT" "$TICKFLOW_REPO")"
+  git -C "$repo_dir" checkout --detach "$TICKFLOW_COMMIT" \
+    || error "$(t app.tickflow.error.commit_checkout "$TICKFLOW_COMMIT" "$repo_dir")"
+}
+
 _clone_or_update_repo() {
   local parent repo_dir
   parent="$(dirname "$TICKFLOW_INSTALL_DIR")"
@@ -148,17 +188,29 @@ _clone_or_update_repo() {
     error "$(t app.tickflow.error.install_parent_dir "$parent")"
   fi
   if [[ -d "$repo_dir/.git" ]]; then
-    info "$(t app.tickflow.info.repo_exists "$TICKFLOW_BRANCH")"
-    git -C "$repo_dir" fetch --prune origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
-    git -C "$repo_dir" checkout "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
-    git -C "$repo_dir" pull --ff-only origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
+    if [[ -n "$TICKFLOW_COMMIT" ]]; then
+      _tickflow_checkout_pinned_commit "$repo_dir"
+    else
+      info "$(t app.tickflow.info.repo_exists "$TICKFLOW_BRANCH")"
+      git -C "$repo_dir" fetch --prune origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
+      git -C "$repo_dir" checkout "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
+      git -C "$repo_dir" pull --ff-only origin "$TICKFLOW_BRANCH" || error "$(t app.tickflow.error.repo_update "$repo_dir")"
+    fi
   else
     if [[ -e "$repo_dir" || -L "$repo_dir" ]]; then
       error "$(t app.tickflow.error.install_dir_not_repo "$repo_dir")"
     fi
-    git clone --depth 1 --branch "$TICKFLOW_BRANCH" "https://github.com/${TICKFLOW_REPO}.git" "$repo_dir" \
-      || error "$(t app.tickflow.error.repo_clone "$TICKFLOW_REPO" "$repo_dir")"
+    if [[ -n "$TICKFLOW_COMMIT" ]]; then
+      git init -q "$repo_dir" || error "$(t app.tickflow.error.repo_clone "$TICKFLOW_REPO" "$repo_dir")"
+      git -C "$repo_dir" remote add origin "https://github.com/${TICKFLOW_REPO}.git" \
+        || error "$(t app.tickflow.error.repo_clone "$TICKFLOW_REPO" "$repo_dir")"
+      _tickflow_checkout_pinned_commit "$repo_dir"
+    else
+      git clone --depth 1 --branch "$TICKFLOW_BRANCH" "https://github.com/${TICKFLOW_REPO}.git" "$repo_dir" \
+        || error "$(t app.tickflow.error.repo_clone "$TICKFLOW_REPO" "$repo_dir")"
+    fi
   fi
+  _tickflow_record_installed_version
   success "$(t app.tickflow.success.source_ready "$repo_dir")"
 }
 
@@ -418,6 +470,7 @@ do_update() {
   preflight_check "update"
   acquire_lock
   app_load_config
+  _validate_config_values
   _require_compose_runtime
   step "$(t app.tickflow.step.fetch_source)"
   _clone_or_update_repo
