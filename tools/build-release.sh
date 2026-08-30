@@ -36,6 +36,7 @@ COMMON_RELEASE_LIB_FILES=(
 # Kept out of COMMON_RELEASE_LIB_FILES so per-app release scripts stay lean.
 # (lib/compose.sh moved to COMMON because tickflow uses it at runtime.)
 MANAGER_ONLY_RELEASE_LIB_FILES=(
+  lib/manager_args.sh
   lib/notify.sh
   lib/schedule.sh
   lib/migrate.sh
@@ -224,7 +225,7 @@ build_manager() {
     emit_release_files lib/self_update.sh lib/app_registry.sh
     emit_release_files "${MANAGER_ONLY_RELEASE_LIB_FILES[@]}"
     emit_app_loader_file
-    emit_release_files lib/cli.sh lib/manager_cli.sh
+    emit_release_files lib/cli.sh lib/manager_security_doctor.sh lib/manager_cli.sh
     echo 'manager_main "$@"'
     echo 'exit 0'
     emit_manager_app_definitions

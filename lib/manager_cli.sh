@@ -102,6 +102,17 @@ manager_main() {
       shift || true
       manager_doctor_main "$@"
       ;;
+    doctor-security|security-doctor)
+      shift || true
+      manager_security_doctor_main "$@"
+      ;;
+    doctor)
+      shift || true
+      case "${1:-}" in
+        security) shift || true; manager_security_doctor_main "$@" ;;
+        *) manager_security_doctor_print_usage; return 2 ;;
+      esac
+      ;;
     backup-all)
       shift || true
       manager_backup_main "$@"
