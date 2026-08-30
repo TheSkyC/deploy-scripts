@@ -25,6 +25,7 @@ check_cpa_stack_status_backup_projection() {
 
 check_cpa_stack_layout() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_cpa_stack.sh; do
     grep -Fq 'host: "127.0.0.1"' "$file" \
       && grep -Fq 'usage-statistics-enabled: true' "$file" \

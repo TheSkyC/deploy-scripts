@@ -4,6 +4,7 @@
 
 check_gitea_uses_shared_binary_lifecycle() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_gitea.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
@@ -22,6 +23,7 @@ check_gitea_uses_shared_binary_lifecycle() {
 
 check_gitea_release_asset_mapping() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_gitea.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-go-gitea/gitea}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="gitea"' "$file" \
@@ -38,6 +40,7 @@ check_gitea_release_asset_mapping() {
 
 check_gitea_config_is_managed_atomically() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_gitea.sh; do
     grep -Fq 'atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}"' "$file" \
       && grep -Fq 'DB_TYPE = sqlite' "$file" \

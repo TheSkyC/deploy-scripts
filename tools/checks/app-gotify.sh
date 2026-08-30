@@ -4,6 +4,7 @@
 
 check_gotify_uses_shared_binary_lifecycle() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_gotify.sh; do
     grep -Fq 'bapp_install' "$file" \
       && grep -Fq 'bapp_update' "$file" \
@@ -22,6 +23,7 @@ check_gotify_uses_shared_binary_lifecycle() {
 
 check_gotify_release_asset_mapping() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_gotify.sh; do
     grep -Fq 'GITHUB_REPO="${GITHUB_REPO:-gotify/server}"' "$file" \
       && grep -Fq 'BA_BIN_NAME="gotify"' "$file" \
@@ -39,6 +41,7 @@ check_gotify_release_asset_mapping() {
 
 check_gotify_env_is_managed_atomically() {
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_gotify.sh; do
     grep -Fq 'atomic_write_file "$env_file" 600 root:root' "$file" \
       && grep -Fq "grep -E '^GOTIFY_DEFAULTUSER_PASS='" "$file" \

@@ -335,6 +335,7 @@ check_vaultwarden_workdir_cleanup_traps_are_nonfatal() {
     return 1
   fi
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_vaultwarden.sh; do
     awk '
         /_cleanup_(install|update)\(\)/ { in_func=1; saw_if=0; saw_rm=0; next }
@@ -1075,6 +1076,7 @@ check_vaultwarden_webvault_archives_are_validated() {
       }
     ' apps/vaultwarden.sh
   local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_vaultwarden.sh; do
     awk '
         /_verify_web_vault_archive\(\)/ {
