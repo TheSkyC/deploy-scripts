@@ -870,6 +870,11 @@ check_backup_retention_cleanup_reports_failures() {
     echo "Backup retention cleanup must report per-file removal failures instead of ignoring them." >&2
     return 1
   fi
+  grep -R -nE 'backup_remove_archive_with_metadata "\$f"|backup_remove_archive_with_metadata "\$_old_backup"' \
+      lib/binary_app.sh impl/install_sub2api.sh >/dev/null || {
+    echo "Runtime backup retention must remove integrity sidecars with expired archives." >&2
+    return 1
+  }
   awk '
       /binary_app\.warn\.backup_cleanup_failed/ { saw_framework_warn=1 }
       /app\.newapi\.backup\.log\.remove_failed/ { saw_newapi_log_key=1 }
@@ -1229,6 +1234,30 @@ check_backup_create_gzip_archive_delegates() {
     echo "Sub2API manual PostgreSQL backup must use shared gzip publisher" >&2
     return 1
   }
+}
+
+check_backup_remove_archive_with_metadata_helper() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf "$temp_dir"" EXIT
+    archive="$temp_dir/app.tar.gz"
+    printf archive > "$archive"
+    printf digest > "$archive.sha256"
+    printf manifest > "$archive.manifest.json"
+    backup_remove_archive_with_metadata "$archive"
+    [[ ! -e "$archive" && ! -e "$archive.sha256" && ! -e "$archive.manifest.json" ]]
+
+    printf orphan > "$archive.sha256"
+    printf orphan > "$archive.manifest.json"
+    backup_remove_archive_with_metadata "$archive"
+    [[ ! -e "$archive.sha256" && ! -e "$archive.manifest.json" ]]
+    ! backup_remove_archive_with_metadata ""
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
 }
 
 check_sub2api_manual_backups_finalize_integrity() {

@@ -1622,6 +1622,23 @@ backup_list_expired_archives() {
     ! -name '*.tmp' -mtime "+${keep_days}" -print0 2>/dev/null
 }
 
+# Remove an archive and any integrity sidecars that belong to it. Sidecars are
+# removed only after the archive removal succeeds; if a cleanup step fails,
+# return nonzero so callers can report the per-file failure and retry later.
+backup_remove_archive_with_metadata() {
+  local archive="$1" companion cleanup_status=0
+  [[ -n "$archive" ]] || return 1
+  if ! rm -f -- "$archive"; then
+    return 1
+  fi
+  for companion in "${archive}.sha256" "${archive}.manifest.json"; do
+    if [[ -e "$companion" || -L "$companion" ]] && ! rm -f -- "$companion"; then
+      cleanup_status=1
+    fi
+  done
+  return "$cleanup_status"
+}
+
 # List every archive (absolute paths) matching the globs, oldest first, with
 # the staging suffix excluded.
 backup_list_archives() {
@@ -5596,7 +5613,7 @@ _ba_prune_backups() {
   if [[ "$keep_days" -gt 0 ]]; then
     local cleaned=0 f
     while IFS= read -r -d '' f; do
-      if rm -f "$f"; then
+      if backup_remove_archive_with_metadata "$f"; then
         cleaned=$((cleaned + 1))
       else
         warn "$(t binary_app.warn.backup_cleanup_failed "$f")"
