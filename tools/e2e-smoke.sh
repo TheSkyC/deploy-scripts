@@ -276,11 +276,12 @@ echo "NEWAPI_SMOKE_OK"
 ' || exit 1
 
 echo "=== e2e-smoke: Sub2API real PostgreSQL/Redis fixture ==="
-docker run --rm \
-  -v "$ROOT_MOUNT:/repo:ro" \
-  -v "$STUB_MOUNT:/stub:ro" \
-  -v "$WWW_MOUNT:/www:ro" \
-  deploy-e2e-smoke bash -c '
+# Keep this fixture in a separately mounted script rather than embedding its
+# body in `bash -c`. SQL string literals and the status-json Python assertions
+# then remain exact file content instead of being reinterpreted by the host
+# shell while building the docker command.
+cat > "$WORK/sub2api-real-dependencies.sh" <<'SUB2API_E2E'
+#!/usr/bin/env bash
 set -euo pipefail
 export PATH="/stub:$PATH"
 LOG=/tmp/e2e.log
@@ -346,7 +347,7 @@ gzip -cd "$DB_ARCHIVE" | grep -Fq "fixture-row" || { echo "DB_DUMP_CONTENT_MISSI
 test -n "$(ls /opt/sub2api-backups/sub2api_conf_*.tar.gz 2>/dev/null)" || { echo "CONF_ARCHIVE_MISSING"; exit 1; }
 test -n "$(ls /opt/sub2api-backups/sub2api_data_*.tar.gz 2>/dev/null)" || { echo "DATA_ARCHIVE_MISSING"; exit 1; }
 # Verify the persisted runtime versions reach the public component manifest.
-bash /repo/dist/install_sub2api.sh status-json | python3 -c '\''
+bash /repo/dist/install_sub2api.sh status-json | python3 -c '
 import json, sys
 payload = json.load(sys.stdin)
 components = payload["version_info"]["components"]
@@ -355,9 +356,16 @@ assert components["postgresql"]["installed"].startswith("15.")
 assert components["postgresql"]["source"] == "system_runtime"
 assert components["redis"]["installed"].startswith("7.")
 assert components["redis"]["update_state"] == "not_checked"
-'\'' || { echo "COMPONENT_MANIFEST_BAD"; exit 1; }
+' || { echo "COMPONENT_MANIFEST_BAD"; exit 1; }
 echo "SUB2API_REAL_DEPENDENCIES_SMOKE_OK"
-' || exit 1
+SUB2API_E2E
+chmod +x "$WORK/sub2api-real-dependencies.sh"
+docker run --rm \
+  -v "$ROOT_MOUNT:/repo:ro" \
+  -v "$STUB_MOUNT:/stub:ro" \
+  -v "$WWW_MOUNT:/www:ro" \
+  -v "$WORK_MOUNT:/fixture-work:ro" \
+  deploy-e2e-smoke bash /fixture-work/sub2api-real-dependencies.sh || exit 1
 
 echo "=== e2e-smoke: compose path (tickflow config + compose delegation) ==="
 docker run --rm \
