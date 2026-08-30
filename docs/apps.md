@@ -123,7 +123,13 @@ App-specific defaults:
 
 - Static blog with optional CMS backend. Config: `BLOG_TITLE`, `BLOG_AUTHOR`,
   `BLOG_LANG`, `SITE_DIR`, `PUBLIC_DIR`, `NGINX_ROOT`, `THEME_NAME`,
-  `THEME_REPO`, `ENABLE_CMS`, `CMS_REPO`, `CMS_BRANCH`, `CMS_SITE_URL`.
+  `THEME_REPO`, `ENABLE_CMS`, `CMS_REPO`, `CMS_BRANCH`, `CMS_SITE_URL`, and
+  optional `HUGO_VERSION`.
+- Leave `HUGO_VERSION` unset to install the latest Hugo release. Set an exact
+  semantic version without a leading `v` (for example `HUGO_VERSION=0.150.1`)
+  to pin both `install` and `update`; the successful package version is saved
+  as `INSTALLED_VERSION`. `check-update` reports the pinned target without a
+  network lookup, while unpinned deployments compare against GitHub Releases.
 - The Hugo `.deb` is verified against the SHA-256 digest published in the
   GitHub release metadata before `dpkg -i`.
 - Publishing: `blog-publish` (installed to `/usr/local/bin`).

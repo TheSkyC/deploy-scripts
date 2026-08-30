@@ -203,6 +203,9 @@ i18n_register app.blog.error.hugo_version \
 i18n_register app.blog.latest_version \
   "Latest version: v%s" \
   "最新版本：v%s"
+i18n_register app.blog.pinned_version \
+  "Pinned Hugo version: v%s" \
+  "固定 Hugo 版本：v%s"
 i18n_register app.blog.download_url \
   "Download: %s" \
   "下载：%s"
