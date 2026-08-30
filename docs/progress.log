@@ -718,3 +718,20 @@ Format per entry:
   `check_blog_config_persistence` 通过；`tools/verify.sh guards` 通过
   （预期的 `fail_check` 与脱敏 fixture 输出不表示失败）。
 - 提交 / Commit: d06b6e1, 2b0b867
+
+
+## 2026-08-30（自主演进批次 P1-S2）
+- 状态 / Status: completed
+- 成果 / Change: TickFlow 版本可复现性第二阶段：新增可选
+  `TICKFLOW_COMMIT`（完整 40 位 git SHA）与 `INSTALLED_VERSION`。配置 pin
+  时 install/update 从配置的 GitHub 仓库获取并 detached checkout 指定提交，
+  不再跟随 `TICKFLOW_BRANCH`；成功检出会记录完整 SHA。新增共享
+  `version_check_git_commit_json`，TickFlow 的 `check-update` 与
+  `status-json` 在 pinned 模式本地比对已检出 SHA 和目标 SHA，返回
+  `source=git_commit`、`cache_state=pinned`，不发起网络请求；未配置 pin
+  时保留原有 moving-branch 行为。新增本地 git fixture 行为守卫，并同步应用
+  文档与整改路线。
+- 验证 / Verified: `tools/verify.sh syntax` 通过；
+  `check_tickflow_git_commit_version_contract` 覆盖落后/已对齐 pin、
+  `status-json` 适配器和非法 SHA；`tools/verify.sh release` 通过。
+- 提交 / Commit: c0e8a56, d51b4cc
