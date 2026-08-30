@@ -6329,6 +6329,21 @@ i18n_register_many \
   app.cyberstrikeai.error.repo_clone \
   "Failed to clone %s into %s. Remove any partial checkout, then retry: git clone --depth 1 --branch %s https://github.com/%s.git %s" \
   "无法将 %s 克隆到 %s。请移除任何不完整的检出目录后重试：git clone --depth 1 --branch %s https://github.com/%s.git %s" \
+  app.cyberstrikeai.error.commit_invalid \
+  "GITHUB_COMMIT must be a full 40-character git commit SHA when set: %s" \
+  "设置 GITHUB_COMMIT 时必须提供完整的 40 位 git 提交 SHA：%s" \
+  app.cyberstrikeai.info.repo_pinned \
+  "Checking out pinned commit %s" \
+  "正在检出固定提交 %s" \
+  app.cyberstrikeai.error.commit_fetch \
+  "Failed to fetch pinned commit %s from %s. Confirm that the commit exists in the configured repository and is accessible, then retry." \
+  "无法获取固定提交 %s（仓库：%s）。请确认该提交存在于配置的仓库且可访问后重试。" \
+  app.cyberstrikeai.error.commit_checkout \
+  "Failed to check out pinned commit %s in %s. Check local changes or restore the checkout, then retry." \
+  "无法检出固定提交 %s（目录：%s）。请检查本地改动或修复检出目录后重试。" \
+  app.cyberstrikeai.error.installed_version \
+  "Cannot determine the checked-out CyberStrikeAI commit in %s." \
+  "无法确定 %s 中已检出的 CyberStrikeAI 提交。" \
   app.cyberstrikeai.error.nonempty_dir \
   "%s exists and is not an empty git checkout" \
   "%s 已存在且不是空的 Git 检出目录" \
@@ -6769,6 +6784,10 @@ SERVICE_NAME="${SERVICE_NAME:-cyberstrike-ai}"
 SERVICE_USER="${SERVICE_USER:-cyberstrike}"
 GITHUB_REPO="${GITHUB_REPO:-Ed1s0nZ/CyberStrikeAI}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
+# Optional immutable source pin. When set, deployments check out this full
+# commit instead of following the moving GITHUB_BRANCH ref.
+GITHUB_COMMIT="${GITHUB_COMMIT:-}"
+INSTALLED_VERSION="${INSTALLED_VERSION:-}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/cyberstrike-ai-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 ENABLE_NGINX="${ENABLE_NGINX:-true}"
@@ -6796,7 +6815,7 @@ CRON_FILE="/etc/cron.d/cyberstrike-ai-backup"
 LOGROTATE_FILE="/etc/logrotate.d/cyberstrike-ai"
 CONFIG_KEYS=(
   CSAI_DOMAIN PORT PUBLIC_PORT INSTALL_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO GITHUB_BRANCH BACKUP_DIR BACKUP_KEEP_DAYS ENABLE_NGINX
+  GITHUB_REPO GITHUB_BRANCH GITHUB_COMMIT INSTALLED_VERSION BACKUP_DIR BACKUP_KEEP_DAYS ENABLE_NGINX
   CSAI_HTTPS OPEN_FIREWALL PIP_INDEX_URL GOPROXY
 )
 _CSAI_DERIVE_PATHS() {
@@ -6806,17 +6825,32 @@ _CSAI_DERIVE_PATHS() {
   LOG_DIR="${INSTALL_DIR}/logs"
 }
 APP_CONFIG_DERIVE_HOOK=_CSAI_DERIVE_PATHS
-# Central check-update adapter: CyberStrikeAI updates from a git branch, so
-# the shared git-branch checker compares the local HEAD with origin. Saved
-# configuration is reloaded so custom install paths are honored without
-# running an app action.
+# Central check-update adapter. A configured commit is an immutable target
+# and compares locally; otherwise CyberStrikeAI retains its moving-branch
+# behavior and fetches origin through the shared branch checker.
 _csai_check_update_json() {
   local conf_file
   conf_file="$(app_conf_file 2>/dev/null || true)"
   [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
-  version_check_git_branch_json "$INSTALL_DIR" "${GITHUB_BRANCH:-main}" "${3:-0}"
+  if [[ -n "${GITHUB_COMMIT:-}" ]]; then
+    version_check_git_commit_json "$INSTALL_DIR" "$GITHUB_COMMIT"
+  else
+    version_check_git_branch_json "$INSTALL_DIR" "${GITHUB_BRANCH:-main}" "${3:-0}"
+  fi
 }
 APP_CHECK_UPDATE_FN=_csai_check_update_json
+
+_csai_status_version_json() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] && load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+  if [[ -n "${GITHUB_COMMIT:-}" ]]; then
+    version_check_git_commit_json "$INSTALL_DIR" "$GITHUB_COMMIT"
+  else
+    version_check_git_branch_json "$INSTALL_DIR" "${GITHUB_BRANCH:-main}" 1
+  fi
+}
+APP_STATUS_VERSION_FN=_csai_status_version_json
 _csai_status_backup() {
   app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
     "backup directory is unsafe" 'cyberstrike-ai_*.tar.gz'
@@ -6848,6 +6882,9 @@ _validate_config_values() {
   app_validate_system_name "SERVICE_USER" "$SERVICE_USER"
   app_validate_github_repo "GITHUB_REPO" "$GITHUB_REPO"
   app_validate_git_ref "GITHUB_BRANCH" "$GITHUB_BRANCH"
+  if [[ -n "$GITHUB_COMMIT" ]] && ! [[ "$GITHUB_COMMIT" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+    error "$(t app.cyberstrikeai.error.commit_invalid "$GITHUB_COMMIT")"
+  fi
   app_validate_http_url "PIP_INDEX_URL" "$PIP_INDEX_URL"
   app_validate_goproxy "GOPROXY" "$GOPROXY"
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
@@ -7084,23 +7121,57 @@ sync_repo_branch() {
     error "$(t app.cyberstrikeai.error.repo_pull "$INSTALL_DIR" "$GITHUB_BRANCH" "$INSTALL_DIR" "$GITHUB_BRANCH")"
   fi
 }
+_csai_record_installed_version() {
+  local revision
+  revision="$(git -C "$INSTALL_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+  if ! [[ "$revision" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+    error "$(t app.cyberstrikeai.error.installed_version "$INSTALL_DIR")"
+  fi
+  INSTALLED_VERSION="$revision"
+}
+
+sync_repo_pinned_commit() {
+  info "$(t app.cyberstrikeai.info.repo_pinned "$GITHUB_COMMIT")"
+  if ! git -C "$INSTALL_DIR" fetch --quiet --depth 1 origin "$GITHUB_COMMIT"; then
+    error "$(t app.cyberstrikeai.error.commit_fetch "$GITHUB_COMMIT" "$GITHUB_REPO")"
+  fi
+  if ! git -C "$INSTALL_DIR" checkout -q --detach "$GITHUB_COMMIT"; then
+    error "$(t app.cyberstrikeai.error.commit_checkout "$GITHUB_COMMIT" "$INSTALL_DIR")"
+  fi
+}
+
 clone_or_update_repo() {
   step "$(t app.cyberstrikeai.step.fetch_source)"
   if ! mkdir -p "$(dirname "$INSTALL_DIR")"; then
     error "$(t app.cyberstrikeai.error.source_parent_dir "$INSTALL_DIR")"
   fi
   if [[ -d "$INSTALL_DIR/.git" ]]; then
-    info "$(t app.cyberstrikeai.info.repo_fetch "$GITHUB_BRANCH")"
-    sync_repo_branch
+    if [[ -n "$GITHUB_COMMIT" ]]; then
+      sync_repo_pinned_commit
+    else
+      info "$(t app.cyberstrikeai.info.repo_fetch "$GITHUB_BRANCH")"
+      sync_repo_branch
+    fi
   elif [[ -d "$INSTALL_DIR" && -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
     error "$(t app.cyberstrikeai.error.nonempty_dir "$INSTALL_DIR")"
   else
     safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
-    if ! git clone --depth 1 --branch "$GITHUB_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"; then
+    if [[ -n "$GITHUB_COMMIT" ]]; then
+      if ! git init -q "$INSTALL_DIR"; then
+        safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
+        error "$(t app.cyberstrikeai.error.repo_clone "$GITHUB_REPO" "$INSTALL_DIR" "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR")"
+      fi
+      if ! git -C "$INSTALL_DIR" remote add origin "https://github.com/${GITHUB_REPO}.git"; then
+        safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
+        error "$(t app.cyberstrikeai.error.repo_clone "$GITHUB_REPO" "$INSTALL_DIR" "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR")"
+      fi
+      sync_repo_pinned_commit
+    elif ! git clone --depth 1 --branch "$GITHUB_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"; then
       safe_rm_dir "$INSTALL_DIR" "INSTALL_DIR"
       error "$(t app.cyberstrikeai.error.repo_clone "$GITHUB_REPO" "$INSTALL_DIR" "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR")"
     fi
   fi
+  _csai_record_installed_version
   success "$(t app.cyberstrikeai.success.source_ready "$INSTALL_DIR")"
 }
 patch_config_port_and_paths() {
@@ -7661,6 +7732,7 @@ do_update() {
   show_banner
   preflight_check "update"
   app_load_config _CSAI_DERIVE_PATHS
+  _validate_config_values
   acquire_lock
   check_connectivity
   [[ -d "$INSTALL_DIR/.git" ]] || error "$(t app.cyberstrikeai.error.not_git "$INSTALL_DIR")"
@@ -7680,7 +7752,12 @@ do_update() {
   write_backup_file "$CONFIG_FILE" "$config_bak" \
     || error "$(t app.cyberstrikeai.error.backup_write "$config_bak")"
   step "$(t app.cyberstrikeai.step.update_source)"
-  sync_repo_branch
+  if [[ -n "$GITHUB_COMMIT" ]]; then
+    sync_repo_pinned_commit
+  else
+    sync_repo_branch
+  fi
+  _csai_record_installed_version
   new_rev=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
   setup_python_env
   patch_config_port_and_paths
@@ -7734,6 +7811,7 @@ do_update() {
   if [[ $_cleaned_old -gt 0 ]]; then
     info "$(t app.cyberstrikeai.info.cleaned_old_binaries "$_cleaned_old")"
   fi
+  app_save_config
 }
 do_status() {
   show_banner
