@@ -785,4 +785,4 @@ Format per entry:
 - 验证 / Verified: `tools/verify.sh syntax`、`tools/verify.sh update` 与
   focused component-manifest guards 通过；发布产物、全量 guards 和 GitHub CI
   将在配套生成物提交后执行。
-- 提交 / Commit: 1054685, pending release artifact
+- 提交 / Commit: 1054685, b751b9f, c3fb5f4
