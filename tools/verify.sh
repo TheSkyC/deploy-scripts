@@ -409,6 +409,7 @@ main() {
       return 0
       ;;
     guards)
+      trap 'status=$?; printf "guards verification failed while running: %s\n" "$BASH_COMMAND" >&2; exit "$status"' ERR
       check_shell_syntax
       build_verified_release
       check_dist_is_up_to_date
