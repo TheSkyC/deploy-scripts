@@ -6392,6 +6392,9 @@ i18n_register app.blog.error.hugo_version \
 i18n_register app.blog.latest_version \
   "Latest version: v%s" \
   "最新版本：v%s"
+i18n_register app.blog.pinned_version \
+  "Pinned Hugo version: v%s" \
+  "固定 Hugo 版本：v%s"
 i18n_register app.blog.download_url \
   "Download: %s" \
   "下载：%s"
@@ -6905,10 +6908,15 @@ CMS_BACKEND="${CMS_BACKEND:-github}"
 CMS_REPO="${CMS_REPO:-TheSkyC/my-hugo-blog}"
 CMS_BRANCH="${CMS_BRANCH:-main}"
 CMS_SITE_URL="${CMS_SITE_URL:-https://${BLOG_DOMAIN}}"
+# Leave HUGO_VERSION empty to follow the latest Hugo release. Set an exact
+# semantic version (without a leading v) to make install/update reproducible.
+HUGO_VERSION="${HUGO_VERSION:-}"
+INSTALLED_VERSION="${INSTALLED_VERSION:-}"
 CONFIG_KEYS=(
   BLOG_DOMAIN BLOG_TITLE BLOG_AUTHOR BLOG_DESCRIPTION BLOG_LANG
   SITE_DIR PUBLIC_DIR NGINX_ROOT BLOG_BACKUP_DIR BLOG_BACKUP_KEEP_DAYS
   THEME_NAME THEME_REPO ENABLE_CMS CMS_BACKEND CMS_REPO CMS_BRANCH CMS_SITE_URL
+  HUGO_VERSION INSTALLED_VERSION
 )
 LOCK_FILE="/var/lock/blog-deploy.lock"
 
@@ -6933,6 +6941,8 @@ _validate_config_values() {
   app_validate_github_repo "CMS_REPO" "$CMS_REPO"
   app_validate_git_ref "CMS_BRANCH" "$CMS_BRANCH"
   app_validate_http_url "CMS_SITE_URL" "$CMS_SITE_URL"
+  [[ -z "$HUGO_VERSION" ]] || app_validate_release_version "HUGO_VERSION" "$HUGO_VERSION"
+  [[ -z "$INSTALLED_VERSION" ]] || app_validate_release_version "INSTALLED_VERSION" "$INSTALLED_VERSION"
   [[ "$BLOG_BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] \
     || error "$(t app.blog.error.keep_days_invalid "$BLOG_BACKUP_KEEP_DAYS")"
   require_safe_path "SITE_DIR" "$SITE_DIR"
@@ -6945,6 +6955,139 @@ _blog_load_config_if_root() {
   if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
     app_load_config _BLOG_DERIVE_PATHS
   fi
+}
+
+# Read only the saved deployment settings needed by status and check-update.
+# These adapters run without invoking lifecycle actions, so they intentionally
+# do not emit the normal "configuration loaded" message.
+_blog_load_version_config() {
+  local conf_file
+  conf_file="$(app_conf_file 2>/dev/null || true)"
+  [[ -n "$conf_file" && -f "$conf_file" ]] || return 0
+  load_config_file "$conf_file" "${CONFIG_KEYS[@]}"
+}
+
+_blog_detect_hugo_version() {
+  local output version
+  command -v hugo >/dev/null 2>&1 || return 1
+  output="$(hugo version 2>/dev/null | head -1 || true)"
+  version="$(printf '%s\n' "$output" | sed -nE 's/.*[[:space:]]v?([0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?).*/\1/p' | head -1)"
+  [[ -n "$version" ]] && deploy_version_normalize "$version" >/dev/null 2>&1 || return 1
+  printf '%s\n' "$version"
+}
+
+_blog_pinned_version_json() {
+  local installed="$1" result
+  result="$(version_check_result_for_versions "$installed" "$HUGO_VERSION")"
+  version_check_emit_json "$installed" "$HUGO_VERSION" "" "$result" github_release pinned
+}
+
+_blog_check_update_json() {
+  local installed="${1:-}" refresh="${2:-0}" no_network="${3:-0}"
+  _blog_load_version_config
+  installed="${INSTALLED_VERSION:-$installed}"
+  [[ -n "$installed" ]] || installed="$(_blog_detect_hugo_version 2>/dev/null || true)"
+  if [[ -n "$HUGO_VERSION" ]]; then
+    _blog_pinned_version_json "$installed"
+  else
+    version_check_binary_release_json "blog-hugo" "gohugoio/hugo" "$installed" "$refresh" "$no_network"
+  fi
+}
+APP_CHECK_UPDATE_FN=_blog_check_update_json
+
+_blog_status_version_json() {
+  local installed
+  _blog_load_version_config
+  installed="${INSTALLED_VERSION:-}"
+  [[ -n "$installed" ]] || installed="$(_blog_detect_hugo_version 2>/dev/null || true)"
+  if [[ -n "$HUGO_VERSION" ]]; then
+    _blog_pinned_version_json "$installed"
+  else
+    version_check_cached_binary_release_json "blog-hugo" "$installed"
+  fi
+}
+APP_STATUS_VERSION_FN=_blog_status_version_json
+
+# Resolve and install the configured Hugo release. HUGO_VERSION, when set,
+# selects one immutable release tag; otherwise the GitHub latest endpoint is
+# used. The exact package asset is verified against its published SHA-256.
+_blog_install_hugo_package() {
+  local arch deb_arch release_url hugo_json hugo_ver deb_url hugo_deb_sha256 hugo_deb
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64) deb_arch="amd64" ;;
+    aarch64) deb_arch="arm64" ;;
+    *) error "$(t app.blog.error.arch "$arch")" ;;
+  esac
+  if [[ -n "$HUGO_VERSION" ]]; then
+    release_url="https://api.github.com/repos/gohugoio/hugo/releases/tags/v${HUGO_VERSION}"
+  else
+    release_url="https://api.github.com/repos/gohugoio/hugo/releases/latest"
+  fi
+  info "$(t app.blog.query_hugo)"
+  hugo_json="$(curl -fsSL --max-time 15 "$release_url")" \
+    || error "$(t app.blog.error.github_api)"
+  hugo_ver="$(json_tag_name "$hugo_json" --strip-v)"
+  [[ -n "$hugo_ver" ]] || error "$(t app.blog.error.hugo_version)"
+  [[ "$hugo_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] \
+    || error "$(t app.blog.error.hugo_version)"
+  if [[ -n "$HUGO_VERSION" && "$hugo_ver" != "$HUGO_VERSION" ]]; then
+    error "$(t app.blog.error.hugo_version)"
+  fi
+  if [[ -n "$HUGO_VERSION" ]]; then
+    success "$(t app.blog.pinned_version "$hugo_ver")"
+  else
+    success "$(t app.blog.latest_version "$hugo_ver")"
+  fi
+  deb_url="https://github.com/gohugoio/hugo/releases/download/v${hugo_ver}/hugo_extended_${hugo_ver}_linux-${deb_arch}.deb"
+  info "$(t app.blog.download_url "$deb_url")"
+  hugo_deb_sha256="$(printf '%s' "$hugo_json" | \
+    awk -v url="hugo_extended_${hugo_ver}_linux-${deb_arch}.deb" '
+      /"name"[[:space:]]*:[[:space:]]*"/ { line=$0 }
+      /"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"/ {
+        name=line; sub(/.*"name"[[:space:]]*:[[:space:]]*"/, "", name); sub(/".*/, "", name)
+        if (name == url) {
+          d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"sha256:/, "", d); sub(/".*/, "", d)
+          print d
+        }
+      }
+    ' | head -1)"
+  if ! [[ "$hugo_deb_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+    error "$(t app.blog.error.hugo_digest "$deb_url")"
+  fi
+  if ! hugo_deb="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
+    error "$(t app.blog.error.hugo_download)"
+  fi
+  if ! wget -q --show-progress -O "$hugo_deb" "$deb_url"; then
+    if ! rm -f "$hugo_deb"; then
+      warn "$(t app.blog.warn.hugo_cleanup_failed "$hugo_deb")"
+    fi
+    error "$(t app.blog.error.hugo_download)"
+  fi
+  if [[ ! -s "$hugo_deb" ]]; then
+    if ! rm -f "$hugo_deb"; then
+      warn "$(t app.blog.warn.hugo_cleanup_failed "$hugo_deb")"
+    fi
+    error "$(t app.blog.error.hugo_download)"
+  fi
+  if ! _verify_hugo_sha256 "$hugo_deb" "$hugo_deb_sha256"; then
+    if ! rm -f "$hugo_deb"; then
+      warn "$(t app.blog.warn.hugo_cleanup_failed "$hugo_deb")"
+    fi
+    error "$(t app.blog.error.hugo_checksum "$deb_url")"
+  fi
+  success "$(t app.blog.hugo_sha_ok)"
+  if ! dpkg -i "$hugo_deb"; then
+    if ! rm -f "$hugo_deb"; then
+      warn "$(t app.blog.warn.hugo_cleanup_failed "$hugo_deb")"
+    fi
+    error "$(t app.blog.error.hugo_install)"
+  fi
+  if ! rm -f "$hugo_deb"; then
+    error "$(t app.blog.error.hugo_cleanup "$hugo_deb")"
+  fi
+  INSTALLED_VERSION="$hugo_ver"
+  success "$(t app.blog.hugo_installed "$(hugo version | head -1)")"
 }
 
 # Verify a downloaded Hugo .deb against the SHA-256 digest published in the
@@ -7167,12 +7310,6 @@ echo -e "  ${BOLD}$(t app.blog.banner_stack)${NC}\n"
 [[ $EUID -ne 0 ]] && error "$(t error.root_required "$0" "${1:-}")"
 command -v apt-get >/dev/null 2>&1 || error "$(t app.blog.error.apt_only)"
 command -v systemctl >/dev/null 2>&1 || error "$(t app.blog.error.systemd_required)"
-ARCH=$(uname -m)
-case $ARCH in
-  x86_64)  DEB_ARCH="amd64" ;;
-  aarch64) DEB_ARCH="arm64" ;;
-  *)       error "$(t app.blog.error.arch "$ARCH")" ;;
-esac
 _validate_config_values
 acquire_lock
 step "$(t app.blog.step_install_deps)"
@@ -7184,64 +7321,7 @@ if ! apt-get install -y -qq curl wget git nginx ca-certificates; then
 fi
 success "$(t app.blog.deps_installed)"
 step "$(t app.blog.step_install_hugo)"
-info "$(t app.blog.query_hugo)"
-HUGO_JSON=$(curl -fsSL --max-time 15 \
-  "https://api.github.com/repos/gohugoio/hugo/releases/latest") \
-  || error "$(t app.blog.error.github_api)"
-HUGO_VER="$(json_tag_name "$HUGO_JSON" --strip-v)"
-[[ -z "$HUGO_VER" ]] && error "$(t app.blog.error.hugo_version)"
-success "$(t app.blog.latest_version "$HUGO_VER")"
-DEB_URL="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb"
-info "$(t app.blog.download_url "$DEB_URL")"
-# GitHub release assets carry a sha256:... digest field; extract the one for
-# this exact .deb asset so the download can be verified instead of trusting
-# the size alone.
-HUGO_DEB_SHA256="$(printf '%s' "$HUGO_JSON" | \
-  awk -v url="hugo_extended_${HUGO_VER}_linux-${DEB_ARCH}.deb" '
-    /"name"[[:space:]]*:[[:space:]]*"/ { line=$0 }
-    /"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"/ {
-      name=line; sub(/.*"name"[[:space:]]*:[[:space:]]*"/, "", name); sub(/".*/, "", name)
-      if (name == url) {
-        d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"sha256:/, "", d); sub(/".*/, "", d)
-        print d
-      }
-    }
-  ' | head -1)"
-if ! [[ "$HUGO_DEB_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-  error "$(t app.blog.error.hugo_digest "$DEB_URL")"
-fi
-if ! HUGO_DEB="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
-  error "$(t app.blog.error.hugo_download)"
-fi
-if ! wget -q --show-progress -O "$HUGO_DEB" "$DEB_URL"; then
-  if ! rm -f "$HUGO_DEB"; then
-    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
-  fi
-  error "$(t app.blog.error.hugo_download)"
-fi
-if [[ ! -s "$HUGO_DEB" ]]; then
-  if ! rm -f "$HUGO_DEB"; then
-    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
-  fi
-  error "$(t app.blog.error.hugo_download)"
-fi
-if ! _verify_hugo_sha256 "$HUGO_DEB" "$HUGO_DEB_SHA256"; then
-  if ! rm -f "$HUGO_DEB"; then
-    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
-  fi
-  error "$(t app.blog.error.hugo_checksum "$DEB_URL")"
-fi
-success "$(t app.blog.hugo_sha_ok)"
-if ! dpkg -i "$HUGO_DEB"; then
-  if ! rm -f "$HUGO_DEB"; then
-    warn "$(t app.blog.warn.hugo_cleanup_failed "$HUGO_DEB")"
-  fi
-  error "$(t app.blog.error.hugo_install)"
-fi
-if ! rm -f "$HUGO_DEB"; then
-  error "$(t app.blog.error.hugo_cleanup "$HUGO_DEB")"
-fi
-success "$(t app.blog.hugo_installed "$(hugo version | head -1)")"
+_blog_install_hugo_package
 step "$(t app.blog.step_init_site)"
 if ! mkdir -p "$(dirname "$SITE_DIR")"; then
   error "$(t app.blog.error.site_parent_dir "$SITE_DIR")"
@@ -7798,6 +7878,8 @@ do_update() {
   [[ -f /etc/nginx/sites-available/blog || -L /etc/nginx/sites-enabled/blog ]] \
     || error "$(t app.blog.update.error_nginx_site_missing)"
 
+  step "$(t app.blog.step_install_hugo)"
+  _blog_install_hugo_package
   _blog_build_site
   _blog_deploy_public
   _write_publish_script
@@ -7821,6 +7903,7 @@ do_update() {
   else
     warn "$(t app.blog.http_warn "$http_code")"
   fi
+  app_save_config
   success "$(t app.blog.update.success "$NGINX_ROOT")"
 }
 
