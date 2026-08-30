@@ -2,6 +2,25 @@
 # shellcheck source=../verify.sh
 # Verify checks for the sub2api app (apps/sub2api.sh, impl/install_sub2api.sh).
 
+# Keep the Docker smoke fixture tied to real database/cache process contracts.
+# The CI e2e-smoke job proves these commands execute; this guard prevents a
+# future edit from silently replacing that scenario with command-only fakes.
+check_sub2api_e2e_uses_real_dependency_fixture() {
+  local fixture="tools/e2e-smoke.sh"
+  grep -Fq "postgresql-15 redis-server redis-tools" "$fixture" \
+    && grep -Fq "pg_ctlcluster --skip-systemctl-redirect 15 main start" "$fixture" \
+    && grep -Fq "pg_isready -q" "$fixture" \
+    && grep -Fq "redis-server --daemonize yes --bind 127.0.0.1 --port 6379" "$fixture" \
+    && grep -Fq "redis-cli ping" "$fixture" \
+    && grep -Fq 'psql "$PG_DSN" -v ON_ERROR_STOP=1' "$fixture" \
+    && grep -Fq 'gzip -cd "$DB_ARCHIVE" | grep -Fq "fixture-row"' "$fixture" \
+    && grep -Fq "SUB2API_REAL_DEPENDENCIES_SMOKE_OK" "$fixture" \
+    || {
+      echo "Sub2API E2E must retain its real PostgreSQL/Redis fixture and pg_dump content assertion." >&2
+      return 1
+    }
+}
+
 check_sub2api_status_backup_projection() {
   local output
   output="$($BASH_BIN -c '

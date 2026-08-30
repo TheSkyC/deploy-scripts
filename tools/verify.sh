@@ -542,6 +542,7 @@ main() {
       check_sub2api_apt_failures_are_reported
       check_sub2api_codename_resolution
       check_sub2api_dependency_services_start_before_success
+      check_sub2api_e2e_uses_real_dependency_fixture
       check_sub2api_enable_failures_are_reported
       check_sub2api_extract_move_failure_cleanup
       check_sub2api_health_checks_are_nonfatal_outside_install
