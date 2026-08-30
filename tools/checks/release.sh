@@ -185,3 +185,32 @@ check_dist_is_up_to_date() {
     return 1
   fi
 }
+
+check_versioned_pre_commit_checks_release_artifacts() {
+  local hook=".githooks/pre-commit" installer="tools/install-git-hooks.sh"
+  [[ -f "$hook" && -x "$hook" ]] || {
+    echo "Expected executable versioned pre-commit hook: ${hook}" >&2
+    return 1
+  }
+  [[ -f "$installer" && -x "$installer" ]] || {
+    echo "Expected executable Git hook installer: ${installer}" >&2
+    return 1
+  }
+
+  grep -Fq 'git diff --cached --quiet --' "$hook" || {
+    echo "Pre-commit hook must skip release verification when no release inputs are staged." >&2
+    return 1
+  }
+  grep -Fq 'bash tools/verify.sh release' "$hook" || {
+    echo "Pre-commit hook must use the deterministic release verifier." >&2
+    return 1
+  }
+  grep -Fq 'The hook intentionally never stages generated files.' "$hook" || {
+    echo "Pre-commit hook must not stage generated artifacts implicitly." >&2
+    return 1
+  }
+  grep -Fq 'core.hooksPath' "$installer" || {
+    echo "Git hook installer must configure core.hooksPath locally." >&2
+    return 1
+  }
+}

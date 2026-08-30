@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+# Release scripts are committed artifacts. Only pay the rebuild cost when a
+# staged change can affect them or alters an artifact directly. The release
+# verifier rebuilds deterministically, then compares the generated worktree
+# files with the staged index; it never stages files on the contributor's
+# behalf.
+if git diff --cached --quiet --   ':(top,glob)apps/**'   ':(top,glob)impl/**'   ':(top,glob)lib/**'   ':(top,glob)dist/**'   ':(top)tools/build-release.sh'; then
+  exit 0
+fi
+
+echo "pre-commit: verifying generated dist/ artifacts" >&2
+if bash tools/verify.sh release; then
+  exit 0
+fi
+
+cat >&2 <<'EOF'
+pre-commit: generated release scripts are stale or invalid.
+Run `bash tools/build-release.sh all`, review the dist/ changes, stage them,
+and retry the commit. The hook intentionally never stages generated files.
+EOF
+exit 1
