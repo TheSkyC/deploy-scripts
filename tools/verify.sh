@@ -432,6 +432,7 @@ main() {
       check_backup_temp_moves_handle_failure
       check_backup_create_tar_archive_helper
       check_backup_create_tar_archive_delegates
+      check_backup_list_expired_archives_helper
       check_binary_helpers_are_atomic
       check_binary_replacements_handle_failure
       check_binary_restores_validate_permissions

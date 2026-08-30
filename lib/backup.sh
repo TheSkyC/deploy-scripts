@@ -134,6 +134,24 @@ backup_latest_archive() {
   printf '%s\n' "${latest#*|}"
 }
 
+# List expired archive paths as NUL-delimited output. The retention value is
+# normalized here so every caller skips cleanup for zero/invalid values and
+# applies the same max-depth, regular-file, and staging-file rules.
+backup_list_expired_archives() {
+  local backup_dir="$1" keep_days="$2" glob
+  local find_args=()
+  shift 2
+  [[ -d "$backup_dir" ]] || return 0
+  [[ "$keep_days" =~ ^[0-9]+$ ]] || keep_days=0
+  [[ "$keep_days" -gt 0 && "$#" -gt 0 ]] || return 0
+  for glob in "$@"; do
+    [[ ${#find_args[@]} -eq 0 ]] || find_args+=(-o)
+    find_args+=(-name "$glob")
+  done
+  find "$backup_dir" -maxdepth 1 -type f \( "${find_args[@]}" \) \
+    ! -name '*.tmp' -mtime "+${keep_days}" -print0 2>/dev/null
+}
+
 # List every archive (absolute paths) matching the globs, oldest first, with
 # the staging suffix excluded.
 backup_list_archives() {

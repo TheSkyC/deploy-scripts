@@ -1574,6 +1574,24 @@ backup_latest_archive() {
   printf '%s\n' "${latest#*|}"
 }
 
+# List expired archive paths as NUL-delimited output. The retention value is
+# normalized here so every caller skips cleanup for zero/invalid values and
+# applies the same max-depth, regular-file, and staging-file rules.
+backup_list_expired_archives() {
+  local backup_dir="$1" keep_days="$2" glob
+  local find_args=()
+  shift 2
+  [[ -d "$backup_dir" ]] || return 0
+  [[ "$keep_days" =~ ^[0-9]+$ ]] || keep_days=0
+  [[ "$keep_days" -gt 0 && "$#" -gt 0 ]] || return 0
+  for glob in "$@"; do
+    [[ ${#find_args[@]} -eq 0 ]] || find_args+=(-o)
+    find_args+=(-name "$glob")
+  done
+  find "$backup_dir" -maxdepth 1 -type f \( "${find_args[@]}" \) \
+    ! -name '*.tmp' -mtime "+${keep_days}" -print0 2>/dev/null
+}
+
 # List every archive (absolute paths) matching the globs, oldest first, with
 # the staging suffix excluded.
 backup_list_archives() {
@@ -5553,8 +5571,8 @@ _ba_prune_backups() {
       else
         warn "$(t binary_app.warn.backup_cleanup_failed "$f")"
       fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" \
-             -mtime "+${keep_days}" -type f -print0 2>/dev/null)
+    done < <(backup_list_expired_archives "$BACKUP_DIR" "$keep_days" \
+      "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz")
     if [[ "$cleaned" -gt 0 ]]; then
       info "$(t binary_app.info.cleaned_backups "$cleaned" "$keep_days")"
     fi
@@ -8766,10 +8784,8 @@ do_backup() {
       else
         warn "$(t app.sub2api.warn.backup_cleanup_failed "$_old_backup")"
       fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 \
-      \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
-      -o -name "sub2api_conf_*.tar.gz" \) \
-      -mtime "+${_keep_days}" -type f -print0 2>/dev/null)
+    done < <(backup_list_expired_archives "$BACKUP_DIR" "$_keep_days" \
+      'sub2api_*.tar.gz' 'sub2api_db_*.sql.gz' 'sub2api_conf_*.tar.gz')
     if [[ $_cleaned -gt 0 ]]; then
       info "$(t app.sub2api.info.cleaned_old_backups "$_cleaned" "$_keep_days")"
     fi

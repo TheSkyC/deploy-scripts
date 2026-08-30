@@ -1447,10 +1447,8 @@ do_backup() {
       else
         warn "$(t app.sub2api.warn.backup_cleanup_failed "$_old_backup")"
       fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 \
-      \( -name "sub2api_*.tar.gz" -o -name "sub2api_db_*.sql.gz" \
-      -o -name "sub2api_conf_*.tar.gz" \) \
-      -mtime "+${_keep_days}" -type f -print0 2>/dev/null)
+    done < <(backup_list_expired_archives "$BACKUP_DIR" "$_keep_days" \
+      'sub2api_*.tar.gz' 'sub2api_db_*.sql.gz' 'sub2api_conf_*.tar.gz')
     if [[ $_cleaned -gt 0 ]]; then
       info "$(t app.sub2api.info.cleaned_old_backups "$_cleaned" "$_keep_days")"
     fi

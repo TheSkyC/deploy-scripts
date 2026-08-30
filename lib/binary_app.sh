@@ -1242,8 +1242,8 @@ _ba_prune_backups() {
       else
         warn "$(t binary_app.warn.backup_cleanup_failed "$f")"
       fi
-    done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" \
-             -mtime "+${keep_days}" -type f -print0 2>/dev/null)
+    done < <(backup_list_expired_archives "$BACKUP_DIR" "$keep_days" \
+      "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz")
     if [[ "$cleaned" -gt 0 ]]; then
       info "$(t binary_app.info.cleaned_backups "$cleaned" "$keep_days")"
     fi
