@@ -908,7 +908,7 @@ check_backup_retention_cleanup_reports_failures() {
       /^do_backup\(\) \{/ { in_backup=1; saw_warn=0; saw_info=0; saw_pattern=0; next }
       in_backup && /warn "\$\(t app\.sub2api\.warn\.backup_cleanup_failed "\$_old_backup"\)"/ { saw_warn=1 }
       in_backup && /info "\$\(t app\.sub2api\.info\.cleaned_old_backups "\$_cleaned" "\$_keep_days"\)"/ { saw_info=1 }
-      in_backup && /-name "sub2api_db_\*\.sql\.gz"/ { saw_pattern=1 }
+      in_backup && (/-name "sub2api_db_\*\.sql\.gz"/ || index($0, "sub2api_db_*.sql.gz")) { saw_pattern=1 }
       in_backup && /success "\$\(t app\.sub2api\.success\.backup_done "\$BACKUP_DIR"\)"/ {
         if (!(saw_warn && saw_info && saw_pattern)) {
           printf "%s Sub2API manual backup retention cleanup must report per-file failures and include database backup archives\n", FILENAME > "/dev/stderr"
