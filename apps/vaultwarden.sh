@@ -57,6 +57,9 @@ i18n_register_many \
   app.vaultwarden.error.image_extract \
   "Image extraction failed. Check the network and retry later." \
   "镜像提取失败，请检查网络或稍后重试。" \
+  app.vaultwarden.error.image_digest_invalid \
+  "VW_IMAGE_DIGEST must be a full sha256:<64-hex> Docker image digest when set: %s" \
+  "设置 VW_IMAGE_DIGEST 时必须提供完整的 sha256:<64 位十六进制> Docker 镜像摘要：%s" \
   app.vaultwarden.error.binary_missing_image \
   "vaultwarden binary was not found in the image." \
   "未在镜像中找到 vaultwarden 二进制。" \
