@@ -12,6 +12,7 @@
 # Coverage:
 #   - binary_app lifecycle path (ntfy): install -> backup -> verify
 #   - newapi migrated lifecycle (env file + cron backup script): install -> backup
+#   - Sub2API: real PostgreSQL/Redis processes, database bootstrap, and pg_dump backup
 #   - compose path (tickflow): install files + config generation
 #
 # Usage: bash tools/e2e-smoke.sh        (requires docker; Linux recommended)
@@ -56,6 +57,15 @@ with open(os.path.join(work, "tickflow.bin"), "wb") as fh:
     fh.write(payload)
 with open(os.path.join(work, "newapi.bin"), "wb") as fh:
     fh.write(payload)
+# Sub2API verifies both the ELF magic and the x86_64 e_machine field.
+# It never executes this fixture binary because systemd is intentionally stubbed.
+sub2api = bytearray(2 * 1024 * 1024)
+sub2api[:4] = b"\x7fELF"
+sub2api[4:7] = b"\x02\x01\x01"  # ELF64, little-endian, current version
+sub2api[16:18] = (2).to_bytes(2, "little")  # ET_EXEC
+sub2api[18:20] = (62).to_bytes(2, "little")  # EM_X86_64
+with open(os.path.join(work, "sub2api.bin"), "wb") as fh:
+    fh.write(sub2api)
 PY
 
 # Fake ntfy release tarball: ntfy_<ver>_linux_<arch>.tar.gz with a binary.
@@ -69,10 +79,22 @@ tar -czf "$WORK/www/binwiederhier/ntfy/releases/download/v2.27.0/ntfy_2.27.0_lin
 mkdir -p "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1"
 cp "$WORK/newapi.bin" "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1/new-api-0.6.1"
 
+# Fake Sub2API tarball plus the checksum file required by its install flow.
+mkdir -p "$WORK/www/Wei-Shaw/sub2api/releases/download/v0.1.0"
+mkdir -p "$WORK/www/sub2api-stage"
+cp "$WORK/sub2api.bin" "$WORK/www/sub2api-stage/sub2api"
+tar -czf "$WORK/www/Wei-Shaw/sub2api/releases/download/v0.1.0/sub2api_0.1.0_linux_amd64.tar.gz" \
+  -C "$WORK/www/sub2api-stage" sub2api
+(
+  cd "$WORK/www/Wei-Shaw/sub2api/releases/download/v0.1.0"
+  sha256sum sub2api_0.1.0_linux_amd64.tar.gz > checksums.txt
+)
+
 # Fake GitHub API responses per repo path.
 mkdir -p "$WORK/www/api"
 printf '{"tag_name":"v2.27.0"}\n' > "$WORK/www/api/binwiederhier-ntfy_latest.json"
 printf '{"tag_name":"v0.6.1"}\n' > "$WORK/www/api/QuantumNous-new-api_latest.json"
+printf '{"tag_name":"v0.1.0"}\n' > "$WORK/www/api/Wei-Shaw-sub2api_latest.json"
 
 # A stub systemctl + a curl shim that serves GitHub requests from the
 # mounted /www tree (no network needed, works on every Docker host):
@@ -147,7 +169,10 @@ fi
 echo "=== e2e-smoke: building disposable container ==="
 docker build -t deploy-e2e-smoke - <<'DOCKERFILE'
 FROM debian:bookworm-slim
-RUN apt-get update -qq && apt-get install -y -qq ca-certificates curl tar gzip python3
+RUN apt-get update -qq \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    ca-certificates curl tar gzip python3 openssl sudo \
+    postgresql-15 redis-server redis-tools
 DOCKERFILE
 
 echo "=== e2e-smoke: binary_app lifecycle (ntfy install/backup/verify) ==="
@@ -250,6 +275,90 @@ test -n "$(ls /opt/new-api-backups/new-api_*.tar.gz.sha256 2>/dev/null)" || { ec
 echo "NEWAPI_SMOKE_OK"
 ' || exit 1
 
+echo "=== e2e-smoke: Sub2API real PostgreSQL/Redis fixture ==="
+docker run --rm \
+  -v "$ROOT_MOUNT:/repo:ro" \
+  -v "$STUB_MOUNT:/stub:ro" \
+  -v "$WWW_MOUNT:/www:ro" \
+  deploy-e2e-smoke bash -c '
+set -euo pipefail
+export PATH="/stub:$PATH"
+LOG=/tmp/e2e.log
+# The container has actual PostgreSQL 15 and Redis 7 packages. Start both
+# daemons directly because systemd is deliberately stubbed for app lifecycle
+# calls. --skip-systemctl-redirect keeps pg_ctlcluster from delegating back to
+# the systemctl shim.
+pg_ctlcluster --skip-systemctl-redirect 15 main start
+for attempt in $(seq 1 30); do
+  pg_isready -q && break
+  sleep 1
+done
+pg_isready -q || { echo "POSTGRES_NOT_READY"; exit 1; }
+redis-server --daemonize yes --bind 127.0.0.1 --port 6379
+for attempt in $(seq 1 30); do
+  redis-cli ping 2>/dev/null | grep -qx PONG && break
+  sleep 1
+done
+redis-cli ping | grep -qx PONG || { echo "REDIS_NOT_READY"; exit 1; }
+# The real dependency packages are already present, so bypass only the install
+# action. Nginx remains a harmless command stub: this scenario focuses on the
+# actual PostgreSQL/Redis bootstrap and backup contracts.
+cat > /usr/local/bin/apt-get <<APT
+#!/bin/bash
+exit 0
+APT
+cat > /usr/local/bin/nginx <<NGINX
+#!/bin/bash
+exit 0
+NGINX
+chmod +x /usr/local/bin/apt-get /usr/local/bin/nginx
+DOMAIN="" PORT=18082 INSTALL_DIR=/opt/sub2api DATA_DIR=/opt/sub2api/data \
+LOG_DIR=/opt/sub2api/logs CONFIG_DIR=/etc/sub2api SERVICE_NAME=sub2api \
+SERVICE_USER=sub2api GITHUB_REPO=Wei-Shaw/sub2api BACKUP_DIR=/opt/sub2api-backups \
+BACKUP_KEEP_DAYS=30 bash /repo/dist/install_sub2api.sh install >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "SUB2API_INSTALL_FAILED"
+  exit 1
+}
+grep -qE "Sub2API deployment complete|Sub2API files installed" "$LOG" || { echo "NO_SUMMARY"; cat "$LOG"; exit 1; }
+test -x /opt/sub2api/sub2api || { echo "BINARY_MISSING"; exit 1; }
+test -f /etc/systemd/system/sub2api.service || { echo "UNIT_MISSING"; exit 1; }
+test -f /etc/sub2api/.pg_dsn || { echo "PG_DSN_MISSING"; exit 1; }
+test "$(stat -c %a /etc/sub2api/.pg_dsn)" = 600 || { echo "PG_DSN_MODE_BAD"; exit 1; }
+# Exercise the deployed DSN with a real client and leave data that must appear
+# in the real pg_dump artifact produced by the manual backup flow.
+PG_DSN="$(cat /etc/sub2api/.pg_dsn)"
+psql "$PG_DSN" -v ON_ERROR_STOP=1 -c "CREATE TABLE e2e_fixture (value text NOT NULL); INSERT INTO e2e_fixture VALUES ('fixture-row');" >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "POSTGRES_DSN_FAILED"
+  exit 1
+}
+redis-cli set sub2api-e2e fixture-value | grep -qx OK || { echo "REDIS_WRITE_FAILED"; exit 1; }
+test "$(redis-cli get sub2api-e2e)" = fixture-value || { echo "REDIS_READ_FAILED"; exit 1; }
+# The runtime dependency versions must have been persisted by the real tools.
+source /etc/sub2api-deploy.conf
+[[ "${INSTALLED_POSTGRES_VERSION}" =~ ^15\. ]] || { echo "POSTGRES_VERSION_NOT_SAVED"; exit 1; }
+[[ "${INSTALLED_REDIS_VERSION}" =~ ^7\. ]] || { echo "REDIS_VERSION_NOT_SAVED"; exit 1; }
+bash /repo/dist/install_sub2api.sh backup >"$LOG" 2>&1 || { cat "$LOG"; echo "BACKUP_FAILED"; exit 1; }
+DB_ARCHIVE="$(ls -1t /opt/sub2api-backups/sub2api_db_*.sql.gz | head -1)"
+test -n "$DB_ARCHIVE" || { echo "DB_ARCHIVE_MISSING"; exit 1; }
+gzip -cd "$DB_ARCHIVE" | grep -Fq "fixture-row" || { echo "DB_DUMP_CONTENT_MISSING"; exit 1; }
+test -n "$(ls /opt/sub2api-backups/sub2api_conf_*.tar.gz 2>/dev/null)" || { echo "CONF_ARCHIVE_MISSING"; exit 1; }
+test -n "$(ls /opt/sub2api-backups/sub2api_data_*.tar.gz 2>/dev/null)" || { echo "DATA_ARCHIVE_MISSING"; exit 1; }
+# Verify the persisted runtime versions reach the public component manifest.
+bash /repo/dist/install_sub2api.sh status-json | python3 -c '\''
+import json, sys
+payload = json.load(sys.stdin)
+components = payload["version_info"]["components"]
+assert components["sub2api"]["repository"] == "Wei-Shaw/sub2api"
+assert components["postgresql"]["installed"].startswith("15.")
+assert components["postgresql"]["source"] == "system_runtime"
+assert components["redis"]["installed"].startswith("7.")
+assert components["redis"]["update_state"] == "not_checked"
+'\'' || { echo "COMPONENT_MANIFEST_BAD"; exit 1; }
+echo "SUB2API_REAL_DEPENDENCIES_SMOKE_OK"
+' || exit 1
+
 echo "=== e2e-smoke: compose path (tickflow config + compose delegation) ==="
 docker run --rm \
   -v "$ROOT_MOUNT:/repo:ro" \
@@ -310,4 +419,4 @@ grep -q "compose" /etc/systemd/system/tickflow-stock-panel.service || { echo "UN
 echo "COMPOSE_PATH_SMOKE_OK"
 ' || exit 1
 
-echo "=== e2e-smoke: done (binary_app + compose paths passed) ==="
+echo "=== e2e-smoke: done (binary_app + real dependencies + compose paths passed) ==="
