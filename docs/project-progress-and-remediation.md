@@ -1,6 +1,6 @@
 # 项目当前进度与整改路线
 
-> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `fc5a4d3`（Vaultwarden 固定镜像摘要发布产物）。
+> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `8441d97`（Sub2API 真实 PostgreSQL/Redis E2E fixture）。
 > **文档目的**：将另一 AI 提出的安全、架构和体验问题与当前代码逐项对照，区分“已修复”“部分完成”“仍待处理”，并给出下一阶段可执行顺序。
 >
 > **结论先行**：这份建议对应的是修复前状态。高优先级安全项 1–4 已在 2026-08-29 的连续提交中完成主要修复；功能建议中的版本固定、单应用 dry-run/help、一键 HTTPS、卸载前导出、多实例、配置 diff、CI push 校验也已经落地。当前最大的未完成项不是原建议中的安全基线，而是：**真实生产环境验证仍有限、四个手写应用的架构取舍尚未进一步推进、`dist/` 生成物的治理仍保留漂移风险、部分应用仍采用浮动分支/镜像版本语义**。
@@ -28,7 +28,7 @@
 - **备份可靠性闭环已完成**：归档 SHA-256、`manifest.json`、`verify`、安全 restore、损坏/路径穿越防护；16/16 应用均具备 backup + verify + restore 能力（不同应用可通过自定义适配实现）。
 - **中央运维能力已完成**：`status-all`、`backup-all`、`update-all`、`doctor-all`、`check-update`、`doctor security`、通知、systemd timer/cron 调度、export/import、Fleet 多机执行、JSON 状态与操作历史。
 - **安全基线已收紧**：Web 服务默认 loopback；二进制应用默认不自动开防火墙端口；Vaultwarden 默认关闭注册；TickFlow 默认生成随机面板密码；敏感配置 root-only；Nginx 默认站点可恢复而非卸载时直接删除。
-- **质量门禁已加强**：verify 套件从扫描生成物文本逐步解耦，源码结构检查与 `dist` 一致性检查分离；CI 的 syntax/release/dispatch/guards、shellcheck、Docker E2E smoke 已配置为 push/PR 执行，nightly 运行全量验证。
+- **质量门禁已加强**：verify 套件从扫描生成物文本逐步解耦，源码结构检查与 `dist` 一致性检查分离；CI 的 syntax/release/dispatch/guards、shellcheck、Docker E2E smoke 已配置为 push/PR 执行；E2E 已覆盖真实 PostgreSQL 15/Redis 7 进程、Sub2API 数据库初始化和 `pg_dump` 数据内容断言，nightly 运行全量验证。
 
 ## 2. 对另一 AI 建议的逐项核对
 
@@ -88,7 +88,7 @@
 
 当前验证重点是 Bash 静态/结构检查、stub 行为验证和 Docker smoke；这能覆盖生命周期文件操作和 CLI 路径，但不能替代真实 Debian/Ubuntu 主机上的：
 
-- systemd、Nginx、certbot、Docker、PostgreSQL、Redis 的真实版本兼容性；
+- systemd、Nginx、certbot、Docker 的真实版本兼容性与服务管理语义；Sub2API 已在 CI 的 Debian fixture 中实际运行 PostgreSQL 15 和 Redis 7，覆盖本地 bootstrap、DSN、`pg_dump` 及运行时版本记录，但不能替代多发行版/生产数据规模验证；
 - GitHub release/镜像站的真实资产可用性、限流、签名/摘要变化；
 - 真实公网 DNS、IPv6、防火墙、TLS 续期和反向代理配置；
 - 升级/恢复跨版本数据兼容性。
@@ -135,7 +135,12 @@
   `git_commit`（`cache_state=pinned`），Vaultwarden digest 使用本地
   `docker_image`，CPA Stack/Sub2API 通过稳定的顶层版本 verdict + typed
   `components` manifest 输出。pinned target 都不联网查询 moving latest。
-- [ ] 将 E2E smoke 从当前代表性矩阵扩展到真实依赖服务或可复用容器 fixture。
+- [x] 将 E2E smoke 从当前代表性矩阵扩展到真实依赖服务或可复用容器 fixture：
+  Sub2API 场景在同一 Debian 容器中直接启动 PostgreSQL 15 与 Redis 7（不经
+  systemd），仍以本地 GitHub release fixture 提供可验证二进制；真实 `psql` 建库、
+  Redis 读写、`pg_dump` 内容和 `status-json` 的 runtime component manifest 均有
+  断言。Nginx 与 systemd 继续在该容器中安全 stub，避免把服务管理器差异误当作应用
+  生命周期回归。
 
 ### P2：维护成本与发布流程
 
@@ -156,7 +161,9 @@
 & 'C:\Program Files\Git\bin\bash.exe' tools/e2e-smoke.sh
 ```
 
-本次已执行仓库盘点和源码证据核对；尚未执行需要 Linux/systemd/Docker 的完整验证。提交前至少执行 `syntax`、`release` 和 `guards`，并确认 `git diff --check` 通过。
+提交前至少执行 `syntax`、`release` 和 `guards`，并确认 `git diff --check` 通过。
+本地 Windows 开发环境若没有可用 Linux Docker daemon，`tools/e2e-smoke.sh` 由 GitHub
+Actions 的 Ubuntu runner 作为权威验证；真实 fixture 覆盖不等同于完整生产主机验证。
 
 ## 7. 参考
 

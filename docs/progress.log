@@ -786,3 +786,18 @@ Format per entry:
   focused component-manifest guards 通过；发布产物、全量 guards 和 GitHub CI
   将在配套生成物提交后执行。
 - 提交 / Commit: 1054685, b751b9f, c3fb5f4
+
+## 2026-08-30（自主演进批次 P1-S6）
+- 状态 / Status: completed
+- 成果 / Change: 将 Docker E2E smoke 从代表性文件/命令替身矩阵扩展为
+  Sub2API 的真实依赖 fixture。Debian 容器镜像预装 PostgreSQL 15、Redis 7、客户端
+  与 `sudo`；用直接进程启动绕过容器内缺失的 init，而应用层 `systemctl` 保持受控
+  stub。fixture 使用本地 GitHub release/checksum 资产，实际执行 Sub2API install，
+  通过生成的 DSN 用 `psql` 创建测试表，以 `redis-cli` 验证读写，再运行真实 `pg_dump`
+  备份并检查压缩 SQL 中的插入数据；同时验证配置中持久化的 PostgreSQL/Redis 版本及
+  `status-json` component manifest。新增守卫避免该 fixture 被退化为纯命令替身。
+- 验证 / Verified: `bash -n tools/e2e-smoke.sh`、focused fixture guard、
+  `tools/verify.sh syntax`、`tools/verify.sh guards`、`tools/verify.sh release`、
+  `git diff --check` 均通过。当前 Windows 本地 Docker Linux daemon 不可用，完整 E2E
+  交由本次 push 的 GitHub Actions Ubuntu runner 验证。
+- 提交 / Commit: 8441d97
