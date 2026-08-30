@@ -149,7 +149,10 @@
   `tools/build-release.sh` 改动，hook 会运行 `tools/verify.sh release`；它绝不自动
   stage 生成物。`tools/install-git-hooks.sh` 在每个 clone 显式、安全地启用本地
   `core.hooksPath`，README/CONTRIBUTING 记录安装和冲突处理。
-- [ ] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。
+- [ ] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。已完成第一小步：
+  `app_http_status_code` 统一二进制应用与上述三个自定义应用的本地 HTTP
+  状态探测（保留各自的重试、成功码、Host header、TLS 与用户提示语义）；仍待继续
+  下沉回滚和备份编排的重复部分。
 - [ ] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档。
 
 ## 6. 推荐验证命令

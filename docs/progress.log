@@ -829,3 +829,18 @@ Format per entry:
   `lib/logging.sh` 改动，hook 重建后正确拒绝 stale `dist/`（exit 1）；
   `tools/verify.sh syntax`、`release`、`shellcheck`、`guards` 与 `git diff --check` 通过。
 - 提交 / Commit: 5d288aa
+## 2026-08-30（自主演进批次 P2-S2）
+- 状态 / Status: completed
+- 成果 / Change: 提取共享 HTTP health probe 原语 `app_http_status_code`。它以稳定的
+  三位状态码协议处理 curl 缺失/失败（`000`），并保留 timeout 与应用受控的 curl options。
+  `binary_app`、Sub2API、Vaultwarden、CyberStrikeAI 均改为委托：各应用仍保留自身
+  重试次数、接受状态码、CyberStrikeAI 的 TLS/Host header、以及 ready/pending 的本地化
+  告警语义。该小步降低了四个生命周期实现间的低层重复，并为后续回滚/备份编排下沉留出
+  明确边界。
+- 验证 / Verified: 新增行为守卫使用 curl stub 验证 timeout/options/URL 透传与失败
+  `000` fallback；守卫同时锁定四个调用面已接入共享 helper。`bash -n`、focused
+  guards、`tools/verify.sh syntax`、`release`、`shellcheck`、`guards` 以及
+  `git diff --check` 均通过。注：源码和生成物未提交前执行完整 guards 会被
+  `check_release_package_artifacts` 正确拒绝 stale `dist/`；在同一提交含生成物后复跑
+  全量 guards 已通过。
+- 提交 / Commit: 7d9d9f4
