@@ -818,7 +818,7 @@ check_manual_backup_retention_is_normalized() {
       }
       in_func && /\[\[ "\$keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
-      in_func && /-mtime "\+\$\{keep_days\}"/ { saw_find=1 }
+      in_func && (/-mtime "\+\$\{keep_days\}"/ || /backup_list_expired_archives/) { saw_find=1 }
     ' lib/binary_app.sh
   awk '
       /^do_backup\(\) \{/ {
@@ -839,7 +839,7 @@ check_manual_backup_retention_is_normalized() {
       in_func && /local _keep_days="\$\{BLOG_BACKUP_KEEP_DAYS\}"/ { saw_assignment=1 }
       in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
-      in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
+      in_func && (/-mtime "\+\$\{_keep_days\}"/ || /backup_list_expired_archives/) { saw_find=1 }
     ' impl/install_hugo_blog.sh
   awk '
       /^do_backup\(\) \{/ {
@@ -860,7 +860,7 @@ check_manual_backup_retention_is_normalized() {
       in_func && /local _keep_days="\$\{BACKUP_KEEP_DAYS\}"/ { saw_assignment=1 }
       in_func && /\[\[ "\$_keep_days" =~ \^\[0-9\]\+\$ \]\] \|\| _keep_days=0/ { saw_guard=1 }
       in_func && /\[\[ "\$_keep_days" -gt 0 \]\]/ { saw_positive_guard=1 }
-      in_func && /-mtime "\+\$\{_keep_days\}"/ { saw_find=1 }
+      in_func && (/-mtime "\+\$\{_keep_days\}"/ || /backup_list_expired_archives/) { saw_find=1 }
     ' impl/install_sub2api.sh
 }
 
@@ -1094,6 +1094,34 @@ check_backup_finalize_archive_helper() {
   [[ "$output" == ok ]]
 }
 
+# Retention selection must be centralized, NUL-safe, limited to direct regular
+# files, and normalized so zero/invalid values do not remove anything.
+check_backup_list_expired_archives_helper() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf \"$temp_dir\"" EXIT
+    mkdir -p "$temp_dir/nested"
+    old="$temp_dir/app_old.tar.gz"
+    fresh="$temp_dir/app_fresh.tar.gz"
+    nested="$temp_dir/nested/app_nested.tar.gz"
+    : > "$old"; : > "$fresh"; : > "$nested"
+    touch -t 202001010000 "$old" "$nested"
+    found=0
+    while IFS= read -r -d "" item; do
+      [[ "$item" == "$old" ]] || exit 11
+      found=$((found + 1))
+    done < <(backup_list_expired_archives "$temp_dir" 30 "app_*.tar.gz")
+    [[ "$found" -eq 1 ]]
+    [[ -z "$(backup_list_expired_archives "$temp_dir" invalid "app_*.tar.gz")" ]]
+    [[ -z "$(backup_list_expired_archives "$temp_dir" 0 "app_*.tar.gz")" ]]
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
 # The shared tar publisher must stage to a unique sibling, send tar diagnostics
 # to stderr, publish only after success, and clean up on both failure paths.
 check_backup_create_tar_archive_helper() {
@@ -1149,6 +1177,14 @@ check_backup_create_tar_archive_delegates() {
   }
   grep -Fq 'backup_create_tar_archive "$archive"' impl/install_vaultwarden.sh || {
     echo "Vaultwarden manual backup must use shared tar publisher" >&2
+    return 1
+  }
+  grep -Fq 'backup_list_expired_archives "$BACKUP_DIR" "$keep_days"' lib/binary_app.sh || {
+    echo "binary_app retention must use shared expired-archive selection" >&2
+    return 1
+  }
+  grep -Fq 'backup_list_expired_archives "$BACKUP_DIR" "$_keep_days"' impl/install_sub2api.sh || {
+    echo "Sub2API retention must use shared expired-archive selection" >&2
     return 1
   }
 }
