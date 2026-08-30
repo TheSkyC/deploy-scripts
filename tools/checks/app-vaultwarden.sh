@@ -1149,3 +1149,38 @@ STUB
 
   rm -rf "$tmp_dir"
 }
+
+
+check_vaultwarden_image_digest_version_contract() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    trap '"'"'rm -rf "$tmp_dir"'"'"' EXIT
+    digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    source lib/core.sh
+    APP_ID=vaultwarden
+    APP_NAME=Vaultwarden
+    VW_IMAGE_DIGEST="$digest"
+    INSTALLED_IMAGE_DIGEST="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    app_conf_file() { printf "%s" "$tmp_dir/missing.conf"; }
+    source impl/install_vaultwarden.sh
+
+    [[ "$(_vw_image_reference)" == "vaultwarden/server:${digest}" ]]
+    result="$(_vw_check_update_json "" 0 0)"
+    [[ "$(state_json_field "$result" installed)" == "$INSTALLED_IMAGE_DIGEST" ]]
+    [[ "$(state_json_field "$result" latest)" == "$digest" ]]
+    [[ "$(state_json_field "$result" update_state)" == update_available ]]
+    [[ "$(state_json_field "$result" source)" == docker_image ]]
+    [[ "$(state_json_field "$result" cache_state)" == pinned ]]
+    INSTALLED_IMAGE_DIGEST="$digest"
+    result="$(_vw_check_update_json "" 0 0)"
+    [[ "$(state_json_field "$result" update_state)" == up_to_date ]]
+    status="$(_vw_status_version_json)"
+    [[ "$(state_json_field "$status" update_state)" == up_to_date ]]
+  '
+  grep -Fq 'VW_IMAGE_DIGEST' impl/install_vaultwarden.sh
+  grep -Fq 'INSTALLED_IMAGE_DIGEST INSTALLED_VERSION' impl/install_vaultwarden.sh
+  grep -Fq 'app.vaultwarden.error.image_digest_invalid' apps/vaultwarden.sh
+  grep -Fq '"$image_reference" >&2' impl/install_vaultwarden.sh
+  grep -Fq '_vw_pinned_image_json' impl/install_vaultwarden.sh
+}

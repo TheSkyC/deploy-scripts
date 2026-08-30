@@ -62,8 +62,14 @@ App-specific defaults:
   then `install_vaultwarden.sh signups off`. `signups status` shows the
   current value.
 - Key config: `VW_DOMAIN`, `VW_PORT`, `VW_ENV_FILE` (`/etc/vaultwarden.env`),
-  `VW_IMAGE_TAG`, `ENABLE_HTTPS` (default true, requires `CERTBOT_EMAIL`),
-  `VW_ADMIN_TOKEN_FILE`.
+  `VW_IMAGE_TAG`, optional `VW_IMAGE_DIGEST`, `ENABLE_HTTPS` (default true,
+  requires `CERTBOT_EMAIL`), `VW_ADMIN_TOKEN_FILE`.
+- `VW_IMAGE_TAG` remains the readable version selector. To make image extraction
+  immutable, set `VW_IMAGE_DIGEST` to a full `sha256:<64-hex>` Docker image
+  digest; it takes precedence over the tag. A successful install/update records
+  `INSTALLED_IMAGE_DIGEST` and `INSTALLED_VERSION`; pinned `check-update` and
+  `status-json` compare the recorded and configured digests locally
+  (`source: docker_image`, `cache_state: pinned`) without a network lookup.
 - Database is SQLite at `VW_DATA_DIR` (`/var/lib/vaultwarden`); the backup
   script checkpoints and integrity-checks it before archiving.
 
