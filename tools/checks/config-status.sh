@@ -39,6 +39,62 @@ STUB
   rm -rf "$tmp_dir"
 }
 
+check_app_http_status_code_helper() {
+  local tmp_dir output
+  tmp_dir="$(mktemp -d)"
+  cat > "${tmp_dir}/curl" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$HTTP_PROBE_ARGS_FILE"
+printf '204'
+STUB
+  chmod +x "${tmp_dir}/curl"
+
+  output="$(PATH="${tmp_dir}:$PATH" HTTP_PROBE_ARGS_FILE="${tmp_dir}/args" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    app_http_status_code "http://127.0.0.1:8080/health" 7 -k -H "Host: example.test"
+  ')" || {
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  [[ "$output" == "204" ]] || {
+    echo "HTTP probe helper did not return the curl status code: ${output}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  grep -Fx -- '--max-time' "${tmp_dir}/args" >/dev/null     && grep -Fx -- '7' "${tmp_dir}/args" >/dev/null     && grep -Fx -- '-k' "${tmp_dir}/args" >/dev/null     && grep -Fx -- '-H' "${tmp_dir}/args" >/dev/null     && grep -Fx -- 'Host: example.test' "${tmp_dir}/args" >/dev/null     && grep -Fx -- 'http://127.0.0.1:8080/health' "${tmp_dir}/args" >/dev/null || {
+      echo "HTTP probe helper did not preserve timeout, curl options, and URL arguments." >&2
+      rm -rf "$tmp_dir"
+      return 1
+    }
+
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    curl() { return 1; }
+    app_http_status_code "http://127.0.0.1:8080/health"
+  ')" || {
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  [[ "$output" == "000" ]] || {
+    echo "HTTP probe helper must return 000 when curl fails: ${output}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  rm -rf "$tmp_dir"
+}
+
+check_custom_app_http_health_probes_use_shared_helper() {
+  local file
+  for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do
+    grep -Fq 'app_http_status_code' "$file" || {
+      echo "${file} must use the shared HTTP status probe helper." >&2
+      return 1
+    }
+  done
+}
+
 check_config_writes_are_centralized() {
   if grep -R -nE '(>|>>)[[:space:]]*"?\$\{?CONF_FILE\}?"?|tee[[:space:]]+"?\$\{?CONF_FILE\}?"?' impl dist 2>/dev/null; then
     echo "Deployment config (CONF_FILE) must be written only through app_save_config." >&2

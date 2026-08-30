@@ -854,7 +854,7 @@ check_cyberstrikeai_nginx_health_probe_matches_server_name() {
   awk '
       /step "\$\(t app\.cyberstrikeai\.step\.health\)"/ { in_health=1; next }
       in_health && /public_url="http:\/\/127\.0\.0\.1:\$\{PUBLIC_PORT\}\/"/ { saw_url=1 }
-      in_health && /curl -H "Host: \$\{CSAI_DOMAIN:-localhost\}"/ { saw_host_header=1 }
+      in_health && /app_http_status_code "\$public_url" 8 -H "Host: \$\{CSAI_DOMAIN:-localhost\}"/ { saw_host_header=1 }
       in_health && /warn "\$\(t app\.cyberstrikeai\.warn\.nginx_health "\$code"\)"/ { saw_warn=1 }
       in_health && /\[\[ "\$health_pending" -eq 0 \]\]/ {
         if (!(saw_url && saw_host_header && saw_warn)) {

@@ -211,6 +211,28 @@ app_validate_db_identifier() {
   fi
 }
 
+# Emit the HTTP status code returned by a local application probe. The helper
+# always emits a three-digit fallback (000) on curl errors so health/reporting
+# callers can decide whether a failed probe is fatal without special-casing
+# command failures. Extra curl options (for example `-k` or `-H`) are passed
+# before the URL and are intended only for application-controlled probes.
+# Usage: app_http_status_code URL [timeout_seconds] [curl_option ...]
+app_http_status_code() {
+  local url="${1:-}" timeout="${2:-5}"
+  if [[ $# -ge 2 ]]; then
+    shift 2
+  else
+    set --
+  fi
+  [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
+  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+    printf '000\n'
+    return 0
+  fi
+  curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
+    || printf '000\n'
+}
+
 # Echo the standard deployment config path for the current app. With
 # APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
 # config file so independent instances do not clobber each other.

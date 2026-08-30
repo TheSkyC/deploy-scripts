@@ -885,7 +885,7 @@ bapp_health_probe() {
   local url="${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
-  until code="$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")" \
+  until code="$(app_http_status_code "$url" 5)" \
       && [[ "$code" =~ $codes ]]; do
     sleep 1
     elapsed=$((elapsed + 1))

@@ -855,7 +855,7 @@ health_check() {
   local code backend_url public_url
   local health_pending=0
   backend_url="${scheme}://127.0.0.1:${PORT}/"
-  code=$(curl -k -o /dev/null -s -w "%{http_code}" --max-time 8 "$backend_url" || echo "000")
+  code=$(app_http_status_code "$backend_url" 8 -k)
   if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
     success "$(t app.cyberstrikeai.success.backend_health "$backend_url" "$code")"
   else
@@ -864,7 +864,7 @@ health_check() {
   fi
   if _bool_true "$ENABLE_NGINX"; then
     public_url="http://127.0.0.1:${PUBLIC_PORT}/"
-    code=$(curl -H "Host: ${CSAI_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 8 "$public_url" || echo "000")
+    code=$(app_http_status_code "$public_url" 8 -H "Host: ${CSAI_DOMAIN:-localhost}")
     if [[ "$code" =~ ^(200|301|302|308)$ ]]; then
       success "$(t app.cyberstrikeai.success.nginx_health "$public_url" "$code")"
     else

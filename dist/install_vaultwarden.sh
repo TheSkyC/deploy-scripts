@@ -3611,6 +3611,28 @@ app_validate_db_identifier() {
   fi
 }
 
+# Emit the HTTP status code returned by a local application probe. The helper
+# always emits a three-digit fallback (000) on curl errors so health/reporting
+# callers can decide whether a failed probe is fatal without special-casing
+# command failures. Extra curl options (for example `-k` or `-H`) are passed
+# before the URL and are intended only for application-controlled probes.
+# Usage: app_http_status_code URL [timeout_seconds] [curl_option ...]
+app_http_status_code() {
+  local url="${1:-}" timeout="${2:-5}"
+  if [[ $# -ge 2 ]]; then
+    shift 2
+  else
+    set --
+  fi
+  [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
+  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+    printf '000\n'
+    return 0
+  fi
+  curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
+    || printf '000\n'
+}
+
 # Echo the standard deployment config path for the current app. With
 # APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
 # config file so independent instances do not clobber each other.
@@ -5119,7 +5141,7 @@ bapp_health_probe() {
   local url="${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
-  until code="$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")" \
+  until code="$(app_http_status_code "$url" 5)" \
       && [[ "$code" =~ $codes ]]; do
     sleep 1
     elapsed=$((elapsed + 1))
@@ -8473,7 +8495,7 @@ LOGR
   app_save_config
   local _hc_elapsed=0
   local HTTP_CODE
-  until HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${VW_PORT}/" || echo "000") \
+  until HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${VW_PORT}/" 5) \
       && [[ "$HTTP_CODE" =~ ^(200|301|302)$ ]]; do
     sleep 1; _hc_elapsed=$(( _hc_elapsed + 1 ))
     [[ $_hc_elapsed -ge 10 ]] && break
@@ -9000,7 +9022,7 @@ do_status() {
     echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.fail2ban_stopped)"
   fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.http_health)]${NC}"
-  HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${VW_PORT}/" 2>/dev/null || echo "000")
+  HTTP_CODE=$(app_http_status_code "http://127.0.0.1:${VW_PORT}/" 5)
   [[ "$HTTP_CODE" =~ ^(200|302|301)$ ]] \
     && echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.local_response "$HTTP_CODE")" \
     || echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.local_response_warn "$HTTP_CODE")"
