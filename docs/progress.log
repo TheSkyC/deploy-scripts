@@ -751,3 +751,22 @@ Format per entry:
   `check_cyberstrikeai_git_commit_version_contract` 与既有源码失败处理守卫
   通过；`tools/verify.sh release` 通过。
 - 提交 / Commit: 6ae17bf, 0dfe154
+
+
+## 2026-08-30（自主演进批次 P1-S4）
+- 状态 / Status: completed
+- 成果 / Change: Vaultwarden 镜像可复现性第四阶段：新增可选
+  `VW_IMAGE_DIGEST`（完整 `sha256:<64-hex>` Docker 镜像摘要），优先于
+  `VW_IMAGE_TAG`，并通过已固定的 docker-image-extract 使用
+  `repository:sha256:<digest>` 提取指定 manifest。成功 install/update 保存
+  `INSTALLED_IMAGE_DIGEST` 与 `INSTALLED_VERSION`。pinned 模式的
+  `check-update`/`status-json` 本地比对摘要，返回 `source=docker_image`、
+  `cache_state=pinned`，不因上游 GitHub release 或 tag 变动建议漂移更新；
+  未设置 digest 时保留原 GitHub Release 检查与 tag 行为。新增 digest 配置和
+  JSON 协议 fixture 守卫，并更新应用文档和整改路线。
+- 验证 / Verified: `tools/verify.sh syntax` 通过；
+  `check_vaultwarden_config_values_are_validated`、
+  `check_vaultwarden_extract_tool_is_pinned_and_verified`、
+  `check_vaultwarden_image_digest_version_contract` 通过；
+  `tools/verify.sh release` 通过。
+- 提交 / Commit: 0cdde5d, fc5a4d3

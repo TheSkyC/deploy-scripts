@@ -1,6 +1,6 @@
 # 项目当前进度与整改路线
 
-> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `0dfe154`（CyberStrikeAI 固定 git 提交发布产物）。
+> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `fc5a4d3`（Vaultwarden 固定镜像摘要发布产物）。
 > **文档目的**：将另一 AI 提出的安全、架构和体验问题与当前代码逐项对照，区分“已修复”“部分完成”“仍待处理”，并给出下一阶段可执行顺序。
 >
 > **结论先行**：这份建议对应的是修复前状态。高优先级安全项 1–4 已在 2026-08-29 的连续提交中完成主要修复；功能建议中的版本固定、单应用 dry-run/help、一键 HTTPS、卸载前导出、多实例、配置 diff、CI push 校验也已经落地。当前最大的未完成项不是原建议中的安全基线，而是：**真实生产环境验证仍有限、四个手写应用的架构取舍尚未进一步推进、`dist/` 生成物的治理仍保留漂移风险、部分应用仍采用浮动分支/镜像版本语义**。
@@ -16,7 +16,7 @@
 | `dist/` 规模 | 约 135,274 行（按当前工作区统计） | 生成产物，不应手工编辑 |
 | 共享库 | 约 8,979 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
 | 工作区 | 干净 | 旧安装安全审计、行为级守卫及发布产物已提交 |
-| 当前整改代码基线 | `0dfe154` | CyberStrikeAI 固定 git 提交及其发布产物；后续文档提交不改变该代码基线 |
+| 当前整改代码基线 | `fc5a4d3` | Vaultwarden 固定镜像摘要及其发布产物；后续文档提交不改变该代码基线 |
 
 ### 1.2 已完成的主线能力
 
@@ -56,7 +56,7 @@
 |---|---|---|---|
 | M15 | Sub2API/Vaultwarden/NewAPI/CyberStrikeAI 各自重复生命周期 | **部分完成** | New API 已迁移到共享 `binary_app`（提交 `5e52008`）。剩余三个手写应用仍保留，但已有共享 helper（备份、回滚、删除、配置、restore、版本检查）。`PLAN.md:54-62` 明确记录：Vaultwarden 是 Docker 镜像提取 + Web Vault/nginx/certbot，Sub2API 是多构件备份 + PostgreSQL/Redis，CyberStrikeAI 是源码构建，当前不适合强行套单二进制生命周期。 |
 | M1 | `dist/` 生成物可能与源码漂移 | **有防线，治理仍可优化** | `tools/verify.sh` 的 release/dispatch/guards 会确定性重建并检查 `dist`；`.github/workflows/verify.yml:3-5, 23-40` 已在 push/PR 执行 release 检查。因此提交过时 `dist` 会被 CI 拦截。风险仍存在于本地忘记重建、生成物体积大、源码与发布物双份审阅成本；后续可评估改为 release 时生成或保留提交产物但强化 pre-commit。 |
-| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；Hugo 支持 `HUGO_VERSION` 精确 pin、安装记录和统一版本输出；TickFlow 支持 `TICKFLOW_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；CyberStrikeAI 支持 `GITHUB_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；Vaultwarden 使用镜像 tag。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
+| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；Hugo 支持 `HUGO_VERSION` 精确 pin、安装记录和统一版本输出；TickFlow 支持 `TICKFLOW_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；CyberStrikeAI 支持 `GITHUB_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；Vaultwarden 支持 `VW_IMAGE_DIGEST` 的完整 sha256 image digest pin、安装记录和本地 JSON 比对。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
 | M11/M8 | Hugo `.deb` 无 SHA-256；Vaultwarden 用 root crontab 覆盖 | **已修复** | `impl/install_hugo_blog.sh:62-70, 308-340` 提取 GitHub asset digest 并校验后才 `dpkg -i`；Vaultwarden 使用 `/etc/cron.d/vaultwarden-backup` 与 `/etc/cron.d/certbot-renew` 原子写入，不再覆盖 root crontab。提交 `7640720`。 |
 
 ### 2.3 一致性与体验问题
@@ -107,7 +107,7 @@
 
 当前 `BA_VERSION` 只对共享 GitHub Release 二进制应用提供通用 pin。当前共有 10 个应用使用该共享生命周期。仍有几类版本来源需要独立策略：
 
-- Vaultwarden：`VW_IMAGE_TAG` 已可指定镜像 tag，但镜像 tag 不等同于不可变 digest；
+- Vaultwarden：`VW_IMAGE_TAG` 可指定镜像 tag，现已可通过 `VW_IMAGE_DIGEST` 使用不可变 `sha256:<digest>`，并在 pinned 模式记录并本地比对镜像摘要；
 - Hugo：已支持 `HUGO_VERSION` 精确 release pin，并保存 `INSTALLED_VERSION`；未设置时仍采用 GitHub latest，`check-update` 使用共享 JSON 协议；
 - TickFlow：默认仍为 git branch 模式，但现已可通过 `TICKFLOW_COMMIT` 固定完整 SHA；未设置 pin 时 branch 会移动；
 - CyberStrikeAI：默认仍为 git branch 模式，但现已可通过 `GITHUB_COMMIT` 固定完整 SHA；未设置 pin 时 branch 会移动；
@@ -123,7 +123,7 @@
 
 ### P1：版本与部署可复现性
 
-- [ ] 为 Vaultwarden/CPA Stack/Sub2API 定义统一版本记录字段；Hugo 已具备 `HUGO_VERSION`、`INSTALLED_VERSION` 和 GitHub release tag 语义，TickFlow/CyberStrikeAI 已具备完整 SHA commit pin、`INSTALLED_VERSION` 和本地 git commit JSON 语义。后续优先支持不可变镜像 digest 和组件版本 manifest。
+- [ ] 为 CPA Stack/Sub2API 定义统一版本记录字段；Hugo 已具备 `HUGO_VERSION`、`INSTALLED_VERSION` 和 GitHub release tag 语义，TickFlow/CyberStrikeAI 已具备完整 SHA commit pin、`INSTALLED_VERSION` 和本地 git commit JSON 语义，Vaultwarden 已具备 `VW_IMAGE_DIGEST`、安装记录和本地 docker image JSON 语义。后续优先支持组件版本 manifest。
 - [ ] 为 `check-update` 补齐其余非 GitHub Release 应用的统一输出协议，明确 latest/tag/branch/commit 的语义；Hugo 已接入 `github_release` 输出，TickFlow pinned commit 已接入本地 `git_commit` 输出（`cache_state=pinned`），两者 pinned target 都不联网查询 latest。
 - [ ] 将 E2E smoke 从当前代表性矩阵扩展到真实依赖服务或可复用容器 fixture。
 
