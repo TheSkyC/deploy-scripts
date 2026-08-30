@@ -31,6 +31,18 @@ bash tools/verify.sh all
 `PARALLEL_JOBS=1` to run serially when debugging a single check.
 
 Useful targets: `syntax`, `shellcheck`, `release`, `dispatch`, `guards`, `help`.
+
+Enable the versioned pre-commit hook once per clone:
+
+```bash
+bash tools/install-git-hooks.sh
+```
+
+When a staged change touches `lib/`, `apps/`, `impl/`, `dist/`, or
+`tools/build-release.sh`, the hook runs `tools/verify.sh release`. It rebuilds
+`dist/` but never stages generated files; review and stage any resulting release
+updates before retrying the commit. Use `bash tools/install-git-hooks.sh --check`
+to confirm the setup.
 `all` rebuilds `dist/` deterministically, so a change to `lib/`, `apps/`, or an
 `impl/` script requires committing the regenerated release scripts too. New
 `check_*` functions belong in a `tools/checks/` module and must be registered in

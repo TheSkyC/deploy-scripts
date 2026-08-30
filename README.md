@@ -311,6 +311,24 @@ bash tools/build-release.sh newapi
 
 `tools/verify.sh` rebuilds `dist/` with deterministic metadata before checking syntax and dispatch behavior; commit regenerated `dist/` files together with their source.
 
+
+### Versioned pre-commit release check
+
+The repository keeps its Git hook in `.githooks/` so the generated release
+artifact check is shared by every clone. Enable it once for the current checkout:
+
+```bash
+bash tools/install-git-hooks.sh
+```
+
+For staged changes to `lib/`, `apps/`, `impl/`, `dist/`, or
+`tools/build-release.sh`, the hook runs `bash tools/verify.sh release`. A stale
+artifact makes the commit fail after rebuilding `dist/`; review and explicitly
+stage the generated files before retrying. The hook never stages generated files
+on your behalf. Check the setup with `bash tools/install-git-hooks.sh --check`.
+If this checkout already uses a different hook path, the installer refuses to
+replace it unless `--force` is passed deliberately.
+
 ## Validation
 
 Use Git Bash on Windows for Bash validation:
