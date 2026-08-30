@@ -123,8 +123,18 @@
 
 ### P1：版本与部署可复现性
 
-- [ ] 为 CPA Stack/Sub2API 定义统一版本记录字段；Hugo 已具备 `HUGO_VERSION`、`INSTALLED_VERSION` 和 GitHub release tag 语义，TickFlow/CyberStrikeAI 已具备完整 SHA commit pin、`INSTALLED_VERSION` 和本地 git commit JSON 语义，Vaultwarden 已具备 `VW_IMAGE_DIGEST`、安装记录和本地 docker image JSON 语义。后续优先支持组件版本 manifest。
-- [ ] 为 `check-update` 补齐其余非 GitHub Release 应用的统一输出协议，明确 latest/tag/branch/commit 的语义；Hugo 已接入 `github_release` 输出，TickFlow pinned commit 已接入本地 `git_commit` 输出（`cache_state=pinned`），两者 pinned target 都不联网查询 latest。
+- [x] 为 CPA Stack/Sub2API 定义组件版本记录与 manifest：CPA Stack 保留
+  `INSTALLED_CPA_VERSION` / `INSTALLED_CPAMP_VERSION`，并在统一 JSON 中提供
+  `components.cpa` / `components.cpamp`；Sub2API 记录
+  `INSTALLED_VERSION`、`INSTALLED_POSTGRES_VERSION`、
+  `INSTALLED_REDIS_VERSION`，统一 JSON 提供 `sub2api`、`postgresql`、`redis`
+  组件。依赖包不伪装成可比较的 GitHub release，明确标为
+  `update_state=not_checked`、`source=system_runtime`。
+- [x] 为 `check-update` 补齐当前非单一 GitHub Release 应用的统一输出协议：
+  Hugo 使用 `github_release`，TickFlow/CyberStrikeAI pinned commit 使用本地
+  `git_commit`（`cache_state=pinned`），Vaultwarden digest 使用本地
+  `docker_image`，CPA Stack/Sub2API 通过稳定的顶层版本 verdict + typed
+  `components` manifest 输出。pinned target 都不联网查询 moving latest。
 - [ ] 将 E2E smoke 从当前代表性矩阵扩展到真实依赖服务或可复用容器 fixture。
 
 ### P2：维护成本与发布流程

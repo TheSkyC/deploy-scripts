@@ -87,6 +87,13 @@ App-specific defaults:
   entry point). `SUB2API_TZ` replaces the old hardcoded `Asia/Shanghai`
   (empty = server local time).
 - Restore: `install_sub2api.sh restore` loads the DB dump via `psql`.
+- Version records: the deployment config persists `INSTALLED_VERSION` for the
+  Sub2API release plus `INSTALLED_POSTGRES_VERSION` and
+  `INSTALLED_REDIS_VERSION` after a successful install/update. `check-update`
+  and `status-json` retain the Sub2API GitHub-release verdict at the top level
+  and add `version_info.components` entries for `sub2api`, `postgresql`, and
+  `redis`; package dependencies are explicitly `update_state: not_checked`
+  because the deployment script does not own a comparable package-feed policy.
 
 ### New API (`newapi`, port 8080)
 

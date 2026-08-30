@@ -770,3 +770,19 @@ Format per entry:
   `check_vaultwarden_image_digest_version_contract` 通过；
   `tools/verify.sh release` 通过。
 - 提交 / Commit: 0cdde5d, fc5a4d3
+
+## 2026-08-30（自主演进批次 P1-S5）
+- 状态 / Status: completed
+- 成果 / Change: 完成 CPA Stack 与 Sub2API 的多组件版本记录/统一 JSON
+  manifest。共享 `version_check` 增加组件封装 helper；CPA Stack 在保留顶层
+  聚合 verdict 和兼容的 `installed`/`latest` 字段基础上，增加
+  `components.cpa`、`components.cpamp`（仓库、已安装版本、最新版本、缓存和
+  更新状态）。Sub2API 在成功 install/update 时记录 PostgreSQL 与 Redis
+  运行时版本，并将 `sub2api` GitHub release 与 `postgresql` / `redis`
+  组件同时投影到 `version_info.components`；运行时依赖明确返回
+  `source=system_runtime`、`update_state=not_checked`，不伪装为可比较的
+  release。新增 CPA/Sub2API manifest 行为守卫并同步应用/路线文档。
+- 验证 / Verified: `tools/verify.sh syntax`、`tools/verify.sh update` 与
+  focused component-manifest guards 通过；发布产物、全量 guards 和 GitHub CI
+  将在配套生成物提交后执行。
+- 提交 / Commit: 1054685, pending release artifact
