@@ -311,8 +311,8 @@ check_update_binary_backups_are_atomic() {
       in_func && /mv "\$backup_tmp" "\$backup_path"/ { saw_mv=1 }
       in_func && /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       in_func && /^}/ {
-        if (!((saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup) || (saw_atomic && saw_tmp_error) || (saw_app_helper && saw_tmp_error))) {
-          printf "%s binary backup helper must report temp creation failures, stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
+        if (!((saw_tmp && saw_tmp_error && saw_cp && saw_mv && saw_cleanup) || saw_atomic || (saw_app_helper && saw_tmp_error))) {
+          printf "%s binary backup helper must use a shared atomic publisher or report temp creation failures, stage, replace, and clean up temporary backups\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
