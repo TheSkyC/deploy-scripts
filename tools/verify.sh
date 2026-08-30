@@ -430,6 +430,8 @@ main() {
       check_backup_script_dir_failures_are_explicit
       check_backup_scripts_are_atomic
       check_backup_temp_moves_handle_failure
+      check_backup_create_tar_archive_helper
+      check_backup_create_tar_archive_delegates
       check_binary_helpers_are_atomic
       check_binary_replacements_handle_failure
       check_binary_restores_validate_permissions

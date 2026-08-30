@@ -1098,6 +1098,54 @@ check_backup_finalize_archive_helper() {
   [[ "$output" == ok ]]
 }
 
+# The shared tar publisher must stage to a unique sibling, send tar diagnostics
+# to stderr, publish only after success, and clean up on both failure paths.
+check_backup_create_tar_archive_helper() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf \"$temp_dir\"" EXIT
+    mkdir -p "$temp_dir/source/payload"
+    printf data > "$temp_dir/source/payload/file.txt"
+    archive="$temp_dir/backups/app.tar.gz"
+    mkdir -p "$temp_dir/backups"
+    backup_create_tar_archive "$archive" -C "$temp_dir/source" payload
+    tar -tzf "$archive" | grep -qx payload/file.txt
+    compgen -G "$archive.tmp.*" >/dev/null && exit 11 || true
+
+    printf old > "$archive"
+    if backup_create_tar_archive "$archive" -C "$temp_dir/missing" payload; then
+      exit 12
+    fi
+    [[ "$(cat "$archive")" == old ]]
+    compgen -G "$archive.tmp.*" >/dev/null && exit 13 || true
+    ! backup_create_tar_archive "$archive"
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+check_backup_create_tar_archive_delegates() {
+  grep -Fq 'backup_create_tar_archive "$archive"' lib/binary_app.sh || {
+    echo "binary_app backup must use shared tar publisher" >&2
+    return 1
+  }
+  grep -Fq 'backup_create_tar_archive "$CONF_ARCHIVE"' impl/install_sub2api.sh || {
+    echo "Sub2API config backup must use shared tar publisher" >&2
+    return 1
+  }
+  grep -Fq 'backup_create_tar_archive "$DATA_ARCHIVE"' impl/install_sub2api.sh || {
+    echo "Sub2API data backup must use shared tar publisher" >&2
+    return 1
+  }
+  grep -Fq 'backup_create_tar_archive "$archive"' impl/install_vaultwarden.sh || {
+    echo "Vaultwarden manual backup must use shared tar publisher" >&2
+    return 1
+  }
+}
+
 check_sub2api_manual_backups_finalize_integrity() {
   local file=impl/install_sub2api.sh
   local count

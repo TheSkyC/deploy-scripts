@@ -1025,20 +1025,11 @@ _backup_silent() {
   if [[ -d "$CONFIG_DIR" ]]; then
     local conf_archive
     conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
-    local conf_tmp="${conf_archive}.tmp"
-    if tar -czf "$conf_tmp" \
-        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
-      if mv "$conf_tmp" "$conf_archive"; then
-        local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
-        success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
-      else
-        rm -f "$conf_tmp"
-        _log_backup_helper "$(t app.sub2api.backup.log.config_failed)"
-        warn "$(t app.sub2api.warn.config_backup_failed)"
-        backup_failed=1
-      fi
+    if backup_create_tar_archive "$conf_archive" \
+        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
+      local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
+      success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
     else
-      rm -f "$conf_tmp"
       _log_backup_helper "$(t app.sub2api.backup.log.config_failed)"
       warn "$(t app.sub2api.warn.config_backup_failed)"
       backup_failed=1
@@ -1417,21 +1408,14 @@ do_backup() {
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
     local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_$(date +%Y%m%d_%H%M%S).tar.gz"
-    local CONF_TMP="${CONF_ARCHIVE}.tmp"
-    if tar -czf "$CONF_TMP" \
-        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" >&2; then
-      if mv "$CONF_TMP" "$CONF_ARCHIVE"; then
+    if backup_create_tar_archive "$CONF_ARCHIVE" \
+        -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
         if ! backup_finalize_archive "$CONF_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
           warn "$(t app.sub2api.warn.backup_integrity "$CONF_ARCHIVE")"
         fi
         local cf_sz; cf_sz=$(du -sh "$CONF_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.config_backup "$CONF_ARCHIVE" "$cf_sz")"
-      else
-        rm -f "$CONF_TMP"
-        warn "$(t app.sub2api.warn.config_backup_failed)"
-      fi
     else
-      rm -f "$CONF_TMP"
       warn "$(t app.sub2api.warn.config_backup_failed)"
     fi
   else
@@ -1439,22 +1423,15 @@ do_backup() {
   fi
   if [[ -d "$DATA_DIR" ]]; then
     local DATA_ARCHIVE; DATA_ARCHIVE="${BACKUP_DIR}/sub2api_data_$(date +%Y%m%d_%H%M%S).tar.gz"
-    local DATA_TMP="${DATA_ARCHIVE}.tmp"
-    if tar -czf "$DATA_TMP" \
+    if backup_create_tar_archive "$DATA_ARCHIVE" \
         --exclude="*.log" --exclude="*.log.*" \
-        -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")" >&2; then
-      if mv "$DATA_TMP" "$DATA_ARCHIVE"; then
+        -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
         if ! backup_finalize_archive "$DATA_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
           warn "$(t app.sub2api.warn.backup_integrity "$DATA_ARCHIVE")"
         fi
         local da_sz; da_sz=$(du -sh "$DATA_ARCHIVE" 2>/dev/null | awk '{print $1}')
         success "$(t app.sub2api.success.data_backup "$DATA_ARCHIVE" "$da_sz")"
-      else
-        rm -f "$DATA_TMP"
-        warn "$(t app.sub2api.warn.data_backup_failed)"
-      fi
     else
-      rm -f "$DATA_TMP"
       warn "$(t app.sub2api.warn.data_backup_failed)"
     fi
   else
