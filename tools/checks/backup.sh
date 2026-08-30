@@ -1694,6 +1694,9 @@ check_schedule_retries_are_configurable() {
     export DEPLOY_SCHEDULE_RUNNER="$tmp/runner"
     export DEPLOY_SCHEDULE_CRON_FILE="$tmp/cron"
     require_root() { :; }
+    # Force the cron path; CI runners can expose a live systemctl while this
+    # fixture intentionally uses temporary, unprivileged output paths.
+    systemctl() { return 1; }
     error() { exit 9; }
     success() { :; }
     # The test writes configs as the invoking user with default modes; the
