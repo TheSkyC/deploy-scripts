@@ -1173,15 +1173,10 @@ do_install() {
   step "$(t app.sub2api.step.cron_backup)"
   _write_backup_script
   local cron_file="/etc/cron.d/sub2api-backup"
-  local cron_tmp
-  if ! cron_tmp=$(mktemp "${cron_file}.XXXXXX"); then
-    error "$(t app.sub2api.error.cron_backup)"
-  fi
-  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/sub2api-backup" > "$cron_tmp" \
-      || ! chmod 644 "$cron_tmp" \
-      || ! chown root:root "$cron_tmp" \
-      || ! mv "$cron_tmp" "$cron_file"; then
-    rm -f "$cron_tmp"
+  if ! atomic_write_file "$cron_file" 644 root:root <<CRON
+30 3 * * * root /bin/bash /usr/local/bin/sub2api-backup
+CRON
+  then
     error "$(t app.sub2api.error.cron_backup)"
   fi
   success "$(t app.sub2api.success.cron_backup "$BACKUP_KEEP_DAYS")"
