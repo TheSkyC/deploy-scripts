@@ -553,6 +553,8 @@ main() {
       check_status_commands_allow_non_root
       check_status_port_matches_are_bounded
       check_sub2api_apt_failures_are_reported
+      check_sub2api_backup_script_is_published_atomically
+      check_sub2api_backup_script_publish_contract
       check_sub2api_codename_resolution
       check_sub2api_dependency_services_start_before_success
       check_sub2api_database_restore_fails_closed
