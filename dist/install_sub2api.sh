@@ -8330,7 +8330,7 @@ BKSH_HEADER
 
 LOG="${BACKUP_DIR}/backup.log"
 TS=$(date +%Y%m%d_%H%M%S)
-ARCHIVE="${BACKUP_DIR}/sub2api_${TS}.tar.gz"
+ARCHIVE="${BACKUP_DIR}/sub2api_data_${TS}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"
 PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
 PG_DUMP_TMP="${PG_DUMP_FILE}.tmp"
