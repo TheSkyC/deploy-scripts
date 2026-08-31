@@ -1574,19 +1574,60 @@ check_registry_restore_capability_matches_impl() {
     }
   ' impl/install_cpa_stack.sh || return 1
   awk '
-    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_conf=0; saw_db=0; saw_stop=0; next }
-    in_fn && /backup_restore_data_dir "\$DATA_DIR"/ { saw_data=1 }
-    in_fn && /sub2api_conf_\*\.tar\.gz/ { saw_conf=1 }
+    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_data_restart=0; saw_conf=0; saw_conf_restart=0; saw_db=0; saw_stop=0; next }
+    in_fn && /if ! backup_restore_data_dir "\$DATA_DIR" ""/ { saw_data=1 }
+    in_fn && saw_data && /systemctl start "\$SERVICE_NAME"/ { saw_data_restart=1 }
+    in_fn && /backup_restore_directory "\$CONFIG_DIR" "\$conf_archive"/ { saw_conf=1 }
+    in_fn && saw_conf && /systemctl start "\$SERVICE_NAME"/ { saw_conf_restart=1 }
+    in_fn && /sub2api_conf_\*\.tar\.gz/ { saw_conf_archive=1 }
     in_fn && /sub2api_db_\*\.sql\.gz/ { saw_db=1 }
     in_fn && /systemctl stop "\$SERVICE_NAME"/ { saw_stop=1 }
     in_fn && /^}$/ {
-      if (!(saw_data && saw_conf && saw_db && saw_stop)) {
-        print "sub2api do_restore must cover data tar, config tar, db dump, and stop the service first" > "/dev/stderr"
+      if (!(saw_data && saw_data_restart && saw_conf && saw_conf_restart && saw_conf_archive && saw_db && saw_stop)) {
+        print "sub2api do_restore must use shared directory restore helpers and restart the service after caller-managed failures" > "/dev/stderr"
         exit 1
       }
       in_fn=0
     }
   ' impl/install_sub2api.sh
+}
+
+# Behavioral lifecycle test for backup_restore_directory, covering top-level
+# and bare payload archives, checksum/member rejection, and rollback.
+check_backup_restore_directory_lifecycle() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/backups" "$tmp/config"
+    printf original > "$tmp/config/settings.yml"
+    mkdir -p "$tmp/stage/config"
+    printf restored > "$tmp/stage/config/settings.yml"
+    tar -czf "$tmp/backups/config.tar.gz" -C "$tmp/stage" config
+    backup_write_sha256 "$tmp/backups/config.tar.gz" >/dev/null
+    backup_restore_directory "$tmp/config" "$tmp/backups/config.tar.gz"
+    [[ "$(cat "$tmp/config/settings.yml")" == restored ]]
+
+    # A bare payload must not be deleted by temporary-directory cleanup.
+    mkdir -p "$tmp/stage/bare"
+    printf bare > "$tmp/stage/bare/value"
+    tar -czf "$tmp/backups/bare.tar.gz" -C "$tmp/stage/bare" .
+    rm -rf "$tmp/bare"
+    backup_restore_directory "$tmp/bare" "$tmp/backups/bare.tar.gz"
+    [[ "$(cat "$tmp/bare/value")" == bare ]]
+
+    # A failed checksum must leave the existing target untouched.
+    printf corrupted > "$tmp/backups/config.tar.gz"
+    if backup_restore_directory "$tmp/config" "$tmp/backups/config.tar.gz"; then
+      exit 31
+    fi
+    [[ "$(cat "$tmp/config/settings.yml")" == restored ]]
+    [[ -z "$(find "$tmp" -maxdepth 2 -name ".config.restore*" -print -quit)" ]]
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
 }
 
 # Behavioral lifecycle test for backup_restore_data_dir, run with a stubbed
