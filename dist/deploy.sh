@@ -18174,6 +18174,26 @@ MSG_BACKUP_CREATED="${msg_backup_created}"
 MSG_REMOVE_FAILED="${msg_remove_failed}"
 
 _log() { echo "\$(date '+%F %T') \$*" >> "\$LOG_FILE"; }
+# Minimal JSON string literal for manifest fields (best-effort; archive
+# names and timestamps never contain control bytes).
+_json_string() {
+  local s="\${1:-}"
+  [[ -n "\$s" ]] || { printf 'null'; return; }
+  s="\${s//\\\\/\\\\\\\\}"
+  s="\${s//\"/\\\\\"}"
+  printf '"%s"' "\$s"
+}
+
+# Write the integrity manifest next to a completed archive, matching the
+# shared backup contract: schema, app, archive name, digest, creation time.
+# Best-effort like the sidecar: a failed manifest write never fails the
+# backup, and verify keeps reporting the archive via the sidecar.
+_write_manifest() {
+  local archive="\$1"
+  [[ -f "\${archive}.sha256" ]] || return 0
+  printf '{"schema_version":1,"app":"cyberstrikeai","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' "\$(_json_string "\$(basename "\$archive")")" "\$(awk '{print \$1}' "\${archive}.sha256")" "\$(_json_string "\$(date '+%Y-%m-%dT%H:%M:%S%:z')")" > "\${archive}.manifest.json" 2>/dev/null || true
+  chmod 600 "\${archive}.manifest.json" 2>/dev/null || true
+}
 
 if ! mkdir -p "\$BACKUP_DIR"; then
   printf "\$(date '+%F %T') [ERROR] %s\n" "\$(printf "\$MSG_BACKUP_DIR_FAILED" "\$BACKUP_DIR")" >&2
@@ -18220,6 +18240,7 @@ if tar -czf "\$tmp" \
     shasum -a 256 "\$archive" | awk '{print \$1"  "\$(NF)}' > "\${archive}.sha256" || true
     chmod 600 "\${archive}.sha256" 2>/dev/null || true
   fi
+  _write_manifest "\$archive"
 else
   rm -f "\$tmp"
   exit 1
@@ -18227,7 +18248,9 @@ fi
 
 if [[ "\$KEEP_DAYS" -gt 0 ]]; then
   while IFS= read -r -d '' old_backup; do
-    if ! rm -f "\$old_backup"; then
+    if rm -f "\$old_backup"; then
+      rm -f "\${old_backup}.sha256" "\${old_backup}.manifest.json" 2>/dev/null || true
+    else
       _log "[WARN] \$(printf "\$MSG_REMOVE_FAILED" "\$old_backup")"
     fi
   done < <(find "\$BACKUP_DIR" -maxdepth 1 -name "cyberstrike-ai_*.tar.gz" -mtime "+\$KEEP_DAYS" -type f -print0 2>/dev/null)

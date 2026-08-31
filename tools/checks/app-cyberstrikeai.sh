@@ -7,10 +7,21 @@
 # shared fail-closed atomic writer.
 check_cyberstrikeai_backup_script_is_published_atomically() {
   awk '
-      /write_backup_script\(\)/ { in_func=1; saw_atomic=0; saw_legacy_temp=0; next }
-      in_func && /atomic_write_file "\$BACKUP_SCRIPT" 750 root:root/ { saw_atomic=1 }
-      in_func && /mktemp "\$\{BACKUP_SCRIPT\}\.XXXXXX"/ { saw_legacy_temp=1 }
-      in_func && /^}/ {
+      /write_backup_script\(\)/ {
+        in_func=1
+        in_heredoc=0
+        saw_atomic=0
+        saw_legacy_temp=0
+        next
+      }
+      # The generation body embeds the standalone backup script as an unquoted
+      # heredoc; skip its literal contents so template functions with a
+      # column-0 closing brace do not end the function scope early.
+      in_func && !in_heredoc && /^[[:space:]]*cat[[:space:]]+<<BACKUP/ { in_heredoc=1; next }
+      in_func && in_heredoc && $0 == "BACKUP" { in_heredoc=0; next }
+      in_func && !in_heredoc && /atomic_write_file "\$BACKUP_SCRIPT" 750 root:root/ { saw_atomic=1 }
+      in_func && !in_heredoc && /mktemp "\$\{BACKUP_SCRIPT\}\.XXXXXX"/ { saw_legacy_temp=1 }
+      in_func && !in_heredoc && /^}/ {
         if (!saw_atomic || saw_legacy_temp) {
           printf "%s CyberStrikeAI backup script generation must use atomic_write_file instead of a caller-managed temp file\n", FILENAME > "/dev/stderr"
           exit 1
