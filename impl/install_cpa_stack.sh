@@ -330,7 +330,7 @@ cpa_stack_install_binary() {
   local source="$1" target="$2" owner="$3" backup
   [[ -s "$source" ]] || error "$(t app.cpa_stack.error.binary_missing "$(basename "$target")" "$(dirname "$source")")"
   backup="${target}.bak.$(date +%Y%m%d_%H%M%S)"
-  if [[ -f "$target" ]] && ! cp -a "$target" "$backup"; then
+  if [[ -f "$target" ]] && ! atomic_copy_file "$target" "$backup"; then
     error "$(t app.cpa_stack.error.binary_backup "$target")"
   fi
   if ! atomic_copy_file "$source" "$target" 0755 "$owner"; then

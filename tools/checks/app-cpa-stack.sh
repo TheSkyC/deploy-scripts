@@ -70,3 +70,24 @@ CPATEST
   grep -Fq 'version_check_component_json cpa' impl/install_cpa_stack.sh
   grep -Fq 'version_check_component_json cpamp' impl/install_cpa_stack.sh
 }
+
+check_cpa_stack_binary_backups_are_atomic() {
+  awk '
+      /cpa_stack_install_binary\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
+      in_func && /atomic_copy_file "\$target" "\$backup"/ { saw_atomic=1 }
+      in_func && /error "\$\(t app\.cpa_stack\.error\.binary_backup "\$target"\)"/ { saw_error=1 }
+      in_func && /^}/ {
+        if (!(saw_atomic && saw_error)) {
+          print "CPA Stack binary rollback backups must use atomic_copy_file and report failures" > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      END {
+        if (in_func) {
+          print "CPA Stack binary install function was not closed" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cpa_stack.sh
+}
