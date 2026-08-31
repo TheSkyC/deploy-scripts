@@ -323,7 +323,19 @@ check_batch_target_selection_is_local_only() {
 
 check_doctor_all_target() {
   local output json_file
-  output="$($BASH_BIN deploy.sh doctor-all --json --include newapi)"
+  output="$($BASH_BIN <<'DOCTORTEST'
+set -euo pipefail
+source lib/core.sh
+manager_status_selected_ids() { printf 'newapi\n'; }
+manager_status_collect_app_json() {
+  [[ "${DEPLOY_STATUS_NO_PROBE:-0}" == 1 ]] || return 91
+  [[ "${DEPLOY_STATUS_NO_NETWORK:-0}" == 1 ]] || return 92
+  printf '%s' '{"install_state":"not_installed"}' > "$2"
+  : > "$3"
+}
+manager_main doctor-all --json --include newapi
+DOCTORTEST
+  )"
   json_file="$(mktemp)"
   printf '%s' "$output" > "$json_file"
   python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["schema_version"] == 1; assert x["summary"]["selected"] == 1; assert x["summary"]["skipped"] == 1; assert x["records"][0]["state"] == "skipped"' "$json_file"
