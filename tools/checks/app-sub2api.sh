@@ -2,6 +2,72 @@
 # shellcheck source=../verify.sh
 # Verify checks for the sub2api app (apps/sub2api.sh, impl/install_sub2api.sh).
 
+# The generated standalone cron script cannot source the shared library when it
+# later runs on a host, but writing it during installation still must use the
+# shared fail-closed atomic publisher.
+check_sub2api_backup_script_is_published_atomically() {
+  awk '
+      /_write_backup_script\(\)/ { in_func=1; saw_atomic=0; saw_legacy_temp=0; next }
+      in_func && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
+      in_func && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
+      in_func && /^}/ {
+        if (!saw_atomic || saw_legacy_temp) {
+          printf "%s Sub2API backup script generation must use atomic_write_file instead of a caller-managed temp file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_sub2api.sh
+}
+
+check_sub2api_backup_script_publish_contract() {
+  local output
+  output="$($BASH_BIN <<'SUB2APITEST'
+set -euo pipefail
+source lib/core.sh
+source apps/sub2api.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_sub2api.sh >/dev/null 2>&1
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+BACKUP_DIR="$tmp_dir/backups"
+CONFIG_DIR="$tmp_dir/config"
+DATA_DIR="$tmp_dir/data"
+SERVICE_NAME=testsvc
+BACKUP_KEEP_DAYS=7
+PG_DSN='postgresql://user:password@example.invalid/sub2api'
+mkdir -p "$DATA_DIR"
+records="$tmp_dir/records"
+script="$tmp_dir/sub2api-backup"
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+success() { :; }
+atomic_write_file() {
+  local target="$1" mode="$2" owner="$3"
+  printf '%s|%s|%s\n' "$target" "$mode" "$owner" >> "$records"
+  case "$target" in
+    "${CONFIG_DIR}/.pg_dsn") cat > "${tmp_dir}/pg_dsn" ;;
+    /usr/local/bin/sub2api-backup) cat > "$script" ;;
+    *) cat > /dev/null; return 1 ;;
+  esac
+}
+
+_write_backup_script
+[[ "$(sed -n '1p' "$records")" == "${CONFIG_DIR}/.pg_dsn|600|root:root" ]]
+[[ "$(sed -n '2p' "$records")" == "/usr/local/bin/sub2api-backup|750|root:root" ]]
+[[ "$(cat "${tmp_dir}/pg_dsn")" == "$PG_DSN" ]]
+[[ "$(head -n 1 "$script")" == '#!/bin/bash' ]]
+grep -Fq "PG_DSN_FILE=${CONFIG_DIR}/.pg_dsn" "$script"
+grep -Fq 'set -euo pipefail' "$script"
+! grep -Fq 'source lib/backup.sh' "$script"
+bash -n "$script"
+printf ok
+SUB2APITEST
+  )"
+  [[ "$output" == ok ]]
+}
 # Keep the Docker smoke fixture tied to real database/cache process contracts.
 # The CI e2e-smoke job proves these commands execute; this guard prevents a
 # future edit from silently replacing that scenario with command-only fakes.
