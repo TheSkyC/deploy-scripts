@@ -8968,6 +8968,7 @@ if tar -czf "${ARCHIVE_TMP}" \
   -C "${DATA_PARENT}" "${DATA_BASE}" \
   "${TAR_EXTRA[@]+"${TAR_EXTRA[@]}"}" >&2; then
   if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+    chmod 600 "${ARCHIVE}" 2>/dev/null || true
     # Integrity sidecar: bare digest is enough here; verify accepts it.
     if command -v sha256sum >/dev/null 2>&1; then
       sha256sum "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true

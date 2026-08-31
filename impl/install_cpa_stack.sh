@@ -873,6 +873,7 @@ do_backup() {
     fi
     error "$(t app.cpa_stack.error.backup "$archive")"
   fi
+  chmod 600 "$archive" 2>/dev/null || true
   if $cpamp_was_active; then
     systemctl start "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
   fi

@@ -7847,6 +7847,7 @@ if tar -czf "\$tmp" \
     rm -f "\$tmp"
     exit 1
   fi
+  chmod 600 "\$archive" 2>/dev/null || true
   # Integrity sidecar: bare digest is enough here; verify accepts it.
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "\$archive" | awk '{print \$1"  "\$(NF)}' > "\${archive}.sha256" || true

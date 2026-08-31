@@ -1542,6 +1542,25 @@ check_generated_backup_scripts_write_sidecars() {
   grep -q 'sha256sum "\\$archive"' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai generated backup script must write a sha256 sidecar" >&2; return 1; }
 }
+# Standalone backup scripts and runtime backup paths must publish archives
+# privately: archives can hold database dumps, configs with secrets, and
+# service data, and the shared tar/gzip publishers already require 0600.
+# Quoted heredocs reference shell vars directly; the unquoted cyberstrikeai
+# heredoc escapes them — accept both spellings.
+check_backup_archives_are_private() {
+  grep -q 'chmod 600 "${ARCHIVE}" 2>/dev/null || true' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden backup archive must be published with mode 600" >&2; return 1; }
+  grep -q 'chmod 600 "${PG_DUMP_FILE}" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api pg_dump archive must be published with mode 600" >&2; return 1; }
+  grep -q 'chmod 600 "${EXTRA_CONF_ARCHIVE}" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api config archive must be published with mode 600" >&2; return 1; }
+  grep -q 'chmod 600 "${ARCHIVE}" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api data archive must be published with mode 600" >&2; return 1; }
+  grep -q 'chmod 600 "\\$archive" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
+    || { echo "cyberstrikeai backup archive must be published with mode 600" >&2; return 1; }
+  grep -q 'chmod 600 "$archive" 2>/dev/null || true' impl/install_cpa_stack.sh \
+    || { echo "cpa-stack backup archive must be published with mode 600" >&2; return 1; }
+}
 
 # Registry restore capability must match reality: an app declares "restore"
 # only when its impl defines do_restore backed by the shared lifecycle.
