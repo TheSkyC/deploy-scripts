@@ -610,6 +610,8 @@ main() {
       check_vaultwarden_admin_token_file_is_private
       check_vaultwarden_apt_update_failures_are_reported
       check_vaultwarden_backup_failures_include_followup_guidance
+      check_vaultwarden_backup_script_is_published_atomically
+      check_vaultwarden_backup_script_publish_contract
       check_vaultwarden_binary_backups_use_shared_atomic_copy
       check_vaultwarden_binary_installs_are_atomic
       check_vaultwarden_certbot_cron_failures_are_reported

@@ -2,6 +2,65 @@
 # shellcheck source=../verify.sh
 # Verify checks for the vaultwarden app (apps/vaultwarden.sh).
 
+# The generated standalone cron script cannot source the shared library when it
+# later runs on a host, but installation-time publication must still use the
+# shared fail-closed atomic writer.
+check_vaultwarden_backup_script_is_published_atomically() {
+  awk '
+      /_write_backup_script\(\)/ { in_func=1; saw_atomic=0; saw_legacy_temp=0; next }
+      in_func && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
+      in_func && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
+      in_func && /^}/ {
+        if (!saw_atomic || saw_legacy_temp) {
+          printf "%s Vaultwarden backup script generation must use atomic_write_file instead of a caller-managed temp file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_vaultwarden.sh
+}
+
+check_vaultwarden_backup_script_publish_contract() {
+  local output
+  output="$($BASH_BIN <<'VAULTWARDENTEST'
+set -euo pipefail
+source lib/core.sh
+source apps/vaultwarden.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_vaultwarden.sh >/dev/null 2>&1
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+VW_BACKUP_DIR="$tmp_dir/backup dir"
+VW_DATA_DIR="$tmp_dir/data dir"
+VW_ENV_FILE="$tmp_dir/config dir/vaultwarden.env"
+BACKUP_KEEP_DAYS=7
+records="$tmp_dir/records"
+script="$tmp_dir/vaultwarden-backup"
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+atomic_write_file() {
+  local target="$1" mode="$2" owner="$3"
+  printf '%s|%s|%s\n' "$target" "$mode" "$owner" >> "$records"
+  [[ "$target" == /usr/local/bin/vaultwarden-backup ]] || { cat > /dev/null; return 1; }
+  cat > "$script"
+}
+
+_write_backup_script
+[[ "$(cat "$records")" == '/usr/local/bin/vaultwarden-backup|750|root:root' ]]
+[[ "$(head -n 1 "$script")" == '#!/bin/bash' ]]
+grep -Fq "BACKUP_DIR=\"${VW_BACKUP_DIR}\"" "$script"
+grep -Fq "ENV_FILE=\"${VW_ENV_FILE}\"" "$script"
+grep -Fq 'set -euo pipefail' "$script"
+! grep -Fq 'source lib/backup.sh' "$script"
+bash -n "$script"
+printf ok
+VAULTWARDENTEST
+  )"
+  [[ "$output" == ok ]]
+}
+
 check_vaultwarden_status_backup_projection() {
   local output
   output="$($BASH_BIN -c '
