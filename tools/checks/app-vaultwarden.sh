@@ -7,10 +7,26 @@
 # shared fail-closed atomic writer.
 check_vaultwarden_backup_script_is_published_atomically() {
   awk '
-      /_write_backup_script\(\)/ { in_func=1; saw_atomic=0; saw_legacy_temp=0; next }
-      in_func && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
-      in_func && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
-      in_func && /^}/ {
+      /_write_backup_script\(\)/ {
+        in_func=1
+        in_heredoc=0
+        heredoc_delim=""
+        saw_atomic=0
+        saw_legacy_temp=0
+        next
+      }
+      # The generation body embeds the standalone backup script as heredocs;
+      # skip their literal contents so template functions with a column-0
+      # closing brace do not end the function scope early.
+      in_func && !in_heredoc && /^[[:space:]]*cat << / {
+        in_heredoc=1
+        heredoc_delim = ($0 ~ /BKSH_VARS/ ? "BKSH_VARS" : "BKSH")
+        next
+      }
+      in_func && in_heredoc && $0 == heredoc_delim { in_heredoc=0; next }
+      in_func && !in_heredoc && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
+      in_func && !in_heredoc && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
+      in_func && !in_heredoc && /^}/ {
         if (!saw_atomic || saw_legacy_temp) {
           printf "%s Vaultwarden backup script generation must use atomic_write_file instead of a caller-managed temp file\n", FILENAME > "/dev/stderr"
           exit 1
