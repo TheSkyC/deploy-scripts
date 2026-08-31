@@ -1031,3 +1031,9 @@ Format per entry:
 - 成果 / Change: 在不改变独立 cron 脚本运行时自包含边界的前提下，Sub2API 安装阶段生成 `/usr/local/bin/sub2api-backup` 时改为委托共享 `atomic_write_file`。发布器统一负责同目录临时文件、0750、root:root、原子替换和失败清理，避免调用方继续维护手写 `mktemp`/`chmod`/`chown`/`mv` 序列；生成后的脚本仍不 source 运行时共享库，数据库凭据仍只保存在 root-only 的 `.pg_dsn` 文件中。
 - 验证 / Verified: 新增静态守卫锁定共享原子发布且禁止旧调用方临时文件；新增行为守卫，以 stub 捕获两次发布的目标/权限/owner，验证 `.pg_dsn` 维持 0600 root:root、独立脚本维持 0750 root:root、生成内容保留 `set -euo pipefail` 且不依赖 `lib/backup.sh`。focused Sub2API guards、`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、干净提交上的 `tools/verify.sh guards`、`git diff --check` 与提交 hook 的 release 验证均通过；guards 的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径，最终输出为 `Guards verification passed`。本地 Docker Linux daemon 不可用，真实 Docker E2E 继续由后续 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
 - 提交 / Commit: 9e20a6b
+
+## 2026-08-31（自主演进批次 P2-S2 续 21）
+- 状态 / Status: completed
+- 成果 / Change: Vaultwarden 与 CyberStrikeAI 的安装阶段在发布各自独立的 root cron 备份脚本时，统一委托共享 `atomic_write_file`。发布器负责同目录临时文件、目标权限/owner、原子替换和失败清理：两者生成的 `/usr/local/bin/*-backup` 脚本均保持 0750、`root:root`；CyberStrikeAI 的 `/etc/cron.d` 任务仍独立以 0644、`root:root` 发布。生成后的脚本继续完全自包含，不在目标主机运行时 source `lib/backup.sh`，并保留各应用既有 SQLite 检查、sidecar、日志、路径转义及错误语义。
+- 验证 / Verified: 新增 Vaultwarden/CyberStrikeAI focused 行为守卫，捕获脚本与 cron 的发布参数、验证生成脚本的 shebang、`set -euo pipefail`、安装/日志路径、自包含边界以及 `bash -n`。`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、`tools/verify.sh release`、`tools/verify.sh dispatch`、串行 `PARALLEL_JOBS=1 tools/verify.sh guards`、`git diff --check` 与提交 hook 的 release 验证均通过；此前 `check_doctor_all_target` 的并行 guards 单次失败经单独命令和串行完整 guards 复验未重现。guards 中的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径。本地 Docker Linux daemon 不可用，真实 Docker E2E 继续由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: 4b9feaf, d96333d
