@@ -14557,6 +14557,31 @@ PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
 PG_DUMP_TMP="${PG_DUMP_FILE}.tmp"
 
 _log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
+# Minimal JSON string literal for manifest fields (best-effort; archive
+# names and timestamps never contain control bytes).
+_json_string() {
+  local s="${1:-}"
+  [[ -n "$s" ]] || { printf 'null'; return; }
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "$s"
+}
+
+# Write the integrity manifest next to a completed archive, matching the
+# shared backup contract: schema, app, archive name, digest, creation time.
+# Best-effort like the sidecar: a failed manifest write never fails the
+# backup, and verify keeps reporting the archive via the sidecar.
+_write_manifest() {
+  local archive="$1"
+  [[ -f "${archive}.sha256" ]] || return 0
+  printf '{"schema_version":1,"app":"sub2api","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' \
+    "$(_json_string "$(basename "$archive")")" \
+    "$(awk '{print $1}' "${archive}.sha256")" \
+    "$(_json_string "$(date '+%Y-%m-%dT%H:%M:%S%:z')")" \
+    > "${archive}.manifest.json" 2>/dev/null || true
+  chmod 600 "${archive}.manifest.json" 2>/dev/null || true
+}
+
 if ! mkdir -p "${BACKUP_DIR}"; then
   printf '%s  %s\n' "$(date '+%F %T')" "$(printf "$MSG_BACKUP_DIR_FAILED" "$BACKUP_DIR")" >&2
   exit 1
@@ -14582,6 +14607,7 @@ _publish_backup_artifact() {
     shasum -a 256 "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
     chmod 600 "$final.sha256" 2>/dev/null || true
   fi
+  _write_manifest "${final}"
   return 0
 }
 
@@ -14656,6 +14682,7 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   REMOVED=0
   while IFS= read -r f; do
     if rm -f "$f"; then
+      rm -f "$f.sha256" "$f.manifest.json" 2>/dev/null || true
       REMOVED=$(( REMOVED + 1 ))
     else
       _log "$(printf "$MSG_REMOVE_FAILED" "$f")"

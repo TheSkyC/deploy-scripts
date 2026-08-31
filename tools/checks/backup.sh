@@ -1613,6 +1613,10 @@ check_generated_backup_scripts_write_manifests() {
     || { echo "cyberstrikeai generated backup script must write a manifest.json" >&2; return 1; }
   grep -q 'chmod 600 "\\${archive}.manifest.json" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai manifest must be published with mode 600" >&2; return 1; }
+  grep -q '{"schema_version":1,"app":"sub2api"' impl/install_sub2api.sh \
+    || { echo "sub2api generated backup script must write a manifest.json" >&2; return 1; }
+  grep -q 'chmod 600 "${archive}.manifest.json" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api manifest must be published with mode 600" >&2; return 1; }
 }
 
 # Retention cleanup in the generated cron backup scripts must remove the
@@ -1624,6 +1628,8 @@ check_generated_backup_retention_removes_metadata() {
     || { echo "vaultwarden generated backup retention must remove integrity companions" >&2; return 1; }
   grep -q 'rm -f "\\${old_backup}.sha256" "\\${old_backup}.manifest.json" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai generated backup retention must remove integrity companions" >&2; return 1; }
+  grep -q 'rm -f "$f.sha256" "$f.manifest.json" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api generated backup retention must remove integrity companions" >&2; return 1; }
 }
 
 # Standalone backup scripts and runtime backup paths must publish archives
