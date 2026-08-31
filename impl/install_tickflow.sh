@@ -511,20 +511,14 @@ do_backup() {
   done
   local archive
   archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
-  local archive_tmp="${archive}.tmp"
-  if ! tar -czf "$archive_tmp" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env >&2; then
-    rm -f "$archive_tmp"
-    error "$(t app.tickflow.backup.error_archive "$archive")"
-  fi
-  if ! chmod 600 "$archive_tmp" || ! mv "$archive_tmp" "$archive"; then
-    rm -f "$archive_tmp"
+  if ! backup_create_tar_archive "$archive" \
+      -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env; then
     error "$(t app.tickflow.backup.error_archive "$archive")"
   fi
   # Integrity metadata: a sha256 sidecar plus a manifest, so do_verify and the
   # shared status projection can confirm the archive instead of reporting it
   # as unverified forever. Best-effort on failure — the archive itself exists.
-  if ! backup_write_sha256 "$archive" >/dev/null \
-     || ! backup_write_manifest "$archive" "$APP_ID" 1 "${INSTALLED_VERSION:-}"; then
+  if ! backup_finalize_archive "$archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
     warn "$(t app.tickflow.warn.integrity_failed "$archive")"
   fi
   success "$(t app.tickflow.backup.success "$archive")"

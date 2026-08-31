@@ -1158,16 +1158,32 @@ check_backup_create_tar_archive_helper() {
     fi
     [[ "$(cat "$archive")" == old ]]
     compgen -G "$archive.tmp.*" >/dev/null && exit 13 || true
+
+    stub_dir="$temp_dir/stubs"
+    mkdir -p "$stub_dir"
+    cat > "$stub_dir/chmod" <<'"'"'STUB'"'"'
+#!/usr/bin/env bash
+[[ "${2:-}" == *.tar.gz.tmp.* ]] && exit 1
+exec /bin/chmod "$@"
+STUB
+    chmod +x "$stub_dir/chmod"
+    PATH="$stub_dir:$PATH"
+    if backup_create_tar_archive "$archive" -C "$temp_dir/source" payload; then
+      exit 14
+    fi
+    [[ "$(cat "$archive")" == old ]]
+    compgen -G "$archive.tmp.*" >/dev/null && exit 15 || true
     ! backup_create_tar_archive "$archive"
     echo ok
   ')"
   [[ "$output" == ok ]]
   awk '
-    /^backup_create_tar_archive\(\)/ { in_fn=1; saw_stderr=0; next }
+    /^backup_create_tar_archive\(\)/ { in_fn=1; saw_stderr=0; saw_mode=0; next }
     in_fn && /tar -czf "\$archive_tmp" "\$@" >&2/ { saw_stderr=1 }
+    in_fn && /chmod 600 "\$archive_tmp"/ { saw_mode=1 }
     in_fn && /^}$/ {
-      if (!saw_stderr) {
-        print "backup_create_tar_archive must send tar diagnostics to stderr" > "/dev/stderr"
+      if (!(saw_stderr && saw_mode)) {
+        print "backup_create_tar_archive must send tar diagnostics to stderr and publish private archives" > "/dev/stderr"
         exit 1
       }
       in_fn=0
@@ -1190,6 +1206,10 @@ check_backup_create_tar_archive_delegates() {
   }
   grep -Fq 'backup_create_tar_archive "$archive"' impl/install_vaultwarden.sh || {
     echo "Vaultwarden manual backup must use shared tar publisher" >&2
+    return 1
+  }
+  grep -Fq 'backup_create_tar_archive "$archive"' impl/install_tickflow.sh || {
+    echo "TickFlow manual backup must use shared tar publisher" >&2
     return 1
   }
   grep -Fq 'backup_list_expired_archives "$BACKUP_DIR" "$keep_days"' lib/binary_app.sh || {
