@@ -66,6 +66,12 @@ i18n_register_many \
   app.sub2api.warn.setup_wizard \
   "After database/Redis setup is complete, visit the Setup Wizard in a browser: http://<IP>:%s/" \
   "完成数据库/Redis 配置后，请在浏览器访问 Setup Wizard：http://<IP>:%s/" \
+  app.sub2api.error.database_restore_failed \
+  "Database restore from %s failed. Data and configuration were restored, but database state may be partial; the service was restarted. Inspect PostgreSQL logs and restore the database manually before retrying." \
+  "从 %s 恢复数据库失败。数据和配置已恢复，但数据库状态可能不完整；服务已重新启动。请检查 PostgreSQL 日志，并在重试前手动恢复数据库。" \
+  app.sub2api.error.database_restore_unavailable \
+  "Cannot restore database archive %s because psql or PG_DSN is unavailable. Data and configuration were restored and the service was restarted; configure PostgreSQL access and restore the database manually." \
+  "无法恢复数据库归档 %s，因为 psql 或 PG_DSN 不可用。数据和配置已恢复且服务已重新启动；请配置 PostgreSQL 访问后手动恢复数据库。" \
   app.sub2api.info.install_base_deps \
   "Installing base dependencies..." \
   "安装基础依赖..." \

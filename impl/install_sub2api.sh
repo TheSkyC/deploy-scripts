@@ -1786,14 +1786,22 @@ do_restore() {
     fi
   fi
 
-  # ── database: pipe the newest dump back through psql when one exists.
+  # ── database: a matching dump must restore successfully. This cannot be
+  # rolled back atomically like the directories above, so stop before claiming
+  # success, restart the service for diagnostics, and report a hard failure.
   if [[ -n "$db_archive" ]]; then
     if command -v psql >/dev/null 2>&1 && [[ -n "${PG_DSN:-}" ]]; then
-      if ! gunzip -c "$db_archive" | psql "$PG_DSN" >&2; then
-        warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+      if ! gunzip -c "$db_archive" | psql "$PG_DSN" -v ON_ERROR_STOP=1 >&2; then
+        if ! systemctl start "$SERVICE_NAME"; then
+          error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+        fi
+        error "$(t app.sub2api.error.database_restore_failed "$db_archive")"
       fi
     else
-      warn "$(t binary_app.error.backup_failed)"
+      if ! systemctl start "$SERVICE_NAME"; then
+        error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
+      error "$(t app.sub2api.error.database_restore_unavailable "$db_archive")"
     fi
   fi
 

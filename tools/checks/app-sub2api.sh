@@ -441,6 +441,80 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
     ' impl/install_sub2api.sh
 }
 
+check_sub2api_database_restore_fails_closed() {
+  awk '
+      /^do_restore\(\)/ { in_restore=1; saw_gzip=0; saw_psql=0; saw_restart_on_failure=0; saw_failure_error=0; saw_unavailable_error=0; saw_legacy_warn=0; next }
+      in_restore && /gunzip -c "\$db_archive"/ { saw_gzip=1 }
+      in_restore && /psql "\$PG_DSN" -v ON_ERROR_STOP=1/ { saw_psql=1 }
+      in_restore && saw_psql && /systemctl start "\$SERVICE_NAME"/ { saw_restart_on_failure=1 }
+      in_restore && /app\.sub2api\.error\.database_restore_failed/ { saw_failure_error=1 }
+      in_restore && /app\.sub2api\.error\.database_restore_unavailable/ { saw_unavailable_error=1 }
+      in_restore && /binary_app\.warn\.rollback_start_failed|binary_app\.error\.backup_failed/ { saw_legacy_warn=1 }
+      in_restore && /^}/ {
+        if (!(saw_gzip && saw_psql && saw_restart_on_failure && saw_failure_error && saw_unavailable_error) || saw_legacy_warn) {
+          printf "%s Sub2API database restore must use psql ON_ERROR_STOP and fail closed after restarting the service\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_restore=0
+      }
+    ' impl/install_sub2api.sh || return 1
+  grep -Fq 'app.sub2api.error.database_restore_failed' apps/sub2api.sh     && grep -Fq 'app.sub2api.error.database_restore_unavailable' apps/sub2api.sh     || { echo "Sub2API database restore failures must have localized guidance." >&2; return 1; }
+}
+
+# Exercise the restore boundary with a real tar/gzip archive and a failing psql
+# stub: the database error must produce a non-zero action after data restore and
+# a service restart, rather than falling through to a success message.
+check_sub2api_database_restore_failure_is_nonzero() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_sub2api.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin" "$tmp/backups" "$tmp/stage/data" "$tmp/data" "$tmp/config"
+    printf restored > "$tmp/stage/data/restored.txt"
+    printf old > "$tmp/data/old.txt"
+    tar -czf "$tmp/backups/sub2api_data_20260831_000000.tar.gz" -C "$tmp/stage" data
+    printf dump > "$tmp/dump.sql"
+    gzip -c "$tmp/dump.sql" > "$tmp/backups/sub2api_db_20260831_000000.sql.gz"
+    cat > "$tmp/bin/psql" <<'"'"'PSQL'"'"'
+#!/usr/bin/env bash
+printf "%s\n" "$*" >> "$PSQL_ARGS_LOG"
+cat >/dev/null
+exit 1
+PSQL
+    chmod +x "$tmp/bin/psql"
+    export PATH="$tmp/bin:$PATH"
+    export PSQL_ARGS_LOG="$tmp/psql.args"
+    BACKUP_DIR="$tmp/backups"
+    DATA_DIR="$tmp/data"
+    CONFIG_DIR="$tmp/config"
+    SERVICE_NAME=testsvc
+    PG_DSN="postgresql://example.invalid/sub2api"
+    show_banner() { :; }
+    require_root() { :; }
+    app_load_config() { :; }
+    acquire_lock() { :; }
+    step() { :; }
+    require_safe_path() { :; }
+    info() { :; }
+    success() { :; }
+    systemctl() { printf "%s %s\n" "$1" "${2:-}" >> "$tmp/systemctl.log"; return 0; }
+    set +e
+    ( do_restore ) >/dev/null 2>&1
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || exit 11
+    grep -Fxq "stop testsvc" "$tmp/systemctl.log" || exit 12
+    grep -Fxq "start testsvc" "$tmp/systemctl.log" || exit 13
+    [[ "$(cat "$DATA_DIR/restored.txt")" == restored ]] || exit 14
+    grep -Fqx "postgresql://example.invalid/sub2api -v ON_ERROR_STOP=1" "$PSQL_ARGS_LOG" || exit 15
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
 check_sub2api_summary_does_not_print_pg_password() {
   if grep -R -nE 'summary\.password.*\$\{?PG_PASS\}?' impl/install_sub2api.sh 2>/dev/null; then
     echo "Sub2API install summary must not print the generated PostgreSQL password." >&2
