@@ -527,6 +527,7 @@ main() {
       check_netfilter_persistent_save_reports_failures
       check_newapi_secret_uses_private_env_file
       check_newapi_backup_wal_hook_is_best_effort
+      check_newapi_backup_script_is_published_atomically
       check_nginx_configs_are_atomic
       check_nginx_domains_are_validated
       check_nginx_main_config_edits_are_atomic

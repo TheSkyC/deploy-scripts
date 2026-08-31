@@ -122,3 +122,51 @@ STUB
   [[ "$status" -eq 0 ]] || return 1
   python -c 'import json,sys; x=json.loads(sys.argv[1]); assert x["state"] == "available"; assert x["path"].endswith("new-api_20260820123456.tar.gz"); assert x["last_success_at"]' "$output"
 }
+
+check_newapi_backup_script_is_published_atomically() {
+  local output
+  output="$($BASH_BIN <<'NEWAPITEST'
+set -euo pipefail
+source lib/core.sh
+source apps/newapi.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_newapi.sh >/dev/null 2>&1
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+BACKUP_DIR="$tmp_dir/backup dir"
+DATA_DIR="$tmp_dir/data dir"
+BACKUP_KEEP_DAYS=7
+BACKUP_CRON='30 3 * * *'
+records="$tmp_dir/records"
+captured_script="$tmp_dir/generated-backup"
+captured_cron="$tmp_dir/generated-cron"
+t() { printf '%s' "$1"; }
+error() { return 1; }
+success() { :; }
+atomic_write_file() {
+  local target="$1" mode="$2" owner="$3"
+  printf '%s|%s|%s\n' "$target" "$mode" "$owner" >> "$records"
+  case "$target" in
+    /usr/local/bin/new-api-backup) cat > "$captured_script" ;;
+    /etc/cron.d/new-api-backup) cat > "$captured_cron" ;;
+    *) cat > /dev/null; return 1 ;;
+  esac
+}
+_write_backup_script
+[[ "$(sed -n '1p' "$records")" == '/usr/local/bin/new-api-backup|700|root:root' ]]
+[[ "$(sed -n '2p' "$records")" == '/etc/cron.d/new-api-backup|644|root:root' ]]
+[[ "$(head -n 1 "$captured_script")" == '#!/bin/bash' ]]
+grep -Fq 'set -euo pipefail' "$captured_script"
+printf -v backup_dir_literal '%q' "$BACKUP_DIR"
+printf -v data_dir_literal '%q' "$DATA_DIR"
+grep -Fq "BACKUP_DIR=${backup_dir_literal}" "$captured_script"
+grep -Fq "DATA_DIR=${data_dir_literal}" "$captured_script"
+grep -Eq '^KEEP_DAYS=7$' "$captured_script"
+grep -Fq '30 3 * * * root /bin/bash /usr/local/bin/new-api-backup' "$captured_cron"
+bash -n "$captured_script"
+printf ok
+NEWAPITEST
+  )"
+  [[ "$output" == ok ]]
+}
