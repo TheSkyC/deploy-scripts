@@ -1055,3 +1055,9 @@ Format per entry:
 - 成果 / Change: CPA Stack 安装两个组件二进制时，已有目标文件的回滚副本不再直接使用 `cp -a` 写入最终备份路径，改为共享 `atomic_copy_file` 进行同目录暂存和原子替换；保留原有备份失败即中止、二进制安装失败后的回滚编排及应用专属 owner/路径语义。该步只收敛回滚备份的文件发布边界，不合并 CPA Stack 的多组件数据恢复模型。
 - 验证 / Verified: 新增并注册 CPA Stack 二进制回滚备份守卫；focused guard、`bash -n`、提交 hook 的 release 验证、串行 `PARALLEL_JOBS=1 tools/verify.sh guards` 和 `git diff --check` 均通过，最终输出为 `Guards verification passed`。guards 中的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径。本地 Docker Linux daemon 不可用，真实 Docker E2E 继续由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
 - 提交 / Commit: 807ef99
+
+## 2026-08-31（自主演进批次 P2-S2 续 25）
+- 状态 / Status: completed
+- 成果 / Change: 卸载前配置导出改用共享 `atomic_copy_file`，导出文件仍写入备份目录或原配置目录、保持 0600 权限，并保留该流程 best-effort、失败仅 warning 且不阻断卸载的用户可见语义。该改动只收敛共享 CLI 配置导出的文件发布方式，不改变配置格式和导入路径。
+- 验证 / Verified: 新增并注册配置导出原子复制守卫，拒绝直接 `cp` 覆盖；focused guard、`bash -n`、`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、提交 hook 的 release 验证均通过。完整 guards 将在本批后续再次执行；本地 Docker Linux daemon 不可用，真实 Docker E2E 继续由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: 7aa0b94
