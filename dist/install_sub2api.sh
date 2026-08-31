@@ -1769,6 +1769,62 @@ backup_validate_archive_members() {
   done <<< "$member_list"
 }
 
+# Restore one directory from an archive without owning the service lifecycle.
+# The archive may contain either a top-level directory matching the target
+# basename or a bare directory payload. Existing targets are set aside before
+# extraction and restored if any staging step fails. A caller that has stopped
+# a service must handle a non-zero return by restoring its service lifecycle.
+backup_restore_directory() {
+  local target_dir="$1" archive="$2"
+  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
+    return 1
+  fi
+  if ! backup_validate_archive_members "$archive"; then
+    return 1
+  fi
+
+  local target_parent target_base aside_dir extract_dir payload restored=false had_target=false
+  target_parent="$(dirname "$target_dir")"
+  target_base="$(basename "$target_dir")"
+  mkdir -p "$target_parent" || return 1
+  aside_dir="$(mktemp -d "${target_parent}/.${target_base}.restore-aside.XXXXXX")" || return 1
+  if [[ -e "$target_dir" || -L "$target_dir" ]]; then
+    had_target=true
+    if ! mv "$target_dir" "${aside_dir}/${target_base}"; then
+      rm -rf "$aside_dir"
+      return 1
+    fi
+  fi
+  if ! extract_dir="$(mktemp -d "${target_parent}/.${target_base}.restore.XXXXXX")"; then
+    if [[ "$had_target" == true ]]; then
+      mv "${aside_dir}/${target_base}" "$target_dir" 2>/dev/null || true
+    fi
+    rm -rf "$aside_dir"
+    return 1
+  fi
+
+  if tar -xzf "$archive" -C "$extract_dir"; then
+    payload="$extract_dir"
+    if [[ -d "${extract_dir}/${target_base}" ]]; then
+      payload="${extract_dir}/${target_base}"
+    fi
+    if mv "$payload" "$target_dir"; then
+      restored=true
+      [[ "$payload" == "$extract_dir" ]] && extract_dir=""
+    fi
+  fi
+  [[ -z "$extract_dir" ]] || rm -rf "$extract_dir"
+  if [[ "$restored" != true ]]; then
+    rm -rf "$target_dir"
+    if [[ "$had_target" == true ]]; then
+      mv "${aside_dir}/${target_base}" "$target_dir" 2>/dev/null || true
+    fi
+    rm -rf "$aside_dir"
+    return 1
+  fi
+  rm -rf "$aside_dir"
+}
+
 # Restore one archive over a service's data directory, with full rollback.
 # Arguments: $1 data dir  $2 optional systemd unit name  $3 archive path.
 # Caller must already have: required root, taken the app lock, selected a
@@ -1780,10 +1836,16 @@ backup_validate_archive_members() {
 backup_restore_data_dir() {
   local data_dir="$1" service_name="$2" archive="$3"
   if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
-    error "$(t backup.verify.failed "$(basename "$archive")")"
+    if [[ -n "$service_name" ]]; then
+      error "$(t backup.verify.failed "$(basename "$archive")")"
+    fi
+    return 1
   fi
   if ! backup_validate_archive_members "$archive"; then
-    error "$(t backup.restore.invalid_archive "$archive")"
+    if [[ -n "$service_name" ]]; then
+      error "$(t backup.restore.invalid_archive "$archive")"
+    fi
+    return 1
   fi
   info "$(t backup.restore.using "$archive")"
 
@@ -1798,14 +1860,20 @@ backup_restore_data_dir() {
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
     fi
-    error "$(t backup.restore.invalid_archive "$archive")"
+    if [[ -n "$service_name" ]]; then
+      error "$(t backup.restore.invalid_archive "$archive")"
+    fi
+    return 1
   fi
   if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
     mv "$staged_aside" "$data_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
     fi
-    error "$(t backup.restore.invalid_archive "$archive")"
+    if [[ -n "$service_name" ]]; then
+      error "$(t backup.restore.invalid_archive "$archive")"
+    fi
+    return 1
   fi
   if tar -xzf "$archive" -C "$extract_dir"; then
     # Archives store either the bare payload (tar -C stage .) or a single
@@ -1816,16 +1884,20 @@ backup_restore_data_dir() {
     fi
     if mv "$payload" "$data_dir"; then
       restored=true
+      [[ "$payload" == "$extract_dir" ]] && extract_dir=""
     fi
   fi
-  rm -rf "$extract_dir"
+  [[ -z "$extract_dir" ]] || rm -rf "$extract_dir"
   if [[ "$restored" != "true" ]]; then
     rm -rf "$data_dir"
     mv "$staged_aside" "$data_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
     fi
-    error "$(t backup.restore.invalid_archive "$archive")"
+    if [[ -n "$service_name" ]]; then
+      error "$(t backup.restore.invalid_archive "$archive")"
+    fi
+    return 1
   fi
   chown -R root:root "$data_dir" 2>/dev/null || true
   if [[ -z "$service_name" ]]; then
@@ -9223,29 +9295,19 @@ do_restore() {
     || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
   # ── data directory: atomic swap with aside copy. The empty service argument
   # tells the shared helper that this caller owns the service lifecycle.
-  backup_restore_data_dir "$DATA_DIR" "" "$data_archive"
+  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
+    systemctl start "$SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$data_archive")"
+  fi
 
-  # ── config directory: aside + swap when a config archive exists.
+  # ── config directory: use the shared directory swap while this caller owns
+  # the service lifecycle. The helper returns failures instead of exiting so
+  # this path can always restart the service before reporting the error.
   if [[ -n "$conf_archive" ]]; then
-    local aside_dir stamp extract_ok=true
-    stamp="$(date +%Y%m%d%H%M%S)"
-    if ! aside_dir=$(mktemp -d "${BACKUP_DIR}/.restore-aside.XXXXXX"); then
+    if ! backup_restore_directory "$CONFIG_DIR" "$conf_archive"; then
       systemctl start "$SERVICE_NAME" || true
       error "$(t backup.restore.invalid_archive "$conf_archive")"
     fi
-    if [[ -d "$CONFIG_DIR" ]]; then
-      mv "$CONFIG_DIR" "${aside_dir}/conf.restore.${stamp}" || true
-    fi
-    mkdir -p "$(dirname "$CONFIG_DIR")"
-    tar -xzf "$conf_archive" -C "$(dirname "$CONFIG_DIR")" >&2 || extract_ok=false
-    if [[ "$extract_ok" != "true" ]]; then
-      rm -rf "$CONFIG_DIR"
-      [[ -d "${aside_dir}/conf.restore.${stamp}" ]] && mv "${aside_dir}/conf.restore.${stamp}" "$CONFIG_DIR"
-      rm -rf "$aside_dir"
-      systemctl start "$SERVICE_NAME" || true
-      error "$(t backup.restore.invalid_archive "$conf_archive")"
-    fi
-    rm -rf "$aside_dir"
   fi
 
   # ── database: pipe the newest dump back through psql when one exists.

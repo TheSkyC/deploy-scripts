@@ -1768,29 +1768,19 @@ do_restore() {
     || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
   # ── data directory: atomic swap with aside copy. The empty service argument
   # tells the shared helper that this caller owns the service lifecycle.
-  backup_restore_data_dir "$DATA_DIR" "" "$data_archive"
+  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
+    systemctl start "$SERVICE_NAME" || true
+    error "$(t backup.restore.invalid_archive "$data_archive")"
+  fi
 
-  # ── config directory: aside + swap when a config archive exists.
+  # ── config directory: use the shared directory swap while this caller owns
+  # the service lifecycle. The helper returns failures instead of exiting so
+  # this path can always restart the service before reporting the error.
   if [[ -n "$conf_archive" ]]; then
-    local aside_dir stamp extract_ok=true
-    stamp="$(date +%Y%m%d%H%M%S)"
-    if ! aside_dir=$(mktemp -d "${BACKUP_DIR}/.restore-aside.XXXXXX"); then
+    if ! backup_restore_directory "$CONFIG_DIR" "$conf_archive"; then
       systemctl start "$SERVICE_NAME" || true
       error "$(t backup.restore.invalid_archive "$conf_archive")"
     fi
-    if [[ -d "$CONFIG_DIR" ]]; then
-      mv "$CONFIG_DIR" "${aside_dir}/conf.restore.${stamp}" || true
-    fi
-    mkdir -p "$(dirname "$CONFIG_DIR")"
-    tar -xzf "$conf_archive" -C "$(dirname "$CONFIG_DIR")" >&2 || extract_ok=false
-    if [[ "$extract_ok" != "true" ]]; then
-      rm -rf "$CONFIG_DIR"
-      [[ -d "${aside_dir}/conf.restore.${stamp}" ]] && mv "${aside_dir}/conf.restore.${stamp}" "$CONFIG_DIR"
-      rm -rf "$aside_dir"
-      systemctl start "$SERVICE_NAME" || true
-      error "$(t backup.restore.invalid_archive "$conf_archive")"
-    fi
-    rm -rf "$aside_dir"
   fi
 
   # ── database: pipe the newest dump back through psql when one exists.

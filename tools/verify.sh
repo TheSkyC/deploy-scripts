@@ -696,6 +696,7 @@ main() {
       check_binary_app_backup_writes_integrity_metadata
       check_generated_backup_scripts_write_sidecars
       check_registry_restore_capability_matches_impl
+      check_backup_restore_directory_lifecycle
       check_backup_restore_data_dir_lifecycle
       check_notification_fail_open_and_redaction
       check_schedule_units_are_atomic_and_cleaned_up
