@@ -460,6 +460,7 @@ main() {
       check_blog_static_deploy_swaps_tree
       check_bundled_impl_cleanup
       check_bundled_impl_dir_security_failure_cleanup
+      check_bundled_impl_empty_payload_fails_closed
       check_bundled_impl_failure_cleanup
       check_bundled_impl_temp_names_are_random
       check_certbot_diagnostics_use_stderr

@@ -51,16 +51,37 @@ check_bundled_impl_temp_names_are_random() {
     return 1
   fi
   awk '
+      /atomic_write_command_file "\$script_path" 700 "" _bundled_app_impl_payload "\$marker"/ { saw_shared=1 }
       /tmp_path="\$\(mktemp "\$\{script_path\}\.XXXXXX"\)"/ { saw_tmp=1 }
       /rm -f "\$tmp_path"/ { saw_cleanup=1 }
       /mv "\$tmp_path" "\$script_path"/ { saw_mv=1 }
       END {
-        if (!(saw_tmp && saw_cleanup && saw_mv)) {
-          print "Bundled implementation extraction must stage, replace, and clean up a mktemp file." > "/dev/stderr"
+        if (!(saw_shared || (saw_tmp && saw_cleanup && saw_mv))) {
+          print "Bundled implementation extraction must publish via the shared command publisher or a randomized mktemp stage with cleanup." > "/dev/stderr"
           exit 1
         }
       }
- ' lib/app_loader.sh 
+ ' lib/app_loader.sh
+}
+
+# A bundled script whose embedded payload is empty must fail closed instead of
+# publishing an empty implementation file.
+check_bundled_impl_empty_payload_fails_closed() {
+  local tmp_root script_copy
+  tmp_root="$(mktemp -d)"
+  script_copy="${tmp_root}/install_newapi.sh"
+  sed '/^__DEPLOY_APP_IMPL_SCRIPT__/,$d' dist/install_newapi.sh > "$script_copy"
+  if ! expect_failure_output en "$script_copy" "Failed to install bundled app implementation payload"; then
+    rm -rf "$tmp_root"
+    return 1
+  fi
+  if find "$tmp_root" -name 'install_*_impl.sh*' -type f | grep -q .; then
+    echo "Bundled implementation payload was left behind after empty-payload failure" >&2
+    find "$tmp_root" -name 'install_*_impl.sh*' -type f >&2
+    rm -rf "$tmp_root"
+    return 1
+  fi
+  rm -rf "$tmp_root"
 }
 
 check_bundled_impl_dir_security_failure_cleanup() {
