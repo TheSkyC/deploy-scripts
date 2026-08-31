@@ -333,8 +333,10 @@ cpa_stack_install_binary() {
   if [[ -f "$target" ]] && ! atomic_copy_file "$target" "$backup"; then
     error "$(t app.cpa_stack.error.binary_backup "$target")"
   fi
+  # atomic_copy_file leaves an existing target untouched until the staged
+  # replacement is fully prepared. A failed publish therefore needs no direct
+  # backup copy that could overwrite the still-valid executable non-atomically.
   if ! atomic_copy_file "$source" "$target" 0755 "$owner"; then
-    [[ -f "$backup" ]] && cp -a "$backup" "$target" || true
     error "$(t app.cpa_stack.error.binary_install "$target")"
   fi
 }
