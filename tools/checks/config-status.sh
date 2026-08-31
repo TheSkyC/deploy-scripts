@@ -116,6 +116,36 @@ check_app_install_executable_file_helper() {
   rm -rf "$tmp_dir"
 }
 
+check_atomic_copy_file_strict_helper() {
+  local tmp_dir output
+  tmp_dir="$(mktemp -d)"
+  printf 'restored config\n' > "${tmp_dir}/source"
+  printf 'existing config\n' > "${tmp_dir}/destination"
+
+  output="$(TMP_DIR="$tmp_dir" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    atomic_copy_file_strict "$TMP_DIR/source" "$TMP_DIR/destination" 0600 ""
+    cmp -s "$TMP_DIR/source" "$TMP_DIR/destination"
+    printf "existing config\n" > "$TMP_DIR/destination"
+    if atomic_copy_file_strict "$TMP_DIR/source" "$TMP_DIR/destination" "" "deploy-test-does-not-exist:deploy-test-does-not-exist" 2>/dev/null; then
+      echo "strict copy accepted a failed owner change" >&2
+      exit 1
+    fi
+    [[ "$(cat "$TMP_DIR/destination")" == "existing config" ]]
+    [[ -z "$(find "$TMP_DIR" -maxdepth 1 -name "destination.??????" -print -quit)" ]]
+  ' 2>&1)" || {
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  [[ -z "$output" ]] || {
+    echo "Strict atomic copy helper unexpectedly wrote output: ${output}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  rm -rf "$tmp_dir"
+}
+
 check_custom_app_http_health_probes_use_shared_helper() {
   local file
   for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do

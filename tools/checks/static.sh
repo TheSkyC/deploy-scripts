@@ -281,6 +281,21 @@ check_atomic_helpers_are_atomic() {
         }
         in_copy=0
       }
+      /atomic_copy_file_strict\(\)/ { in_strict_copy=1; saw_dir=0; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_strict_copy && /mkdir -p "\$target_dir"/ { saw_dir=1 }
+      in_strict_copy && /mktemp "\$\{target_path\}\.XXXXXX"/ { saw_tmp=1 }
+      in_strict_copy && /cp "\$source_path" "\$target_tmp"/ { saw_cp=1 }
+      in_strict_copy && /chmod "\$mode" "\$target_tmp"/ { saw_chmod=1 }
+      in_strict_copy && /chown "\$owner" "\$target_tmp"/ { saw_chown=1 }
+      in_strict_copy && /rm -f "\$target_tmp"/ { saw_cleanup=1 }
+      in_strict_copy && /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
+      in_strict_copy && /^}/ {
+        if (!(saw_dir && saw_tmp && saw_cp && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+          printf "%s atomic_copy_file_strict must stage, enforce ownership, replace, and clean up temporary files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_strict_copy=0
+      }
       /atomic_symlink\(\)/ { in_link=1; saw_dir=0; saw_tmp=0; saw_unlink=0; saw_ln=0; saw_mv=0; saw_cleanup=0; next }
       in_link && /mkdir -p "\$link_dir"/ { saw_dir=1 }
       in_link && /mktemp "\$\{link_path\}\.XXXXXX"/ { saw_tmp=1 }
