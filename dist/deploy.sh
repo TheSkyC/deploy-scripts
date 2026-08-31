@@ -4348,16 +4348,9 @@ app_configure_firewall() {
         local iptables_dir="/etc/iptables"
         if mkdir -p "$iptables_dir"; then
           local iptables_rules="${iptables_dir}/rules.v4"
-          local iptables_tmp
-          if ! iptables_tmp=$(mktemp "${iptables_rules}.XXXXXX"); then
-            warn "$(t "${app_prefix}.warn.iptables_write_failed")"
-          elif iptables-save > "$iptables_tmp" 2>/dev/null \
-              && chmod 644 "$iptables_tmp" \
-              && chown root:root "$iptables_tmp" \
-              && mv "$iptables_tmp" "$iptables_rules"; then
+          if atomic_write_command_file "$iptables_rules" 644 root:root iptables-save 2>/dev/null; then
             info "$(t "${app_prefix}.info.iptables_rules_written")"
           else
-            rm -f "$iptables_tmp"
             warn "$(t "${app_prefix}.warn.iptables_write_failed")"
           fi
         else
