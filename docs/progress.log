@@ -1007,3 +1007,9 @@ Format per entry:
 - 成果 / Change: 新增共享 `backup_restore_directory`，统一“归档校验 → 同父目录 aside 暂存 → 解压 → 目录交换 → 失败恢复”的 caller-managed 目录恢复契约；Sub2API 的 config 多 artifact restore 改用该 helper，保留其服务停止/启动、数据库 `psql` 恢复和多产物编排。与此同时，修复 `backup_restore_data_dir` 在 caller-managed 模式下失败时直接 `error/exit` 的问题，使 Sub2API 能在数据恢复失败后先恢复服务再报告错误；并修复 bare payload 被临时目录清理误删的边界。
 - 验证 / Verified: 新增目录恢复行为守卫，覆盖顶层目录 payload、bare payload、校验失败时保留旧配置和临时目录清理；更新 Sub2API restore 结构守卫。`bash -n`、`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused restore guards、干净提交上的 `tools/verify.sh guards`、`git diff --check` 与提交 hook 的 release 验证均通过。guards 中的 chown/missing-tar/`fail_check` 和脱敏输出来自既有故意失败路径，最终输出为 `Guards verification passed`。本地 Docker Linux daemon 不可用，真实 Docker E2E 待本批推送后由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
 - 提交 / Commit: 2d72a78
+
+## 2026-08-31（自主演进批次 P2-S2 续 17）
+- 状态 / Status: completed
+- 成果 / Change: 将共享部署配置写入进一步收敛为“内容 producer → `atomic_write_command_file`”契约。新增 `_write_config_file_content` 负责逐项脱敏并生成配置内容，`write_config_file` 由共享命令发布器统一完成同目录临时文件、0600、root:root 和原子替换；producer 失败时不会发布部分配置，也不会覆盖既有目标。保留所有现有配置键、格式和失败语义，没有改变应用生命周期。
+- 验证 / Verified: 新增/更新配置守卫，覆盖 producer 脱敏输出、权限失败、owner 失败、producer 失败时旧文件保护和临时文件清理；`bash -n`、`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、focused config guards、干净提交上的 `tools/verify.sh guards`、`git diff --check` 与提交 hook 的 release 验证均通过。guards 中的 chown/missing-tar/`fail_check` 和脱敏输出来自既有故意失败路径，最终输出为 `Guards verification passed`。本地 Docker Linux daemon 不可用，真实 Docker E2E 待本批推送后由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: d51d137
