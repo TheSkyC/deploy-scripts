@@ -726,16 +726,18 @@ load_config_file() {
   done < "$conf_file"
 }
 
+_write_config_file_content() {
+  local key value
+  for key in "$@"; do
+    value="$(sanitize_conf_val "${!key:-}")"
+    printf '%s="%s"\n' "$key" "$value"
+  done
+}
+
 write_config_file() {
   local conf_file="$1"
   shift
-  local key value
-  {
-    for key in "$@"; do
-      value="$(sanitize_conf_val "${!key:-}")"
-      printf '%s="%s"\n' "$key" "$value"
-    done
-  } | atomic_write_file "$conf_file" 600 root:root
+  atomic_write_command_file "$conf_file" 600 root:root _write_config_file_content "$@"
 }
 
 # ----- lib/service.sh -----
