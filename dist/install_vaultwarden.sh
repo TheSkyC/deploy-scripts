@@ -7174,6 +7174,9 @@ i18n_register_many \
   app.vaultwarden.warn.backup_failed_continue \
   "Backup failed; temporary file removed. Continuing. Inspect /opt/vaultwarden-backups/backup.log or run /usr/local/bin/vaultwarden-backup manually before proceeding further." \
   "备份失败，临时文件已清理，继续执行。请检查 /opt/vaultwarden-backups/backup.log，或先手动执行 /usr/local/bin/vaultwarden-backup 再继续后续操作。" \
+  app.vaultwarden.warn.integrity_failed \
+  "Backup created, but integrity metadata could not be written for %s; verify will report the archive as unverified." \
+  "备份已创建，但完整性元数据写入失败：%s；verify 将把该归档报告为未验证。" \
   app.vaultwarden.error.manual_backup_failed \
   "Manual backup did not complete successfully. Inspect /opt/vaultwarden-backups/backup.log, review the existing backups above, and retry after fixing the archive or filesystem issue." \
   "手动备份未成功完成。请检查 /opt/vaultwarden-backups/backup.log，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
@@ -9041,7 +9044,17 @@ _backup_silent() {
   if backup_create_tar_archive "$archive" --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
     "${tar_extra[@]+"${tar_extra[@]}"}"; then
-    success "$(t app.vaultwarden.success.backup_created "$archive")"
+    # Publish integrity metadata through the shared finalizer so the archive
+    # carries the same sha256 sidecar and manifest the cron backup writes. A
+    # metadata failure stays nonfatal but is never silent: verify reports the
+    # archive as unverified until it is restored.
+    if backup_finalize_archive "$archive" vaultwarden "${INSTALLED_VERSION:-}"; then
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    else
+      _log_backup_helper "$(t app.vaultwarden.warn.integrity_failed "$archive")"
+      warn "$(t app.vaultwarden.warn.integrity_failed "$archive")"
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    fi
   else
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"

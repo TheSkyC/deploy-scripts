@@ -841,10 +841,9 @@ do_backup() {
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   step "$(t app.cpa_stack.step.backup)"
   mkdir -p "$CPA_STACK_BACKUP_DIR" || error "$(t app.cpa_stack.error.backup "$CPA_STACK_BACKUP_DIR")"
-  local timestamp archive tmp cpamp_was_active=false
+  local timestamp archive cpamp_was_active=false
   timestamp="$(date +%Y%m%d_%H%M%S)"
   archive="${CPA_STACK_BACKUP_DIR}/cpa-stack-${timestamp}.tar.gz"
-  tmp="${archive}.tmp"
   systemctl is-active --quiet "$CPAMP_SERVICE_NAME" && cpamp_was_active=true
   if $cpamp_was_active; then
     systemctl stop "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
@@ -859,23 +858,24 @@ do_backup() {
       var/lib/cli-proxy-api; do
     [[ -e "/${candidate}" ]] && backup_paths+=("$candidate")
   done
-  if ! tar -C / -czf "$tmp" "${backup_paths[@]}" 2>/dev/null; then
-    rm -f "$tmp"
+  # The shared publisher stages the archive into a sibling temp file,
+  # enforces private mode and moves it into place atomically; a failure
+  # leaves any previous archive untouched.
+  if ! backup_create_tar_archive "$archive" -C / "${backup_paths[@]}"; then
     if $cpamp_was_active; then
       systemctl start "$CPAMP_SERVICE_NAME" || true
     fi
     error "$(t app.cpa_stack.error.backup "$archive")"
   fi
-  if ! mv "$tmp" "$archive"; then
-    rm -f "$tmp"
-    if $cpamp_was_active; then
-      systemctl start "$CPAMP_SERVICE_NAME" || true
-    fi
-    error "$(t app.cpa_stack.error.backup "$archive")"
-  fi
-  chmod 600 "$archive" 2>/dev/null || true
   if $cpamp_was_active; then
     systemctl start "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
+  fi
+  # Finalize with the shared integrity metadata so verify can cross-check the
+  # archive; a metadata failure stays nonfatal because the archive itself is
+  # already private and usable.
+  if ! backup_finalize_archive "$archive" cpa-stack \
+      "cpa:${INSTALLED_CPA_VERSION:-} cpamp:${INSTALLED_CPAMP_VERSION:-}"; then
+    warn "$(t app.cpa_stack.warn.integrity_failed "$archive")"
   fi
   cpa_stack_prune_backups
   success "$(t app.cpa_stack.success.backup "$archive")"

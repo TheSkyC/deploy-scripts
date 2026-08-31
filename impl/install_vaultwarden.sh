@@ -1571,7 +1571,17 @@ _backup_silent() {
   if backup_create_tar_archive "$archive" --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
     "${tar_extra[@]+"${tar_extra[@]}"}"; then
-    success "$(t app.vaultwarden.success.backup_created "$archive")"
+    # Publish integrity metadata through the shared finalizer so the archive
+    # carries the same sha256 sidecar and manifest the cron backup writes. A
+    # metadata failure stays nonfatal but is never silent: verify reports the
+    # archive as unverified until it is restored.
+    if backup_finalize_archive "$archive" vaultwarden "${INSTALLED_VERSION:-}"; then
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    else
+      _log_backup_helper "$(t app.vaultwarden.warn.integrity_failed "$archive")"
+      warn "$(t app.vaultwarden.warn.integrity_failed "$archive")"
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    fi
   else
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"

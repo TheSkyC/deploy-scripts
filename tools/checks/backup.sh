@@ -1212,6 +1212,10 @@ check_backup_create_tar_archive_delegates() {
     echo "TickFlow manual backup must use shared tar publisher" >&2
     return 1
   }
+  grep -Fq 'backup_create_tar_archive "$archive" -C /' impl/install_cpa_stack.sh || {
+    echo "CPA Stack manual backup must use shared tar publisher" >&2
+    return 1
+  }
   grep -Fq 'backup_list_expired_archives "$BACKUP_DIR" "$keep_days"' lib/binary_app.sh || {
     echo "binary_app retention must use shared expired-archive selection" >&2
     return 1
@@ -1521,6 +1525,37 @@ check_binary_app_backup_writes_integrity_metadata() {
   ' lib/binary_app.sh
 }
 
+# Vaultwarden and CPA Stack runtime backups must finalize integrity metadata
+# (sha256 sidecar + manifest) after the archive lands, matching Sub2API, the
+# blog, and the shared binary lifecycle. A metadata failure must stay
+# nonfatal and surface a warning instead of silently claiming full integrity.
+check_runtime_backup_finalizes_integrity_metadata() {
+  awk '
+    /_backup_silent\(\)/ { in_fn=1; saw_finalize=0; saw_warn=0; next }
+    in_fn && /backup_finalize_archive "\$archive" vaultwarden/ { saw_finalize=1 }
+    in_fn && /warn\.integrity_failed/ { saw_warn=1 }
+    in_fn && /^}/ {
+      if (!(saw_finalize && saw_warn)) {
+        print "vaultwarden _backup_silent must finalize integrity metadata and warn on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_vaultwarden.sh || return 1
+  awk '
+    /do_backup\(\)/ { in_fn=1; saw_finalize=0; saw_warn=0; next }
+    in_fn && /backup_finalize_archive "\$archive" cpa-stack/ { saw_finalize=1 }
+    in_fn && /warn\.integrity_failed/ { saw_warn=1 }
+    in_fn && /^}/ {
+      if (!(saw_finalize && saw_warn)) {
+        print "cpa-stack do_backup must finalize integrity metadata and warn on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_cpa_stack.sh
+}
+
 # The four generated cron backup scripts must also publish a sha256 sidecar
 # right after the archive lands, so scheduled and manual backups carry the
 # same integrity metadata. Quoted heredocs (newapi, sub2api, vaultwarden)
@@ -1566,8 +1601,8 @@ check_backup_archives_are_private() {
     || { echo "sub2api data archive must be published with mode 600" >&2; return 1; }
   grep -q 'chmod 600 "\\$archive" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai backup archive must be published with mode 600" >&2; return 1; }
-  grep -q 'chmod 600 "$archive" 2>/dev/null || true' impl/install_cpa_stack.sh \
-    || { echo "cpa-stack backup archive must be published with mode 600" >&2; return 1; }
+  grep -q 'backup_create_tar_archive "$archive" -C /' impl/install_cpa_stack.sh \
+    || { echo "cpa-stack backup archive must be published through the shared 0600 tar publisher" >&2; return 1; }
 }
 
 # Registry restore capability must match reality: an app declares "restore"
