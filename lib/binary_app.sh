@@ -998,16 +998,12 @@ EOF
     error "$(t binary_app.error.tls_nginx_test)"
   fi
   success "$(t binary_app.success.tls_live "https://${DOMAIN}")"
-  # Renewal via /etc/cron.d (atomic), matching the vaultwarden approach.
-  local cron_file="/etc/cron.d/certbot-renew" cron_tmp
-  if ! cron_tmp=$(mktemp "${cron_file}.XXXXXX"); then
-    error "$(t binary_app.error.tls_renewal)"
-  fi
-  if ! printf '%s\n' "30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" > "$cron_tmp" \
-      || ! chmod 644 "$cron_tmp" \
-      || ! chown root:root "$cron_tmp" \
-      || ! mv -f "$cron_tmp" "$cron_file"; then
-    rm -f "$cron_tmp"
+  # Renewal via /etc/cron.d, published by the shared atomic writer.
+  local cron_file="/etc/cron.d/certbot-renew"
+  if ! atomic_write_file "$cron_file" 644 root:root <<'CRON'
+30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'
+CRON
+  then
     error "$(t binary_app.error.tls_renewal)"
   fi
   success "$(t binary_app.success.tls_renewal)"
