@@ -6595,6 +6595,12 @@ i18n_register_many \
   app.sub2api.warn.setup_wizard \
   "After database/Redis setup is complete, visit the Setup Wizard in a browser: http://<IP>:%s/" \
   "完成数据库/Redis 配置后，请在浏览器访问 Setup Wizard：http://<IP>:%s/" \
+  app.sub2api.error.database_restore_failed \
+  "Database restore from %s failed. Data and configuration were restored, but database state may be partial; the service was restarted. Inspect PostgreSQL logs and restore the database manually before retrying." \
+  "从 %s 恢复数据库失败。数据和配置已恢复，但数据库状态可能不完整；服务已重新启动。请检查 PostgreSQL 日志，并在重试前手动恢复数据库。" \
+  app.sub2api.error.database_restore_unavailable \
+  "Cannot restore database archive %s because psql or PG_DSN is unavailable. Data and configuration were restored and the service was restarted; configure PostgreSQL access and restore the database manually." \
+  "无法恢复数据库归档 %s，因为 psql 或 PG_DSN 不可用。数据和配置已恢复且服务已重新启动；请配置 PostgreSQL 访问后手动恢复数据库。" \
   app.sub2api.info.install_base_deps \
   "Installing base dependencies..." \
   "安装基础依赖..." \
@@ -9310,14 +9316,22 @@ do_restore() {
     fi
   fi
 
-  # ── database: pipe the newest dump back through psql when one exists.
+  # ── database: a matching dump must restore successfully. This cannot be
+  # rolled back atomically like the directories above, so stop before claiming
+  # success, restart the service for diagnostics, and report a hard failure.
   if [[ -n "$db_archive" ]]; then
     if command -v psql >/dev/null 2>&1 && [[ -n "${PG_DSN:-}" ]]; then
-      if ! gunzip -c "$db_archive" | psql "$PG_DSN" >&2; then
-        warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+      if ! gunzip -c "$db_archive" | psql "$PG_DSN" -v ON_ERROR_STOP=1 >&2; then
+        if ! systemctl start "$SERVICE_NAME"; then
+          error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+        fi
+        error "$(t app.sub2api.error.database_restore_failed "$db_archive")"
       fi
     else
-      warn "$(t binary_app.error.backup_failed)"
+      if ! systemctl start "$SERVICE_NAME"; then
+        error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
+      error "$(t app.sub2api.error.database_restore_unavailable "$db_archive")"
     fi
   fi
 
