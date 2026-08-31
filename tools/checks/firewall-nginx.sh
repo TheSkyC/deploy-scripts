@@ -58,12 +58,13 @@ check_iptables_rules_are_atomic() {
       /iptables_dir="\/etc\/iptables"/ { saw_dir=1 }
       /if mkdir -p "\$iptables_dir"; then/ { saw_dir_if=1 }
       /app_prefix\}\.warn\.iptables_write_failed/ { saw_warn=1 }
+      /atomic_write_command_file "\$iptables_rules" 644 root:root iptables-save/ { saw_atomic=1 }
       /if ! iptables_tmp=\$\(mktemp "\$\{iptables_rules\}\.XXXXXX"\); then/ { saw_tmp=1 }
       /iptables-save > "\$iptables_tmp"/ { saw_save=1 }
       /mv "\$iptables_tmp" "\$iptables_rules"/ { saw_mv=1 }
       /rm -f "\$iptables_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_dir && saw_dir_if && saw_warn && saw_tmp && saw_save && saw_mv && saw_cleanup)) {
+        if (!(saw_dir && saw_dir_if && saw_warn && (saw_atomic || (saw_tmp && saw_save && saw_mv && saw_cleanup)))) {
           print "iptables rules writes must prepare directories, stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
