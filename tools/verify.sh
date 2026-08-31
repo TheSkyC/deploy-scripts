@@ -713,6 +713,7 @@ main() {
       check_generated_backup_scripts_write_sidecars
       check_generated_backup_scripts_write_manifests
       check_generated_backup_retention_removes_metadata
+      check_generated_backup_scripts_manifest_contract
       check_backup_archives_are_private
       check_registry_restore_capability_matches_impl
       check_backup_validate_gzip_archive
