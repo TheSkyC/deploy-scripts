@@ -14557,6 +14557,28 @@ if ! mkdir -p "${BACKUP_DIR}"; then
 fi
 _log "── ${MSG_START} ────────────────────────────────────"
 
+# Publish a staged backup artifact: move it into place, enforce private
+# mode (0600) and write a best-effort sha256 sidecar. Returns 0 only when
+# the move succeeds; a failed move removes the staging file. Sidecar
+# failures are non-fatal because umask 077 already keeps archives private
+# and the next run rewrites the sidecar.
+_publish_backup_artifact() {
+  local tmp="$1" final="$2"
+  if ! mv "$tmp" "$final"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  chmod 600 "$final" 2>/dev/null || true
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
+    chmod 600 "$final.sha256" 2>/dev/null || true
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
+    chmod 600 "$final.sha256" 2>/dev/null || true
+  fi
+  return 0
+}
+
 # ── 1. PostgreSQL database backup ─────────────────────────────
 if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
   _log "${MSG_PG_DUMP_START}"
@@ -14565,20 +14587,10 @@ if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
         _log "[PG_DUMP] ${line}"
       done
     ) | gzip > "${PG_DUMP_TMP}"; then
-    if mv "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"; then
-      chmod 600 "${PG_DUMP_FILE}" 2>/dev/null || true
-      # Integrity sidecar for the database dump.
-      if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "${PG_DUMP_FILE}" | awk '{print $1"  "$(NF)}' > "${PG_DUMP_FILE}.sha256" || true
-        chmod 600 "${PG_DUMP_FILE}.sha256" 2>/dev/null || true
-      elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "${PG_DUMP_FILE}" | awk '{print $1"  "$(NF)}' > "${PG_DUMP_FILE}.sha256" || true
-        chmod 600 "${PG_DUMP_FILE}.sha256" 2>/dev/null || true
-      fi
+    if _publish_backup_artifact "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"; then
       DB_SIZE=$(du -sh "${PG_DUMP_FILE}" 2>/dev/null | awk '{print $1}')
       _log "$(printf "$MSG_PG_DUMP_OK" "$PG_DUMP_FILE" "$DB_SIZE")"
     else
-      rm -f "${PG_DUMP_TMP}"
       _log "${MSG_PG_DUMP_FAILED}"
     fi
   else
@@ -14605,19 +14617,9 @@ if [[ -d "${CONFIG_DIR}" ]]; then
   if tar -czf "${EXTRA_CONF_TMP}" \
       -C "$(dirname "${CONFIG_DIR}")" "$(basename "${CONFIG_DIR}")" 2>&1 | \
       while IFS= read -r line; do _log "[TAR-CONF] ${line}"; done; then
-    if mv "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"; then
-      chmod 600 "${EXTRA_CONF_ARCHIVE}" 2>/dev/null || true
-      # Integrity sidecar for the config archive.
-      if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "${EXTRA_CONF_ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${EXTRA_CONF_ARCHIVE}.sha256" || true
-        chmod 600 "${EXTRA_CONF_ARCHIVE}.sha256" 2>/dev/null || true
-      elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "${EXTRA_CONF_ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${EXTRA_CONF_ARCHIVE}.sha256" || true
-        chmod 600 "${EXTRA_CONF_ARCHIVE}.sha256" 2>/dev/null || true
-      fi
+    if _publish_backup_artifact "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"; then
       _log "$(printf "$MSG_CONFIG_OK" "$EXTRA_CONF_ARCHIVE")"
     else
-      rm -f "${EXTRA_CONF_TMP}"
       _log "${MSG_CONFIG_FAILED}"
     fi
   else
@@ -14631,20 +14633,10 @@ if [[ ${#TAR_ARGS[@]} -gt 0 ]]; then
       --exclude="*.log" --exclude="*.log.*" \
       "${TAR_ARGS[@]}" 2>&1 | \
       while IFS= read -r line; do _log "[TAR] ${line}"; done; then
-    if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
-      chmod 600 "${ARCHIVE}" 2>/dev/null || true
-      # Integrity sidecar for the data archive.
-      if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
-        chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
-      elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
-        chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
-      fi
+    if _publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"; then
       SIZE=$(du -sh "${ARCHIVE}" 2>/dev/null | awk '{print $1}')
       _log "$(printf "$MSG_DATA_OK" "$ARCHIVE" "$SIZE")"
     else
-      rm -f "${ARCHIVE_TMP}"
       _log "${MSG_DATA_FAILED}"
     fi
   else

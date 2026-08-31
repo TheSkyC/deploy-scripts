@@ -1533,12 +1533,16 @@ check_generated_backup_scripts_write_sidecars() {
     grep -q 'chmod 600 "${ARCHIVE}.sha256"' "impl/$impl" \
       || { echo "$impl sidecar must be written with mode 600" >&2; return 1; }
   done
-  grep -q 'sha256sum "${PG_DUMP_FILE}"' impl/install_sub2api.sh \
-    || { echo "sub2api pg_dump sidecar missing" >&2; return 1; }
-  grep -q 'sha256sum "${EXTRA_CONF_ARCHIVE}"' impl/install_sub2api.sh \
-    || { echo "sub2api config-archive sidecar missing" >&2; return 1; }
-  grep -q 'sha256sum "${ARCHIVE}"' impl/install_sub2api.sh \
-    || { echo "sub2api data-archive sidecar missing" >&2; return 1; }
+  grep -q 'sha256sum "$final"' impl/install_sub2api.sh \
+    || { echo "sub2api publish helper must write a sha256 sidecar" >&2; return 1; }
+  grep -q 'chmod 600 "$final.sha256" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api sidecar must be written with mode 600" >&2; return 1; }
+  grep -q '_publish_backup_artifact "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"' impl/install_sub2api.sh \
+    || { echo "sub2api pg_dump sidecar publication missing" >&2; return 1; }
+  grep -q '_publish_backup_artifact "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"' impl/install_sub2api.sh \
+    || { echo "sub2api config-archive publication missing" >&2; return 1; }
+  grep -q '_publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"' impl/install_sub2api.sh \
+    || { echo "sub2api data-archive publication missing" >&2; return 1; }
   grep -q 'sha256sum "\\$archive"' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai generated backup script must write a sha256 sidecar" >&2; return 1; }
 }
@@ -1550,11 +1554,15 @@ check_generated_backup_scripts_write_sidecars() {
 check_backup_archives_are_private() {
   grep -q 'chmod 600 "${ARCHIVE}" 2>/dev/null || true' impl/install_vaultwarden.sh \
     || { echo "vaultwarden backup archive must be published with mode 600" >&2; return 1; }
-  grep -q 'chmod 600 "${PG_DUMP_FILE}" 2>/dev/null || true' impl/install_sub2api.sh \
+  grep -q '_publish_backup_artifact()' impl/install_sub2api.sh \
+    || { echo "sub2api backup archives must go through the shared private publish helper" >&2; return 1; }
+  grep -q 'chmod 600 "$final" 2>/dev/null || true' impl/install_sub2api.sh \
+    || { echo "sub2api backup archives must be published with mode 600" >&2; return 1; }
+  grep -q '_publish_backup_artifact "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"' impl/install_sub2api.sh \
     || { echo "sub2api pg_dump archive must be published with mode 600" >&2; return 1; }
-  grep -q 'chmod 600 "${EXTRA_CONF_ARCHIVE}" 2>/dev/null || true' impl/install_sub2api.sh \
+  grep -q '_publish_backup_artifact "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"' impl/install_sub2api.sh \
     || { echo "sub2api config archive must be published with mode 600" >&2; return 1; }
-  grep -q 'chmod 600 "${ARCHIVE}" 2>/dev/null || true' impl/install_sub2api.sh \
+  grep -q '_publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"' impl/install_sub2api.sh \
     || { echo "sub2api data archive must be published with mode 600" >&2; return 1; }
   grep -q 'chmod 600 "\\$archive" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai backup archive must be published with mode 600" >&2; return 1; }
