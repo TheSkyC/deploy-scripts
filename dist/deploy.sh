@@ -1056,6 +1056,13 @@ deploy_version_is_older() {
 
 # ----- lib/operation.sh -----
 
+# atomic.sh provides the shared atomic publisher used by operation_write_logrotate.
+# core.sh and the release bundle load it first; standalone consumers (guards,
+# validators) reach it through this relative self-source.
+if ! declare -F atomic_write_file >/dev/null 2>&1; then
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/atomic.sh"
+fi
+
 DEPLOY_OPERATION_ROOT="${DEPLOY_OPERATION_ROOT:-/var/lib/deploy-scripts}"
 DEPLOY_OPERATION_LOG_ROOT="${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}"
 DEPLOY_OPERATION_LOGROTATE_FILE="${DEPLOY_OPERATION_LOGROTATE_FILE:-/etc/logrotate.d/deploy-scripts}"
@@ -1182,7 +1189,7 @@ operation_set_owner_and_mode() {
   if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then chown root:root "$path" || return 1; fi
 }
 operation_write_logrotate() {
-  local target="${DEPLOY_OPERATION_LOGROTATE_FILE:-}" tmp days files log_root
+  local target="${DEPLOY_OPERATION_LOGROTATE_FILE:-}" owner="" days files log_root
   [[ -n "$target" ]] || return 0
   [[ "$target" != *$'\n'* && "$target" != *$'\r'* ]] || return 1
   days="${DEPLOY_OPERATION_LOGROTATE_DAYS:-30}"
@@ -1190,9 +1197,10 @@ operation_write_logrotate() {
   [[ "$days" =~ ^[1-9][0-9]*$ && "$files" =~ ^[1-9][0-9]*$ ]] || return 1
   log_root="${DEPLOY_OPERATION_LOG_ROOT%/}"
   [[ -n "$log_root" && "$log_root" != *$'\n'* && "$log_root" != *$'\r'* ]] || return 1
-  mkdir -p "$(dirname "$target")" || return 1
-  tmp="$(mktemp "$(dirname "$target")/.$(basename "$target").XXXXXX")" || return 1
-  if ! cat >"$tmp" <<LOGROTATE
+  # Enforce root ownership only when privileged; the shared atomic writer
+  # stages, modes, and replaces the file in one fail-closed publication.
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then owner="root:root"; fi
+  if ! atomic_write_file "$target" 644 "$owner" <<LOGROTATE
 ${log_root}/*/*.log {
     daily
     rotate ${files}
@@ -1205,16 +1213,9 @@ ${log_root}/*/*.log {
 }
 LOGROTATE
   then
-    rm -f "$tmp"
     return 1
   fi
-  if ! chmod 644 "$tmp" || { [[ "${EUID:-$(id -u)}" -eq 0 ]] && ! chown root:root "$tmp"; }; then
-    rm -f "$tmp"
-    return 1
-  fi
-  mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
 }
-
 operation_ensure_logrotate() {
   # Framework installation owns the system policy; unprivileged dry-runs and
   # tests must not repeatedly attempt to mutate /etc.
