@@ -212,6 +212,27 @@ check_certbot_diagnostics_use_stderr() {
     ' impl/install_vaultwarden.sh
 }
 
+check_binary_app_certbot_cron_is_published_atomically() {
+  awk '
+      /# Renewal via \/etc\/cron\.d, published by the shared atomic writer\./ { in_block=1; saw_file=0; saw_atomic=0; saw_error=0; next }
+      in_block && /local cron_file="\/etc\/cron\.d\/certbot-renew"/ { saw_file=1 }
+      in_block && /atomic_write_file "\$cron_file" 644 root:root <<'"'"'CRON'"'"'/ { saw_atomic=1 }
+      in_block && /error "\$\(t binary_app\.error\.tls_renewal\)"/ { saw_error=1 }
+      in_block && /success "\$\(t binary_app\.success\.tls_renewal\)"/ {
+        if (!(saw_file && saw_atomic && saw_error)) {
+          print "binary-app Certbot renewal cron must use atomic_write_file with root-owned mode 0644 and report failures" > "/dev/stderr"
+          exit 1
+        }
+        exit 0
+      }
+      END {
+        if (in_block && !(saw_file && saw_atomic && saw_error)) {
+          print "binary-app Certbot renewal cron publication block is incomplete" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+}
 check_cron_logrotate_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
     echo "cron and logrotate configs must be written through temporary files before replacement." >&2
