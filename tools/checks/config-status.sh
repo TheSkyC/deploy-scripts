@@ -146,6 +146,35 @@ check_atomic_copy_file_strict_helper() {
   rm -rf "$tmp_dir"
 }
 
+check_atomic_write_command_file_helper() {
+  local tmp_dir output
+  tmp_dir="$(mktemp -d)"
+  printf 'existing keyring\n' > "${tmp_dir}/destination"
+
+  output="$(TMP_DIR="$tmp_dir" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    atomic_write_command_file "$TMP_DIR/destination" 0644 "" printf "new keyring\n"
+    [[ "$(cat "$TMP_DIR/destination")" == "new keyring" ]]
+    printf "existing keyring\n" > "$TMP_DIR/destination"
+    if atomic_write_command_file "$TMP_DIR/destination" 0644 "" sh -c "printf partial; exit 1" 2>/dev/null; then
+      echo "command publisher accepted a failed producer" >&2
+      exit 1
+    fi
+    [[ "$(cat "$TMP_DIR/destination")" == "existing keyring" ]]
+    [[ -z "$(find "$TMP_DIR" -maxdepth 1 -name ".destination.??????" -print -quit)" ]]
+  ')" || {
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  [[ -z "$output" ]] || {
+    echo "Command-backed atomic publisher unexpectedly wrote output: ${output}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  rm -rf "$tmp_dir"
+}
+
 check_custom_app_http_health_probes_use_shared_helper() {
   local file
   for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do
