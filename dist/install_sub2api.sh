@@ -1643,6 +1643,18 @@ backup_verify_archive() {
   return 0
 }
 
+# Validate a gzip backup before a caller mutates any live state. Integrity
+# metadata is checked when present, while pre-manifest archives remain usable;
+# gzip itself is always tested so a corrupt SQL dump is rejected early.
+backup_validate_gzip_archive() {
+  local archive="$1"
+  [[ -f "$archive" ]] || return 1
+  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
+    return 1
+  fi
+  gzip -t "$archive" >/dev/null 2>&1
+}
+
 # Print the newest archive path (by mtime) matching one or more globs in a
 # backup directory, or nothing when none exist. Mirrors the find/sort idiom of
 # app_backup_latest_archive_json so verify and status agree on "latest".
@@ -9273,6 +9285,9 @@ do_restore() {
   fi
   if [[ -n "$conf_archive" ]] && ! backup_validate_archive_members "$conf_archive"; then
     error "$(t backup.restore.invalid_archive "$conf_archive")"
+  fi
+  if [[ -n "$db_archive" ]] && ! backup_validate_gzip_archive "$db_archive"; then
+    error "$(t backup.restore.invalid_archive "$db_archive")"
   fi
   info "$(t backup.restore.using "$data_archive")"
 

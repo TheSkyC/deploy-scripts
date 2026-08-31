@@ -1762,6 +1762,9 @@ do_restore() {
   if [[ -n "$conf_archive" ]] && ! backup_validate_archive_members "$conf_archive"; then
     error "$(t backup.restore.invalid_archive "$conf_archive")"
   fi
+  if [[ -n "$db_archive" ]] && ! backup_validate_gzip_archive "$db_archive"; then
+    error "$(t backup.restore.invalid_archive "$db_archive")"
+  fi
   info "$(t backup.restore.using "$data_archive")"
 
   systemctl stop "$SERVICE_NAME" \
