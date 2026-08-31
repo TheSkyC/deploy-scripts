@@ -102,6 +102,25 @@ check_operation_logrotate_policy() {
   rm -rf "$temp_root"
 }
 
+# Logrotate policy publication must stay on the shared atomic writer instead
+# of reverting to a per-library mktemp/chmod/chown/mv copy.
+check_operation_logrotate_uses_shared_atomic_writer() {
+  awk '
+      /operation_write_logrotate\(\)/ { in_fn=1; saw_atomic=0; saw_legacy_tmp=0; next }
+      in_fn && /atomic_write_file "\$target" 644 "\$owner"/ { saw_atomic=1 }
+      in_fn && /mktemp/ { saw_legacy_tmp=1 }
+      in_fn && /cat >"\$tmp"/ { saw_legacy_tmp=1 }
+      in_fn && /mv -f "\$tmp" "\$target"/ { saw_legacy_tmp=1 }
+      in_fn && /^}/ {
+        if (!saw_atomic || saw_legacy_tmp) {
+          printf "%s operation logrotate publication must delegate to the shared atomic writer\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+    ' lib/operation.sh
+}
+
 check_app_action_operation_wrapping() {
   local temp_root status
   temp_root="$(mktemp -d)"
