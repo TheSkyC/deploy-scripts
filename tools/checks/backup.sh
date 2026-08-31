@@ -790,9 +790,16 @@ check_generated_backup_scripts_handle_missing_dirs() {
       in_func && index($0, "if ! mkdir -p \"${BACKUP_DIR}\"; then") { saw_mkdir=1 }
       in_func && index($0, "${MSG_BACKUP_DIR_FAILED}") && index($0, ">&2") { saw_stderr=1 }
       in_func && index($0, "find \"${BACKUP_DIR}\" -maxdepth 1 -name \"vaultwarden_*.tar.gz\"") { saw_maxdepth=1 }
-      in_func && /mv "\$backup_tmp" "\$backup_script"/ {
+      in_func && /} \| atomic_write_file "\$backup_script" 750 root:root; then/ {
         if (!(saw_msg && saw_mkdir && saw_stderr && saw_maxdepth)) {
           printf "%s generated Vaultwarden backup script must create the backup directory explicitly and limit retention cleanup before archiving\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_publish=1
+      }
+      in_func && /^}/ {
+        if (!saw_publish) {
+          printf "%s generated Vaultwarden backup script must be published with atomic_write_file\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0

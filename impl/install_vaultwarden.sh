@@ -1437,21 +1437,14 @@ do_update() {
 }
 _write_backup_script() {
   local backup_script="/usr/local/bin/vaultwarden-backup"
-  local backup_tmp
-  if ! backup_tmp=$(mktemp "${backup_script}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.backup_script)"
-  fi
-  if ! cat > "$backup_tmp" << 'BKSH'
+  if ! {
+    cat << 'BKSH'
 #!/bin/bash
 # Auto-generated Vaultwarden backup script.
 set -euo pipefail
 umask 077   # Backup files include secrets and must be root-readable only.
 BKSH
-  then
-    rm -f "$backup_tmp"
-    error "$(t app.vaultwarden.error.backup_script)"
-  fi
-  if ! cat >> "$backup_tmp" << BKSH_VARS
+    cat << BKSH_VARS
 BACKUP_DIR="${VW_BACKUP_DIR}"
 DATA_DIR="${VW_DATA_DIR}"
 ENV_FILE="${VW_ENV_FILE}"
@@ -1465,11 +1458,7 @@ MSG_FAILED="$(t app.vaultwarden.backup.script.failed)"
 MSG_CLEANED="$(t app.vaultwarden.backup.script.cleaned)"
 MSG_REMOVE_FAILED="$(t app.vaultwarden.backup.script.remove_failed)"
 BKSH_VARS
-  then
-    rm -f "$backup_tmp"
-    error "$(t app.vaultwarden.error.backup_script)"
-  fi
-  if ! cat >> "$backup_tmp" << 'BKSH'
+    cat << 'BKSH'
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
@@ -1545,14 +1534,7 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
   fi
 fi
 BKSH
-  then
-    rm -f "$backup_tmp"
-    error "$(t app.vaultwarden.error.backup_script)"
-  fi
-  if ! chmod 750 "$backup_tmp" \
-      || ! chown root:root "$backup_tmp" \
-      || ! mv "$backup_tmp" "$backup_script"; then
-    rm -f "$backup_tmp"
+  } | atomic_write_file "$backup_script" 750 root:root; then
     error "$(t app.vaultwarden.error.backup_script)"
   fi
 }
