@@ -1049,3 +1049,9 @@ Format per entry:
 - 成果 / Change: 共享防火墙流程在没有 `netfilter-persistent`、改用 `iptables-save` 持久化规则时，改为调用 `atomic_write_command_file` 发布 `/etc/iptables/rules.v4`。共享发布器负责目录准备、命令输出暂存、0644、`root:root`、原子替换和失败清理；保留 iptables 规则添加成功后对持久化失败的 warning 语义，以及既有成功/失败诊断，不改变 UFW、firewalld 或 netfilter-persistent 分支。
 - 验证 / Verified: 更新 iptables 原子发布守卫，兼容共享 command publisher 契约并继续拒绝直接覆盖；focused guard、`bash -n`、`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、提交 hook 的 release 验证均通过。完整 guards 将在本批后续再次执行；本地 Docker Linux daemon 不可用，真实 Docker E2E 继续由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
 - 提交 / Commit: 39cfd66
+
+## 2026-08-31（自主演进批次 P2-S2 续 24）
+- 状态 / Status: completed
+- 成果 / Change: CPA Stack 安装两个组件二进制时，已有目标文件的回滚副本不再直接使用 `cp -a` 写入最终备份路径，改为共享 `atomic_copy_file` 进行同目录暂存和原子替换；保留原有备份失败即中止、二进制安装失败后的回滚编排及应用专属 owner/路径语义。该步只收敛回滚备份的文件发布边界，不合并 CPA Stack 的多组件数据恢复模型。
+- 验证 / Verified: 新增并注册 CPA Stack 二进制回滚备份守卫；focused guard、`bash -n`、提交 hook 的 release 验证、串行 `PARALLEL_JOBS=1 tools/verify.sh guards` 和 `git diff --check` 均通过，最终输出为 `Guards verification passed`。guards 中的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径。本地 Docker Linux daemon 不可用，真实 Docker E2E 继续由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: 807ef99
