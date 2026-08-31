@@ -18143,11 +18143,8 @@ write_backup_script() {
   msg_sqlite_integrity="$(t app.cyberstrikeai.backup.warn.sqlite_integrity '%s' '%s')"
   msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
   msg_remove_failed="$(t app.cyberstrikeai.backup.warn.remove_failed '%s')"
-  local backup_tmp
-  if ! backup_tmp=$(mktemp "${BACKUP_SCRIPT}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.backup_script)"
-  fi
-  if ! cat > "$backup_tmp" <<BACKUP
+  if ! {
+    cat <<BACKUP
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
@@ -18227,14 +18224,7 @@ fi
 _log "[OK] \$(printf "\$MSG_BACKUP_CREATED" "\$archive")"
 printf "\$(date '+%F %T') [OK] %s\n" "\$(printf "\$MSG_BACKUP_CREATED" "\$archive")"
 BACKUP
-  then
-    rm -f "$backup_tmp"
-    error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
-  fi
-  if ! chmod 750 "$backup_tmp" \
-      || ! chown root:root "$backup_tmp" \
-      || ! mv "$backup_tmp" "$BACKUP_SCRIPT"; then
-    rm -f "$backup_tmp"
+  } | atomic_write_file "$BACKUP_SCRIPT" 750 root:root; then
     error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
   fi
   if ! atomic_write_file "$CRON_FILE" 644 root:root <<CRON
