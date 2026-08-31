@@ -553,10 +553,11 @@ check_fail2ban_configs_are_atomic() {
       /error "\$\(t app\.vaultwarden\.error\.fail2ban_write "\$fail2ban_conf"\)"/ { saw_tmp_error=1 }
       /mv "\$fail2ban_tmp" "\$fail2ban_conf"/ { saw_mv=1 }
       /rm -f "\$fail2ban_tmp"/ { saw_cleanup=1 }
+      /atomic_write_file "\$fail2ban_conf" 644 root:root/ { saw_atomic=1 }
       /_write_fail2ban_config_file \/etc\/fail2ban\// { saw_helper=1 }
       END {
-        if (!(saw_tmp && saw_tmp_if && saw_tmp_error && saw_mv && saw_cleanup && saw_helper)) {
-          print "Fail2Ban config writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
+        if (!saw_helper || !((saw_tmp && saw_tmp_if && saw_tmp_error && saw_mv && saw_cleanup) || saw_atomic)) {
+          print "Fail2Ban config writes must use a shared atomic publisher or stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
           exit 1
         }
       }
