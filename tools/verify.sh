@@ -478,6 +478,8 @@ main() {
       check_cron_logrotate_are_atomic
       check_logrotate_writes_use_shared_helper
       check_cyberstrikeai_backups_are_atomic
+      check_cyberstrikeai_backup_script_is_published_atomically
+      check_cyberstrikeai_backup_script_publish_contract
       check_cyberstrikeai_booleans_are_validated
       check_cyberstrikeai_mirrors_are_opt_in
       check_cyberstrikeai_build_temp_cleanup

@@ -2,6 +2,73 @@
 # shellcheck source=../verify.sh
 # Verify checks for the cyberstrikeai app (apps/cyberstrikeai.sh).
 
+# The generated standalone cron script cannot source the shared library when it
+# later runs on a host, but installation-time publication must still use the
+# shared fail-closed atomic writer.
+check_cyberstrikeai_backup_script_is_published_atomically() {
+  awk '
+      /write_backup_script\(\)/ { in_func=1; saw_atomic=0; saw_legacy_temp=0; next }
+      in_func && /atomic_write_file "\$BACKUP_SCRIPT" 750 root:root/ { saw_atomic=1 }
+      in_func && /mktemp "\$\{BACKUP_SCRIPT\}\.XXXXXX"/ { saw_legacy_temp=1 }
+      in_func && /^}/ {
+        if (!saw_atomic || saw_legacy_temp) {
+          printf "%s CyberStrikeAI backup script generation must use atomic_write_file instead of a caller-managed temp file\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+    ' impl/install_cyberstrikeai.sh
+}
+
+check_cyberstrikeai_backup_script_publish_contract() {
+  local output
+  output="$($BASH_BIN <<'CYBERTEST'
+set -euo pipefail
+source lib/core.sh
+source apps/cyberstrikeai.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_cyberstrikeai.sh >/dev/null 2>&1
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+INSTALL_DIR="$tmp_dir/install dir"
+CONFIG_FILE="$tmp_dir/config dir/config.yaml"
+BACKUP_DIR="$tmp_dir/backup dir"
+BACKUP_KEEP_DAYS=7
+SERVICE_NAME=cyber-test
+LOG_DIR="$tmp_dir/log dir"
+BACKUP_SCRIPT="$tmp_dir/bin dir/cyberstrikeai-backup"
+CRON_FILE="$tmp_dir/cron dir/cyberstrikeai-backup"
+records="$tmp_dir/records"
+script="$tmp_dir/generated-backup"
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+atomic_write_file() {
+  local target="$1" mode="$2" owner="$3"
+  printf '%s|%s|%s\n' "$target" "$mode" "$owner" >> "$records"
+  case "$target" in
+    "$BACKUP_SCRIPT") cat > "$script" ;;
+    "$CRON_FILE") cat > "${tmp_dir}/cron" ;;
+    *) cat > /dev/null; return 1 ;;
+  esac
+}
+
+write_backup_script
+[[ "$(sed -n '1p' "$records")" == "${BACKUP_SCRIPT}|750|root:root" ]]
+[[ "$(sed -n '2p' "$records")" == "${CRON_FILE}|644|root:root" ]]
+[[ "$(head -n 1 "$script")" == '#!/usr/bin/env bash' ]]
+grep -Fq 'INSTALL_DIR=' "$script"
+grep -Fq 'LOG_FILE=' "$script"
+grep -Fq 'set -euo pipefail' "$script"
+! grep -Fq 'source lib/backup.sh' "$script"
+bash -n "$script"
+printf ok
+CYBERTEST
+  )"
+  [[ "$output" == ok ]]
+}
+
 check_cyberstrikeai_status_backup_projection() {
   local output
   output="$($BASH_BIN -c '
