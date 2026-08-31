@@ -539,19 +539,11 @@ build_binary() {
 }
 restore_update_backup() {
   local bin_backup="$1" config_backup="$2"
-  local config_restore_tmp
   app_install_executable_file "$bin_backup" "$BIN_PATH" "${SERVICE_USER}:${SERVICE_USER}" 0755 \
     || return 1
   if [[ -f "$config_backup" ]]; then
-    if ! config_restore_tmp=$(mktemp "${CONFIG_FILE}.restore.XXXXXX"); then
-      return 1
-    fi
-    if ! cp "$config_backup" "$config_restore_tmp" \
-        || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$config_restore_tmp" \
-        || ! mv "$config_restore_tmp" "$CONFIG_FILE"; then
-      rm -f "$config_restore_tmp"
-      return 1
-    fi
+    atomic_copy_file_strict "$config_backup" "$CONFIG_FILE" "" \
+      "${SERVICE_USER}:${SERVICE_USER}" || return 1
   fi
 }
 install_runtime_dirs() {

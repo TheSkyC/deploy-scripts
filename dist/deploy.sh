@@ -407,6 +407,41 @@ atomic_copy_file() {
   fi
 }
 
+# Copy a file atomically while requiring an explicitly requested owner change
+# to succeed. This is for rollback/config paths where silently retaining the
+# caller's ownership would make the restored state unsafe.
+atomic_copy_file_strict() {
+  local source_path="$1"
+  local target_path="$2"
+  local mode="${3:-}"
+  local owner="${4:-}"
+  local target_dir target_tmp
+  [[ -f "$source_path" ]] || return 1
+  target_dir="$(dirname "$target_path")"
+  if ! mkdir -p "$target_dir"; then
+    return 1
+  fi
+  if ! target_tmp="$(mktemp "${target_path}.XXXXXX")"; then
+    return 1
+  fi
+  if ! cp "$source_path" "$target_tmp"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if [[ -n "$mode" ]] && ! chmod "$mode" "$target_tmp"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if [[ -n "$owner" ]] && ! chown "$owner" "$target_tmp" 2>/dev/null; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if ! mv "$target_tmp" "$target_path"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+}
+
 atomic_symlink() {
   local target_path="$1"
   local link_path="$2"
@@ -17908,19 +17943,11 @@ build_binary() {
 }
 restore_update_backup() {
   local bin_backup="$1" config_backup="$2"
-  local config_restore_tmp
   app_install_executable_file "$bin_backup" "$BIN_PATH" "${SERVICE_USER}:${SERVICE_USER}" 0755 \
     || return 1
   if [[ -f "$config_backup" ]]; then
-    if ! config_restore_tmp=$(mktemp "${CONFIG_FILE}.restore.XXXXXX"); then
-      return 1
-    fi
-    if ! cp "$config_backup" "$config_restore_tmp" \
-        || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$config_restore_tmp" \
-        || ! mv "$config_restore_tmp" "$CONFIG_FILE"; then
-      rm -f "$config_restore_tmp"
-      return 1
-    fi
+    atomic_copy_file_strict "$config_backup" "$CONFIG_FILE" "" \
+      "${SERVICE_USER}:${SERVICE_USER}" || return 1
   fi
 }
 install_runtime_dirs() {

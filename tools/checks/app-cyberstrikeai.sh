@@ -589,16 +589,17 @@ check_cyberstrikeai_rollback_restore_is_validated() {
     return 1
   fi
   awk '
-      /restore_update_backup\(\)/ { in_func=1; saw_bin_helper=0; saw_config_tmp=0; saw_config_tmp_return=0; saw_config_cp=0; saw_config_chown=0; saw_config_mv=0; next }
+      /restore_update_backup\(\)/ { in_func=1; saw_bin_helper=0; saw_config_tmp=0; saw_config_tmp_return=0; saw_config_cp=0; saw_config_chown=0; saw_config_mv=0; saw_config_atomic=0; next }
       in_func && /app_install_executable_file "\$bin_backup" "\$BIN_PATH" "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" 0755/ { saw_bin_helper=1 }
       in_func && /if ! config_restore_tmp=\$\(mktemp "\$\{CONFIG_FILE\}\.restore\.XXXXXX"\); then/ { saw_config_tmp=1 }
       in_func && saw_config_tmp && /return 1/ { saw_config_tmp_return=1 }
       in_func && /cp "\$config_backup" "\$config_restore_tmp"/ { saw_config_cp=1 }
       in_func && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}" "\$config_restore_tmp"/ { saw_config_chown=1 }
       in_func && /mv "\$config_restore_tmp" "\$CONFIG_FILE"/ { saw_config_mv=1 }
+      in_func && /atomic_copy_file_strict "\$config_backup" "\$CONFIG_FILE"/ { saw_config_atomic=1 }
       in_func && /^}/ {
-        if (!(saw_bin_helper && saw_config_tmp && saw_config_tmp_return && saw_config_cp && saw_config_chown && saw_config_mv)) {
-          printf "%s CyberStrikeAI rollback helper must delegate binary restore and atomically restore config state\n", FILENAME > "/dev/stderr"
+        if (!saw_bin_helper || !((saw_config_tmp && saw_config_tmp_return && saw_config_cp && saw_config_chown && saw_config_mv) || saw_config_atomic)) {
+          printf "%s CyberStrikeAI rollback helper must delegate binary restore and use a strict atomic config publisher or equivalent staging\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
