@@ -966,3 +966,9 @@ Format per entry:
   缺失 tar、`fail_check` 和脱敏测试输出来自既有故意失败路径；本地 Docker Linux daemon
   不可用，真实 Docker E2E 留待 Ubuntu GitHub Actions runner。
 - 提交 / Commit: 5001336, fc8acd2
+
+## 2026-08-31（自主演进批次 P2-S2 续 9）
+- 状态 / Status: completed
+- 成果 / Change: 继续以小步方式复用共享配置发布原语。Vaultwarden 的 Fail2Ban jail/filter 配置写入现委托 `atomic_write_file`，保留 0644、`root:root`、调用方 heredoc 规则内容和本地化写入失败提示；不改变 Fail2Ban 目录准备、Nginx/Docker 服务生命周期或应用特有规则。通用 Fail2Ban guard 同时接受完整的既有私有暂存替换序列，或该具备同等 fail-closed owner 语义的共享原子发布契约，避免守卫反向要求重复实现。
+- 验证 / Verified: focused Fail2Ban guard、`bash -n tools/checks/firewall-nginx.sh`、`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、`tools/verify.sh guards` 与 `git diff --check` 均通过；guards 的 chown/missing-tar/`fail_check` 和脱敏输出来自既有故意失败路径，最终输出为 `Guards verification passed`。本地 Docker Linux daemon 不可用，真实 Docker E2E 仍由 GitHub Ubuntu runner 验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: 3c11a2b, ff15864
