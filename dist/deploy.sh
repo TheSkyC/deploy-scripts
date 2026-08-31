@@ -16405,15 +16405,10 @@ NGINX
       # Use an /etc/cron.d file (atomic write) instead of appending to the
       # root crontab, so an existing crontab is never overwritten non-atomically.
       local _certbot_cron_file="/etc/cron.d/certbot-renew"
-      local _certbot_cron_tmp
-      if ! _certbot_cron_tmp=$(mktemp "${_certbot_cron_file}.XXXXXX"); then
-        error "$(t app.vaultwarden.error.certbot_cron)"
-      fi
-      if ! printf '%s\n' "30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'" > "$_certbot_cron_tmp" \
-          || ! chmod 644 "$_certbot_cron_tmp" \
-          || ! chown root:root "$_certbot_cron_tmp" \
-          || ! mv -f "$_certbot_cron_tmp" "$_certbot_cron_file"; then
-        rm -f "$_certbot_cron_tmp"
+      if ! atomic_write_file "$_certbot_cron_file" 644 root:root <<CRON
+30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'
+CRON
+      then
         error "$(t app.vaultwarden.error.certbot_cron)"
       fi
       success "$(t app.vaultwarden.success.certbot_cron)"
@@ -16681,15 +16676,10 @@ LOGR
   step "$(t app.vaultwarden.step.auto_backup)"
   _write_backup_script
   local _vw_cron_file="/etc/cron.d/vaultwarden-backup"
-  local _vw_cron_tmp
-  if ! _vw_cron_tmp=$(mktemp "${_vw_cron_file}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.auto_backup)"
-  fi
-  if ! printf '%s\n' "30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1" > "$_vw_cron_tmp" \
-      || ! chmod 644 "$_vw_cron_tmp" \
-      || ! chown root:root "$_vw_cron_tmp" \
-      || ! mv "$_vw_cron_tmp" "$_vw_cron_file"; then
-    rm -f "$_vw_cron_tmp"
+  if ! atomic_write_file "$_vw_cron_file" 644 root:root <<CRON
+30 3 * * * root /bin/bash /usr/local/bin/vaultwarden-backup >> ${VW_BACKUP_DIR}/backup.log 2>&1
+CRON
+  then
     error "$(t app.vaultwarden.error.auto_backup)"
   fi
   success "$(t app.vaultwarden.success.auto_backup "$BACKUP_KEEP_DAYS")"
