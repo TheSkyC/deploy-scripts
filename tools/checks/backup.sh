@@ -1574,22 +1574,45 @@ check_registry_restore_capability_matches_impl() {
     }
   ' impl/install_cpa_stack.sh || return 1
   awk '
-    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_data_restart=0; saw_conf=0; saw_conf_restart=0; saw_db=0; saw_stop=0; next }
+    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_data_restart=0; saw_conf=0; saw_conf_restart=0; saw_db=0; saw_db_validate=0; saw_stop=0; next }
     in_fn && /if ! backup_restore_data_dir "\$DATA_DIR" ""/ { saw_data=1 }
     in_fn && saw_data && /systemctl start "\$SERVICE_NAME"/ { saw_data_restart=1 }
     in_fn && /backup_restore_directory "\$CONFIG_DIR" "\$conf_archive"/ { saw_conf=1 }
     in_fn && saw_conf && /systemctl start "\$SERVICE_NAME"/ { saw_conf_restart=1 }
     in_fn && /sub2api_conf_\*\.tar\.gz/ { saw_conf_archive=1 }
     in_fn && /sub2api_db_\*\.sql\.gz/ { saw_db=1 }
+    in_fn && /backup_validate_gzip_archive "\$db_archive"/ { saw_db_validate=1 }
     in_fn && /systemctl stop "\$SERVICE_NAME"/ { saw_stop=1 }
     in_fn && /^}$/ {
-      if (!(saw_data && saw_data_restart && saw_conf && saw_conf_restart && saw_conf_archive && saw_db && saw_stop)) {
+      if (!(saw_data && saw_data_restart && saw_conf && saw_conf_restart && saw_conf_archive && saw_db && saw_db_validate && saw_stop)) {
         print "sub2api do_restore must use shared directory restore helpers and restart the service after caller-managed failures" > "/dev/stderr"
         exit 1
       }
       in_fn=0
     }
   ' impl/install_sub2api.sh
+}
+
+# Behavioral test for backup_validate_gzip_archive: valid pre-manifest archives
+# remain usable, while corrupt gzip data and mismatched sidecars fail closed.
+check_backup_validate_gzip_archive() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    printf sql > "$tmp/valid.sql"
+    gzip -c "$tmp/valid.sql" > "$tmp/valid.sql.gz"
+    backup_validate_gzip_archive "$tmp/valid.sql.gz"
+    printf corrupt > "$tmp/bad.sql.gz"
+    if backup_validate_gzip_archive "$tmp/bad.sql.gz"; then exit 11; fi
+    backup_write_sha256 "$tmp/valid.sql.gz" >/dev/null
+    printf corrupt > "$tmp/valid.sql.gz"
+    if backup_validate_gzip_archive "$tmp/valid.sql.gz"; then exit 12; fi
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
 }
 
 # Behavioral lifecycle test for backup_restore_directory, covering top-level
