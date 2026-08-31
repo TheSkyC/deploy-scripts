@@ -90,7 +90,7 @@ app_export_config_before_uninstall() {
   if [[ -d "${BACKUP_DIR:-}" ]] && [[ -w "${BACKUP_DIR}" ]]; then
     export_path="${BACKUP_DIR}/${APP_ID:-app}-deploy-config-export.conf"
   fi
-  if ! cp "$conf_file" "$export_path" 2>/dev/null; then
+  if ! atomic_copy_file "$conf_file" "$export_path" 600 2>/dev/null; then
     warn "$(t common.config_export_failed "$conf_file")"
     return 0
   fi

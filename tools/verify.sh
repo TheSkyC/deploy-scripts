@@ -472,6 +472,7 @@ main() {
       check_config_value_validators
       check_config_write_failure_cleanup
       check_config_writes_are_centralized
+      check_config_export_uses_atomic_copy
       check_connectivity_helper_behavior
       check_cpa_stack_status_backup_projection
       check_cpa_stack_layout
