@@ -7,10 +7,15 @@
 # shared fail-closed atomic publisher.
 check_sub2api_backup_script_is_published_atomically() {
   awk '
-      /_write_backup_script\(\)/ { in_func=1; saw_atomic=0; saw_legacy_temp=0; next }
-      in_func && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
-      in_func && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
-      in_func && /^}/ {
+      /_write_backup_script\(\)/ { in_func=1; in_heredoc=0; saw_atomic=0; saw_legacy_temp=0; next }
+      # The generation body embeds the standalone backup script as quoted
+      # heredocs; skip their literal contents so template functions with a
+      # column-0 closing brace do not end the function scope early.
+      in_func && !in_heredoc && /^[[:space:]]*cat << .*BKSH_(HEADER|BODY)/ { in_heredoc=1; next }
+      in_func && in_heredoc && /^BKSH_(HEADER|BODY)$/ { in_heredoc=0; next }
+      in_func && !in_heredoc && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
+      in_func && !in_heredoc && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
+      in_func && !in_heredoc && /^}/ {
         if (!saw_atomic || saw_legacy_temp) {
           printf "%s Sub2API backup script generation must use atomic_write_file instead of a caller-managed temp file\n", FILENAME > "/dev/stderr"
           exit 1
