@@ -1564,16 +1564,20 @@ backup_finalize_archive() {
 }
 
 # Create a gzip tar archive in a unique sibling temporary file and publish it
-# atomically at ARCHIVE. Remaining arguments are passed verbatim to tar after
-# its output path, so callers retain control over excludes and source layout.
-# Any failed tar or publish step removes the temporary file and leaves an
-# existing final archive untouched.
+# atomically at ARCHIVE with private mode 0600. Remaining arguments are passed
+# verbatim to tar after its output path, so callers retain control over
+# excludes and source layout. Any failed tar, permission, or publish step
+# removes the temporary file and leaves an existing final archive untouched.
 backup_create_tar_archive() {
   local archive="$1" archive_tmp
   shift
   [[ -n "$archive" && "$#" -gt 0 ]] || return 1
   archive_tmp="$(mktemp "${archive}.tmp.XXXXXX")" || return 1
   if ! tar -czf "$archive_tmp" "$@" >&2; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+  if ! chmod 600 "$archive_tmp"; then
     rm -f "$archive_tmp"
     return 1
   fi
@@ -20472,20 +20476,14 @@ do_backup() {
   done
   local archive
   archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
-  local archive_tmp="${archive}.tmp"
-  if ! tar -czf "$archive_tmp" -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env >&2; then
-    rm -f "$archive_tmp"
-    error "$(t app.tickflow.backup.error_archive "$archive")"
-  fi
-  if ! chmod 600 "$archive_tmp" || ! mv "$archive_tmp" "$archive"; then
-    rm -f "$archive_tmp"
+  if ! backup_create_tar_archive "$archive" \
+      -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env; then
     error "$(t app.tickflow.backup.error_archive "$archive")"
   fi
   # Integrity metadata: a sha256 sidecar plus a manifest, so do_verify and the
   # shared status projection can confirm the archive instead of reporting it
   # as unverified forever. Best-effort on failure — the archive itself exists.
-  if ! backup_write_sha256 "$archive" >/dev/null \
-     || ! backup_write_manifest "$archive" "$APP_ID" 1 "${INSTALLED_VERSION:-}"; then
+  if ! backup_finalize_archive "$archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
     warn "$(t app.tickflow.warn.integrity_failed "$archive")"
   fi
   success "$(t app.tickflow.backup.success "$archive")"

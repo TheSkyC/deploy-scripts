@@ -1563,16 +1563,20 @@ backup_finalize_archive() {
 }
 
 # Create a gzip tar archive in a unique sibling temporary file and publish it
-# atomically at ARCHIVE. Remaining arguments are passed verbatim to tar after
-# its output path, so callers retain control over excludes and source layout.
-# Any failed tar or publish step removes the temporary file and leaves an
-# existing final archive untouched.
+# atomically at ARCHIVE with private mode 0600. Remaining arguments are passed
+# verbatim to tar after its output path, so callers retain control over
+# excludes and source layout. Any failed tar, permission, or publish step
+# removes the temporary file and leaves an existing final archive untouched.
 backup_create_tar_archive() {
   local archive="$1" archive_tmp
   shift
   [[ -n "$archive" && "$#" -gt 0 ]] || return 1
   archive_tmp="$(mktemp "${archive}.tmp.XXXXXX")" || return 1
   if ! tar -czf "$archive_tmp" "$@" >&2; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
+  if ! chmod 600 "$archive_tmp"; then
     rm -f "$archive_tmp"
     return 1
   fi
