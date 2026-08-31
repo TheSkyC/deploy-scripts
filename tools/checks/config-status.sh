@@ -302,6 +302,24 @@ STUB
     fi
   ' _ "$tmp_dir" "$conf"
 
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    FOO="bar"
+    printf existing > "$2"
+    sanitize_conf_val() { return 1; }
+    set +e
+    write_config_file "$2" FOO
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || { echo "write_config_file unexpectedly ignored producer failure" >&2; exit 1; }
+    [[ "$(cat "$2")" == existing ]]
+    if find "$(dirname "$2")" -maxdepth 1 -name ".$(basename "$2").??????" -type f | grep -q .; then
+      echo "write_config_file left a temporary file behind after producer failure" >&2
+      exit 1
+    fi
+  ' _ "$tmp_dir" "$conf"
+
   rm -rf "$tmp_dir"
 }
 
@@ -325,9 +343,20 @@ check_unsafe_config_loads_fail_closed() {
 
 check_config_save_failures_are_explicit() {
   awk '
+      /_write_config_file_content\(\)/ { in_func=1; saw_sanitize=0; saw_printf=0; next }
+      in_func && /sanitize_conf_val/ { saw_sanitize=1 }
+      in_func && /printf/ { saw_printf=1 }
+      in_func && /^}/ {
+        if (!(saw_sanitize && saw_printf)) {
+          printf "%s config content producer must sanitize values and emit quoted key/value lines\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+  ' lib/config.sh
+  awk '
       /write_config_file\(\)/ { in_func=1; saw_atomic=0; saw_mode=0; saw_owner=0; saw_producer=0; next }
-      in_func && /for key in "\$@"/ { saw_producer=1 }
-      in_func && /atomic_write_file "\$conf_file" 600 root:root/ { saw_atomic=1; saw_mode=1; saw_owner=1 }
+      in_func && /atomic_write_command_file "\$conf_file" 600 root:root _write_config_file_content/ { saw_atomic=1; saw_mode=1; saw_owner=1; saw_producer=1 }
       in_func && /^}/ {
         if (!(saw_atomic && saw_mode && saw_owner && saw_producer)) {
           printf "%s write_config_file must stream sanitized keys through the shared atomic publisher with mode 600 and root ownership\n", FILENAME > "/dev/stderr"
