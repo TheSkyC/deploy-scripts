@@ -18205,23 +18205,12 @@ BACKUP
     rm -f "$backup_tmp"
     error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
   fi
-  local cron_tmp
-  if ! cron_tmp=$(mktemp "${CRON_FILE}.XXXXXX"); then
-    error "$(t app.cyberstrikeai.error.cron)"
-  fi
-  if ! cat > "$cron_tmp" <<CRON
+  if ! atomic_write_file "$CRON_FILE" 644 root:root <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 30 3 * * * root ${BACKUP_SCRIPT} >> ${LOG_DIR}/backup.log 2>&1
 CRON
   then
-    rm -f "$cron_tmp"
-    error "$(t app.cyberstrikeai.error.cron "$CRON_FILE")"
-  fi
-  if ! chmod 644 "$cron_tmp" \
-      || ! chown root:root "$cron_tmp" \
-      || ! mv "$cron_tmp" "$CRON_FILE"; then
-    rm -f "$cron_tmp"
     error "$(t app.cyberstrikeai.error.cron "$CRON_FILE")"
   fi
 }
