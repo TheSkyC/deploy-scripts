@@ -1765,7 +1765,7 @@ mkdir -p "$BACKUP_DIR" "$CONFIG_DIR" "$DATA_DIR"
 printf 'records' > "$DATA_DIR/records.db"
 _write_backup_script
 chmod 600 "$SUB2API_DSN"
-run_manifest_proof sub2api "$CAPTURE_FILE" "$BACKUP_DIR" 'sub2api_*.tar.gz sub2api_db_*.sql.gz sub2api_conf_*.tar.gz' 'sub2api_20000101_000000.tar.gz' 'sub2api_db_20000101_000000.sql.gz' 'sub2api_conf_20000101_000000.tar.gz'
+run_manifest_proof sub2api "$CAPTURE_FILE" "$BACKUP_DIR" 'sub2api_data_*.tar.gz sub2api_db_*.sql.gz sub2api_conf_*.tar.gz' 'sub2api_data_20000101_000000.tar.gz' 'sub2api_db_20000101_000000.sql.gz' 'sub2api_conf_20000101_000000.tar.gz'
 
 GENMANIFEST
   )"
