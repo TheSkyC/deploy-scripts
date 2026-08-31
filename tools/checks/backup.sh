@@ -1581,6 +1581,26 @@ check_generated_backup_scripts_write_sidecars() {
   grep -q 'sha256sum "\\$archive"' impl/install_cyberstrikeai.sh \
     || { echo "cyberstrikeai generated backup script must write a sha256 sidecar" >&2; return 1; }
 }
+# The generated standalone cron backup scripts must publish the same integrity
+# triad as runtime backups: private archive + sha256 sidecar + manifest.json.
+# Quoted heredocs reference shell vars directly; the unquoted cyberstrikeai
+# heredoc escapes them — accept both spellings.
+check_generated_backup_scripts_write_manifests() {
+  grep -q '{"schema_version":1,"app":"vaultwarden"' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden generated backup script must write a manifest.json" >&2; return 1; }
+  grep -q 'chmod 600 "${archive}.manifest.json" 2>/dev/null || true' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden manifest must be published with mode 600" >&2; return 1; }
+}
+
+# Retention cleanup in the generated cron backup scripts must remove the
+# integrity companions (.sha256 / .manifest.json) together with an expired
+# archive, matching backup_remove_archive_with_metadata semantics, so expired
+# backups never leave orphaned metadata behind.
+check_generated_backup_retention_removes_metadata() {
+  grep -q 'rm -f "${old_backup}.sha256" "${old_backup}.manifest.json" 2>/dev/null || true' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden generated backup retention must remove integrity companions" >&2; return 1; }
+}
+
 # Standalone backup scripts and runtime backup paths must publish archives
 # privately: archives can hold database dumps, configs with secrets, and
 # service data, and the shared tar/gzip publishers already require 0600.
