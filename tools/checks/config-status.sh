@@ -735,3 +735,29 @@ STUB
 
   rm -rf "$tmp_dir"
 }
+
+check_config_export_uses_atomic_copy() {
+  if grep -nE '^[[:space:]]*cp "\$conf_file" "\$export_path"' lib/cli.sh; then
+    echo "Uninstall config exports must use atomic_copy_file rather than direct replacement." >&2
+    return 1
+  fi
+  awk '
+      /app_export_config_before_uninstall\(\)/ { in_func=1; saw_copy=0; saw_mode=0; saw_warn=0; next }
+      in_func && /atomic_copy_file "\$conf_file" "\$export_path" 600/ { saw_copy=1 }
+      in_func && /warn "\$\(t common\.config_export_failed/ { saw_warn=1 }
+      in_func && /chmod 600 "\$export_path"/ { saw_mode=1 }
+      in_func && /^}/ {
+        if (!(saw_copy && saw_mode && saw_warn)) {
+          print "Config export must use atomic_copy_file with mode 600 and preserve warning behavior" > "/dev/stderr"
+          exit 1
+        }
+        in_func=0
+      }
+      END {
+        if (in_func) {
+          print "Config export function was not closed" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/cli.sh
+}
