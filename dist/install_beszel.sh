@@ -372,6 +372,42 @@ atomic_write_file() {
   fi
 }
 
+# Run a producer command and publish its stdout atomically. The command must
+# succeed before the staged contents replace the target, so a failing producer
+# cannot publish partial output. Requested mode and ownership are fail-closed.
+# Usage: atomic_write_command_file TARGET [MODE] [OWNER] COMMAND [ARGS...]
+atomic_write_command_file() {
+  local target_path="$1"
+  local mode="${2:-}"
+  local owner="${3:-}"
+  local target_dir target_tmp
+  shift 3
+  [[ -n "$target_path" && "$#" -gt 0 ]] || return 1
+  target_dir="$(dirname "$target_path")"
+  if ! mkdir -p "$target_dir"; then
+    return 1
+  fi
+  if ! target_tmp="$(mktemp "${target_dir}/.$(basename "$target_path").XXXXXX")"; then
+    return 1
+  fi
+  if ! "$@" > "$target_tmp"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if [[ -n "$mode" ]] && ! chmod "$mode" "$target_tmp"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if [[ -n "$owner" ]] && ! chown "$owner" "$target_tmp" 2>/dev/null; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if ! mv "$target_tmp" "$target_path"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+}
+
 atomic_copy_file() {
   local source_path="$1"
   local target_path="$2"

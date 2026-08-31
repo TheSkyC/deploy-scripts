@@ -266,6 +266,21 @@ check_atomic_helpers_are_atomic() {
         }
         in_write=0
       }
+      /atomic_write_command_file\(\)/ { in_command_write=1; saw_dir=0; saw_tmp=0; saw_command=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
+      in_command_write && /mkdir -p "\$target_dir"/ { saw_dir=1 }
+      in_command_write && /mktemp "\$\{target_dir\}\/\.\$\(basename "\$target_path"\)\.XXXXXX"/ { saw_tmp=1 }
+      in_command_write && /"\$@" > "\$target_tmp"/ { saw_command=1 }
+      in_command_write && /chmod "\$mode" "\$target_tmp"/ { saw_chmod=1 }
+      in_command_write && /chown "\$owner" "\$target_tmp"/ { saw_chown=1 }
+      in_command_write && /rm -f "\$target_tmp"/ { saw_cleanup=1 }
+      in_command_write && /mv "\$target_tmp" "\$target_path"/ { saw_mv=1 }
+      in_command_write && /^}/ {
+        if (!(saw_dir && saw_tmp && saw_command && saw_chmod && saw_chown && saw_mv && saw_cleanup)) {
+          printf "%s atomic_write_command_file must run a producer, enforce permissions, replace, and clean up temporary files\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_command_write=0
+      }
       /atomic_copy_file\(\)/ { in_copy=1; saw_dir=0; saw_tmp=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; next }
       in_copy && /mkdir -p "\$target_dir"/ { saw_dir=1 }
       in_copy && /mktemp "\$\{target_path\}\.XXXXXX"/ { saw_tmp=1 }

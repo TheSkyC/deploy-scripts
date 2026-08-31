@@ -372,6 +372,42 @@ atomic_write_file() {
   fi
 }
 
+# Run a producer command and publish its stdout atomically. The command must
+# succeed before the staged contents replace the target, so a failing producer
+# cannot publish partial output. Requested mode and ownership are fail-closed.
+# Usage: atomic_write_command_file TARGET [MODE] [OWNER] COMMAND [ARGS...]
+atomic_write_command_file() {
+  local target_path="$1"
+  local mode="${2:-}"
+  local owner="${3:-}"
+  local target_dir target_tmp
+  shift 3
+  [[ -n "$target_path" && "$#" -gt 0 ]] || return 1
+  target_dir="$(dirname "$target_path")"
+  if ! mkdir -p "$target_dir"; then
+    return 1
+  fi
+  if ! target_tmp="$(mktemp "${target_dir}/.$(basename "$target_path").XXXXXX")"; then
+    return 1
+  fi
+  if ! "$@" > "$target_tmp"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if [[ -n "$mode" ]] && ! chmod "$mode" "$target_tmp"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if [[ -n "$owner" ]] && ! chown "$owner" "$target_tmp" 2>/dev/null; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+  if ! mv "$target_tmp" "$target_path"; then
+    rm -f "$target_tmp"
+    return 1
+  fi
+}
+
 atomic_copy_file() {
   local source_path="$1"
   local target_path="$2"
@@ -7796,17 +7832,10 @@ _install_postgres() {
     if ! install -d "$pg_keyring_dir"; then
       error "$(t app.sub2api.error.postgres_keyring_dir "$pg_keyring_dir")"
     fi
-    local pg_keyring pg_key_tmp
+    local pg_keyring
     pg_keyring="${pg_keyring_dir}/apt.postgresql.org.asc"
-    if ! pg_key_tmp="$(mktemp "${pg_keyring}.XXXXXX")"; then
-      error "$(t app.sub2api.error.postgres_key)"
-    fi
-    if ! curl -fsSL --max-time 30 -o "$pg_key_tmp" \
-        "https://www.postgresql.org/media/keys/ACCC4CF8.asc" \
-        || ! chmod 644 "$pg_key_tmp" \
-        || ! chown root:root "$pg_key_tmp" \
-        || ! mv "$pg_key_tmp" "$pg_keyring"; then
-      rm -f "$pg_key_tmp"
+    if ! atomic_write_command_file "$pg_keyring" 644 root:root \
+        curl -fsSL --max-time 30 "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
       error "$(t app.sub2api.error.postgres_key)"
     fi
     local codename
@@ -7816,15 +7845,10 @@ _install_postgres() {
       error "$(t app.sub2api.error.postgres_source_dir "$apt_source_dir")"
     fi
     local pg_source_list="/etc/apt/sources.list.d/pgdg.list"
-    local pg_source_tmp
-    if ! pg_source_tmp=$(mktemp "${pg_source_list}.XXXXXX"); then
-      error "$(t app.sub2api.error.postgres_source)"
-    fi
-    if ! printf '%s\n' "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" > "$pg_source_tmp" \
-        || ! chmod 644 "$pg_source_tmp" \
-        || ! chown root:root "$pg_source_tmp" \
-        || ! mv "$pg_source_tmp" "$pg_source_list"; then
-      rm -f "$pg_source_tmp"
+    if ! atomic_write_file "$pg_source_list" 644 root:root <<EOF
+deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main
+EOF
+    then
       error "$(t app.sub2api.error.postgres_source)"
     fi
     if ! apt-get update -qq; then
@@ -7879,6 +7903,11 @@ _ensure_redis_running() {
   done
   return 1
 }
+_sub2api_redis_keyring_content() {
+  curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
+    | gpg --batch --yes --dearmor -o -
+}
+
 _install_redis() {
   if command -v redis-server &>/dev/null; then
     local redis_ver
@@ -7897,20 +7926,10 @@ _install_redis() {
     if ! install -d "$redis_keyring_dir"; then
       error "$(t app.sub2api.error.redis_keyring_dir "$redis_keyring_dir")"
     fi
-    local redis_keyring redis_key_tmp
+    local redis_keyring
     redis_keyring="${redis_keyring_dir}/redis-archive-keyring.gpg"
-    if ! redis_key_tmp="$(mktemp "${redis_keyring}.tmp.XXXXXX")"; then
-      error "$(t app.sub2api.error.redis_key)"
-    fi
-    if ! curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
-        | gpg --batch --yes --dearmor -o "$redis_key_tmp"; then
-      rm -f "$redis_key_tmp"
-      error "$(t app.sub2api.error.redis_key)"
-    fi
-    if ! chmod 644 "$redis_key_tmp" \
-        || ! chown root:root "$redis_key_tmp" \
-        || ! mv "$redis_key_tmp" "$redis_keyring"; then
-      rm -f "$redis_key_tmp"
+    if ! atomic_write_command_file "$redis_keyring" 644 root:root \
+        _sub2api_redis_keyring_content; then
       error "$(t app.sub2api.error.redis_key)"
     fi
     local codename
@@ -7920,15 +7939,10 @@ _install_redis() {
       error "$(t app.sub2api.error.redis_source_dir "$apt_source_dir")"
     fi
     local redis_source_list="/etc/apt/sources.list.d/redis.list"
-    local redis_source_tmp
-    if ! redis_source_tmp=$(mktemp "${redis_source_list}.XXXXXX"); then
-      error "$(t app.sub2api.error.redis_source)"
-    fi
-    if ! printf '%s\n' "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb ${codename} main" > "$redis_source_tmp" \
-        || ! chmod 644 "$redis_source_tmp" \
-        || ! chown root:root "$redis_source_tmp" \
-        || ! mv "$redis_source_tmp" "$redis_source_list"; then
-      rm -f "$redis_source_tmp"
+    if ! atomic_write_file "$redis_source_list" 644 root:root <<EOF
+deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb ${codename} main
+EOF
+    then
       error "$(t app.sub2api.error.redis_source)"
     fi
     if ! apt-get update -qq; then

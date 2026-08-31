@@ -12,13 +12,14 @@ check_keyring_writes_are_atomic() {
       /if ! install -d "\$(pg_keyring_dir|redis_keyring_dir)"; then/ { saw_dir_if=1 }
       /error "\$\(t app\.sub2api\.error\.(postgres|redis)_keyring_dir "\$(pg_keyring_dir|redis_keyring_dir)"\)"/ { saw_dir_error=1 }
       /if ! (pg_key_tmp|redis_key_tmp)="?\$\(mktemp/ { saw_tmp=1 }
+      /atomic_write_command_file "\$(pg_keyring|redis_keyring)" 644 root:root/ { saw_atomic=1 }
       /error "\$\(t app\.sub2api\.error\.(postgres|redis)_key\)"/ { saw_tmp_error=1 }
       /(curl .* -o "\$pg_key_tmp"|gpg .* --dearmor -o "\$redis_key_tmp")/ { saw_write=1 }
       /mv "\$(pg_key_tmp|redis_key_tmp)" "\$(pg_keyring|redis_keyring)"/ { saw_mv=1 }
       /rm -f "\$(pg_key_tmp|redis_key_tmp)"/ { saw_cleanup=1 }
       END {
-        if (!(saw_dir_var && saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_write && saw_mv && saw_cleanup)) {
-          print "Apt keyring writes must prepare directories, stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_dir_var && saw_dir_if && saw_dir_error && saw_tmp_error && (saw_atomic || (saw_tmp && saw_write && saw_mv && saw_cleanup)))) {
+          print "Apt keyring writes must prepare directories, use a shared command publisher or stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }
@@ -35,12 +36,13 @@ check_apt_sources_are_atomic() {
       /if ! mkdir -p "\$apt_source_dir"; then/ { saw_dir_if=1 }
       /error "\$\(t app\.sub2api\.error\.(postgres|redis)_source_dir "\$apt_source_dir"\)"/ { saw_dir_error=1 }
       /if ! (pg_source_tmp|redis_source_tmp)=\$\(mktemp/ { saw_tmp=1 }
+      /atomic_write_file "\$(pg_source_list|redis_source_list)" 644 root:root/ { saw_atomic=1 }
       /error "\$\(t app\.sub2api\.error\.(postgres|redis)_source\)"/ { saw_tmp_error=1 }
       /mv "\$(pg_source_tmp|redis_source_tmp)" "\$(pg_source_list|redis_source_list)"/ { saw_mv=1 }
       /rm -f "\$(pg_source_tmp|redis_source_tmp)"/ { saw_cleanup=1 }
       END {
-        if (!(saw_dir_var && saw_dir_if && saw_dir_error && saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
-          print "Apt source list writes must prepare directories, stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!(saw_dir_var && saw_dir_if && saw_dir_error && saw_tmp_error && (saw_atomic || (saw_tmp && saw_mv && saw_cleanup)))) {
+          print "Apt source list writes must prepare directories, use a shared atomic publisher or stage, replace, and clean up temporary files." > "/dev/stderr"
           exit 1
         }
       }
