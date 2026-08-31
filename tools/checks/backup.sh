@@ -663,12 +663,13 @@ check_backup_scripts_are_atomic() {
   fi
   awk '
       /if ! backup_tmp=\$\(mktemp/ { saw_tmp=1 }
-      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(backup_script|backup_write)\)"/ { saw_tmp_error=1 }
+      /atomic_write_file "\$(backup_script|BACKUP_SCRIPT)" (700|750) root:root/ { saw_atomic=1 }
+      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(backup_script|backup_write)/ { saw_tmp_error=1 }
       /mv "\$backup_tmp" "(\$backup_script|\$BACKUP_SCRIPT)"/ { saw_mv=1 }
       /rm -f "\$backup_tmp"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
-          print "Backup script writes must report temp creation failures, stage, replace, and clean up temporary files." > "/dev/stderr"
+        if (!((saw_tmp && saw_tmp_error && saw_mv && saw_cleanup) || saw_atomic)) {
+          print "Backup script writes must use a shared atomic publisher or stage, replace, clean up temporary files, and report failures." > "/dev/stderr"
           exit 1
         }
       }
