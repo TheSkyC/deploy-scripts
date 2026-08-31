@@ -325,20 +325,17 @@ check_unsafe_config_loads_fail_closed() {
 
 check_config_save_failures_are_explicit() {
   awk '
-      /write_config_file\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_chmod=0; saw_mv=0; saw_cleanup=0; next }
-      in_func && /if ! tmp_file="\$\(mktemp "\$\{conf_file\}\.tmp\.XXXXXX"\)"; then/ { saw_tmp=1 }
-      in_func && saw_tmp && /return 1/ { saw_tmp_return=1 }
-      in_func && /chmod 600 "\$tmp_file"/ { saw_chmod=1 }
-      in_func && /mv "\$tmp_file" "\$conf_file"/ { saw_mv=1 }
-      in_func && /rm -f "\$tmp_file"/ { saw_cleanup=1 }
+      /write_config_file\(\)/ { in_func=1; saw_atomic=0; saw_mode=0; saw_owner=0; saw_producer=0; next }
+      in_func && /for key in "\$@"/ { saw_producer=1 }
+      in_func && /atomic_write_file "\$conf_file" 600 root:root/ { saw_atomic=1; saw_mode=1; saw_owner=1 }
       in_func && /^}/ {
-        if (!(saw_tmp && saw_tmp_return && saw_chmod && saw_mv && saw_cleanup)) {
-          printf "%s write_config_file must report temp creation failures, secure, replace, and clean up temporary config files\n", FILENAME > "/dev/stderr"
+        if (!(saw_atomic && saw_mode && saw_owner && saw_producer)) {
+          printf "%s write_config_file must stream sanitized keys through the shared atomic publisher with mode 600 and root ownership\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_func=0
       }
- ' lib/config.sh 
+ ' lib/config.sh
   awk '
       /error\.config_write/ { saw_key=1 }
       END {
@@ -347,7 +344,7 @@ check_config_save_failures_are_explicit() {
           exit 1
         }
       }
- ' lib/i18n.sh 
+ ' lib/i18n.sh
   awk '
       /^(app_)?save_config\(\)/ { in_func=1; saw_if=0; saw_error=0; next }
       in_func && /write_config_file/ { saw_if=1 }

@@ -730,30 +730,13 @@ load_config_file() {
 write_config_file() {
   local conf_file="$1"
   shift
-  local tmp_file=""
-  if ! tmp_file="$(mktemp "${conf_file}.tmp.XXXXXX")"; then
-    return 1
-  fi
-  if ! chmod 600 "$tmp_file"; then
-    rm -f "$tmp_file"
-    return 1
-  fi
   local key value
-  for key in "$@"; do
-    value="$(sanitize_conf_val "${!key:-}")"
-    if ! printf '%s="%s"\n' "$key" "$value" >> "$tmp_file"; then
-      rm -f "$tmp_file"
-      return 1
-    fi
-  done
-  if ! chown root:root "$tmp_file" 2>/dev/null; then
-    rm -f "$tmp_file"
-    return 1
-  fi
-  if ! mv "$tmp_file" "$conf_file"; then
-    rm -f "$tmp_file"
-    return 1
-  fi
+  {
+    for key in "$@"; do
+      value="$(sanitize_conf_val "${!key:-}")"
+      printf '%s="%s"\n' "$key" "$value"
+    done
+  } | atomic_write_file "$conf_file" 600 root:root
 }
 
 # ----- lib/service.sh -----
