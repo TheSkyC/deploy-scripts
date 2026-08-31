@@ -476,6 +476,7 @@ main() {
       check_cpa_stack_status_backup_projection
       check_cpa_stack_layout
       check_cron_logrotate_are_atomic
+      check_binary_app_certbot_cron_is_published_atomically
       check_logrotate_writes_use_shared_helper
       check_cyberstrikeai_backups_are_atomic
       check_cyberstrikeai_backup_script_is_published_atomically
