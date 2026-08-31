@@ -217,12 +217,13 @@ check_cron_logrotate_are_atomic() {
   fi
   awk '
       /if ! (cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)=\$\(mktemp/ { saw_tmp=1 }
-      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(cron|cron_backup|auto_backup|logrotate)\)"/ { saw_tmp_error=1 }
+      /atomic_write_file "\$CRON_FILE" 644 root:root/ { saw_atomic=1 }
+      /error "\$\(t app\.(newapi|sub2api|cyberstrikeai|vaultwarden)\.error\.(cron|cron_backup|auto_backup|logrotate)"/ { saw_tmp_error=1 }
       /mv "\$(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)" "\$(cron_file|_vw_cron_file|logrotate_file|_vw_logrotate_file|CRON_FILE|LOGROTATE_FILE)"/ { saw_mv=1 }
       /rm -f "\$(cron_tmp|_vw_cron_tmp|logrotate_tmp|_vw_logrotate_tmp)"/ { saw_cleanup=1 }
       END {
-        if (!(saw_tmp && saw_tmp_error && saw_mv && saw_cleanup)) {
-          print "cron and logrotate config writes must stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
+        if (!((saw_tmp && saw_tmp_error && saw_mv && saw_cleanup) || saw_atomic)) {
+          print "cron and logrotate config writes must use a shared atomic publisher or stage, replace, clean up temporary files, and report temp creation failures." > "/dev/stderr"
           exit 1
         }
       }
