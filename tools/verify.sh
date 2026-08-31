@@ -709,6 +709,7 @@ main() {
       check_shared_impls_have_restore_delegate
       check_blog_backup_writes_integrity_metadata
       check_binary_app_backup_writes_integrity_metadata
+      check_runtime_backup_finalizes_integrity_metadata
       check_generated_backup_scripts_write_sidecars
       check_backup_archives_are_private
       check_registry_restore_capability_matches_impl

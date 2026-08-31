@@ -93,6 +93,9 @@ i18n_register_many \
   app.cpa_stack.warn.config_missing \
   "Configuration file is missing: %s." \
   "配置文件缺失：%s。" \
+  app.cpa_stack.warn.integrity_failed \
+  "Backup created, but integrity metadata could not be written for %s; verify will report the archive as unverified." \
+  "备份已创建，但完整性元数据写入失败：%s；verify 将把该归档报告为未验证。" \
   app.cpa_stack.warn.email_empty \
   "Email cannot be empty. Try again." \
   "邮箱不能为空，请重新输入。" \

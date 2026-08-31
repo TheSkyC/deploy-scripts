@@ -11058,6 +11058,9 @@ i18n_register_many \
   app.vaultwarden.warn.backup_failed_continue \
   "Backup failed; temporary file removed. Continuing. Inspect /opt/vaultwarden-backups/backup.log or run /usr/local/bin/vaultwarden-backup manually before proceeding further." \
   "备份失败，临时文件已清理，继续执行。请检查 /opt/vaultwarden-backups/backup.log，或先手动执行 /usr/local/bin/vaultwarden-backup 再继续后续操作。" \
+  app.vaultwarden.warn.integrity_failed \
+  "Backup created, but integrity metadata could not be written for %s; verify will report the archive as unverified." \
+  "备份已创建，但完整性元数据写入失败：%s；verify 将把该归档报告为未验证。" \
   app.vaultwarden.error.manual_backup_failed \
   "Manual backup did not complete successfully. Inspect /opt/vaultwarden-backups/backup.log, review the existing backups above, and retry after fixing the archive or filesystem issue." \
   "手动备份未成功完成。请检查 /opt/vaultwarden-backups/backup.log，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
@@ -13015,6 +13018,9 @@ i18n_register_many \
   app.cpa_stack.warn.config_missing \
   "Configuration file is missing: %s." \
   "配置文件缺失：%s。" \
+  app.cpa_stack.warn.integrity_failed \
+  "Backup created, but integrity metadata could not be written for %s; verify will report the archive as unverified." \
+  "备份已创建，但完整性元数据写入失败：%s；verify 将把该归档报告为未验证。" \
   app.cpa_stack.warn.email_empty \
   "Email cannot be empty. Try again." \
   "邮箱不能为空，请重新输入。" \
@@ -17103,7 +17109,17 @@ _backup_silent() {
   if backup_create_tar_archive "$archive" --exclude="*.log" --exclude="*.log.*" \
     -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
     "${tar_extra[@]+"${tar_extra[@]}"}"; then
-    success "$(t app.vaultwarden.success.backup_created "$archive")"
+    # Publish integrity metadata through the shared finalizer so the archive
+    # carries the same sha256 sidecar and manifest the cron backup writes. A
+    # metadata failure stays nonfatal but is never silent: verify reports the
+    # archive as unverified until it is restored.
+    if backup_finalize_archive "$archive" vaultwarden "${INSTALLED_VERSION:-}"; then
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    else
+      _log_backup_helper "$(t app.vaultwarden.warn.integrity_failed "$archive")"
+      warn "$(t app.vaultwarden.warn.integrity_failed "$archive")"
+      success "$(t app.vaultwarden.success.backup_created "$archive")"
+    fi
   else
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
     warn "$(t app.vaultwarden.warn.backup_failed_continue)"
@@ -21563,10 +21579,9 @@ do_backup() {
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   step "$(t app.cpa_stack.step.backup)"
   mkdir -p "$CPA_STACK_BACKUP_DIR" || error "$(t app.cpa_stack.error.backup "$CPA_STACK_BACKUP_DIR")"
-  local timestamp archive tmp cpamp_was_active=false
+  local timestamp archive cpamp_was_active=false
   timestamp="$(date +%Y%m%d_%H%M%S)"
   archive="${CPA_STACK_BACKUP_DIR}/cpa-stack-${timestamp}.tar.gz"
-  tmp="${archive}.tmp"
   systemctl is-active --quiet "$CPAMP_SERVICE_NAME" && cpamp_was_active=true
   if $cpamp_was_active; then
     systemctl stop "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
@@ -21581,23 +21596,24 @@ do_backup() {
       var/lib/cli-proxy-api; do
     [[ -e "/${candidate}" ]] && backup_paths+=("$candidate")
   done
-  if ! tar -C / -czf "$tmp" "${backup_paths[@]}" 2>/dev/null; then
-    rm -f "$tmp"
+  # The shared publisher stages the archive into a sibling temp file,
+  # enforces private mode and moves it into place atomically; a failure
+  # leaves any previous archive untouched.
+  if ! backup_create_tar_archive "$archive" -C / "${backup_paths[@]}"; then
     if $cpamp_was_active; then
       systemctl start "$CPAMP_SERVICE_NAME" || true
     fi
     error "$(t app.cpa_stack.error.backup "$archive")"
   fi
-  if ! mv "$tmp" "$archive"; then
-    rm -f "$tmp"
-    if $cpamp_was_active; then
-      systemctl start "$CPAMP_SERVICE_NAME" || true
-    fi
-    error "$(t app.cpa_stack.error.backup "$archive")"
-  fi
-  chmod 600 "$archive" 2>/dev/null || true
   if $cpamp_was_active; then
     systemctl start "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
+  fi
+  # Finalize with the shared integrity metadata so verify can cross-check the
+  # archive; a metadata failure stays nonfatal because the archive itself is
+  # already private and usable.
+  if ! backup_finalize_archive "$archive" cpa-stack \
+      "cpa:${INSTALLED_CPA_VERSION:-} cpamp:${INSTALLED_CPAMP_VERSION:-}"; then
+    warn "$(t app.cpa_stack.warn.integrity_failed "$archive")"
   fi
   cpa_stack_prune_backups
   success "$(t app.cpa_stack.success.backup "$archive")"
