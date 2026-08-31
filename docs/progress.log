@@ -1137,3 +1137,9 @@ Format per entry:
 - 变更 / Change: 新增行为级共享守卫 `check_generated_backup_scripts_manifest_contract`：在单个 `bash` 子进程中真实生成并运行 Vaultwarden / CyberStrikeAI / Sub2API 三个独立 cron 备份脚本，逐应用断言归档均以 0600 发布、带合法 sha256 sidecar 与可解析的 `manifest.json`（schema_version=1 / app / archive / sha256 64hex / created_at / installed_version=null 且与 sidecar 一致），并预置过期归档 + 伴生文件后断言保留期清理将 `.sha256`/`.manifest.json` 一并删除；Sub2API 覆盖 db/conf/data 三类产物。该守卫把第 35-37 段的静态 grep 校验提升为端到端行为证明，并与既有静态守卫互补，注册进 guards 目标。
 - 验证 / Verified: 新增守卫 focused 通过；`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、`tools/verify.sh release`（dist 无变化）与提交 hook 的 release 验证通过，提交后完整 `tools/verify.sh guards` 通过（`Guards verification passed`）。guards 中的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径。Windows 本地无 Linux Docker daemon，真实 E2E 由 GitHub Actions Verify workflow 的 `e2e-smoke` job 权威验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
 - 提交 / Commit: 519edda
+## 2026-09-01 部署脚本推进 P2-S2 第 39 段
+
+- 状态 / Status: completed
+- 变更 / Change: Sub2API 独立 cron 备份脚本的数据归档统一命名为 `sub2api_data_${TS}.tar.gz`，与运行时 `do_backup`、`do_restore` 及 e2e-smoke 既有的 `sub2api_data_*.tar.gz` 契约一致；此前 cron 脚本产出 `sub2api_${TS}.tar.gz`，当备份目录只含 cron 归档时 `do_restore` 按 `sub2api_data_*.tar.gz` 检索不到数据归档而报 "no backups"。行为级守卫 `check_generated_backup_scripts_manifest_contract` 的 sub2api 断言同步改用 `sub2api_data_*.tar.gz`，从端到端锁定命名契约；保留期与 verify 仍保留广匹配 `sub2api_*.tar.gz`，旧命名归档继续可被清理与验证，不会成为孤儿。
+- 验证 / Verified: focused guards（publish contract、atomic publish、manifest contract、manifests、retention、sidecars、database restore failed-closed 等）通过，`tools/verify.sh syntax`、`tools/verify.sh shellcheck`、`tools/verify.sh release`（确定性重建 `dist/deploy.sh` + `dist/install_sub2api.sh`）与提交 hook 的 release 验证通过。Windows 本地无 Linux Docker daemon，真实 E2E 由 GitHub Actions Verify workflow 的 `e2e-smoke` job 权威验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: e113af3
