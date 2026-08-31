@@ -830,6 +830,7 @@ if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
       done
     ) | gzip > "${PG_DUMP_TMP}"; then
     if mv "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"; then
+      chmod 600 "${PG_DUMP_FILE}" 2>/dev/null || true
       # Integrity sidecar for the database dump.
       if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "${PG_DUMP_FILE}" | awk '{print $1"  "$(NF)}' > "${PG_DUMP_FILE}.sha256" || true
@@ -869,6 +870,7 @@ if [[ -d "${CONFIG_DIR}" ]]; then
       -C "$(dirname "${CONFIG_DIR}")" "$(basename "${CONFIG_DIR}")" 2>&1 | \
       while IFS= read -r line; do _log "[TAR-CONF] ${line}"; done; then
     if mv "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"; then
+      chmod 600 "${EXTRA_CONF_ARCHIVE}" 2>/dev/null || true
       # Integrity sidecar for the config archive.
       if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "${EXTRA_CONF_ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${EXTRA_CONF_ARCHIVE}.sha256" || true
@@ -894,6 +896,7 @@ if [[ ${#TAR_ARGS[@]} -gt 0 ]]; then
       "${TAR_ARGS[@]}" 2>&1 | \
       while IFS= read -r line; do _log "[TAR] ${line}"; done; then
     if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
+      chmod 600 "${ARCHIVE}" 2>/dev/null || true
       # Integrity sidecar for the data archive.
       if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
