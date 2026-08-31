@@ -72,13 +72,57 @@ CPATEST
 }
 
 check_cpa_stack_binary_backups_are_atomic() {
+  local output
+  output="$($BASH_BIN <<'CPATEST'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_cpa_stack.sh >/dev/null 2>&1
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+source_path="$tmp_dir/source"
+target_path="$tmp_dir/target"
+records="$tmp_dir/records"
+cp_calls="$tmp_dir/cp-calls"
+printf new > "$source_path"
+printf old > "$target_path"
+error() { return 1; }
+atomic_copy_file() {
+  local source="$1" target="$2"
+  printf '%s|%s\n' "$source" "$target" >> "$records"
+  if [[ "$source" == "$target_path" && "$target" == "$target_path".bak.* ]]; then
+    cat "$source" > "$target"
+    return 0
+  fi
+  [[ "$source" == "$source_path" && "$target" == "$target_path" ]] && return 1
+  return 1
+}
+cp() { printf '%s\n' "$*" >> "$cp_calls"; return 1; }
+set +e
+cpa_stack_install_binary "$source_path" "$target_path" root:root
+status=$?
+set -e
+[[ "$status" -ne 0 ]]
+[[ "$(cat "$target_path")" == old ]]
+compgen -G "$target_path.bak.*" >/dev/null
+[[ ! -e "$cp_calls" ]]
+[[ "$(sed -n '1p' "$records")" == "$target_path|$target_path".bak.* ]]
+[[ "$(sed -n '2p' "$records")" == "$source_path|$target_path" ]]
+printf ok
+CPATEST
+  )"
+  [[ "$output" == ok ]]
   awk '
-      /cpa_stack_install_binary\(\)/ { in_func=1; saw_atomic=0; saw_error=0; next }
-      in_func && /atomic_copy_file "\$target" "\$backup"/ { saw_atomic=1 }
-      in_func && /error "\$\(t app\.cpa_stack\.error\.binary_backup "\$target"\)"/ { saw_error=1 }
+      /cpa_stack_install_binary\(\)/ { in_func=1; saw_backup=0; saw_publish=0; saw_backup_error=0; saw_publish_error=0; saw_direct_restore=0; next }
+      in_func && /atomic_copy_file "\$target" "\$backup"/ { saw_backup=1 }
+      in_func && /atomic_copy_file "\$source" "\$target" 0755 "\$owner"/ { saw_publish=1 }
+      in_func && /error "\$\(t app\.cpa_stack\.error\.binary_backup "\$target"\)"/ { saw_backup_error=1 }
+      in_func && /error "\$\(t app\.cpa_stack\.error\.binary_install "\$target"\)"/ { saw_publish_error=1 }
+      in_func && /cp -a "\$backup" "\$target"/ { saw_direct_restore=1 }
       in_func && /^}/ {
-        if (!(saw_atomic && saw_error)) {
-          print "CPA Stack binary rollback backups must use atomic_copy_file and report failures" > "/dev/stderr"
+        if (!(saw_backup && saw_publish && saw_backup_error && saw_publish_error) || saw_direct_restore) {
+          print "CPA Stack binary publication must retain atomic backups and avoid non-atomic rollback copies" > "/dev/stderr"
           exit 1
         }
         in_func=0
