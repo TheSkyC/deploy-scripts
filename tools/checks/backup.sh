@@ -1631,6 +1631,146 @@ check_generated_backup_retention_removes_metadata() {
   grep -q 'rm -f "$f.sha256" "$f.manifest.json" 2>/dev/null || true' impl/install_sub2api.sh \
     || { echo "sub2api generated backup retention must remove integrity companions" >&2; return 1; }
 }
+# Behavior-level proof: the generated standalone cron backup scripts must, when
+# actually run, publish each archive with a private mode, a sha256 sidecar and
+# a parseable integrity manifest, and retention cleanup must remove the
+# integrity companions together with expired archives. This complements the
+# static guards above by exercising the real generated scripts end-to-end.
+check_generated_backup_scripts_manifest_contract() {
+  local output
+  output="$($BASH_BIN <<'GENMANIFEST'
+set -euo pipefail
+source lib/core.sh
+source apps/vaultwarden.sh
+source apps/cyberstrikeai.sh
+source apps/sub2api.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+success() { :; }
+warn() { :; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+CAPTURE_SCRIPT=""
+CAPTURE_FILE=""
+SUB2API_DSN=""
+atomic_write_file() {
+  local target="$1" mode="$2" owner="$3"
+  if [[ "$target" == "$SUB2API_DSN" ]]; then
+    cat > "$SUB2API_DSN"
+  elif [[ "$target" == "$CAPTURE_SCRIPT" ]]; then
+    cat > "$CAPTURE_FILE"
+  else
+    cat > /dev/null
+  fi
+}
+
+run_manifest_proof() {
+  local label="$1" script="$2" backup_dir="$3" new_glob="$4"
+  shift 4
+  local seed
+  for seed in "$@"; do
+    printf 'old' > "$backup_dir/$seed"
+    printf 'oldh' > "$backup_dir/$seed.sha256"
+    printf '{}' > "$backup_dir/$seed.manifest.json"
+    touch -d '2020-01-01 00:00:00' "$backup_dir/$seed" "$backup_dir/$seed.sha256" "$backup_dir/$seed.manifest.json"
+  done
+  bash "$script" >/dev/null 2>&1
+  local a count=0
+  for a in "$backup_dir"/$new_glob; do
+    [[ -e "$a" ]] || continue
+    count=$((count + 1))
+    [[ -f "$a.sha256" ]]
+    [[ -f "$a.manifest.json" ]]
+    [[ "$(stat -c '%a' "$a")" == 600 ]]
+    [[ "$(stat -c '%a' "$a.manifest.json")" == 600 ]]
+    [[ "$(awk '{print $1}' "$a.sha256")" == "$(sha256sum "$a" | awk '{print $1}')" ]]
+  done
+  (( count >= 1 ))
+  for seed in "$@"; do
+    [[ ! -e "$backup_dir/$seed" ]]
+    [[ ! -e "$backup_dir/$seed.sha256" ]]
+    [[ ! -e "$backup_dir/$seed.manifest.json" ]]
+  done
+  python - "$backup_dir" "$label" <<'PYEOF'
+import json, os, sys
+bd, label = sys.argv[1], sys.argv[2]
+manifests = sorted(os.path.join(bd, f) for f in os.listdir(bd) if f.endswith('.manifest.json'))
+assert manifests, 'no manifests in %s' % bd
+for mp in manifests:
+    with open(mp) as f:
+        m = json.load(f)
+    assert m['schema_version'] == 1, m
+    assert m['app'] == label, m
+    arch = m['archive']
+    assert arch == os.path.basename(mp)[:-len('.manifest.json')], m
+    sha = m['sha256']
+    assert len(sha) == 64 and all(c in '0123456789abcdef' for c in sha), sha
+    assert m['created_at'], m
+    assert m['installed_version'] is None, m
+    with open(os.path.join(bd, arch + '.sha256')) as f:
+        assert f.read().split()[0] == sha, m
+print('%s manifests OK: %d' % (label, len(manifests)))
+PYEOF
+  echo "$label: manifest proof ok"
+}
+
+# Vaultwarden
+source impl/install_vaultwarden.sh >/dev/null 2>&1
+CAPTURE_SCRIPT=/usr/local/bin/vaultwarden-backup
+CAPTURE_FILE="$tmp/vw-generated"
+SUB2API_DSN=""
+VW_BACKUP_DIR="$tmp/vw-backups"
+VW_DATA_DIR="$tmp/vw-data"
+VW_ENV_FILE="$tmp/vw-config/vaultwarden.env"
+BACKUP_KEEP_DAYS=7
+mkdir -p "$VW_BACKUP_DIR" "$VW_DATA_DIR" "$(dirname "$VW_ENV_FILE")"
+printf 'secret' > "$VW_DATA_DIR/data.db"
+_write_backup_script
+run_manifest_proof vaultwarden "$CAPTURE_FILE" "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz' 'vaultwarden_20000101_000000.tar.gz'
+
+# CyberStrikeAI
+source impl/install_cyberstrikeai.sh >/dev/null 2>&1
+CAPTURE_SCRIPT="$tmp/csai-backup"
+CAPTURE_FILE="$tmp/csai-generated"
+SUB2API_DSN=""
+INSTALL_DIR="$tmp/csai-install"
+CONFIG_FILE="$tmp/csai-config/config.yaml"
+BACKUP_DIR="$tmp/csai-backups"
+BACKUP_KEEP_DAYS=7
+SERVICE_NAME=cyber-test
+LOG_DIR="$tmp/csai-logs"
+BACKUP_SCRIPT="$CAPTURE_SCRIPT"
+CRON_FILE="$tmp/csai-crontab"
+mkdir -p "$INSTALL_DIR/data" "$BACKUP_DIR" "$LOG_DIR"
+printf 'secret' > "$INSTALL_DIR/data/app.db"
+write_backup_script
+run_manifest_proof cyberstrikeai "$CAPTURE_FILE" "$BACKUP_DIR" 'cyberstrike-ai_*.tar.gz' 'cyberstrike-ai_20000101_000000.tar.gz'
+
+# Sub2API
+source impl/install_sub2api.sh >/dev/null 2>&1
+CAPTURE_SCRIPT=/usr/local/bin/sub2api-backup
+CAPTURE_FILE="$tmp/s2a-generated"
+BACKUP_DIR="$tmp/s2a-backups"
+CONFIG_DIR="$tmp/s2a-config"
+DATA_DIR="$tmp/s2a-data"
+SERVICE_NAME=testsvc
+BACKUP_KEEP_DAYS=7
+PG_DSN='postgresql://user:password@example.invalid/sub2api'
+SUB2API_DSN="${CONFIG_DIR}/.pg_dsn"
+mkdir -p "$BACKUP_DIR" "$CONFIG_DIR" "$DATA_DIR"
+printf 'records' > "$DATA_DIR/records.db"
+_write_backup_script
+chmod 600 "$SUB2API_DSN"
+run_manifest_proof sub2api "$CAPTURE_FILE" "$BACKUP_DIR" 'sub2api_*.tar.gz sub2api_db_*.sql.gz sub2api_conf_*.tar.gz' 'sub2api_20000101_000000.tar.gz' 'sub2api_db_20000101_000000.sql.gz' 'sub2api_conf_20000101_000000.tar.gz'
+
+GENMANIFEST
+  )"
+  [[ "$output" == *"manifest proof ok"* ]]
+}
 
 # Standalone backup scripts and runtime backup paths must publish archives
 # privately: archives can hold database dumps, configs with secrets, and
