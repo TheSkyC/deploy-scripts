@@ -786,19 +786,38 @@ check_generated_backup_scripts_handle_missing_dirs() {
       }
     ' impl/install_cyberstrikeai.sh
   awk '
-      /_write_backup_script\(\)/ { in_func=1; saw_msg=0; saw_mkdir=0; saw_stderr=0; saw_maxdepth=0; next }
+      /_write_backup_script\(\)/ {
+        in_func=1
+        in_heredoc=0
+        heredoc_delim=""
+        saw_msg=0
+        saw_mkdir=0
+        saw_stderr=0
+        saw_maxdepth=0
+        saw_publish=0
+        next
+      }
+      # The generation body embeds the standalone backup script as heredocs;
+      # skip their literal contents so template functions with a column-0
+      # closing brace do not end the function scope early.
+      in_func && !in_heredoc && /^[[:space:]]*cat << / {
+        in_heredoc=1
+        heredoc_delim = ($0 ~ /BKSH_VARS/ ? "BKSH_VARS" : "BKSH")
+        next
+      }
+      in_func && in_heredoc && $0 == heredoc_delim { in_heredoc=0; next }
       in_func && /MSG_BACKUP_DIR_FAILED=/ { saw_msg=1 }
       in_func && index($0, "if ! mkdir -p \"${BACKUP_DIR}\"; then") { saw_mkdir=1 }
       in_func && index($0, "${MSG_BACKUP_DIR_FAILED}") && index($0, ">&2") { saw_stderr=1 }
       in_func && index($0, "find \"${BACKUP_DIR}\" -maxdepth 1 -name \"vaultwarden_*.tar.gz\"") { saw_maxdepth=1 }
-      in_func && /} \| atomic_write_file "\$backup_script" 750 root:root; then/ {
+      in_func && !in_heredoc && /} \| atomic_write_file "\$backup_script" 750 root:root; then/ {
         if (!(saw_msg && saw_mkdir && saw_stderr && saw_maxdepth)) {
           printf "%s generated Vaultwarden backup script must create the backup directory explicitly and limit retention cleanup before archiving\n", FILENAME > "/dev/stderr"
           exit 1
         }
         saw_publish=1
       }
-      in_func && /^}/ {
+      in_func && !in_heredoc && /^}/ {
         if (!saw_publish) {
           printf "%s generated Vaultwarden backup script must be published with atomic_write_file\n", FILENAME > "/dev/stderr"
           exit 1
