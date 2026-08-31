@@ -1108,11 +1108,7 @@ JAIL
   success "$(t app.vaultwarden.success.fail2ban)"
   step "$(t app.vaultwarden.step.logrotate)"
   local _vw_logrotate_file="/etc/logrotate.d/vaultwarden"
-  local _vw_logrotate_tmp
-  if ! _vw_logrotate_tmp=$(mktemp "${_vw_logrotate_file}.XXXXXX"); then
-    error "$(t app.vaultwarden.error.logrotate)"
-  fi
-  if ! cat > "$_vw_logrotate_tmp" << LOGR
+  if ! atomic_write_file "$_vw_logrotate_file" 644 root:root <<LOGR
 ${VW_LOG_FILE} {
     daily
     rotate 14
@@ -1126,13 +1122,6 @@ ${VW_LOG_FILE} {
 }
 LOGR
   then
-    rm -f "$_vw_logrotate_tmp"
-    error "$(t app.vaultwarden.error.logrotate)"
-  fi
-  if ! chmod 644 "$_vw_logrotate_tmp" \
-      || ! chown root:root "$_vw_logrotate_tmp" \
-      || ! mv "$_vw_logrotate_tmp" "$_vw_logrotate_file"; then
-    rm -f "$_vw_logrotate_tmp"
     error "$(t app.vaultwarden.error.logrotate)"
   fi
   success "$(t app.vaultwarden.success.logrotate)"
