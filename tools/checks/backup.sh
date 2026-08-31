@@ -1248,6 +1248,19 @@ check_backup_create_gzip_archive_helper() {
     fi
     [[ "$(cat "$archive")" == old ]]
     compgen -G "$archive.tmp.*" >/dev/null && exit 15 || true
+
+    unset -f gzip
+    chmod() {
+      if [[ "$1" == 600 && "$2" == "$archive.tmp."* ]]; then
+        return 1
+      fi
+      command chmod "$@"
+    }
+    if backup_create_gzip_archive "$archive" printf replacement; then
+      exit 16
+    fi
+    [[ "$(cat "$archive")" == old ]]
+    compgen -G "$archive.tmp.*" >/dev/null && exit 17 || true
     echo ok
   ')"
   [[ "$output" == ok ]]

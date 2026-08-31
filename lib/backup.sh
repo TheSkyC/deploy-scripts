@@ -114,6 +114,10 @@ backup_create_gzip_archive() {
     rm -f "$archive_tmp"
     return 1
   fi
+  if ! chmod 600 "$archive_tmp"; then
+    rm -f "$archive_tmp"
+    return 1
+  fi
   if ! mv "$archive_tmp" "$archive"; then
     rm -f "$archive_tmp"
     return 1
