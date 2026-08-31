@@ -1105,3 +1105,10 @@ Format per entry:
 - 验证 / Verified: 生成脚本的 runtime guard（含 `bash -n`）、focused sidecar/private guards、`tools/verify.sh syntax`、全量重建 `dist/`、`tools/verify.sh release`，提交后串行完整 `tools/verify.sh guards` 通过（`Guards verification passed`）；Windows 本地无 Linux Docker daemon，真实 E2E 由 GitHub Actions Verify workflow 的 `e2e-smoke` job 权威验证。
 - 提交 / Commit: fb2c655
 
+## 2026-09-01 部署脚本推进 P2-S2 第 34 段
+
+- 状态 / Status: completed
+- 变更 / Change: Vaultwarden 运行时 `_backup_silent` 与 CPA Stack `do_backup` 现在通过共享 `backup_create_tar_archive` 发布归档，并落 sha256 sidecar + manifest（`backup_finalize_archive`），与 Sub2API、blog 及二进制应用一致；此前二者手动备份会被自身 `verify` 报告为 unverified。CPA Stack 同时移除手写 tmp/mv/chmod 三段式暂存。
+- 验证 / Verified: 新增 `check_runtime_backup_finalizes_integrity_metadata`（vaultwarden/cpa）与 delegates/private guards（cpa 改经共享 0600 publisher）focused 通过，i18n key 一致性通过，`tools/verify.sh syntax`、全量重建 `dist/`、`tools/verify.sh release`，提交后串行完整 `tools/verify.sh guards` 通过（`Guards verification passed`）；Windows 本地无 Linux Docker daemon，真实 E2E 由 GitHub Actions Verify workflow 的 `e2e-smoke` job 权威验证。
+- 提交 / Commit: 8871e5a
+

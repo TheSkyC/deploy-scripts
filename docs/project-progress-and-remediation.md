@@ -157,8 +157,10 @@
   保留期筛选和 gzip 发布。各应用仍保留自身的重试、成功码、服务/数据模型、日志与用户
   提示语义。Sub2API 独立 cron 备份脚本的归档发布已收敛为单一本地
   `_publish_backup_artifact`（私有 0600 + sha256 sidecar），消除生成模板内的三份内联
-  重复；仍待继续审查配置/锁、回滚编排、PostgreSQL/sidecar 语义及独立 cron 脚本的
-  适配边界，不能将整项提前标记为完成。
+  重复；Vaultwarden 与 CPA Stack 运行时备份也已通过共享 tar publisher 发布并落
+  sha256 sidecar + manifest（与 Sub2API、blog 及二进制应用一致），CPA Stack 移除
+  手写 tmp/mv/chmod 暂存；仍待继续审查配置/锁、回滚编排、PostgreSQL/sidecar 语义
+  及独立 cron 脚本的适配边界，不能将整项提前标记为完成。
 - [x] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档：新增 `docs/instances-tls-migration.md`，明确 `@instance` 仅隔离配置/锁而非运行时资源，提供 shared binary/Vaultwarden/CPA Stack/CyberStrikeAI 的 TLS 入口边界，以及 export/import + 备份 verify + restore + cutover 的演练顺序。
 
 ## 6. 推荐验证命令
