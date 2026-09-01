@@ -8503,6 +8503,9 @@ _backup_silent() {
     local pg_archive
     pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
     if backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr "${PG_DSN}"; then
+      if ! backup_finalize_archive "$pg_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+        warn "$(t app.sub2api.warn.backup_integrity "$pg_archive")"
+      fi
       local sz; sz=$(du -sh "$pg_archive" 2>/dev/null | awk '{print $1}')
       success "$(t app.sub2api.success.silent_pg_dump "$pg_archive" "$sz")"
     else
@@ -8519,6 +8522,9 @@ _backup_silent() {
     conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
     if backup_create_tar_archive "$conf_archive" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
+      if ! backup_finalize_archive "$conf_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
+        warn "$(t app.sub2api.warn.backup_integrity "$conf_archive")"
+      fi
       local sz; sz=$(du -sh "$conf_archive" 2>/dev/null | awk '{print $1}')
       success "$(t app.sub2api.success.config_backup "$conf_archive" "$sz")"
     else
