@@ -1336,6 +1336,88 @@ check_sub2api_manual_backups_finalize_integrity() {
     echo "$file must surface integrity metadata failures" >&2
     return 1
   }
+  # Pre-update _backup_silent snapshots must carry the same integrity
+  # metadata as manual backups, or verify would report them unverified.
+  awk '
+      /_backup_silent\(\)/ { in_silent=1; saw_pg=0; saw_conf=0; next }
+      in_silent && index($0, "backup_finalize_archive \"$pg_archive\"") { saw_pg=1; next }
+      in_silent && index($0, "backup_finalize_archive \"$conf_archive\"") { saw_conf=1; next }
+      in_silent && /^}/ {
+        if (!(saw_pg && saw_conf)) {
+          print FILENAME ": sub2api _backup_silent must finalize pg and conf archives with shared metadata" > "/dev/stderr"
+          exit 1
+        }
+        in_silent=0
+      }
+    ' "$file" || return 1
+}
+
+# Behavior-level proof that the Sub2API pre-update snapshot path
+# (_backup_silent) publishes the same integrity metadata as manual backups:
+# both the pg_dump and the config archive get a 0600 sha256 sidecar and a
+# parseable manifest, so verify never reports pre-update snapshots as
+# unverified leftovers.
+check_sub2api_preupdate_backup_finalizes_metadata() {
+  local output
+  output="$($BASH_BIN <<'SILENTPROOF'
+set -euo pipefail
+source lib/core.sh
+source apps/sub2api.sh
+source impl/install_sub2api.sh >/dev/null 2>&1
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+success() { :; }
+warn() { :; }
+pg_dump() { printf 'dump-data\n'; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+BACKUP_DIR="$tmp/backups"
+CONFIG_DIR="$tmp/config"
+DATA_DIR="$tmp/data"
+PG_DSN='postgresql://user:password@example.invalid/sub2api'
+INSTALLED_VERSION='1.2.3'
+mkdir -p "$BACKUP_DIR" "$CONFIG_DIR" "$DATA_DIR"
+printf 'config: yes\n' > "$CONFIG_DIR/config.yaml"
+
+_backup_silent "pre-update"
+
+db_archive="$(find "$BACKUP_DIR" -maxdepth 1 -name 'sub2api_db_pre-update_*.sql.gz' -print -quit)"
+conf_archive="$(find "$BACKUP_DIR" -maxdepth 1 -name 'sub2api_conf_pre-update_*.tar.gz' -print -quit)"
+[[ -n "$db_archive" && -n "$conf_archive" ]] || exit 1
+for a in "$db_archive" "$conf_archive"; do
+  for p in "$a" "$a.sha256" "$a.manifest.json"; do
+    [[ -f "$p" ]] || exit 1
+    [[ "$(stat -c '%a' "$p")" == 600 ]] || exit 1
+  done
+done
+
+python - "$BACKUP_DIR" <<'PYEOF'
+import json, os, sys
+bd = sys.argv[1]
+files = os.listdir(bd)
+for prefix, suffix in (("sub2api_db_pre-update_", ".sql.gz"), ("sub2api_conf_pre-update_", ".tar.gz")):
+    matches = sorted(f for f in files if f.startswith(prefix) and f.endswith(suffix))
+    assert len(matches) == 1, (prefix, matches)
+    archive = matches[0]
+    with open(os.path.join(bd, archive + '.sha256')) as f:
+        digest = f.read().split()[0]
+    assert len(digest) == 64 and all(c in '0123456789abcdef' for c in digest), digest
+    with open(os.path.join(bd, archive + '.manifest.json')) as f:
+        m = json.load(f)
+    assert m['schema_version'] == 1, m
+    assert m['app'] == 'sub2api', m
+    assert m['archive'] == archive, m
+    assert m['sha256'] == digest, m
+    assert m['created_at'], m
+    assert m['installed_version'] == '1.2.3', m
+print('pre-update integrity ok')
+PYEOF
+echo "pre-update proof ok"
+SILENTPROOF
+  )"
+  [[ "$output" == *"pre-update proof ok"* ]]
 }
 
 check_backup_integrity_primitives() {
