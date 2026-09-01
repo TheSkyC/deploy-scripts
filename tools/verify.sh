@@ -705,6 +705,7 @@ main() {
       check_backup_integrity_primitives
       check_sub2api_manual_backups_finalize_integrity
       check_sub2api_preupdate_backup_finalizes_metadata
+      check_vaultwarden_preupdate_backup_finalizes_metadata
       check_binary_impls_have_verify_delegate
       check_custom_impls_have_verify_delegate
       check_shared_impls_have_restore_delegate
