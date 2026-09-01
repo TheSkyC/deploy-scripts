@@ -1420,6 +1420,69 @@ SILENTPROOF
   [[ "$output" == *"pre-update proof ok"* ]]
 }
 
+# Behavior-level proof that the Vaultwarden pre-update snapshot path
+# (_backup_silent "pre-update") publishes the same integrity metadata as
+# manual backups: the data archive gets a 0600 sha256 sidecar and a parseable
+# manifest, so verify never reports pre-update snapshots as unverified
+# leftovers. Mirrors the Sub2API proof for the single-archive Vaultwarden
+# layout.
+check_vaultwarden_preupdate_backup_finalizes_metadata() {
+  local output
+  output="$($BASH_BIN <<'VWPROOF'
+set -euo pipefail
+source lib/core.sh
+source apps/vaultwarden.sh
+source impl/install_vaultwarden.sh >/dev/null 2>&1
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+success() { :; }
+warn() { :; }
+sqlite3() { :; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+VW_BACKUP_DIR="$tmp/backups"
+VW_DATA_DIR="$tmp/data"
+INSTALLED_VERSION='1.2.3'
+mkdir -p "$VW_BACKUP_DIR" "$VW_DATA_DIR"
+printf 'sqldata\n' > "$VW_DATA_DIR/db.sqlite3"
+
+_backup_silent "pre-update"
+
+archive="$(find "$VW_BACKUP_DIR" -maxdepth 1 -name 'vaultwarden_pre-update_*.tar.gz' -print -quit)"
+[[ -n "$archive" ]] || exit 1
+for p in "$archive" "$archive.sha256" "$archive.manifest.json"; do
+  [[ -f "$p" ]] || exit 1
+  [[ "$(stat -c '%a' "$p")" == 600 ]] || exit 1
+done
+
+python - "$VW_BACKUP_DIR" <<'PYEOF'
+import json, os, sys
+bd = sys.argv[1]
+files = os.listdir(bd)
+matches = sorted(f for f in files if f.startswith('vaultwarden_pre-update_') and f.endswith('.tar.gz'))
+assert len(matches) == 1, matches
+archive = matches[0]
+with open(os.path.join(bd, archive + '.sha256')) as f:
+    digest = f.read().split()[0]
+assert len(digest) == 64 and all(c in '0123456789abcdef' for c in digest), digest
+with open(os.path.join(bd, archive + '.manifest.json')) as f:
+    m = json.load(f)
+assert m['schema_version'] == 1, m
+assert m['app'] == 'vaultwarden', m
+assert m['archive'] == archive, m
+assert m['sha256'] == digest, m
+assert m['created_at'], m
+assert m['installed_version'] == '1.2.3', m
+print('vaultwarden pre-update integrity ok')
+PYEOF
+echo "vaultwarden pre-update proof ok"
+VWPROOF
+  )"
+  [[ "$output" == *"vaultwarden pre-update proof ok"* ]]
+}
+
 check_backup_integrity_primitives() {
   local output
   output="$("$BASH_BIN" -c '
