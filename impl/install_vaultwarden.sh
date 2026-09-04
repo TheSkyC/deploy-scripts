@@ -1882,6 +1882,80 @@ do_verify() {
   app_verify_latest_backup "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz'
 }
 
+_vw_restore_env_file() {
+  local archive="$1" env_member env_staged="" env_prev=""
+  env_member="${VW_ENV_FILE#/}"
+  [[ -n "$archive" && -f "$archive" ]] || return 1
+  # Older backups were created before the env file became an archive member;
+  # they still restore data-only, so absent member is not an error.
+
+  if ! tar -tzf "$archive" 2>/dev/null | grep -Fxq -- "$env_member"; then
+    return 0
+  fi
+  if ! env_staged="$(mktemp "${VW_ENV_FILE}.restore.XXXXXX")"; then
+    return 1
+  fi
+  if ! tar -xzOf "$archive" "$env_member" > "$env_staged"; then
+    rm -f "$env_staged"
+    return 1
+  fi
+  chmod 600 "$env_staged" 2>/dev/null || {
+    rm -f "$env_staged"
+    return 1
+  }
+  chown root:root "$env_staged" 2>/dev/null || {
+    rm -f "$env_staged"
+    return 1
+  }
+  if ! systemctl stop vaultwarden; then
+    rm -f "$env_staged"
+    error "$(t app.vaultwarden.error.restore_env_stop_failed vaultwarden)"
+    return 1
+  fi
+  if [[ -f "$VW_ENV_FILE" ]]; then
+    if ! env_prev="$(mktemp "${VW_ENV_FILE}.prev.XXXXXX")"; then
+      rm -f "$env_staged"
+      systemctl start vaultwarden || true
+      error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
+      return 1
+    fi
+    cp "$VW_ENV_FILE" "$env_prev"
+  fi
+  if ! atomic_copy_file_strict "$env_staged" "$VW_ENV_FILE" 600 root:root;then
+    rm -f "$env_staged" "$env_prev"
+    systemctl start vaultwarden || true
+    error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
+    return 1
+  fi
+  rm -f "$env_staged"
+  if ! systemctl start vaultwarden;then
+    if [[ -n "$env_prev" ]]; then
+      if ! atomic_copy_file_strict "$env_prev" "$VW_ENV_FILE" 600 root:root;then
+        warn "$(t app.vaultwarden.warn.restore_env_rollback_failed "$env_prev")"
+      fi
+    else
+      rm -f "$VW_ENV_FILE"
+    fi
+    systemctl start vaultwarden 2>/dev/null || true
+    error "$(t app.vaultwarden.error.restore_env_start_failed vaultwarden)"
+    return 1
+  fi
+  wait_for_service vaultwarden 20 || true
+  if ! systemctl is-active --quiet vaultwarden;then
+    if [[ -n "$env_prev" ]]; then
+      if ! atomic_copy_file_strict "$env_prev" "$VW_ENV_FILE" 600 root:root;then
+        warn "$(t app.vaultwarden.warn.restore_env_rollback_failed "$env_prev")"
+      fi
+    else
+      rm -f "$VW_ENV_FILE"
+    fi
+    systemctl start vaultwarden 2>/dev/null || true
+    error "$(t app.vaultwarden.error.restore_env_start_failed vaultwarden)"
+    return 1
+  fi
+  rm -f "$env_prev"
+}
+
 do_restore() {
   show_banner
   require_root "restore"
@@ -1903,4 +1977,8 @@ do_restore() {
   # The cron script archives DATA_BASE plus (when present) the absolute env
   # file path, so accept both layouts via the shared payload resolution.
   backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive"
+  # Backup snapshots also carry VW_ENV_FILE when present, but the shared
+  # data-dir helper only replaces DATA_DIR, so restore the env file separately
+  # under the service lifecycle to avoid silently discarding secrets on restore.
+  _vw_restore_env_file "$archive" || error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
 }

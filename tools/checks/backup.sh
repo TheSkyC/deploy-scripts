@@ -1483,6 +1483,82 @@ VWPROOF
   [[ "$output" == *"vaultwarden pre-update proof ok"* ]]
 }
 
+# Behavior-level proof that Vaultwarden restore preserves the env file that
+# backups archive alongside the data directory. Backups add the absolute env
+# file path (etc/vaultwarden.env after install) as an extra tar member, but the
+# shared data-dir restore helper only replaces DATA_DIR; if do_restore does not
+# also restore VW_ENV_FILE, the archive's secrets (ADMIN_TOKEN, signups,
+# rate limits) would be silently discarded on restore. Proving the env file
+# lands back with the backed-up contents and 0600 root ownership before the
+# restore reports success.
+
+check_vaultwarden_restore_preserves_env_file() {
+  local output
+  output="$($BASH_BIN <<'VWPROOF'
+set -euo pipefail
+source lib/core.sh
+source apps/vaultwarden.sh
+source impl/install_vaultwarden.sh >/dev/null 2>&1
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+success() { :; }
+warn() { :; }
+sqlite3() { :; }
+show_banner() { :; }
+require_root() { :; }
+app_load_config() { :; }
+acquire_lock() { :; }
+step() { :; }
+require_safe_path() { :; }
+info() { :; }
+wait_for_service() { :; }
+atomic_copy_file_strict() {
+  local src="$1" dst="$2" mode="${3:-}"
+  cp "$src" "$dst" || return 1
+  [[ -n "$mode" ]] && chmod "$mode" "$dst"
+}
+chown() { :; }
+systemctl() { printf '%s %s\\n' "$1" "${2:-}" >> "$tmp/systemctl.log"; return 0; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+VW_BACKUP_DIR="$tmp/backups"
+VW_DATA_DIR="$tmp/data"
+VW_ENV_FILE="$tmp/etc/vaultwarden.env"
+VW_RESTORE_ARCHIVE=""
+mkdir -p "$VW_BACKUP_DIR" "$VW_DATA_DIR" "$tmp/etc"
+
+# Build a backup snapshot whose data payload also carries the env-file member
+# produced by _backup_silent: data dir plus -C / ENV_FILE .
+printf 'restored-sql\n' > "$VW_DATA_DIR/db.sqlite3"
+printf 'ADMIN_TOKEN=newhash\nSIGNUPS_ALLOWED=false\nRATE_LIMIT=10\n' > "$VW_ENV_FILE"
+archive="$VW_BACKUP_DIR/vaultwarden_manual_20260101_000000.tar.gz"
+tar -czf "$archive" -C "$(dirname "$VW_DATA_DIR")" "$(basename "$VW_DATA_DIR")" \
+    -C / "${VW_ENV_FILE#/}"
+
+# The live env file still contains the preceding config until restore publishes
+# the backed-up snapshot.
+printf 'ADMIN_TOKEN=oldhash\nSIGNUPS_ALLOWED=true\nOLD=1\n' > "$VW_ENV_FILE"
+
+( do_restore ) >/dev/null 2>&1
+status=$?
+[[ "$status" -eq 0 ]] || exit 11
+
+# Restore must swap the env file back to the backed-up snapshot (not silently
+# drop it), keep it root-only,and leave the data directory fresh.)
+[[ "$(cat "$VW_DATA_DIR/db.sqlite3")" == 'restored-sql' ]] || exit 12
+grep -Fxq 'ADMIN_TOKEN=newhash' "$VW_ENV_FILE" || exit 13
+grep -Fxq 'SIGNUPS_ALLOWED=false' "$VW_ENV_FILE" || exit 14
+grep -Fxq 'RATE_LIMIT=10' "$VW_ENV_FILE" || exit 15
+grep -Fqx 'OLD=1' "$VW_ENV_FILE" && exit 16
+[[ "$(stat -c '%a' "$VW_ENV_FILE")" == 600 ]] || exit 17
+echo "vaultwarden restore env-file proof ok"
+VWPROOF
+  )"
+  [[ "$output" == *"vaultwarden restore env-file proof ok"* ]]
+}
+
 check_backup_integrity_primitives() {
   local output
   output="$("$BASH_BIN" -c '
