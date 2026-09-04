@@ -267,6 +267,18 @@ i18n_register_many \
   app.vaultwarden.success.env_file \
   "Environment config file written: %s (mode 600)." \
   "环境配置文件已写入：%s（权限 600）。" \
+  app.vaultwarden.error.restore_env_file \
+  "Environment config file could not be restored from backup: %s" \
+  "环境配置文件未能从备份恢复回：%s" \
+  app.vaultwarden.error.restore_env_stop_failed \
+  "Could not stop service %s before restoring the env file; original env file unchanged." \
+  "恢复环境配置文件前停止服务 %s 失败，原环境配置未改动。" \
+  app.vaultwarden.error.restore_env_start_failed \
+  "Restored env file but service %s failed to start; env file rolled back." \
+  "恢复环境配置后服务 %s 启动失败，已回滚环境配置。" \
+  app.vaultwarden.warn.restore_env_rollback_failed \
+  "Env file rollback FAILED; previous config remains at: %s" \
+  "环境配置回滚失败，原配置保留在：%s" \
   app.vaultwarden.step.systemd \
   "Step 7  Create systemd service" \
   "Step 7  创建 systemd 服务" \
