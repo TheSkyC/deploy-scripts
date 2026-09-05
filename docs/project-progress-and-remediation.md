@@ -162,7 +162,7 @@
   手写 tmp/mv/chmod 暂存；Vaultwarden / CyberStrikeAI / Sub2API 的独立 cron 备份脚本
   也已补齐完整性三件套（0600 归档 + sha256 sidecar + manifest.json），保留期清理连同
   删除伴生元数据，并由行为级守卫端到端证明；仍待继续审查配置/锁、回滚编排、
-  PostgreSQL/sidecar 语义及独立 cron 脚本的适配边界，不能将整项提前标记为完成。
+  PostgreSQL/sidecar 语义及独立 cron 脚本的适配边界，不能将整项提前标记为完成。。更新回滚快照清理已收敛为共享 `app_prune_update_backups` helper（binary_app + Sub2API + Vaultwarden + CyberStrikeAI），并由新行为级守卫锁定不再内联 find/tail prune 循环。
 - [x] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档：新增 `docs/instances-tls-migration.md`，明确 `@instance` 仅隔离配置/锁而非运行时资源，提供 shared binary/Vaultwarden/CPA Stack/CyberStrikeAI 的 TLS 入口边界，以及 export/import + 备份 verify + restore + cutover 的演练顺序。
 
 ## 6. 推荐验证命令
