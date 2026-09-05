@@ -1308,27 +1308,8 @@ bapp_restore() {
   bapp_health_probe || true
 }
 _ba_prune_old_bins() {
-  local -a old_bins=()
-  local entry
-  while IFS= read -r -d '' entry; do
-    old_bins+=("${entry#* }")
-  done < <(
-    find "$INSTALL_DIR" -maxdepth 1 -name "${BA_BIN_NAME}.bak.*" -type f \
-      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
-  )
-  if [[ ${#old_bins[@]} -gt 0 ]]; then
-    local cleaned=0 bin_path
-    for bin_path in "${old_bins[@]}"; do
-      if rm -f "$bin_path"; then
-        cleaned=$((cleaned + 1))
-      else
-        warn "$(t binary_app.warn.cleanup_old_failed "$bin_path")"
-      fi
-    done
-    if [[ "$cleaned" -gt 0 ]]; then
-      info "$(t binary_app.info.cleaned_old "$cleaned")"
-    fi
-  fi
+  app_prune_update_backups "$INSTALL_DIR" "${BA_BIN_NAME}.bak.*" \
+    binary_app.warn.cleanup_old_failed binary_app.info.cleaned_old 3 f
 }
 
 bapp_update() {

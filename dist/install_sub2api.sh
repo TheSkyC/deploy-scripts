@@ -4318,6 +4318,50 @@ app_remove_dir_or_error() {
   success "$success_message"
 }
 
+
+
+# Prune old update rollback snapshots (previous binaries or extracted web
+# vault copies), keeping only the few newest entries under `parent_dir`. This
+# helper consolidates the repeated find/sort/tail/rm loops that otherwise
+# appear in the binary_app update flow and hand-written apps' update paths.
+# warn_key/info_key are app-localized; fs_type is `f` (files, default) or `d`
+# (directories, removed with rm -rf). `keep` defaults to 3 (the current
+# rollback snapshot plus an extra fallback), matching the pre-existing behavior.
+
+app_prune_update_backups() {
+  local parent_dir="$1" name_glob="$2" warn_key="$3" info_key="$4"
+  local keep="${5:-3}" fs_type="${6:-f}" keep_plus
+  [[ "$fs_type" == f || "$fs_type" == d ]] || return 1
+  [[ "$keep" =~ ^[0-9]+$ && "$keep" -ge 1 ]] || keep=3
+  keep_plus=$((keep + 1))
+  local -a old_entries=()
+  local entry
+  while IFS= read -r -d '' entry; do
+    old_entries+=("${entry#* }")
+  done < <(
+    find "$parent_dir" -maxdepth 1 -name "$name_glob" -type "$fs_type" \
+      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +"$keep_plus"
+  )
+  if [[ ${#old_entries[@]} -gt 0 ]]; then
+    local cleaned=0 entry_path
+    for entry_path in "${old_entries[@]}"; do
+      if [[ "$fs_type" == d ]]; then
+        if rm -rf "$entry_path"; then
+          cleaned=$((cleaned + 1))
+        else
+          warn "$(t "$warn_key" "$entry_path")"
+        fi
+      elif rm -f "$entry_path"; then
+        cleaned=$((cleaned + 1))
+      else
+        warn "$(t "$warn_key" "$entry_path")"
+      fi
+    done
+    if [[ "$cleaned" -gt 0 ]]; then
+      info "$(t "$info_key" "$cleaned")"
+    fi
+  fi
+}
 # Opens the service port through the active firewall manager: ufw first, then
 # optionally firewalld (opt-in for apps that support it), then iptables with
 # persistence. Localized keys are addressed through the app key prefix and the
@@ -5826,27 +5870,8 @@ bapp_restore() {
   bapp_health_probe || true
 }
 _ba_prune_old_bins() {
-  local -a old_bins=()
-  local entry
-  while IFS= read -r -d '' entry; do
-    old_bins+=("${entry#* }")
-  done < <(
-    find "$INSTALL_DIR" -maxdepth 1 -name "${BA_BIN_NAME}.bak.*" -type f \
-      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
-  )
-  if [[ ${#old_bins[@]} -gt 0 ]]; then
-    local cleaned=0 bin_path
-    for bin_path in "${old_bins[@]}"; do
-      if rm -f "$bin_path"; then
-        cleaned=$((cleaned + 1))
-      else
-        warn "$(t binary_app.warn.cleanup_old_failed "$bin_path")"
-      fi
-    done
-    if [[ "$cleaned" -gt 0 ]]; then
-      info "$(t binary_app.info.cleaned_old "$cleaned")"
-    fi
-  fi
+  app_prune_update_backups "$INSTALL_DIR" "${BA_BIN_NAME}.bak.*" \
+    binary_app.warn.cleanup_old_failed binary_app.info.cleaned_old 3 f
 }
 
 bapp_update() {
@@ -8815,28 +8840,8 @@ do_update() {
     INSTALLED_VERSION="$LATEST"
     _sub2api_record_runtime_versions
     app_save_config
-    local -a _old_baks
-    local _old_bak_entry
-    while IFS= read -r -d '' _old_bak_entry; do
-      _old_baks+=("${_old_bak_entry#* }")
-    done < <(
-      find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*" -type f \
-        -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
-    )
-    if [[ ${#_old_baks[@]} -gt 0 ]]; then
-      local _cleaned_old=0
-      local _old_bak
-      for _old_bak in "${_old_baks[@]}"; do
-        if rm -f "$_old_bak"; then
-          _cleaned_old=$(( _cleaned_old + 1 ))
-        else
-          warn "$(t app.sub2api.warn.cleanup_old_binary_failed "$_old_bak")"
-        fi
-      done
-      if [[ $_cleaned_old -gt 0 ]]; then
-        info "$(t app.sub2api.info.cleaned_old_binaries "$_cleaned_old")"
-      fi
-    fi
+    app_prune_update_backups "$INSTALL_DIR" "sub2api.bak.*" \
+      app.sub2api.warn.cleanup_old_binary_failed app.sub2api.info.cleaned_old_binaries 3 f
     if ! _health_check; then
       :
     fi

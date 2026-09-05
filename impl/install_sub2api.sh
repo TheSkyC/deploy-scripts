@@ -1294,28 +1294,8 @@ do_update() {
     INSTALLED_VERSION="$LATEST"
     _sub2api_record_runtime_versions
     app_save_config
-    local -a _old_baks
-    local _old_bak_entry
-    while IFS= read -r -d '' _old_bak_entry; do
-      _old_baks+=("${_old_bak_entry#* }")
-    done < <(
-      find "$INSTALL_DIR" -maxdepth 1 -name "sub2api.bak.*" -type f \
-        -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +4
-    )
-    if [[ ${#_old_baks[@]} -gt 0 ]]; then
-      local _cleaned_old=0
-      local _old_bak
-      for _old_bak in "${_old_baks[@]}"; do
-        if rm -f "$_old_bak"; then
-          _cleaned_old=$(( _cleaned_old + 1 ))
-        else
-          warn "$(t app.sub2api.warn.cleanup_old_binary_failed "$_old_bak")"
-        fi
-      done
-      if [[ $_cleaned_old -gt 0 ]]; then
-        info "$(t app.sub2api.info.cleaned_old_binaries "$_cleaned_old")"
-      fi
-    fi
+    app_prune_update_backups "$INSTALL_DIR" "sub2api.bak.*" \
+      app.sub2api.warn.cleanup_old_binary_failed app.sub2api.info.cleaned_old_binaries 3 f
     if ! _health_check; then
       :
     fi

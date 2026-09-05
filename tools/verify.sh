@@ -427,6 +427,7 @@ main() {
       check_atomic_write_command_file_helper
       check_custom_app_http_health_probes_use_shared_helper
       check_custom_executable_installs_use_shared_helper
+      check_update_rollback_cleanup_uses_shared_helper
       check_apt_sources_are_atomic
       check_atomic_helpers_are_atomic
       check_backup_retention_cleanup_reports_failures

@@ -551,6 +551,22 @@ check_go_tarball_failures_cleanup() {
     ' impl/install_cyberstrikeai.sh
 }
 
+check_update_rollback_cleanup_uses_shared_helper() {
+  local file
+  for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do
+    grep -Fq 'app_prune_update_backups' "$file" || {
+      echo "Update rollback cleanup must use app_prune_update_backups helper: ${file}" >&2
+      return 1
+    }
+  done
+  if grep -RnE 'find .*\.bak\..*(sort -z -rn|tail -z -n)' \
+    lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh >&2; then
+    echo "Update rollback cleanup must not inline find/tail prune loops; use app_prune_update_backups helper" >&2
+    return 1
+  fi
+}
+
+
 check_no_flag_chained_error_handlers() {
   local file
   while IFS= read -r file; do
