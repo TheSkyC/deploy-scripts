@@ -763,20 +763,9 @@ if tar -czf "\$tmp" \
   --exclude="*.tmp" \
   --exclude="logs/*.log" \
   -C "\$(dirname "\$INSTALL_DIR")" "\$(basename "\$INSTALL_DIR")"; then
-  if ! mv "\$tmp" "\$archive"; then
-    rm -f "\$tmp"
+  if ! _publish_backup_artifact "\$tmp" "\$archive"; then
     exit 1
   fi
-  chmod 600 "\$archive" 2>/dev/null || true
-  # Integrity sidecar: bare digest is enough here; verify accepts it.
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "\$archive" | awk '{print \$1"  "\$(NF)}' > "\${archive}.sha256" || true
-    chmod 600 "\${archive}.sha256" 2>/dev/null || true
-  elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "\$archive" | awk '{print \$1"  "\$(NF)}' > "\${archive}.sha256" || true
-    chmod 600 "\${archive}.sha256" 2>/dev/null || true
-  fi
-  _write_manifest "\$archive"
 else
   rm -f "\$tmp"
   exit 1

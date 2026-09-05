@@ -1427,6 +1427,7 @@ ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into plac
 
 BKSH_PRE
     backup_standalone_manifest_fragment vaultwarden
+    backup_standalone_publish_fragment
     cat << 'BKSH_REST'
 if ! mkdir -p "${BACKUP_DIR}"; then
   printf '%s  '"${MSG_BACKUP_DIR_FAILED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${BACKUP_DIR}" >&2
@@ -1463,17 +1464,7 @@ if tar -czf "${ARCHIVE_TMP}" \
   --exclude="*.log.*" \
   -C "${DATA_PARENT}" "${DATA_BASE}" \
   "${TAR_EXTRA[@]+"${TAR_EXTRA[@]}"}" >&2; then
-  if mv "${ARCHIVE_TMP}" "${ARCHIVE}"; then
-    chmod 600 "${ARCHIVE}" 2>/dev/null || true
-    # Integrity sidecar: bare digest is enough here; verify accepts it.
-    if command -v sha256sum >/dev/null 2>&1; then
-      sha256sum "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
-      chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
-    elif command -v shasum >/dev/null 2>&1; then
-      shasum -a 256 "${ARCHIVE}" | awk '{print $1"  "$(NF)}' > "${ARCHIVE}.sha256" || true
-      chmod 600 "${ARCHIVE}.sha256" 2>/dev/null || true
-    fi
-    _write_manifest "${ARCHIVE}"
+  if _publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"; then
     ARCHIVE_SIZE=$(du -sh "${ARCHIVE}" | cut -f1)
     printf '%s  '"${MSG_SUCCESS}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${ARCHIVE}" "${ARCHIVE_SIZE}"
   else
