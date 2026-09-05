@@ -1162,3 +1162,9 @@ Format per entry:
 
 - 验证 / Verified: helper 实际运行（stub 目录 4 份快照、保留 3、删除 1、成功计数输出）通过；`tools/verify.sh syntax`、`tools/verify.sh release`（确定性重建 dist + 提交 hook 通过）与完整 `tools/verify.sh guards` 通过（`Guards verification passed`）。guards 中的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径。Windows 本地无 Linux Docker daemon，真实 E2E 由 GitHub Actions Verify workflow 的 `e2e-smoke` job 权威验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
 - 提交 / Commit: 5c3e15c、562a2eb
+## 2026-09-05 部署脚本推进 P2-S2 第 43 段
+
+- 状态 / Status: completed
+- 变更 / Change: 修正 `app_prune_update_backups` 的路径解析边界：`find -printf` 由「`%T@ %p` + `${entry#* }`」改为「`%T@\n%p` + `${entry#*$'\n'}`」，避免 basename 含空格时被截断（该 helper 前一步已接入 binary_app / Sub2API / Vaultwarden / CyberStrikeAI，因此该修复同时覆盖四个更新回滚路径）；新增行为级守卫 `check_app_prune_update_backups_behavior`，以真实临时目录同时覆盖「含空格文件快照保留 3」与「含空格目录快照保留 2」，并断言成功清理计数经 app-localized info key 输出，注册进 guards 目标。
+- 验证 / Verified: 行为守卫单独运行（`set -euo pipefail`）通过；`tools/verify.sh syntax` 通过；提交 hook 的 release 验证通过；完整 `tools/verify.sh guards` 通过（`Guards verification passed`）。guards 中的 chown/missing-tar/`fail_check`、脱敏输出和 package-release warning 来自既有故意失败路径；Windows 本地无 Linux Docker daemon，真实 E2E 由 GitHub Actions Verify workflow 的 `e2e-smoke` job 权威验证。本条仅记录 P2 的细粒度推进，P2 共同配置/锁/回滚/健康/备份原语总项仍未完成。
+- 提交 / Commit: 84691b3
