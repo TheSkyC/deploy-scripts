@@ -149,7 +149,7 @@
   `tools/build-release.sh` 改动，hook 会运行 `tools/verify.sh release`；它绝不自动
   stage 生成物。`tools/install-git-hooks.sh` 在每个 clone 显式、安全地启用本地
   `core.hooksPath`，README/CONTRIBUTING 记录安装和冲突处理。
-- [ ] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。已完成若干边界明确的小步：
+- [x] 提取 Sub2API、Vaultwarden、CyberStrikeAI 共同的“配置/锁/回滚/健康/备份”原语，继续减少复制，但保持应用特有分发和数据模型。已完成若干边界明确的小步：
   `app_http_status_code` 统一 HTTP 状态探测；`app_install_executable_file` 统一可执行文件
   staging/原子替换；`backup_validate_archive_members`、`backup_restore_data_dir`、
   `backup_create_tar_archive`、`backup_finalize_archive`、`backup_list_expired_archives` 与
@@ -161,8 +161,7 @@
   sha256 sidecar + manifest（与 Sub2API、blog 及二进制应用一致），CPA Stack 移除
   手写 tmp/mv/chmod 暂存；Vaultwarden / CyberStrikeAI / Sub2API 的独立 cron 备份脚本
   也已补齐完整性三件套（0600 归档 + sha256 sidecar + manifest.json），保留期清理连同
-  删除伴生元数据，并由行为级守卫端到端证明；仍待继续审查配置/锁、回滚编排、
-  PostgreSQL/sidecar 语义及独立 cron 脚本的适配边界，不能将整项提前标记为完成。。更新回滚快照清理已收敛为共享 `app_prune_update_backups` helper（binary_app + Sub2API + Vaultwarden + CyberStrikeAI），并由新行为级守卫锁定不再内联 find/tail prune 循环。
+  删除伴生元数据，并由行为级守卫端到端证明；配置/锁、回滚编排、PostgreSQL/sidecar 语义及独立 cron 脚本的适配边界已审计并收敛（配置/锁沿用 app_conf_file/app_save_config/app_load_config/acquire_lock；回滚继续复用共享二进制备份/恢复 helper 并保留 Vaultwarden image-extract+web-vault、Sub2API 多构件+PG dump、CyberStrikeAI 源码构建+bin/config 的应用特有编排；独立 cron 备份脚本的归档发布/完整性元数据边界由 backup_standalone_manifest_fragment 与 backup_standalone_publish_fragment 收敛，提交 0856c8e、bf83854 修复 Vaultwarden 模板 heredoc delimiter 回归后其行为级守卫端到端通过）。更新回滚快照清理已收敛为共享 `app_prune_update_backups` helper（binary_app + Sub2API + Vaultwarden + CyberStrikeAI），并由新行为级守卫锁定不再内联 find/tail prune 循环。
 - [x] 增加实例级文档、TLS 反代示例、配置导出/导入演练文档：新增 `docs/instances-tls-migration.md`，明确 `@instance` 仅隔离配置/锁而非运行时资源，提供 shared binary/Vaultwarden/CPA Stack/CyberStrikeAI 的 TLS 入口边界，以及 export/import + 备份 verify + restore + cutover 的演练顺序。
 
 ## 6. 推荐验证命令
