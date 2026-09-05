@@ -321,73 +321,58 @@ check_update_binary_backups_are_atomic() {
 }
 
 check_old_backup_cleanup_reports_failures() {
+  # The shared prune helper reports per-path failures through an app-localized warn
+  # key and counts successful removals through an app-localized info key. All
+  # update rollback snapshot cleanups use it; the legacy inline loops were
+  # removed in favour of that single implementation..
+
   local file
+
+  # Localized message keys must keep existing wording so users still see the
+  # established per-path failure / cleanup-count text for every app.
   awk '
       /app\.cyberstrikeai\.warn\.cleanup_old_binary_failed/ { saw_warn_key=1 }
       /app\.cyberstrikeai\.info\.cleaned_old_binaries/ { saw_count_key=1 }
-      END {
-        if (!(saw_warn_key && saw_count_key)) {
-          print "CyberStrikeAI old binary cleanup messages must be localized." > "/dev/stderr"
-          exit 1
-        }
-      }
+      END { if (!(saw_warn_key && saw_count_key)) { print "CyberStrikeAI old binary cleanup messages must be localized." > "/dev/stderr"; exit 1 } }
     ' apps/cyberstrikeai.sh
-  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
-  for file in impl/install_cyberstrikeai.sh; do
-    awk '
-        /while IFS= read -r -d '\'''\'' _old_bak; do/ { saw_loop=1 }
-        /warn "\$\(t app\.cyberstrikeai\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_warn=1 }
-        /info "\$\(t app\.cyberstrikeai\.info\.cleaned_old_binaries "\$_cleaned_old"\)"/ { saw_count=1 }
-        /xargs -r rm -f/ {
-          printf "%s CyberStrikeAI must not silently batch-remove old binary backups\n", FILENAME > "/dev/stderr"
+  awk '
+      /app\.sub2api\.warn\.cleanup_old_binary_failed/ { saw_warn_key=1 }
+      /app\.sub2api\.info\.cleaned_old_binaries/ { saw_count_key=1 }
+      END { if (!(saw_warn_key && saw_count_key)) { print "Sub2API old binary cleanup messages must be localized." > "/dev/stderr"; exit 1 } }
+    ' apps/sub2api.sh
+  awk '
+      /app\.vaultwarden\.warn\.cleanup_old_binary_failed/ { saw_warn_key=1 }
+      /app\.vaultwarden\.info\.cleaned_old_binaries/ { saw_count_key=1 }
+      /app\.vaultwarden\.warn\.cleanup_old_webvault_failed/ { saw_web_warn_key=1 }
+      /app\.vaultwarden\.info\.cleaned_webvault_backups/ { saw_web_count_key=1 }
+      END { if (!(saw_warn_key && saw_count_key && saw_web_warn_key && saw_web_count_key)) { print "Vaultwarden old backup cleanup messages must be localized." > "/dev/stderr"; exit 1 } }
+    ' apps/vaultwarden.sh
+
+  # One implementation, used by binary_app and every hand-written app that
+  # prunes rollback snapshots after updates..
+  awk '
+      /app_prune_update_backups\(\) \{$/ { in_helper=1; saw_warn=0; saw_count=0; saw_loop=0; next }
+      in_helper && /for entry_path in "\${old_entries\[@\]}"; do/ { saw_loop=1 }
+      in_helper && /warn "\$\(t "\$warn_key" "\$entry_path"\)"/ { saw_warn=1 }
+      in_helper && /info "\$\(t "\$info_key" "\$cleaned"\)"/ { saw_count=1 }
+      in_helper && /^}/ {
+        if (!(saw_loop && saw_warn && saw_count)) {
+          print "lib/app.sh app_prune_update_backups must report per-path failures and count successful removals" > "/dev/stderr"
           exit 1
         }
-        END {
-          if (!(saw_loop && saw_warn && saw_count)) {
-            printf "%s CyberStrikeAI old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
-            exit 1
-          }
-        }
-      ' "$file"
-  done
-  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
-  for file in impl/install_sub2api.sh; do
-    awk '
-        /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_loop=1 }
-        /warn "\$\(t app\.sub2api\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_warn=1 }
-        /info "\$\(t app\.sub2api\.info\.cleaned_old_binaries "\$_cleaned_old"\)"/ { saw_count=1 }
-        /rm -f "\$\{_old_baks\[@\]\}"/ {
-          printf "%s Sub2API must not silently batch-remove old binary backups\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        END {
-          if (!(saw_loop && saw_warn && saw_count)) {
-            printf "%s Sub2API old binary backup cleanup must report per-file failures and count successful removals\n", FILENAME > "/dev/stderr"
-            exit 1
-          }
-        }
-      ' "$file"
-  done
-  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
-  for file in impl/install_vaultwarden.sh; do
-    awk '
-        /for _old_bak in "\$\{_old_baks\[@\]\}"/ { saw_binary_loop=1 }
-        /warn "\$\(t app\.vaultwarden\.warn\.cleanup_old_binary_failed "\$_old_bak"\)"/ { saw_binary_warn=1 }
-        /info "\$\(t app\.vaultwarden\.info\.cleaned_old_binaries "\$_cleaned_old"\)"/ { saw_binary_count=1 }
-        /for _old_wv_bak in "\$\{_old_wv_baks\[@\]\}"/ { saw_web_loop=1 }
-        /warn "\$\(t app\.vaultwarden\.warn\.cleanup_old_webvault_failed "\$_old_wv_bak"\)"/ { saw_web_warn=1 }
-        /info "\$\(t app\.vaultwarden\.info\.cleaned_webvault_backups "\$_cleaned_wv"\)"/ { saw_web_count=1 }
-        /rm -f "\$\{_old_baks\[@\]\}"/ || /rm -rf "\$\{_old_wv_baks\[@\]\}"/ {
-          printf "%s Vaultwarden must not silently batch-remove old backups\n", FILENAME > "/dev/stderr"
-          exit 1
-        }
-        END {
-          if (!(saw_binary_loop && saw_binary_warn && saw_binary_count && saw_web_loop && saw_web_warn && saw_web_count)) {
-            printf "%s Vaultwarden old backup cleanup must report per-path failures and count successful removals\n", FILENAME > "/dev/stderr"
-            exit 1
-          }
-        }
-      ' "$file"
+        in_helper=0
+      }
+    ' lib/app.sh
+
+  # Every update rollback snapshot cleanup goes through the shared helper; the
+  # check_update_rollback_cleanup_uses_shared_helper guard in static.sh also
+  # rejects inlined find/tail prune loops, so this check keeps localization plus
+  # the helper contract in one place..
+  for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do
+    if ! grep -q 'app_prune_update_backups' "$file"; then
+      echo "$file must call the shared app_prune_update_backups helper for update rollback cleanup" >&2
+      return 1
+    fi
   done
 }
 
