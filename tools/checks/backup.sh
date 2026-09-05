@@ -1811,18 +1811,18 @@ check_generated_backup_scripts_write_sidecars() {
 # Quoted heredocs reference shell vars directly; the unquoted cyberstrikeai
 # heredoc escapes them — accept both spellings.
 check_generated_backup_scripts_write_manifests() {
-  grep -q '{"schema_version":1,"app":"vaultwarden"' impl/install_vaultwarden.sh \
-    || { echo "vaultwarden generated backup script must write a manifest.json" >&2; return 1; }
-  grep -q 'chmod 600 "${archive}.manifest.json" 2>/dev/null || true' impl/install_vaultwarden.sh \
-    || { echo "vaultwarden manifest must be published with mode 600" >&2; return 1; }
-  grep -q '{"schema_version":1,"app":"cyberstrikeai"' impl/install_cyberstrikeai.sh \
-    || { echo "cyberstrikeai generated backup script must write a manifest.json" >&2; return 1; }
-  grep -q 'chmod 600 "\\${archive}.manifest.json" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
-    || { echo "cyberstrikeai manifest must be published with mode 600" >&2; return 1; }
-  grep -q '{"schema_version":1,"app":"sub2api"' impl/install_sub2api.sh \
-    || { echo "sub2api generated backup script must write a manifest.json" >&2; return 1; }
-  grep -q 'chmod 600 "${archive}.manifest.json" 2>/dev/null || true' impl/install_sub2api.sh \
-    || { echo "sub2api manifest must be published with mode 600" >&2; return 1; }
+  for app in vaultwarden sub2api; do
+    grep -q "backup_standalone_manifest_fragment $app" "impl/install_$app.sh" \
+      || { echo "$app generated backup script must embed the shared manifest fragment" >&2; return 1; }
+  done
+  grep -q 'backup_standalone_manifest_fragment cyberstrikeai' impl/install_cyberstrikeai.sh \
+    || { echo "cyberstrikeai generated backup script must embed the shared manifest fragment" >&2; return 1; }
+  grep -q 'backup_standalone_manifest_fragment()' lib/backup.sh \
+    || { echo "shared manifest fragment must live in lib/backup.sh" >&2; return 1; }
+  grep -q '{"schema_version":1,"app":"APP_ID"' lib/backup.sh \
+    || { echo "shared manifest fragment must carry the app-id placeholder" >&2; return 1; }
+  grep -q 'chmod 600 "${archive}.manifest.json" 2>/dev/null || true' lib/backup.sh \
+    || { echo "shared manifest fragment must publish manifest with mode 600" >&2; return 1; }
 }
 
 # Retention cleanup in the generated cron backup scripts must remove the

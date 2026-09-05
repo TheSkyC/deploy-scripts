@@ -20,7 +20,9 @@ check_vaultwarden_backup_script_is_published_atomically() {
       # closing brace do not end the function scope early.
       in_func && !in_heredoc && /^[[:space:]]*cat << / {
         in_heredoc=1
-        heredoc_delim = ($0 ~ /BKSH_VARS/ ? "BKSH_VARS" : "BKSH")
+        heredoc_delim = "BKSH"
+        if ($0 ~ /BKSH_VARS/) heredoc_delim = "BKSH_VARS"
+        else if ($0 ~ /BKSH_REST/) heredoc_delim = "BKSH_REST"
         next
       }
       in_func && in_heredoc && $0 == heredoc_delim { in_heredoc=0; next }

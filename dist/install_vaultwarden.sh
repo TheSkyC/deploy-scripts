@@ -1635,6 +1635,41 @@ MANIFEST
   fi
 }
 
+# Emit the standalone backup-manifest helper block (callable _json_string +
+# _write_manifest) for generated cron scripts. The generated script cannot
+# source this library at runtime, so installers inline the emitted fragment at
+# generation time. The only per-app difference is the manifest app id.
+backup_standalone_manifest_fragment() {
+  local app_id="$1"
+  sed "s/APP_ID/$app_id/g" <<'MANIFEST_FRAGMENT'
+# Minimal JSON string literal for manifest fields (best-effort; archive
+# names and timestamps never contain control bytes).
+_json_string() {
+  local s="${1:-}"
+  [[ -n "$s" ]] || { printf 'null'; return; }
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "$s"
+}
+
+# Write the integrity manifest next to a completed archive, matching the
+# shared backup contract: schema, app, archive name, digest, creation time.
+# Best-effort like the sidecar: a failed manifest write never fails the
+# backup, and verify keeps reporting the archive via the sidecar.
+_write_manifest() {
+  local archive="$1"
+  [[ -f "${archive}.sha256" ]] || return 0
+  printf '{"schema_version":1,"app":"APP_ID","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' \
+    "$(_json_string "$(basename "$archive")")" \
+    "$(awk '{print $1}' "${archive}.sha256")" \
+    "$(_json_string "$(date '+%Y-%m-%dT%H:%M:%S%:z')")" \
+    > "${archive}.manifest.json" 2>/dev/null || true
+  chmod 600 "${archive}.manifest.json" 2>/dev/null || true
+}
+MANIFEST_FRAGMENT
+}
+
+
 # Verify one archive: recompute the digest and compare against both the
 # sidecar and (when present) the manifest. Prints nothing; returns nonzero on
 # any mismatch or missing artifact. A missing sidecar fails closed — archives
@@ -8912,7 +8947,7 @@ do_update() {
 _write_backup_script() {
   local backup_script="/usr/local/bin/vaultwarden-backup"
   if ! {
-    cat << 'BKSH'
+    cat << 'BKSH_PRE'
 #!/bin/bash
 # Auto-generated Vaultwarden backup script.
 set -euo pipefail
@@ -8937,30 +8972,9 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
 
-# Minimal JSON string literal for manifest fields (best-effort; archive
-# names and timestamps never contain control bytes).
-_json_string() {
-  local s="${1:-}"
-  [[ -n "$s" ]] || { printf 'null'; return; }
-  s="${s//\\/\\\\}"
-  s="${s//\"/\\\"}"
-  printf '"%s"' "$s"
-}
-
-# Write the integrity manifest next to a completed archive, matching the
-# shared backup contract: schema, app, archive name, digest, creation time.
-# Best-effort like the sidecar: a failed manifest write never fails the
-# backup, and verify keeps reporting the archive via the sidecar.
-_write_manifest() {
-  local archive="$1"
-  [[ -f "${archive}.sha256" ]] || return 0
-  printf '{"schema_version":1,"app":"vaultwarden","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' \
-    "$(_json_string "$(basename "$archive")")" \
-    "$(awk '{print $1}' "${archive}.sha256")" \
-    "$(_json_string "$(date '+%Y-%m-%dT%H:%M:%S%:z')")" \
-    > "${archive}.manifest.json" 2>/dev/null || true
-  chmod 600 "${archive}.manifest.json" 2>/dev/null || true
-}
+BKSH_PRE
+    backup_standalone_manifest_fragment vaultwarden
+    cat << 'BKSH_REST'
 if ! mkdir -p "${BACKUP_DIR}"; then
   printf '%s  '"${MSG_BACKUP_DIR_FAILED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${BACKUP_DIR}" >&2
   exit 1
@@ -9035,7 +9049,7 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
     printf '%s  '"${MSG_CLEANED}"'\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${REMOVED}" "${KEEP_DAYS}"
   fi
 fi
-BKSH
+BKSH_REST
   } | atomic_write_file "$backup_script" 750 root:root; then
     error "$(t app.vaultwarden.error.backup_script)"
   fi

@@ -708,7 +708,7 @@ write_backup_script() {
   msg_backup_created="$(t app.cyberstrikeai.backup.ok.created '%s')"
   msg_remove_failed="$(t app.cyberstrikeai.backup.warn.remove_failed '%s')"
   if ! {
-    cat <<BACKUP
+    cat <<BACKUP_HEAD
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
@@ -727,26 +727,9 @@ MSG_BACKUP_CREATED="${msg_backup_created}"
 MSG_REMOVE_FAILED="${msg_remove_failed}"
 
 _log() { echo "\$(date '+%F %T') \$*" >> "\$LOG_FILE"; }
-# Minimal JSON string literal for manifest fields (best-effort; archive
-# names and timestamps never contain control bytes).
-_json_string() {
-  local s="\${1:-}"
-  [[ -n "\$s" ]] || { printf 'null'; return; }
-  s="\${s//\\\\/\\\\\\\\}"
-  s="\${s//\"/\\\\\"}"
-  printf '"%s"' "\$s"
-}
-
-# Write the integrity manifest next to a completed archive, matching the
-# shared backup contract: schema, app, archive name, digest, creation time.
-# Best-effort like the sidecar: a failed manifest write never fails the
-# backup, and verify keeps reporting the archive via the sidecar.
-_write_manifest() {
-  local archive="\$1"
-  [[ -f "\${archive}.sha256" ]] || return 0
-  printf '{"schema_version":1,"app":"cyberstrikeai","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' "\$(_json_string "\$(basename "\$archive")")" "\$(awk '{print \$1}' "\${archive}.sha256")" "\$(_json_string "\$(date '+%Y-%m-%dT%H:%M:%S%:z')")" > "\${archive}.manifest.json" 2>/dev/null || true
-  chmod 600 "\${archive}.manifest.json" 2>/dev/null || true
-}
+BACKUP_HEAD
+    backup_standalone_manifest_fragment cyberstrikeai
+    cat <<BACKUP_TAIL
 
 if ! mkdir -p "\$BACKUP_DIR"; then
   printf "\$(date '+%F %T') [ERROR] %s\n" "\$(printf "\$MSG_BACKUP_DIR_FAILED" "\$BACKUP_DIR")" >&2
@@ -811,7 +794,7 @@ fi
 
 _log "[OK] \$(printf "\$MSG_BACKUP_CREATED" "\$archive")"
 printf "\$(date '+%F %T') [OK] %s\n" "\$(printf "\$MSG_BACKUP_CREATED" "\$archive")"
-BACKUP
+BACKUP_TAIL
   } | atomic_write_file "$BACKUP_SCRIPT" 750 root:root; then
     error "$(t app.cyberstrikeai.error.backup_script "$BACKUP_SCRIPT")"
   fi
