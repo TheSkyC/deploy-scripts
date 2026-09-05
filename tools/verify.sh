@@ -423,6 +423,7 @@ main() {
       check_app_json_string_escapes_controls
       check_app_http_status_code_helper
       check_app_install_executable_file_helper
+      check_app_prune_update_backups_behavior
       check_atomic_copy_file_strict_helper
       check_atomic_write_command_file_helper
       check_custom_app_http_health_probes_use_shared_helper
