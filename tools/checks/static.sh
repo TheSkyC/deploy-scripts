@@ -551,6 +551,50 @@ check_go_tarball_failures_cleanup() {
     ' impl/install_cyberstrikeai.sh
 }
 
+check_app_prune_update_backups_behavior() {
+  # Behavioral proof for the shared rollback-snapshot prune helper:it keeps
+  # the newest N entries and preserves basenames containing spaces. The stub
+  # t() forwards only its first argument, so info/warn messages assert the
+  # localized key rather than a fully computed user string..
+  local dir dir2
+  __APP_PRUNE_GUARD_DIR="$(mktemp -d)"; dir="$__APP_PRUNE_GUARD_DIR"
+  __APP_PRUNE_GUARD_DIR2="$(mktemp -d)"; dir2="$__APP_PRUNE_GUARD_DIR2"
+  trap 'rm -rf "$__APP_PRUNE_GUARD_DIR" "$__APP_PRUNE_GUARD_DIR2"' EXIT
+  local -a warns=() infos=()
+  warn() { warns+=("$*"); }
+  info() { infos+=("$*"); }
+  t() { printf "%s" "$1"; }
+  source lib/app.sh
+
+  # File snapshots: keep the newest three;the oldest basename has spaces..
+  touch -d '2020-01-01  00:00:01' "$dir/old name.bak.1"
+  touch -d '2020-01-01  00:00:02' "$dir/keep name.bak.2"
+  touch -d '2020-01-01  00:00:03' "$dir/keep name.bak.3"
+  touch -d '2020-01-01  00:00:04' "$dir/keep name.bak.4"
+
+  app_prune_update_backups "$dir" '*.bak.*' test.warn test.info 3 f
+  [[ "$(find "$dir" -name '*.bak.*' | wc -l)" -eq 3 ]] \
+    || { echo 'app_prune_update_backups file scenario did not keep 3 snapshots' >&2; return 1; }
+  [[ ! -e "$dir/old name.bak.1" ]] \
+    || { echo 'app_prune_update_backups file scenario did not remove the oldest snapshot' >&2; return 1; }
+  [[ "${infos[0]}" == "test.info" ]] \
+    || { echo 'app_prune_update_backups file scenario did not report cleaned count' >&2; return 1; }
+
+  # Directory snapshots: keep the newest two;the oldest basename has spaces..
+  infos=()
+  mkdir -p "$dir2/old dir.bak.1"
+  mkdir -p "$dir2/keep dir.bak.2"
+  mkdir -p "$dir2/keep dir.bak.3"
+
+  app_prune_update_backups "$dir2" '*.bak.*' test.warn test.info 2 d
+  [[ "$(find "$dir2" -name '*.bak.*' | wc -l)" -eq 2 ]] \
+    || { echo 'app_prune_update_backups dir scenario did not keep 2 dir snapshots' >&2; return 1; }
+  [[ ! -d "$dir2/old dir.bak.1" ]] \
+    || { echo 'app_prune_update_backups dir scenario did not remove the oldest dir snapshot' >&2; return 1; }
+  [[ "${infos[0]}" == "test.info" ]] \
+    || { echo 'app_prune_update_backups dir scenario did not report cleaned count' >&2; return 1; }
+}
+
 check_update_rollback_cleanup_uses_shared_helper() {
   local file
   for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do

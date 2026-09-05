@@ -4337,10 +4337,12 @@ app_prune_update_backups() {
   local -a old_entries=()
   local entry
   while IFS= read -r -d '' entry; do
-    old_entries+=("${entry#* }")
+    # find -printf emits `mtime<newline>path<NUL>`; keep the path intact
+    # after the first newline so basenames containing spaces are preserved..
+    old_entries+=("${entry#*$'\n'}")
   done < <(
     find "$parent_dir" -maxdepth 1 -name "$name_glob" -type "$fs_type" \
-      -printf '%T@ %p\0' 2>/dev/null | sort -z -rn | tail -z -n +"$keep_plus"
+      -printf '%T@\n%p\0' 2>/dev/null | sort -z -rn | tail -z -n +"$keep_plus"
   )
   if [[ ${#old_entries[@]} -gt 0 ]]; then
     local cleaned=0 entry_path
