@@ -9,6 +9,7 @@ check_target_groups_cover_all_checks() {
     /^check_[A-Za-z0-9_]+\(\)/ { d=$0; sub(/\(.*/, "", d); defs[d]=1; next }
     /^main\(\) \{/ { in_main=1; next }
     /^main "\$@"/ { in_main=0; next }
+    in_main && /^      run_isolated_check check_[A-Za-z0-9_]+[[:space:]]*$/ { arm_calls[$2]=1; next }
     in_main && /^      check_[A-Za-z0-9_]+[[:space:]]*$/ { arm_calls[$1]=1; next }
     END {
       for (d in defs) {

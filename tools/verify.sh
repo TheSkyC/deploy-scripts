@@ -125,6 +125,17 @@ run_all_checks() {
 
 
 
+
+run_isolated_check() {
+  local check_name="$1"
+  shift
+  if ( "$check_name" "$@" ); then
+    return 0
+  fi
+  echo "guards verification failed in $check_name" >&2
+  return 1
+}
+
 expect_failure_output() {
   local lang="$1"
   local script="$2"
@@ -415,351 +426,351 @@ main() {
       GUARDS_CURRENT_CHECK=""
       trap 'case "${BASH_COMMAND%% *}" in check_*) GUARDS_CURRENT_CHECK="${BASH_COMMAND%% *}" ;; esac' DEBUG
       trap 'status=$?; if (( status != 0 )); then printf "guards verification failed in %s\n" "${GUARDS_CURRENT_CHECK:-unknown}" >&2; fi' EXIT
-      check_shell_syntax
+      run_isolated_check check_shell_syntax
       build_verified_release
-      check_dist_is_up_to_date
-      check_api_ports_are_validated
-      check_api_status_directory_sizes_are_nonfatal
-      check_app_json_string_escapes_controls
-      check_app_http_status_code_helper
-      check_app_install_executable_file_helper
-      check_app_prune_update_backups_behavior
-      check_atomic_copy_file_strict_helper
-      check_atomic_write_command_file_helper
-      check_custom_app_http_health_probes_use_shared_helper
-      check_custom_executable_installs_use_shared_helper
-      check_update_rollback_cleanup_uses_shared_helper
-      check_apt_sources_are_atomic
-      check_atomic_helpers_are_atomic
-      check_backup_retention_cleanup_reports_failures
-      check_backup_script_dir_failures_are_explicit
-      check_backup_scripts_are_atomic
-      check_backup_temp_moves_handle_failure
-      check_backup_create_tar_archive_helper
-      check_backup_create_tar_archive_delegates
-      check_backup_create_gzip_archive_helper
-      check_backup_create_gzip_archive_delegates
-      check_backup_remove_archive_with_metadata_helper
-      check_backup_list_expired_archives_helper
-      check_binary_helpers_are_atomic
-      check_binary_replacements_handle_failure
-      check_binary_restores_validate_permissions
-      check_binary_app_systemd_paths_are_validated
-      check_binary_app_pre_backup_hook_is_best_effort
-      check_binary_app_health_results_are_surfaced
-      check_blog_config_persistence
-      check_blog_hugo_version_contract
-      check_blog_dependency_failures_are_reported
-      check_blog_enable_failures_are_reported
-      check_blog_hugo_install_failures_are_actionable
-      check_blog_install_summary_matches_local_health
-      check_blog_nginx_start_path_is_explicit
-      check_blog_publish_guidance_uses_staging_output
-      check_blog_publish_helper_is_atomic
-      check_blog_restore_action
-      check_blog_site_files_are_atomic
-      check_blog_site_setup_failures_are_explicit
-      check_blog_static_deploy_failures_are_actionable
-      check_blog_static_deploy_swaps_tree
-      check_bundled_impl_cleanup
-      check_bundled_impl_dir_security_failure_cleanup
-      check_bundled_impl_empty_payload_fails_closed
-      check_bundled_impl_failure_cleanup
-      check_bundled_impl_temp_names_are_random
-      check_certbot_diagnostics_use_stderr
-      check_config_crlf_handling
-      check_config_empty_values_keep_defaults
-      check_config_sanitization_behavior
-      check_config_key_shape_locale_independent
-      check_config_reserved_keys_are_rejected
-      check_config_save_failures_are_explicit
-      check_config_value_validators
-      check_config_write_failure_cleanup
-      check_config_writes_are_centralized
-      check_config_export_uses_atomic_copy
-      check_connectivity_helper_behavior
-      check_cpa_stack_status_backup_projection
-      check_cpa_stack_layout
-      check_cpa_stack_binary_backups_are_atomic
-      check_cron_logrotate_are_atomic
-      check_binary_app_certbot_cron_is_published_atomically
-      check_logrotate_writes_use_shared_helper
-      check_cyberstrikeai_backups_are_atomic
-      check_cyberstrikeai_backup_script_is_published_atomically
-      check_cyberstrikeai_backup_script_publish_contract
-      check_cyberstrikeai_booleans_are_validated
-      check_cyberstrikeai_mirrors_are_opt_in
-      check_cyberstrikeai_build_temp_cleanup
-      check_cyberstrikeai_config_patch_is_atomic
-      check_cyberstrikeai_dependency_failures_are_reported
-      check_cyberstrikeai_git_commit_version_contract
-      check_cyberstrikeai_display_sizes_are_nonfatal
-      check_cyberstrikeai_enable_failures_are_reported
-      check_cyberstrikeai_go_restore_failures_are_reported
-      check_cyberstrikeai_go_version_parse_failures_are_explicit
-      check_cyberstrikeai_health_checks_are_nonfatal_outside_install
-      check_cyberstrikeai_install_summary_matches_health_state
-      check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
-      check_cyberstrikeai_nginx_health_probe_matches_server_name
-      check_cyberstrikeai_pip_upgrade_failures_are_reported
-      check_cyberstrikeai_ports_are_validated
-      check_cyberstrikeai_python_env_failures_are_reported
-      check_cyberstrikeai_repo_go_install_failures_are_reported
-      check_cyberstrikeai_rollback_restore_is_validated
-      check_cyberstrikeai_runtime_dir_failures_are_explicit
-      check_cyberstrikeai_service_start_paths_are_explicit
-      check_cyberstrikeai_source_and_build_prep_failures_are_explicit
-      check_cyberstrikeai_uninstall_stop_disable_failures_are_reported
-      check_cyberstrikeai_update_rollback_stop_failure_aborts_restore
-      check_cyberstrikeai_update_rollbacks_report_restart_failures
-      check_download_temp_creation_failures_are_explicit
-      check_download_validation_failures_cleanup
-      check_fail2ban_configs_are_atomic
-      check_firewall_success_paths_validate_command_results
-      check_framework_validator_errors_are_actionable
-      check_generated_backup_headers_are_shell_quoted
-      check_generated_backup_scripts_handle_missing_dirs
-      check_github_release_tag_behavior
-      check_go_tarball_failures_cleanup
-      check_i18n_keys_are_consistent
-      check_iptables_rules_are_atomic
-      check_keyring_writes_are_atomic
-      check_managed_paths_are_validated
-      check_manual_backup_retention_is_normalized
-      check_mutating_actions_acquire_locks
-      check_no_explicit_release_lock_calls
-      check_netfilter_persistent_save_reports_failures
-      check_newapi_secret_uses_private_env_file
-      check_newapi_backup_wal_hook_is_best_effort
-      check_newapi_backup_script_is_published_atomically
-      check_nginx_configs_are_atomic
-      check_nginx_domains_are_validated
-      check_nginx_main_config_edits_are_atomic
-      check_nginx_test_failures_report_diagnostics
-      check_no_chinese_comments
-      check_no_fixed_tmp_downloads
-      check_no_flag_chained_error_handlers
-      check_no_hardcoded_chinese_impl
-      check_no_unsupported_systemctl_options
-      check_old_backup_cleanup_reports_failures
-      check_optional_count_messages_are_nonfatal
-      check_optional_directory_cleanup_is_nonfatal
-      check_port_listening_process_behavior
-      check_port_conflict_strict_mode_aborts
-      check_port_conflict_is_warn_only
-      check_preupdate_backup_logs_match_guidance
-      check_preupdate_backup_warnings_include_followup_guidance
-      check_random_head_pipelines_handle_sigpipe
-      check_release_build_outputs_are_atomic
-      check_versioned_pre_commit_checks_release_artifacts
-      check_app_loader_dispatch_matches_cli
-      check_root_wrappers_match_bin_loaders
-      check_run_checks_parallel_cleans_tmpdir
-      check_safe_path_guard
-      check_safe_rm_dir_is_idempotent
-      check_service_status_label
-      check_shared_validators_accept_and_reject
-      check_silent_backup_tar_diagnostics_use_stderr
-      check_status_commands_allow_non_root
-      check_status_port_matches_are_bounded
-      check_sub2api_apt_failures_are_reported
-      check_sub2api_backup_script_is_published_atomically
-      check_sub2api_backup_script_publish_contract
-      check_sub2api_codename_resolution
-      check_sub2api_dependency_services_start_before_success
-      check_sub2api_database_restore_fails_closed
-      check_sub2api_database_restore_failure_is_nonzero
-      check_sub2api_e2e_uses_real_dependency_fixture
-      check_sub2api_enable_failures_are_reported
-      check_sub2api_extract_move_failure_cleanup
-      check_sub2api_health_checks_are_nonfatal_outside_install
-      check_sub2api_install_cleanup_reports_systemctl_failures
-      check_sub2api_install_summary_matches_runtime_state
-      check_sub2api_manual_backup_warnings_are_actionable
-      check_sub2api_nginx_install_starts_service_explicitly
-      check_sub2api_nginx_reload_results_are_checked
-      check_sub2api_pg_dump_errors_stay_out_of_backups
-      check_sub2api_pg_password_is_escaped
-      check_sub2api_uri_encode_ascii
-      check_sub2api_postgres_rpm_setup_failures_are_explicit
-      check_sub2api_redis_service_handling_is_explicit
-      check_sub2api_rpm_dependency_failures_are_reported
-      check_sub2api_runtime_dir_failures_are_explicit
-      check_sub2api_service_start_paths_are_explicit
-      check_sub2api_summary_does_not_print_pg_password
-      check_sub2api_uninstall_stop_disable_failures_are_reported
-      check_sub2api_update_rollback_stop_failure_aborts_restore
-      check_sub2api_update_rollbacks_report_restart_failures
-      check_sub2api_update_stop_failure_aborts_before_replace
-      check_summary_ip_detection_has_fallback
-      check_systemctl_status_diagnostics_are_nonfatal
-      check_systemd_daemon_reloads_are_explicit
-      check_systemd_helper_is_atomic
-      check_systemd_units_are_atomic
-      check_tar_diagnostics_use_stderr
-      check_tickflow_config_files_are_atomic
-      check_tickflow_dependency_failures_are_reported
-      check_tickflow_directory_setup_failures_are_explicit
-      check_tickflow_env_rewrites_preserve_existing_secrets
-      check_tickflow_git_commit_version_contract
-      check_tickflow_manual_backup_is_explicit
-      check_tickflow_paths_are_guarded
-      check_tickflow_preflight_defers_docker_runtime_checks
-      check_tickflow_service_start_failures_show_diagnostics
-      check_tickflow_status_is_structured
-      check_tickflow_systemctl_failures_are_reported
-      check_tickflow_systemd_shell_paths_are_quoted
-      check_tickflow_uninstall_daemon_reload_failure_is_fatal
-      check_tickflow_uninstall_stop_disable_failures_are_reported
-      check_uninstall_binary_cleanup_reports_failures
-      check_uninstall_nginx_paths_preserve_diagnostics
-      check_unsafe_config_loads_fail_closed
-      check_update_backs_up_before_stop
-      check_update_binary_backups_are_atomic
-      check_user_deletion_paths_are_explicit
-      check_vaultwarden_admin_token_file_is_private
-      check_vaultwarden_apt_update_failures_are_reported
-      check_vaultwarden_backup_failures_include_followup_guidance
-      check_vaultwarden_backup_script_is_published_atomically
-      check_vaultwarden_backup_script_publish_contract
-      check_vaultwarden_binary_backups_use_shared_atomic_copy
-      check_vaultwarden_binary_installs_are_atomic
-      check_vaultwarden_certbot_cron_failures_are_reported
-      check_vaultwarden_config_values_are_validated
-      check_vaultwarden_enable_failures_are_reported
-      check_vaultwarden_env_file_is_atomic
-      check_vaultwarden_extract_tool_is_pinned_and_verified
-      check_vaultwarden_image_digest_version_contract
-      check_vaultwarden_legacy_extract_tool_config_is_usable
-      check_vaultwarden_fail2ban_restart_failures_are_reported
-      check_vaultwarden_fail2ban_configs_use_shared_atomic_write
-      check_vaultwarden_find_head_pipelines_are_nonfatal
-      check_vaultwarden_install_cleanup_reports_systemctl_failures
-      check_vaultwarden_install_summary_matches_health_state
-      check_vaultwarden_install_webvault_replacement_is_recoverable
-      check_vaultwarden_result_chains_are_explicit
-      check_vaultwarden_runtime_dir_failures_are_explicit
-      check_vaultwarden_runtime_service_starts_are_explicit
-      check_vaultwarden_service_start_paths_are_explicit
-      check_vaultwarden_status_display_commands_are_nonfatal
-      check_vaultwarden_status_health_guidance_matches_local_probe
-      check_vaultwarden_uninstall_stop_disable_failures_are_reported
-      check_vaultwarden_update_stop_failure_aborts_before_replace
-      check_vaultwarden_version_probe_has_fallback
-      check_vaultwarden_webvault_archives_are_validated
-      check_vaultwarden_webvault_replacements_are_atomic
-      check_vaultwarden_webvault_restore_cleans_partial
-      check_vaultwarden_webvault_update_warnings_are_actionable
-      check_vaultwarden_workdir_cleanup_traps_are_nonfatal
-      check_filebrowser_uses_shared_binary_lifecycle
-      check_filebrowser_release_asset_mapping
-      check_filebrowser_root_directory_is_prepared
-      check_alist_uses_shared_binary_lifecycle
-      check_alist_release_asset_mapping
-      check_alist_config_rewrites_use_shared_atomic_write
-      check_meilisearch_uses_shared_binary_lifecycle
-      check_meilisearch_release_asset_mapping
-      check_meilisearch_config_is_managed_atomically
-      check_ntfy_uses_shared_binary_lifecycle
-      check_ntfy_release_asset_mapping
-      check_ntfy_config_is_managed_atomically
-      check_gotify_uses_shared_binary_lifecycle
-      check_gotify_release_asset_mapping
-      check_gotify_env_is_managed_atomically
-      check_beszel_uses_shared_binary_lifecycle
-      check_beszel_release_asset_mapping
-      check_beszel_env_is_managed_atomically
-      check_gitea_uses_shared_binary_lifecycle
-      check_gitea_release_asset_mapping
-      check_gitea_config_is_managed_atomically
-      check_frps_uses_shared_binary_lifecycle
-      check_frps_release_asset_mapping
-      check_frps_config_is_managed_atomically
-      check_navidrome_uses_shared_binary_lifecycle
-      check_navidrome_release_asset_mapping
-      check_navidrome_music_folder_is_prepared
-      check_state_json_contract
-      check_state_all_registered_apps_enumerated
-      check_state_target_selection
-      check_state_scalar_parser_and_severity
-      check_state_operation_error_code_projection
-      check_state_backup_extension_contract
-      check_state_binary_backup_adapter
-      check_state_backup_config_trust_gate
-      check_state_status_matrix
-      check_state_load_failure_isolation
-      check_state_no_network_locality
-      check_state_problems_filtering
-      check_health_all_target
-      check_version_helpers
-      check_operation_records
-      check_operation_json_escape_matches_app_json_string
-      check_operation_logrotate_policy
-      check_operation_logrotate_uses_shared_atomic_writer
-      check_history_command
-      check_operation_scopes_are_distinct
-      check_app_action_operation_wrapping
-      check_operation_failure_traps
-      check_operation_signal_interruption
-      check_backup_all_dry_run
-      check_backup_all_executes_serially_and_records_manager_operation
-      check_backup_finalize_archive_helper
-      check_backup_integrity_primitives
-      check_sub2api_manual_backups_finalize_integrity
-      check_sub2api_preupdate_backup_finalizes_metadata
-      check_vaultwarden_preupdate_backup_finalizes_metadata
-      check_vaultwarden_restore_preserves_env_file
-      check_binary_impls_have_verify_delegate
-      check_custom_impls_have_verify_delegate
-      check_shared_impls_have_restore_delegate
-      check_blog_backup_writes_integrity_metadata
-      check_binary_app_backup_writes_integrity_metadata
-      check_runtime_backup_finalizes_integrity_metadata
-      check_generated_backup_scripts_write_sidecars
-      check_generated_backup_scripts_write_manifests
-      check_generated_backup_retention_removes_metadata
-      check_generated_backup_scripts_manifest_contract
-      check_backup_archives_are_private
-      check_registry_restore_capability_matches_impl
-      check_backup_validate_gzip_archive
-      check_backup_restore_directory_lifecycle
-      check_backup_restore_data_dir_lifecycle
-      check_notification_fail_open_and_redaction
-      check_schedule_units_are_atomic_and_cleaned_up
-      check_schedule_retries_are_configurable
-      check_per_app_event_notifications
-      check_compose_shared_layer_and_tickflow_delegation
-      check_compose_lifecycle_and_health
-      check_fleet_host_validation_and_isolation
-      check_migration_export_import_roundtrip
-      check_batch_target_selection_is_local_only
-      check_doctor_all_target
-      check_update_version_cache_and_network_failures
-      check_check_update_target
-      check_update_all_dry_run_target
-      check_update_all_execution_is_serial_and_safe
-      check_update_target_selection_is_local_only
-      check_update_all_writes_manager_operation_record
-      check_release_package_artifacts
-      check_self_version_and_manifest_checks
-      check_self_update_protects_checkout_and_standalone
-      check_self_update_dry_run_validation
-      check_self_update_managed_rehearsal
-      check_self_update_activation_and_rollback
-      check_self_update_rejects_archive_listing_failure
-      check_self_update_interruption_restores_activation
-      check_self_update_signal_interruption
-      check_security_defaults_and_public_bind_guard
-      check_security_audit_contract
-      check_target_groups_cover_all_checks
+      run_isolated_check check_dist_is_up_to_date
+      run_isolated_check check_api_ports_are_validated
+      run_isolated_check check_api_status_directory_sizes_are_nonfatal
+      run_isolated_check check_app_json_string_escapes_controls
+      run_isolated_check check_app_http_status_code_helper
+      run_isolated_check check_app_install_executable_file_helper
+      run_isolated_check check_app_prune_update_backups_behavior
+      run_isolated_check check_atomic_copy_file_strict_helper
+      run_isolated_check check_atomic_write_command_file_helper
+      run_isolated_check check_custom_app_http_health_probes_use_shared_helper
+      run_isolated_check check_custom_executable_installs_use_shared_helper
+      run_isolated_check check_update_rollback_cleanup_uses_shared_helper
+      run_isolated_check check_apt_sources_are_atomic
+      run_isolated_check check_atomic_helpers_are_atomic
+      run_isolated_check check_backup_retention_cleanup_reports_failures
+      run_isolated_check check_backup_script_dir_failures_are_explicit
+      run_isolated_check check_backup_scripts_are_atomic
+      run_isolated_check check_backup_temp_moves_handle_failure
+      run_isolated_check check_backup_create_tar_archive_helper
+      run_isolated_check check_backup_create_tar_archive_delegates
+      run_isolated_check check_backup_create_gzip_archive_helper
+      run_isolated_check check_backup_create_gzip_archive_delegates
+      run_isolated_check check_backup_remove_archive_with_metadata_helper
+      run_isolated_check check_backup_list_expired_archives_helper
+      run_isolated_check check_binary_helpers_are_atomic
+      run_isolated_check check_binary_replacements_handle_failure
+      run_isolated_check check_binary_restores_validate_permissions
+      run_isolated_check check_binary_app_systemd_paths_are_validated
+      run_isolated_check check_binary_app_pre_backup_hook_is_best_effort
+      run_isolated_check check_binary_app_health_results_are_surfaced
+      run_isolated_check check_blog_config_persistence
+      run_isolated_check check_blog_hugo_version_contract
+      run_isolated_check check_blog_dependency_failures_are_reported
+      run_isolated_check check_blog_enable_failures_are_reported
+      run_isolated_check check_blog_hugo_install_failures_are_actionable
+      run_isolated_check check_blog_install_summary_matches_local_health
+      run_isolated_check check_blog_nginx_start_path_is_explicit
+      run_isolated_check check_blog_publish_guidance_uses_staging_output
+      run_isolated_check check_blog_publish_helper_is_atomic
+      run_isolated_check check_blog_restore_action
+      run_isolated_check check_blog_site_files_are_atomic
+      run_isolated_check check_blog_site_setup_failures_are_explicit
+      run_isolated_check check_blog_static_deploy_failures_are_actionable
+      run_isolated_check check_blog_static_deploy_swaps_tree
+      run_isolated_check check_bundled_impl_cleanup
+      run_isolated_check check_bundled_impl_dir_security_failure_cleanup
+      run_isolated_check check_bundled_impl_empty_payload_fails_closed
+      run_isolated_check check_bundled_impl_failure_cleanup
+      run_isolated_check check_bundled_impl_temp_names_are_random
+      run_isolated_check check_certbot_diagnostics_use_stderr
+      run_isolated_check check_config_crlf_handling
+      run_isolated_check check_config_empty_values_keep_defaults
+      run_isolated_check check_config_sanitization_behavior
+      run_isolated_check check_config_key_shape_locale_independent
+      run_isolated_check check_config_reserved_keys_are_rejected
+      run_isolated_check check_config_save_failures_are_explicit
+      run_isolated_check check_config_value_validators
+      run_isolated_check check_config_write_failure_cleanup
+      run_isolated_check check_config_writes_are_centralized
+      run_isolated_check check_config_export_uses_atomic_copy
+      run_isolated_check check_connectivity_helper_behavior
+      run_isolated_check check_cpa_stack_status_backup_projection
+      run_isolated_check check_cpa_stack_layout
+      run_isolated_check check_cpa_stack_binary_backups_are_atomic
+      run_isolated_check check_cron_logrotate_are_atomic
+      run_isolated_check check_binary_app_certbot_cron_is_published_atomically
+      run_isolated_check check_logrotate_writes_use_shared_helper
+      run_isolated_check check_cyberstrikeai_backups_are_atomic
+      run_isolated_check check_cyberstrikeai_backup_script_is_published_atomically
+      run_isolated_check check_cyberstrikeai_backup_script_publish_contract
+      run_isolated_check check_cyberstrikeai_booleans_are_validated
+      run_isolated_check check_cyberstrikeai_mirrors_are_opt_in
+      run_isolated_check check_cyberstrikeai_build_temp_cleanup
+      run_isolated_check check_cyberstrikeai_config_patch_is_atomic
+      run_isolated_check check_cyberstrikeai_dependency_failures_are_reported
+      run_isolated_check check_cyberstrikeai_git_commit_version_contract
+      run_isolated_check check_cyberstrikeai_display_sizes_are_nonfatal
+      run_isolated_check check_cyberstrikeai_enable_failures_are_reported
+      run_isolated_check check_cyberstrikeai_go_restore_failures_are_reported
+      run_isolated_check check_cyberstrikeai_go_version_parse_failures_are_explicit
+      run_isolated_check check_cyberstrikeai_health_checks_are_nonfatal_outside_install
+      run_isolated_check check_cyberstrikeai_install_summary_matches_health_state
+      run_isolated_check check_cyberstrikeai_nginx_apply_preserves_reload_diagnostics
+      run_isolated_check check_cyberstrikeai_nginx_health_probe_matches_server_name
+      run_isolated_check check_cyberstrikeai_pip_upgrade_failures_are_reported
+      run_isolated_check check_cyberstrikeai_ports_are_validated
+      run_isolated_check check_cyberstrikeai_python_env_failures_are_reported
+      run_isolated_check check_cyberstrikeai_repo_go_install_failures_are_reported
+      run_isolated_check check_cyberstrikeai_rollback_restore_is_validated
+      run_isolated_check check_cyberstrikeai_runtime_dir_failures_are_explicit
+      run_isolated_check check_cyberstrikeai_service_start_paths_are_explicit
+      run_isolated_check check_cyberstrikeai_source_and_build_prep_failures_are_explicit
+      run_isolated_check check_cyberstrikeai_uninstall_stop_disable_failures_are_reported
+      run_isolated_check check_cyberstrikeai_update_rollback_stop_failure_aborts_restore
+      run_isolated_check check_cyberstrikeai_update_rollbacks_report_restart_failures
+      run_isolated_check check_download_temp_creation_failures_are_explicit
+      run_isolated_check check_download_validation_failures_cleanup
+      run_isolated_check check_fail2ban_configs_are_atomic
+      run_isolated_check check_firewall_success_paths_validate_command_results
+      run_isolated_check check_framework_validator_errors_are_actionable
+      run_isolated_check check_generated_backup_headers_are_shell_quoted
+      run_isolated_check check_generated_backup_scripts_handle_missing_dirs
+      run_isolated_check check_github_release_tag_behavior
+      run_isolated_check check_go_tarball_failures_cleanup
+      run_isolated_check check_i18n_keys_are_consistent
+      run_isolated_check check_iptables_rules_are_atomic
+      run_isolated_check check_keyring_writes_are_atomic
+      run_isolated_check check_managed_paths_are_validated
+      run_isolated_check check_manual_backup_retention_is_normalized
+      run_isolated_check check_mutating_actions_acquire_locks
+      run_isolated_check check_no_explicit_release_lock_calls
+      run_isolated_check check_netfilter_persistent_save_reports_failures
+      run_isolated_check check_newapi_secret_uses_private_env_file
+      run_isolated_check check_newapi_backup_wal_hook_is_best_effort
+      run_isolated_check check_newapi_backup_script_is_published_atomically
+      run_isolated_check check_nginx_configs_are_atomic
+      run_isolated_check check_nginx_domains_are_validated
+      run_isolated_check check_nginx_main_config_edits_are_atomic
+      run_isolated_check check_nginx_test_failures_report_diagnostics
+      run_isolated_check check_no_chinese_comments
+      run_isolated_check check_no_fixed_tmp_downloads
+      run_isolated_check check_no_flag_chained_error_handlers
+      run_isolated_check check_no_hardcoded_chinese_impl
+      run_isolated_check check_no_unsupported_systemctl_options
+      run_isolated_check check_old_backup_cleanup_reports_failures
+      run_isolated_check check_optional_count_messages_are_nonfatal
+      run_isolated_check check_optional_directory_cleanup_is_nonfatal
+      run_isolated_check check_port_listening_process_behavior
+      run_isolated_check check_port_conflict_strict_mode_aborts
+      run_isolated_check check_port_conflict_is_warn_only
+      run_isolated_check check_preupdate_backup_logs_match_guidance
+      run_isolated_check check_preupdate_backup_warnings_include_followup_guidance
+      run_isolated_check check_random_head_pipelines_handle_sigpipe
+      run_isolated_check check_release_build_outputs_are_atomic
+      run_isolated_check check_versioned_pre_commit_checks_release_artifacts
+      run_isolated_check check_app_loader_dispatch_matches_cli
+      run_isolated_check check_root_wrappers_match_bin_loaders
+      run_isolated_check check_run_checks_parallel_cleans_tmpdir
+      run_isolated_check check_safe_path_guard
+      run_isolated_check check_safe_rm_dir_is_idempotent
+      run_isolated_check check_service_status_label
+      run_isolated_check check_shared_validators_accept_and_reject
+      run_isolated_check check_silent_backup_tar_diagnostics_use_stderr
+      run_isolated_check check_status_commands_allow_non_root
+      run_isolated_check check_status_port_matches_are_bounded
+      run_isolated_check check_sub2api_apt_failures_are_reported
+      run_isolated_check check_sub2api_backup_script_is_published_atomically
+      run_isolated_check check_sub2api_backup_script_publish_contract
+      run_isolated_check check_sub2api_codename_resolution
+      run_isolated_check check_sub2api_dependency_services_start_before_success
+      run_isolated_check check_sub2api_database_restore_fails_closed
+      run_isolated_check check_sub2api_database_restore_failure_is_nonzero
+      run_isolated_check check_sub2api_e2e_uses_real_dependency_fixture
+      run_isolated_check check_sub2api_enable_failures_are_reported
+      run_isolated_check check_sub2api_extract_move_failure_cleanup
+      run_isolated_check check_sub2api_health_checks_are_nonfatal_outside_install
+      run_isolated_check check_sub2api_install_cleanup_reports_systemctl_failures
+      run_isolated_check check_sub2api_install_summary_matches_runtime_state
+      run_isolated_check check_sub2api_manual_backup_warnings_are_actionable
+      run_isolated_check check_sub2api_nginx_install_starts_service_explicitly
+      run_isolated_check check_sub2api_nginx_reload_results_are_checked
+      run_isolated_check check_sub2api_pg_dump_errors_stay_out_of_backups
+      run_isolated_check check_sub2api_pg_password_is_escaped
+      run_isolated_check check_sub2api_uri_encode_ascii
+      run_isolated_check check_sub2api_postgres_rpm_setup_failures_are_explicit
+      run_isolated_check check_sub2api_redis_service_handling_is_explicit
+      run_isolated_check check_sub2api_rpm_dependency_failures_are_reported
+      run_isolated_check check_sub2api_runtime_dir_failures_are_explicit
+      run_isolated_check check_sub2api_service_start_paths_are_explicit
+      run_isolated_check check_sub2api_summary_does_not_print_pg_password
+      run_isolated_check check_sub2api_uninstall_stop_disable_failures_are_reported
+      run_isolated_check check_sub2api_update_rollback_stop_failure_aborts_restore
+      run_isolated_check check_sub2api_update_rollbacks_report_restart_failures
+      run_isolated_check check_sub2api_update_stop_failure_aborts_before_replace
+      run_isolated_check check_summary_ip_detection_has_fallback
+      run_isolated_check check_systemctl_status_diagnostics_are_nonfatal
+      run_isolated_check check_systemd_daemon_reloads_are_explicit
+      run_isolated_check check_systemd_helper_is_atomic
+      run_isolated_check check_systemd_units_are_atomic
+      run_isolated_check check_tar_diagnostics_use_stderr
+      run_isolated_check check_tickflow_config_files_are_atomic
+      run_isolated_check check_tickflow_dependency_failures_are_reported
+      run_isolated_check check_tickflow_directory_setup_failures_are_explicit
+      run_isolated_check check_tickflow_env_rewrites_preserve_existing_secrets
+      run_isolated_check check_tickflow_git_commit_version_contract
+      run_isolated_check check_tickflow_manual_backup_is_explicit
+      run_isolated_check check_tickflow_paths_are_guarded
+      run_isolated_check check_tickflow_preflight_defers_docker_runtime_checks
+      run_isolated_check check_tickflow_service_start_failures_show_diagnostics
+      run_isolated_check check_tickflow_status_is_structured
+      run_isolated_check check_tickflow_systemctl_failures_are_reported
+      run_isolated_check check_tickflow_systemd_shell_paths_are_quoted
+      run_isolated_check check_tickflow_uninstall_daemon_reload_failure_is_fatal
+      run_isolated_check check_tickflow_uninstall_stop_disable_failures_are_reported
+      run_isolated_check check_uninstall_binary_cleanup_reports_failures
+      run_isolated_check check_uninstall_nginx_paths_preserve_diagnostics
+      run_isolated_check check_unsafe_config_loads_fail_closed
+      run_isolated_check check_update_backs_up_before_stop
+      run_isolated_check check_update_binary_backups_are_atomic
+      run_isolated_check check_user_deletion_paths_are_explicit
+      run_isolated_check check_vaultwarden_admin_token_file_is_private
+      run_isolated_check check_vaultwarden_apt_update_failures_are_reported
+      run_isolated_check check_vaultwarden_backup_failures_include_followup_guidance
+      run_isolated_check check_vaultwarden_backup_script_is_published_atomically
+      run_isolated_check check_vaultwarden_backup_script_publish_contract
+      run_isolated_check check_vaultwarden_binary_backups_use_shared_atomic_copy
+      run_isolated_check check_vaultwarden_binary_installs_are_atomic
+      run_isolated_check check_vaultwarden_certbot_cron_failures_are_reported
+      run_isolated_check check_vaultwarden_config_values_are_validated
+      run_isolated_check check_vaultwarden_enable_failures_are_reported
+      run_isolated_check check_vaultwarden_env_file_is_atomic
+      run_isolated_check check_vaultwarden_extract_tool_is_pinned_and_verified
+      run_isolated_check check_vaultwarden_image_digest_version_contract
+      run_isolated_check check_vaultwarden_legacy_extract_tool_config_is_usable
+      run_isolated_check check_vaultwarden_fail2ban_restart_failures_are_reported
+      run_isolated_check check_vaultwarden_fail2ban_configs_use_shared_atomic_write
+      run_isolated_check check_vaultwarden_find_head_pipelines_are_nonfatal
+      run_isolated_check check_vaultwarden_install_cleanup_reports_systemctl_failures
+      run_isolated_check check_vaultwarden_install_summary_matches_health_state
+      run_isolated_check check_vaultwarden_install_webvault_replacement_is_recoverable
+      run_isolated_check check_vaultwarden_result_chains_are_explicit
+      run_isolated_check check_vaultwarden_runtime_dir_failures_are_explicit
+      run_isolated_check check_vaultwarden_runtime_service_starts_are_explicit
+      run_isolated_check check_vaultwarden_service_start_paths_are_explicit
+      run_isolated_check check_vaultwarden_status_display_commands_are_nonfatal
+      run_isolated_check check_vaultwarden_status_health_guidance_matches_local_probe
+      run_isolated_check check_vaultwarden_uninstall_stop_disable_failures_are_reported
+      run_isolated_check check_vaultwarden_update_stop_failure_aborts_before_replace
+      run_isolated_check check_vaultwarden_version_probe_has_fallback
+      run_isolated_check check_vaultwarden_webvault_archives_are_validated
+      run_isolated_check check_vaultwarden_webvault_replacements_are_atomic
+      run_isolated_check check_vaultwarden_webvault_restore_cleans_partial
+      run_isolated_check check_vaultwarden_webvault_update_warnings_are_actionable
+      run_isolated_check check_vaultwarden_workdir_cleanup_traps_are_nonfatal
+      run_isolated_check check_filebrowser_uses_shared_binary_lifecycle
+      run_isolated_check check_filebrowser_release_asset_mapping
+      run_isolated_check check_filebrowser_root_directory_is_prepared
+      run_isolated_check check_alist_uses_shared_binary_lifecycle
+      run_isolated_check check_alist_release_asset_mapping
+      run_isolated_check check_alist_config_rewrites_use_shared_atomic_write
+      run_isolated_check check_meilisearch_uses_shared_binary_lifecycle
+      run_isolated_check check_meilisearch_release_asset_mapping
+      run_isolated_check check_meilisearch_config_is_managed_atomically
+      run_isolated_check check_ntfy_uses_shared_binary_lifecycle
+      run_isolated_check check_ntfy_release_asset_mapping
+      run_isolated_check check_ntfy_config_is_managed_atomically
+      run_isolated_check check_gotify_uses_shared_binary_lifecycle
+      run_isolated_check check_gotify_release_asset_mapping
+      run_isolated_check check_gotify_env_is_managed_atomically
+      run_isolated_check check_beszel_uses_shared_binary_lifecycle
+      run_isolated_check check_beszel_release_asset_mapping
+      run_isolated_check check_beszel_env_is_managed_atomically
+      run_isolated_check check_gitea_uses_shared_binary_lifecycle
+      run_isolated_check check_gitea_release_asset_mapping
+      run_isolated_check check_gitea_config_is_managed_atomically
+      run_isolated_check check_frps_uses_shared_binary_lifecycle
+      run_isolated_check check_frps_release_asset_mapping
+      run_isolated_check check_frps_config_is_managed_atomically
+      run_isolated_check check_navidrome_uses_shared_binary_lifecycle
+      run_isolated_check check_navidrome_release_asset_mapping
+      run_isolated_check check_navidrome_music_folder_is_prepared
+      run_isolated_check check_state_json_contract
+      run_isolated_check check_state_all_registered_apps_enumerated
+      run_isolated_check check_state_target_selection
+      run_isolated_check check_state_scalar_parser_and_severity
+      run_isolated_check check_state_operation_error_code_projection
+      run_isolated_check check_state_backup_extension_contract
+      run_isolated_check check_state_binary_backup_adapter
+      run_isolated_check check_state_backup_config_trust_gate
+      run_isolated_check check_state_status_matrix
+      run_isolated_check check_state_load_failure_isolation
+      run_isolated_check check_state_no_network_locality
+      run_isolated_check check_state_problems_filtering
+      run_isolated_check check_health_all_target
+      run_isolated_check check_version_helpers
+      run_isolated_check check_operation_records
+      run_isolated_check check_operation_json_escape_matches_app_json_string
+      run_isolated_check check_operation_logrotate_policy
+      run_isolated_check check_operation_logrotate_uses_shared_atomic_writer
+      run_isolated_check check_history_command
+      run_isolated_check check_operation_scopes_are_distinct
+      run_isolated_check check_app_action_operation_wrapping
+      run_isolated_check check_operation_failure_traps
+      run_isolated_check check_operation_signal_interruption
+      run_isolated_check check_backup_all_dry_run
+      run_isolated_check check_backup_all_executes_serially_and_records_manager_operation
+      run_isolated_check check_backup_finalize_archive_helper
+      run_isolated_check check_backup_integrity_primitives
+      run_isolated_check check_sub2api_manual_backups_finalize_integrity
+      run_isolated_check check_sub2api_preupdate_backup_finalizes_metadata
+      run_isolated_check check_vaultwarden_preupdate_backup_finalizes_metadata
+      run_isolated_check check_vaultwarden_restore_preserves_env_file
+      run_isolated_check check_binary_impls_have_verify_delegate
+      run_isolated_check check_custom_impls_have_verify_delegate
+      run_isolated_check check_shared_impls_have_restore_delegate
+      run_isolated_check check_blog_backup_writes_integrity_metadata
+      run_isolated_check check_binary_app_backup_writes_integrity_metadata
+      run_isolated_check check_runtime_backup_finalizes_integrity_metadata
+      run_isolated_check check_generated_backup_scripts_write_sidecars
+      run_isolated_check check_generated_backup_scripts_write_manifests
+      run_isolated_check check_generated_backup_retention_removes_metadata
+      run_isolated_check check_generated_backup_scripts_manifest_contract
+      run_isolated_check check_backup_archives_are_private
+      run_isolated_check check_registry_restore_capability_matches_impl
+      run_isolated_check check_backup_validate_gzip_archive
+      run_isolated_check check_backup_restore_directory_lifecycle
+      run_isolated_check check_backup_restore_data_dir_lifecycle
+      run_isolated_check check_notification_fail_open_and_redaction
+      run_isolated_check check_schedule_units_are_atomic_and_cleaned_up
+      run_isolated_check check_schedule_retries_are_configurable
+      run_isolated_check check_per_app_event_notifications
+      run_isolated_check check_compose_shared_layer_and_tickflow_delegation
+      run_isolated_check check_compose_lifecycle_and_health
+      run_isolated_check check_fleet_host_validation_and_isolation
+      run_isolated_check check_migration_export_import_roundtrip
+      run_isolated_check check_batch_target_selection_is_local_only
+      run_isolated_check check_doctor_all_target
+      run_isolated_check check_update_version_cache_and_network_failures
+      run_isolated_check check_check_update_target
+      run_isolated_check check_update_all_dry_run_target
+      run_isolated_check check_update_all_execution_is_serial_and_safe
+      run_isolated_check check_update_target_selection_is_local_only
+      run_isolated_check check_update_all_writes_manager_operation_record
+      run_isolated_check check_release_package_artifacts
+      run_isolated_check check_self_version_and_manifest_checks
+      run_isolated_check check_self_update_protects_checkout_and_standalone
+      run_isolated_check check_self_update_dry_run_validation
+      run_isolated_check check_self_update_managed_rehearsal
+      run_isolated_check check_self_update_activation_and_rollback
+      run_isolated_check check_self_update_rejects_archive_listing_failure
+      run_isolated_check check_self_update_interruption_restores_activation
+      run_isolated_check check_self_update_signal_interruption
+      run_isolated_check check_security_defaults_and_public_bind_guard
+      run_isolated_check check_security_audit_contract
+      run_isolated_check check_target_groups_cover_all_checks
       echo "Guards verification passed"
       return 0
       ;;
 
     all) ;;
     shellcheck)
-      check_shell_syntax
-      check_shellcheck
+      run_isolated_check check_shell_syntax
+      run_isolated_check check_shellcheck
       echo "Shellcheck verification passed"
       return 0
       ;;
