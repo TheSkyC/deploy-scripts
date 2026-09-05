@@ -8984,7 +8984,7 @@ _write_backup_script() {
 # Auto-generated Vaultwarden backup script.
 set -euo pipefail
 umask 077   # Backup files include secrets and must be root-readable only.
-BKSH
+BKSH_PRE
     cat << BKSH_VARS
 BACKUP_DIR="${VW_BACKUP_DIR}"
 DATA_DIR="${VW_DATA_DIR}"
@@ -9004,7 +9004,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
 
-BKSH_PRE
+BKSH
     backup_standalone_manifest_fragment vaultwarden
     backup_standalone_publish_fragment
     cat << 'BKSH_REST'
