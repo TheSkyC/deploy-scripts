@@ -1670,6 +1670,38 @@ MANIFEST_FRAGMENT
 }
 
 
+# Emit the standalone archive-publish helper block (_publish_backup_artifact) for
+# generated cron scripts. It complements backup_standalone_manifest_fragment and
+# keeps the sidecar+manifest publication identical across generated scripts. The
+# generated script cannot source this library at runtime, so installers inline the
+# emitted fragment at generation time.
+backup_standalone_publish_fragment() {
+  cat <<'PUBLISH_FRAGMENT'
+# Publish a staged backup artifact: move it into place, enforce private
+# mode (0600)and write a best-effort sha256 sidecar. Returns 0 only when
+#the move succeeds; a failed move removes the staging file. Sidecar
+# failures are non-fatal because umask 077 already keeps archives private
+#and the next run rewrites the sidecar.
+_publish_backup_artifact() {
+  local tmp="$1" final="$2"
+  if ! mv "$tmp" "$final"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  chmod 600 "$final" 2>/dev/null || true
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
+    chmod 600 "$final.sha256" 2>/dev/null || true
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
+    chmod 600 "$final.sha256" 2>/dev/null || true
+  fi
+  _write_manifest "${final}"
+  return 0
+}
+PUBLISH_FRAGMENT
+}
+
 # Verify one archive: recompute the digest and compare against both the
 # sidecar and (when present) the manifest. Prints nothing; returns nonzero on
 # any mismatch or missing artifact. A missing sidecar fails closed — archives
@@ -8400,6 +8432,7 @@ PG_DUMP_TMP="${PG_DUMP_FILE}.tmp"
 _log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
 BKSH_BODY_PRE
     backup_standalone_manifest_fragment sub2api
+    backup_standalone_publish_fragment
     cat << 'BKSH_BODY_REST'
 
 if ! mkdir -p "${BACKUP_DIR}"; then
@@ -8407,29 +8440,6 @@ if ! mkdir -p "${BACKUP_DIR}"; then
   exit 1
 fi
 _log "── ${MSG_START} ────────────────────────────────────"
-
-# Publish a staged backup artifact: move it into place, enforce private
-# mode (0600) and write a best-effort sha256 sidecar. Returns 0 only when
-# the move succeeds; a failed move removes the staging file. Sidecar
-# failures are non-fatal because umask 077 already keeps archives private
-# and the next run rewrites the sidecar.
-_publish_backup_artifact() {
-  local tmp="$1" final="$2"
-  if ! mv "$tmp" "$final"; then
-    rm -f "$tmp"
-    return 1
-  fi
-  chmod 600 "$final" 2>/dev/null || true
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
-    chmod 600 "$final.sha256" 2>/dev/null || true
-  elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$final" | awk '{print $1"  "$(NF)}' > "$final.sha256" || true
-    chmod 600 "$final.sha256" 2>/dev/null || true
-  fi
-  _write_manifest "${final}"
-  return 0
-}
 
 # ── 1. PostgreSQL database backup ─────────────────────────────
 if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then

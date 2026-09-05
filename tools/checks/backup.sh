@@ -1787,24 +1787,30 @@ check_runtime_backup_finalizes_integrity_metadata() {
 # reference shell vars directly; the unquoted cyberstrikeai heredoc escapes
 # them — accept both spellings.
 check_generated_backup_scripts_write_sidecars() {
-  for impl in install_newapi.sh install_vaultwarden.sh; do
-    grep -q 'sha256sum "${ARCHIVE}"' "impl/$impl" \
-      || { echo "$impl generated backup script must write a sha256 sidecar" >&2; return 1; }
-    grep -q 'chmod 600 "${ARCHIVE}.sha256"' "impl/$impl" \
-      || { echo "$impl sidecar must be written with mode 600" >&2; return 1; }
+  grep -q 'sha256sum "${ARCHIVE}"' impl/install_newapi.sh \
+    || { echo "newapi generated backup script must write a sha256 sidecar" >&2; return 1; }
+  grep -q 'chmod 600 "${ARCHIVE}.sha256"' impl/install_newapi.sh \
+    || { echo "newapi sidecar must be written with mode 600" >&2; return 1; }
+  grep -q 'backup_standalone_publish_fragment()' lib/backup.sh \
+    || { echo "shared standalone publish fragment must live in lib/backup.sh" >&2; return 1; }
+  grep -q 'sha256sum "$final"' lib/backup.sh \
+    || { echo "shared standalone publish fragment must write a sha256 sidecar" >&2; return 1; }
+  grep -q 'chmod 600 "$final.sha256"' lib/backup.sh \
+    || { echo "shared standalone sidecar must be written with mode 600" >&2; return 1; }
+  for app in vaultwarden sub2api; do
+    grep -q '_publish_backup_artifact' "impl/install_$app.sh" \
+      || { echo "$app generated backup script must publish through the shared private helper" >&2; return 1; }
   done
-  grep -q 'sha256sum "$final"' impl/install_sub2api.sh \
-    || { echo "sub2api publish helper must write a sha256 sidecar" >&2; return 1; }
-  grep -q 'chmod 600 "$final.sha256" 2>/dev/null || true' impl/install_sub2api.sh \
-    || { echo "sub2api sidecar must be written with mode 600" >&2; return 1; }
+  grep -q '_publish_backup_artifact' impl/install_cyberstrikeai.sh \
+    || { echo "cyberstrikeai generated backup script must publish through the shared private helper" >&2; return 1; }
+  grep -q '_publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden data-archive publication missing" >&2; return 1; }
+  grep -q '_publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"' impl/install_sub2api.sh \
+    || { echo "sub2api data-archive publication missing" >&2; return 1; }
   grep -q '_publish_backup_artifact "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"' impl/install_sub2api.sh \
     || { echo "sub2api pg_dump sidecar publication missing" >&2; return 1; }
   grep -q '_publish_backup_artifact "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"' impl/install_sub2api.sh \
     || { echo "sub2api config-archive publication missing" >&2; return 1; }
-  grep -q '_publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"' impl/install_sub2api.sh \
-    || { echo "sub2api data-archive publication missing" >&2; return 1; }
-  grep -q 'sha256sum "\\$archive"' impl/install_cyberstrikeai.sh \
-    || { echo "cyberstrikeai generated backup script must write a sha256 sidecar" >&2; return 1; }
 }
 # The generated standalone cron backup scripts must publish the same integrity
 # triad as runtime backups: private archive + sha256 sidecar + manifest.json.
@@ -1984,20 +1990,16 @@ GENMANIFEST
 # Quoted heredocs reference shell vars directly; the unquoted cyberstrikeai
 # heredoc escapes them — accept both spellings.
 check_backup_archives_are_private() {
-  grep -q 'chmod 600 "${ARCHIVE}" 2>/dev/null || true' impl/install_vaultwarden.sh \
-    || { echo "vaultwarden backup archive must be published with mode 600" >&2; return 1; }
-  grep -q '_publish_backup_artifact()' impl/install_sub2api.sh \
-    || { echo "sub2api backup archives must go through the shared private publish helper" >&2; return 1; }
-  grep -q 'chmod 600 "$final" 2>/dev/null || true' impl/install_sub2api.sh \
-    || { echo "sub2api backup archives must be published with mode 600" >&2; return 1; }
-  grep -q '_publish_backup_artifact "${PG_DUMP_TMP}" "${PG_DUMP_FILE}"' impl/install_sub2api.sh \
-    || { echo "sub2api pg_dump archive must be published with mode 600" >&2; return 1; }
-  grep -q '_publish_backup_artifact "${EXTRA_CONF_TMP}" "${EXTRA_CONF_ARCHIVE}"' impl/install_sub2api.sh \
-    || { echo "sub2api config archive must be published with mode 600" >&2; return 1; }
-  grep -q '_publish_backup_artifact "${ARCHIVE_TMP}" "${ARCHIVE}"' impl/install_sub2api.sh \
-    || { echo "sub2api data archive must be published with mode 600" >&2; return 1; }
-  grep -q 'chmod 600 "\\$archive" 2>/dev/null || true' impl/install_cyberstrikeai.sh \
-    || { echo "cyberstrikeai backup archive must be published with mode 600" >&2; return 1; }
+  grep -q 'backup_standalone_publish_fragment()' lib/backup.sh \
+    || { echo "shared standalone publish helper must live in lib/backup.sh" >&2; return 1; }
+  grep -q 'chmod 600 "$final" 2>/dev/null || true' lib/backup.sh \
+    || { echo "shared standalone publish helper must publish archives with mode 600" >&2; return 1; }
+  for app in vaultwarden sub2api; do
+    grep -q '_publish_backup_artifact' "impl/install_$app.sh" \
+      || { echo "$app backup archive must be published through the shared private helper" >&2; return 1; }
+  done
+  grep -q '_publish_backup_artifact' impl/install_cyberstrikeai.sh \
+    || { echo "cyberstrikeai backup archive must be published through the shared private helper" >&2; return 1; }
   grep -q 'backup_create_tar_archive "$archive" -C /' impl/install_cpa_stack.sh \
     || { echo "cpa-stack backup archive must be published through the shared 0600 tar publisher" >&2; return 1; }
 }
