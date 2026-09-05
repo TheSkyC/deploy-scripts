@@ -12,7 +12,7 @@ check_sub2api_backup_script_is_published_atomically() {
       # heredocs; skip their literal contents so template functions with a
       # column-0 closing brace do not end the function scope early.
       in_func && !in_heredoc && /^[[:space:]]*cat << .*BKSH_(HEADER|BODY)/ { in_heredoc=1; next }
-      in_func && in_heredoc && /^BKSH_(HEADER|BODY)$/ { in_heredoc=0; next }
+      in_func && in_heredoc && /^BKSH_(HEADER|BODY(_REST)?)$/ { in_heredoc=0; next }
       in_func && !in_heredoc && /atomic_write_file "\$backup_script" 750 root:root/ { saw_atomic=1 }
       in_func && !in_heredoc && /mktemp "\$\{backup_script\}\.XXXXXX"/ { saw_legacy_temp=1 }
       in_func && !in_heredoc && /^}/ {

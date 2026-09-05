@@ -1635,6 +1635,41 @@ MANIFEST
   fi
 }
 
+# Emit the standalone backup-manifest helper block (callable _json_string +
+# _write_manifest) for generated cron scripts. The generated script cannot
+# source this library at runtime, so installers inline the emitted fragment at
+# generation time. The only per-app difference is the manifest app id.
+backup_standalone_manifest_fragment() {
+  local app_id="$1"
+  sed "s/APP_ID/$app_id/g" <<'MANIFEST_FRAGMENT'
+# Minimal JSON string literal for manifest fields (best-effort; archive
+# names and timestamps never contain control bytes).
+_json_string() {
+  local s="${1:-}"
+  [[ -n "$s" ]] || { printf 'null'; return; }
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "$s"
+}
+
+# Write the integrity manifest next to a completed archive, matching the
+# shared backup contract: schema, app, archive name, digest, creation time.
+# Best-effort like the sidecar: a failed manifest write never fails the
+# backup, and verify keeps reporting the archive via the sidecar.
+_write_manifest() {
+  local archive="$1"
+  [[ -f "${archive}.sha256" ]] || return 0
+  printf '{"schema_version":1,"app":"APP_ID","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' \
+    "$(_json_string "$(basename "$archive")")" \
+    "$(awk '{print $1}' "${archive}.sha256")" \
+    "$(_json_string "$(date '+%Y-%m-%dT%H:%M:%S%:z')")" \
+    > "${archive}.manifest.json" 2>/dev/null || true
+  chmod 600 "${archive}.manifest.json" 2>/dev/null || true
+}
+MANIFEST_FRAGMENT
+}
+
+
 # Verify one archive: recompute the digest and compare against both the
 # sidecar and (when present) the manifest. Prints nothing; returns nonzero on
 # any mismatch or missing artifact. A missing sidecar fails closed — archives
@@ -8353,7 +8388,7 @@ MSG_REMOVED_OLD="${msg_removed_old}"
 MSG_REMOVE_FAILED="${msg_remove_failed}"
 MSG_DONE="${msg_done}"
 BKSH_HEADER
-    cat << 'BKSH_BODY'
+    cat << 'BKSH_BODY_PRE'
 
 LOG="${BACKUP_DIR}/backup.log"
 TS=$(date +%Y%m%d_%H%M%S)
@@ -8363,30 +8398,9 @@ PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
 PG_DUMP_TMP="${PG_DUMP_FILE}.tmp"
 
 _log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
-# Minimal JSON string literal for manifest fields (best-effort; archive
-# names and timestamps never contain control bytes).
-_json_string() {
-  local s="${1:-}"
-  [[ -n "$s" ]] || { printf 'null'; return; }
-  s="${s//\\/\\\\}"
-  s="${s//\"/\\\"}"
-  printf '"%s"' "$s"
-}
-
-# Write the integrity manifest next to a completed archive, matching the
-# shared backup contract: schema, app, archive name, digest, creation time.
-# Best-effort like the sidecar: a failed manifest write never fails the
-# backup, and verify keeps reporting the archive via the sidecar.
-_write_manifest() {
-  local archive="$1"
-  [[ -f "${archive}.sha256" ]] || return 0
-  printf '{"schema_version":1,"app":"sub2api","archive":%s,"sha256":"%s","created_at":%s,"installed_version":null}\n' \
-    "$(_json_string "$(basename "$archive")")" \
-    "$(awk '{print $1}' "${archive}.sha256")" \
-    "$(_json_string "$(date '+%Y-%m-%dT%H:%M:%S%:z')")" \
-    > "${archive}.manifest.json" 2>/dev/null || true
-  chmod 600 "${archive}.manifest.json" 2>/dev/null || true
-}
+BKSH_BODY_PRE
+    backup_standalone_manifest_fragment sub2api
+    cat << 'BKSH_BODY_REST'
 
 if ! mkdir -p "${BACKUP_DIR}"; then
   printf '%s  %s\n' "$(date '+%F %T')" "$(printf "$MSG_BACKUP_DIR_FAILED" "$BACKUP_DIR")" >&2
@@ -8503,7 +8517,7 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
 fi
 
 _log "── ${MSG_DONE} ────────────────────────────────────"
-BKSH_BODY
+BKSH_BODY_REST
   } | atomic_write_file "$backup_script" 750 root:root; then
     error "$(t app.sub2api.error.backup_script)"
   fi

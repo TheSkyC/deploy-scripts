@@ -18,7 +18,7 @@ check_cyberstrikeai_backup_script_is_published_atomically() {
       # heredoc; skip its literal contents so template functions with a
       # column-0 closing brace do not end the function scope early.
       in_func && !in_heredoc && /^[[:space:]]*cat[[:space:]]+<<BACKUP/ { in_heredoc=1; next }
-      in_func && in_heredoc && $0 == "BACKUP" { in_heredoc=0; next }
+      in_func && in_heredoc && $0 ~ /^BACKUP(_HEAD|_TAIL)?$/ { in_heredoc=0; next }
       in_func && !in_heredoc && /atomic_write_file "\$BACKUP_SCRIPT" 750 root:root/ { saw_atomic=1 }
       in_func && !in_heredoc && /mktemp "\$\{BACKUP_SCRIPT\}\.XXXXXX"/ { saw_legacy_temp=1 }
       in_func && !in_heredoc && /^}/ {
