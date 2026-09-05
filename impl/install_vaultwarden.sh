@@ -1386,52 +1386,14 @@ do_update() {
       error "$(t app.vaultwarden.error.no_backup_binary)"
     fi
   fi
-  local -a _old_baks
-  local _old_bak_entry
-  while IFS= read -r -d '' _old_bak_entry; do
-    _old_baks+=("${_old_bak_entry#* }")
-  done < <(find "$(dirname "$VW_BIN")" -maxdepth 1 \
-    -name "vaultwarden.bak.*" -type f -printf '%T@ %p\0' 2>/dev/null \
-    | sort -z -rn | tail -z -n +4)
-  if [[ ${#_old_baks[@]} -gt 0 ]]; then
-    local _cleaned_old=0
-    local _old_bak
-    for _old_bak in "${_old_baks[@]}"; do
-      if rm -f "$_old_bak"; then
-        _cleaned_old=$(( _cleaned_old + 1 ))
-      else
-        warn "$(t app.vaultwarden.warn.cleanup_old_binary_failed "$_old_bak")"
-      fi
-    done
-    if [[ $_cleaned_old -gt 0 ]]; then
-      info "$(t app.vaultwarden.info.cleaned_old_binaries "$_cleaned_old")"
-    fi
-  fi
+  app_prune_update_backups "$(dirname "$VW_BIN")" "vaultwarden.bak.*" \
+    app.vaultwarden.warn.cleanup_old_binary_failed app.vaultwarden.info.cleaned_old_binaries 3 f
   local _wv_parent
   _wv_parent=$(dirname "$VW_WEB_DIR")
   local _wv_basename
   _wv_basename=$(basename "$VW_WEB_DIR")
-  local -a _old_wv_baks
-  local _old_wv_bak_entry
-  while IFS= read -r -d '' _old_wv_bak_entry; do
-    _old_wv_baks+=("${_old_wv_bak_entry#* }")
-  done < <(find "$_wv_parent" -maxdepth 1 \
-    -name "${_wv_basename}.bak.*" -type d -printf '%T@ %p\0' 2>/dev/null \
-    | sort -z -rn | tail -z -n +4)
-  if [[ ${#_old_wv_baks[@]} -gt 0 ]]; then
-    local _cleaned_wv=0
-    local _old_wv_bak
-    for _old_wv_bak in "${_old_wv_baks[@]}"; do
-      if rm -rf "$_old_wv_bak"; then
-        _cleaned_wv=$(( _cleaned_wv + 1 ))
-      else
-        warn "$(t app.vaultwarden.warn.cleanup_old_webvault_failed "$_old_wv_bak")"
-      fi
-    done
-    if [[ $_cleaned_wv -gt 0 ]]; then
-      info "$(t app.vaultwarden.info.cleaned_webvault_backups "$_cleaned_wv")"
-    fi
-  fi
+  app_prune_update_backups "$_wv_parent" "${_wv_basename}.bak.*" \
+    app.vaultwarden.warn.cleanup_old_webvault_failed app.vaultwarden.info.cleaned_webvault_backups 3 d
   _vw_record_installed_image
   app_save_config
 }
