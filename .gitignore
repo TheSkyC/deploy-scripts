@@ -5,3 +5,4 @@ dist/*_impl.sh
 progress.log
 guards_final.log
 lib/*.sh.bak
+docs/progress.log
