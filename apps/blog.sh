@@ -206,6 +206,10 @@ i18n_register app.blog.latest_version \
 i18n_register app.blog.pinned_version \
   "Pinned Hugo version: v%s" \
   "固定 Hugo 版本：v%s"
+
+i18n_register app.blog.info.hugo_floating \
+  "Hugo follows the moving latest release (v%s); set HUGO_VERSION to an exact release to make future installs reproducible." \
+  "Hugo 跟随会移动的 latest 发布（v%s）；如需让后续安装可复现，请设置 HUGO_VERSION 为精确版本号。"
 i18n_register app.blog.download_url \
   "Download: %s" \
   "下载：%s"

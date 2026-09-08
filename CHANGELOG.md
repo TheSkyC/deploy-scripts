@@ -79,6 +79,9 @@ for the framework release archives produced by `tools/build-release.sh`.
   pinned installs show the configured commit (and warn when the checkout has
   drifted from it), while unpinned installs call out that the deployment
   follows a moving branch and how to pin an exact revision.
+- Install and update of the Hugo blog deployment now print a notice when no
+  `HUGO_VERSION` is configured, so an operator sees that Hugo follows the
+  moving latest release and how to pin an exact release.
 
 ### Fixed
 

@@ -120,6 +120,8 @@ check_blog_hugo_version_contract() {
   grep -Fq 'HUGO_VERSION INSTALLED_VERSION' impl/install_hugo_blog.sh
   grep -Fq 'APP_CHECK_UPDATE_FN=_blog_check_update_json' impl/install_hugo_blog.sh
   grep -Fq 'APP_STATUS_VERSION_FN=_blog_status_version_json' impl/install_hugo_blog.sh
+  grep -Fq 'info "$(t app.blog.info.hugo_floating "$hugo_ver")"' impl/install_hugo_blog.sh
+  grep -Fq 'app.blog.info.hugo_floating' apps/blog.sh
 }
 
 check_blog_config_persistence() {
