@@ -94,6 +94,11 @@ for the framework release archives produced by `tools/build-release.sh`.
 - Root-level `status` for the GitHub-release binary applications now reports the
   configured release pin (`BA_VERSION`) or, when unpinned, calls out that install
   and update follow the moving latest release and how to pin an exact release tag.
+- Root-level `status` for Vaultwarden now reports the image pin state when root:
+  a configured `VW_IMAGE_DIGEST` is confirmed (or warns when it differs from the
+  installed digest, or shows it is configured but not yet applied), while a
+  tag-tracked deployment calls out that the image follows the tag and how to make
+  it immutable with a full sha256 digest.
 
 ### Fixed
 

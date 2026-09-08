@@ -1609,6 +1609,19 @@ do_status() {
   else
     echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.binary_missing "$VW_BIN")"
   fi
+  if [[ $EUID -eq 0 ]]; then
+    if [[ -n "${VW_IMAGE_DIGEST:-}" ]]; then
+      if [[ -n "${INSTALLED_IMAGE_DIGEST:-}" && "$INSTALLED_IMAGE_DIGEST" == "$VW_IMAGE_DIGEST" ]]; then
+        echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.image_pin_ok "$VW_IMAGE_DIGEST")"
+      elif [[ -n "${INSTALLED_IMAGE_DIGEST:-}" ]]; then
+        echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.image_pin_mismatch "$VW_IMAGE_DIGEST" "$INSTALLED_IMAGE_DIGEST")"
+      else
+        echo -e "  $(t app.vaultwarden.status.image_pin_configured "$VW_IMAGE_DIGEST")"
+      fi
+    else
+      echo -e "  $(t app.vaultwarden.status.image_tag "${VW_IMAGE_TAG:-latest}")"
+    fi
+  fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.data_dir "$VW_DATA_DIR")]${NC}"
   if [[ -d "$VW_DATA_DIR" ]]; then
     local _data_entry _data_file

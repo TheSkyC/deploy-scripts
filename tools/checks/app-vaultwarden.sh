@@ -1279,6 +1279,25 @@ check_vaultwarden_image_digest_version_contract() {
   grep -Fq 'app.vaultwarden.error.image_digest_invalid' apps/vaultwarden.sh
   grep -Fq '"$image_reference" >&2' impl/install_vaultwarden.sh
   grep -Fq '_vw_pinned_image_json' impl/install_vaultwarden.sh
+  awk '
+      /^do_status\(\)/ { in_status=1; next }
+      in_status && /^}/ { in_status=0 }
+      in_status && /if \[\[ \$EUID -eq 0 \]\]; then/ { saw_root_gate=1 }
+      in_status && /app\.vaultwarden\.status\.image_pin_ok/ { saw_pin_ok=1 }
+      in_status && /app\.vaultwarden\.status\.image_pin_mismatch/ { saw_mismatch=1 }
+      in_status && /app\.vaultwarden\.status\.image_pin_configured/ { saw_configured=1 }
+      in_status && /app\.vaultwarden\.status\.image_tag/ { saw_tag=1 }
+      END {
+        if (!(saw_root_gate && saw_pin_ok && saw_mismatch && saw_configured && saw_tag)) {
+          printf "%s root status must surface the configured image digest/tag pin state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh
+  grep -Fq 'app.vaultwarden.status.image_pin_ok' apps/vaultwarden.sh
+  grep -Fq 'app.vaultwarden.status.image_pin_mismatch' apps/vaultwarden.sh
+  grep -Fq 'app.vaultwarden.status.image_pin_configured' apps/vaultwarden.sh
+  grep -Fq 'app.vaultwarden.status.image_tag' apps/vaultwarden.sh
 }
 
 
