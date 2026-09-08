@@ -364,6 +364,12 @@ i18n_register_many \
   binary_app.status.health_url \
   "Local health URL: %s" \
   "本地健康检查地址：%s" \
+  binary_app.status.pin_set \
+  "Release is pinned to %s (BA_VERSION)." \
+  "版本已固定到 %s（BA_VERSION）。" \
+  binary_app.status.unpinned \
+  "Not pinned: install and update follow the moving latest release. Set BA_VERSION to an exact release tag to pin it." \
+  "未固定版本：安装与更新跟随会移动的 latest 发布。如需固定，请设置 BA_VERSION 为精确的发布标签。" \
   binary_app.prompt.continue \
   "Continue with uninstall? Type YES:" \
   "是否继续卸载？请输入 YES：" \
@@ -1438,6 +1444,13 @@ bapp_status() {
   if [[ -f "$CONF_FILE" ]]; then
     printf '%s\n' "$(t binary_app.status.service "$SERVICE_NAME" "$(service_status_label "$SERVICE_NAME")")"
     printf '%s\n' "$(t binary_app.status.version "${INSTALLED_VERSION:-unknown}")"
+    if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+      if [[ -n "${BA_VERSION:-}" ]]; then
+        printf '%s\n' "$(t binary_app.status.pin_set "$BA_VERSION")"
+      else
+        printf '%s\n' "$(t binary_app.status.unpinned)"
+      fi
+    fi
     printf '%s\n' "$(t binary_app.status.health_url "${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}")"
     printf '\n%s\n' "$(t binary_app.status.paths)"
     local path

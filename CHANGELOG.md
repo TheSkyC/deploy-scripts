@@ -91,6 +91,9 @@ for the framework release archives produced by `tools/build-release.sh`.
   filebrowser, frps, gitea, gotify, meilisearch, navidrome, newapi, ntfy) now
   print a notice when no `BA_VERSION` is configured, so an operator sees that the
   deployment follows the moving latest release and how to pin an exact release tag.
+- Root-level `status` for the GitHub-release binary applications now reports the
+  configured release pin (`BA_VERSION`) or, when unpinned, calls out that install
+  and update follow the moving latest release and how to pin an exact release tag.
 
 ### Fixed
 

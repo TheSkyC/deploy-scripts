@@ -488,7 +488,22 @@ check_binary_app_unpinned_version_notice() {
         }
       }
     ' lib/binary_app.sh
+  awk '
+      /^bapp_status\(\)/ { current="status"; next }
+      /^}/ { current="" }
+      current == "status" && /if \[\[ \$\{EUID:-\$\(id -u\)\} -eq 0 \]\]/ { saw_root_gate=1 }
+      current == "status" && /binary_app\.status\.pin_set/ { saw_pin=1 }
+      current == "status" && /binary_app\.status\.unpinned/ { saw_unpinned=1 }
+      END {
+        if (!(saw_root_gate && saw_pin && saw_unpinned)) {
+          printf "%s root binary-app status must report the configured pin or the unpinned moving-latest state\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
   grep -Fq 'binary_app.info.unpinned_version' lib/binary_app.sh
+  grep -Fq 'binary_app.status.pin_set' lib/binary_app.sh
+  grep -Fq 'binary_app.status.unpinned' lib/binary_app.sh
 }
 
 check_no_unsupported_systemctl_options() {
