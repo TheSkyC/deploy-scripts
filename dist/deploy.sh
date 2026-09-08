@@ -2547,6 +2547,18 @@ version_check_emit_json() {
     "$(state_json_nullable "$(operation_safe_summary "$error_summary")")"
 }
 
+# Emit a locally compared pinned-release payload. A configured exact release
+# tag is an immutable target: the verdict compares the installed version
+# against the pin locally, without querying a moving upstream release or the
+# version cache. Pinned GitHub-release deployments (binary_app, Hugo) share
+# this projection so central status and check-update agree with their
+# pin-respecting install/update lifecycle.
+version_check_pinned_release_json() {
+  local installed="$1" pin="$2" result
+  result="$(version_check_result_for_versions "$installed" "$pin")"
+  version_check_emit_json "$installed" "$pin" "" "$result" github_release pinned
+}
+
 # Emit a component entry from a normal version-check payload. This keeps the
 # top-level JSON contract stable while custom multi-component deployments can
 # expose typed, independently checked records to status and manager tooling.
@@ -5264,15 +5276,38 @@ bapp_status_backup_json() {
   app_status_backup_json "BACKUP_DIR" "${BACKUP_DIR:-}" \
     "backup directory is unsafe or missing" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz"
 }
+# Resolve the configured release pin for the status/check projections. The pin
+# is persisted in the deployment config and is adopted only after the
+# root/600/400 trust gate passes; an environment BA_VERSION is honored only
+# when no trusted config value exists (for example adapter-level unit checks).
+bapp_configured_pin() {
+  local conf_file="$1" pin="${BA_VERSION:-}" trusted
+  if [[ -n "$conf_file" && -f "$conf_file" ]]; then
+    trusted="$(app_conf_trusted_value "$conf_file" "BA_VERSION" 2>/dev/null || true)"
+    [[ -n "$trusted" ]] && pin="$trusted"
+  fi
+  printf '%s\n' "$pin"
+}
+
 bapp_status_version_json() {
-  local conf_file installed
+  local conf_file installed pin
   conf_file="$(app_conf_file)"
   installed="$(app_config_installed_version "$conf_file" 2>/dev/null || true)"
-  version_check_cached_binary_release_json "$APP_ID" "$installed"
+  pin="$(bapp_configured_pin "$conf_file")"
+  if [[ -n "$pin" ]]; then
+    version_check_pinned_release_json "$installed" "$pin"
+  else
+    version_check_cached_binary_release_json "$APP_ID" "$installed"
+  fi
 }
 
 bapp_check_update_json() {
-  local installed="$1" refresh="${2:-0}" no_network="${3:-0}"
+  local installed="$1" refresh="${2:-0}" no_network="${3:-0}" pin
+  pin="$(bapp_configured_pin "$(app_conf_file 2>/dev/null || true)")"
+  if [[ -n "$pin" ]]; then
+    version_check_pinned_release_json "$installed" "$pin"
+    return 0
+  fi
   version_check_binary_release_json "$APP_ID" "${GITHUB_REPO:-}" "$installed" "$refresh" "$no_network"
 }
 
@@ -18958,9 +18993,7 @@ _blog_detect_hugo_version() {
 }
 
 _blog_pinned_version_json() {
-  local installed="$1" result
-  result="$(version_check_result_for_versions "$installed" "$HUGO_VERSION")"
-  version_check_emit_json "$installed" "$HUGO_VERSION" "" "$result" github_release pinned
+  version_check_pinned_release_json "$1" "$HUGO_VERSION"
 }
 
 _blog_check_update_json() {

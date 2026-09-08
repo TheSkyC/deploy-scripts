@@ -388,6 +388,7 @@ main() {
       return 0
       ;;
     update)
+      check_binary_app_pinned_target_adapters
       check_update_version_cache_and_network_failures
       check_check_update_target
       check_update_all_dry_run_target
@@ -747,6 +748,7 @@ main() {
       run_isolated_check check_migration_export_import_roundtrip
       run_isolated_check check_batch_target_selection_is_local_only
       run_isolated_check check_doctor_all_target
+      run_isolated_check check_binary_app_pinned_target_adapters
       run_isolated_check check_update_version_cache_and_network_failures
       run_isolated_check check_check_update_target
       run_isolated_check check_update_all_dry_run_target
