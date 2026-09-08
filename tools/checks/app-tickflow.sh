@@ -550,4 +550,7 @@ check_tickflow_git_commit_version_contract() {
   grep -Fq 'git -C "$repo_dir" fetch --quiet --depth 1 origin "$TICKFLOW_COMMIT"' impl/install_tickflow.sh
   grep -Fq 'git -C "$repo_dir" checkout --detach "$TICKFLOW_COMMIT"' impl/install_tickflow.sh
   grep -Fq 'app.tickflow.error.commit_invalid' apps/tickflow.sh
+  grep -Fq 'if [[ -z "${TICKFLOW_COMMIT:-}" ]]; then' impl/install_tickflow.sh
+  grep -Fq 'info "$(t app.tickflow.info.branch_floating "${TICKFLOW_BRANCH:-main}")"' impl/install_tickflow.sh
+  grep -Fq 'app.tickflow.info.branch_floating' apps/tickflow.sh
 }

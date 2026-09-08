@@ -211,6 +211,9 @@ _clone_or_update_repo() {
     fi
   fi
   _tickflow_record_installed_version
+  if [[ -z "${TICKFLOW_COMMIT:-}" ]]; then
+    info "$(t app.tickflow.info.branch_floating "${TICKFLOW_BRANCH:-main}")"
+  fi
   success "$(t app.tickflow.success.source_ready "$repo_dir")"
 }
 

@@ -1037,4 +1037,7 @@ check_cyberstrikeai_git_commit_version_contract() {
   grep -Fq 'git -C "$INSTALL_DIR" fetch --quiet --depth 1 origin "$GITHUB_COMMIT"' impl/install_cyberstrikeai.sh
   grep -Fq 'git -C "$INSTALL_DIR" checkout -q --detach "$GITHUB_COMMIT"' impl/install_cyberstrikeai.sh
   grep -Fq 'app.cyberstrikeai.error.commit_invalid' apps/cyberstrikeai.sh
+  grep -Fq 'if [[ -z "${GITHUB_COMMIT:-}" ]]; then' impl/install_cyberstrikeai.sh
+  grep -Fq 'info "$(t app.cyberstrikeai.info.branch_floating "${GITHUB_BRANCH:-main}")"' impl/install_cyberstrikeai.sh
+  grep -Fq 'app.cyberstrikeai.info.branch_floating' apps/cyberstrikeai.sh
 }
