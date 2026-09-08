@@ -70,6 +70,10 @@ for the framework release archives produced by `tools/build-release.sh`.
   finalize through the shared publisher with the integrity triad; Sub2API's
   pre-update snapshots use the same archive naming and layout as its restore
   contract so a later restore can find them.
+- Install and update of the branch-tracked applications (TickFlow and
+  CyberStrikeAI) now print a notice when no commit pin is configured, so
+  an operator sees that the deployment follows a moving branch and how to
+  pin an exact revision.
 
 ### Fixed
 

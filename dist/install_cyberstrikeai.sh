@@ -6731,6 +6731,9 @@ i18n_register_many \
   app.cyberstrikeai.info.repo_pinned \
   "Checking out pinned commit %s" \
   "正在检出固定提交 %s" \
+  app.cyberstrikeai.info.branch_floating \
+  "Deployment follows moving branch %s; set GITHUB_COMMIT to a full 40-character commit SHA to pin an exact revision." \
+  "本次部署跟随会移动的分支 %s；如需固定到精确版本，请设置 GITHUB_COMMIT 为完整的 40 位提交 SHA。" \
   app.cyberstrikeai.error.commit_fetch \
   "Failed to fetch pinned commit %s from %s. Confirm that the commit exists in the configured repository and is accessible, then retry." \
   "无法获取固定提交 %s（仓库：%s）。请确认该提交存在于配置的仓库且可访问后重试。" \
@@ -7568,6 +7571,9 @@ clone_or_update_repo() {
     fi
   fi
   _csai_record_installed_version
+  if [[ -z "${GITHUB_COMMIT:-}" ]]; then
+    info "$(t app.cyberstrikeai.info.branch_floating "${GITHUB_BRANCH:-main}")"
+  fi
   success "$(t app.cyberstrikeai.success.source_ready "$INSTALL_DIR")"
 }
 patch_config_port_and_paths() {

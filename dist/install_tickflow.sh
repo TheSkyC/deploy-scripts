@@ -6830,6 +6830,9 @@ i18n_register_many \
   app.tickflow.info.repo_pinned \
   "Checking out pinned commit %s" \
   "正在检出固定提交 %s" \
+  app.tickflow.info.branch_floating \
+  "Deployment follows moving branch %s; set TICKFLOW_COMMIT to a full 40-character commit SHA to pin an exact revision." \
+  "本次部署跟随会移动的分支 %s；如需固定到精确版本，请设置 TICKFLOW_COMMIT 为完整的 40 位提交 SHA。" \
   app.tickflow.success.source_ready \
   "Source ready: %s" \
   "源码已就绪：%s" \
@@ -7130,6 +7133,9 @@ _clone_or_update_repo() {
     fi
   fi
   _tickflow_record_installed_version
+  if [[ -z "${TICKFLOW_COMMIT:-}" ]]; then
+    info "$(t app.tickflow.info.branch_floating "${TICKFLOW_BRANCH:-main}")"
+  fi
   success "$(t app.tickflow.success.source_ready "$repo_dir")"
 }
 

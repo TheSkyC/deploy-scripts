@@ -397,6 +397,9 @@ clone_or_update_repo() {
     fi
   fi
   _csai_record_installed_version
+  if [[ -z "${GITHUB_COMMIT:-}" ]]; then
+    info "$(t app.cyberstrikeai.info.branch_floating "${GITHUB_BRANCH:-main}")"
+  fi
   success "$(t app.cyberstrikeai.success.source_ready "$INSTALL_DIR")"
 }
 patch_config_port_and_paths() {
