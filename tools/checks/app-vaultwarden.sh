@@ -255,20 +255,14 @@ check_vaultwarden_backup_lists_preserve_paths_with_spaces() {
       in_newest && /NEWEST_BAK="\$\{_newest_bak_entry#\* \}"/ { saw_newest_strip=1 }
       in_newest && /-printf '\''%T@ %p\\0'\''/ { saw_newest_print0=1 }
       in_newest && /sort -z -rn \| head -z -n 1/ { saw_newest_sort=1; in_newest=0 }
-      /local -a _old_baks/ { in_binary=1 }
-      in_binary && /_old_baks\+=\("\$\{_old_bak_entry#\* \}"\)/ { saw_binary_strip=1 }
-      in_binary && /-printf '\''%T@ %p\\0'\''/ { saw_binary_print0=1 }
-      in_binary && /sort -z -rn \| tail -z -n \+4/ { saw_binary_sort=1; in_binary=0 }
-      /local -a _old_wv_baks/ { in_web=1 }
-      in_web && /_old_wv_baks\+=\("\$\{_old_wv_bak_entry#\* \}"\)/ { saw_web_strip=1 }
-      in_web && /-printf '\''%T@ %p\\0'\''/ { saw_web_print0=1 }
-      in_web && /sort -z -rn \| tail -z -n \+4/ { saw_web_sort=1; in_web=0 }
+      /app_prune_update_backups "\$(dirname "\$VW_BIN")" "vaultwarden\.bak\.\*"/ { saw_prune_bin=1 }
+      /app_prune_update_backups "\$_wv_parent" "\$\{_wv_basename\}\.bak\.\*"/ { saw_prune_web=1 }
       /info "\$\(t app\.vaultwarden\.info\.backup_list\)"/ { in_backup=1 }
       in_backup && /_bak_list\+=\("\$\{_bak_entry#\* \}"\)/ { saw_backup_strip=1 }
       in_backup && /-printf '\''%T@ %p\\0'\''/ { saw_backup_print0=1 }
       in_backup && /sort -z -rn \| head -z -n 10/ { saw_backup_sort=1; in_backup=0 }
       END {
-        if (!(saw_newest_strip && saw_newest_print0 && saw_newest_sort && saw_binary_strip && saw_binary_print0 && saw_binary_sort && saw_web_strip && saw_web_print0 && saw_web_sort && saw_backup_strip && saw_backup_print0 && saw_backup_sort)) {
+        if (!(saw_newest_strip && saw_newest_print0 && saw_newest_sort && saw_backup_strip && saw_backup_print0 && saw_backup_sort)) {
           printf "%s Vaultwarden backup, rollback, and retention lists must use NUL-delimited sorting without splitting paths on spaces\n", FILENAME > "/dev/stderr"
           exit 1
         }
