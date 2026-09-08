@@ -86,9 +86,7 @@ _blog_detect_hugo_version() {
 }
 
 _blog_pinned_version_json() {
-  local installed="$1" result
-  result="$(version_check_result_for_versions "$installed" "$HUGO_VERSION")"
-  version_check_emit_json "$installed" "$HUGO_VERSION" "" "$result" github_release pinned
+  version_check_pinned_release_json "$1" "$HUGO_VERSION"
 }
 
 _blog_check_update_json() {

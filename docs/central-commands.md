@@ -70,6 +70,12 @@ Shows per-app Installed / Latest / Update state (cache-backed; `--refresh`
 re-queries GitHub, `--no-network` uses only the cache). `--only-installed`
 and `--continue-on-error` are accepted for symmetry.
 
+Applications with a configured version pin compare against that immutable
+target instead of the moving upstream release: shared binary apps report
+`BA_VERSION`, Hugo reports `HUGO_VERSION`, and the pinned verdict is computed
+locally (`cache_state=pinned`) without querying GitHub. `update-all` only
+plans such apps when the installed version differs from the pin.
+
 ### `update-all`
 
 ```text

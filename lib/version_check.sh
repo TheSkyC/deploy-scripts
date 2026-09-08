@@ -116,6 +116,18 @@ version_check_emit_json() {
     "$(state_json_nullable "$(operation_safe_summary "$error_summary")")"
 }
 
+# Emit a locally compared pinned-release payload. A configured exact release
+# tag is an immutable target: the verdict compares the installed version
+# against the pin locally, without querying a moving upstream release or the
+# version cache. Pinned GitHub-release deployments (binary_app, Hugo) share
+# this projection so central status and check-update agree with their
+# pin-respecting install/update lifecycle.
+version_check_pinned_release_json() {
+  local installed="$1" pin="$2" result
+  result="$(version_check_result_for_versions "$installed" "$pin")"
+  version_check_emit_json "$installed" "$pin" "" "$result" github_release pinned
+}
+
 # Emit a component entry from a normal version-check payload. This keeps the
 # top-level JSON contract stable while custom multi-component deployments can
 # expose typed, independently checked records to status and manager tooling.

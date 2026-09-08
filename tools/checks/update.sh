@@ -330,3 +330,69 @@ CPATEST
   )"
   [[ "$output" == ok ]]
 }
+
+# A pinned binary app (BA_VERSION persisted in a trusted deployment config)
+# must report against that immutable target: both the central check-update
+# adapter and the status-json projection compare the installed version with
+# the pin locally (cache_state=pinned) and never query the moving GitHub
+# latest, matching the pin-respecting install/update lifecycle and the root
+# human status output.
+check_binary_app_pinned_target_adapters() {
+  local temp_root output status
+  temp_root="$(mktemp -d)"
+  if ! BA_VERSION=v1.0.0 "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    APP_ID=ntfy
+    BA_BIN_NAME=ntfy
+    GITHUB_REPO=binwiederhier/ntfy
+    app_conf_file() { printf "%s" "/nonexistent/ntfy.env"; }
+    github_latest_release_tag_checked() { echo "pinned check-update must not query the moving latest" >&2; return 97; }
+
+    result="$(bapp_check_update_json v1.0.0 1 0)"
+    [[ "$(state_json_field "$result" update_state)" == up_to_date ]]
+    [[ "$(state_json_field "$result" latest)" == v1.0.0 ]]
+    [[ "$(state_json_field "$result" source)" == github_release ]]
+    [[ "$(state_json_field "$result" cache_state)" == pinned ]]
+
+    result="$(bapp_check_update_json v0.9.0 1 0)"
+    [[ "$(state_json_field "$result" update_state)" == update_available ]]
+    [[ "$(state_json_field "$result" latest)" == v1.0.0 ]]
+    [[ "$(state_json_field "$result" cache_state)" == pinned ]]
+    printf ok
+  '; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  # Present a trusted config (root, mode 600) via the stat stub so the run is
+  # platform-independent; the status projection must adopt BA_VERSION only
+  # after the root/600/400 trust gate passes.
+  cat > "${temp_root}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${temp_root}/stat"
+  output="$(PATH="${temp_root}:$PATH" APP_CONF_FILE="${temp_root}/ntfy.env" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    printf "INSTALLED_VERSION=\"v1.0.0\"\nBA_VERSION=\"v1.0.0\"\n" > "$APP_CONF_FILE"
+    APP_ID=ntfy
+    BA_BIN_NAME=ntfy
+    GITHUB_REPO=binwiederhier/ntfy
+    app_conf_file() { printf "%s" "$APP_CONF_FILE"; }
+    result="$(bapp_status_version_json)"
+    [[ "$(state_json_field "$result" installed)" == v1.0.0 ]]
+    [[ "$(state_json_field "$result" latest)" == v1.0.0 ]]
+    [[ "$(state_json_field "$result" update_state)" == up_to_date ]]
+    [[ "$(state_json_field "$result" source)" == github_release ]]
+    [[ "$(state_json_field "$result" cache_state)" == pinned ]]
+    printf ok
+  ')" || { rm -rf "$temp_root"; return 1; }
+  [[ "$output" == ok ]] || { rm -rf "$temp_root"; return 1; }
+  rm -rf "$temp_root"
+  return 0
+}
