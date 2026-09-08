@@ -14,8 +14,9 @@ export any key to override its default.
 
 ## Binary apps (shared lifecycle)
 
-The following nine apps share `lib/binary_app.sh`: `alist`, `beszel`,
-`filebrowser`, `frps`, `gitea`, `gotify`, `meilisearch`, `navidrome`, `ntfy`.
+The following ten apps share `lib/binary_app.sh`: `alist`, `beszel`,
+`filebrowser`, `frps`, `gitea`, `gotify`, `meilisearch`, `navidrome`, `newapi`,
+`ntfy`.
 
 Common keys (defaults in parentheses):
 
@@ -45,7 +46,13 @@ App-specific defaults:
 | gotify | 8085 | Initial admin password (random) in `/etc/gotify.env` (`GOTIFY_DEFAULTUSER_PASS`) |
 | meilisearch | 7700 | Master key (random) in `/etc/meilisearch.env` (`MEILI_MASTER_KEY`) |
 | navidrome | 4533 | Music folder `MUSIC_DIR` (`/srv/music`) |
+| newapi | 8080 | LLM API gateway (SQLite by default); `SESSION_SECRET` in `/etc/newapi.env`, `BACKUP_CRON` schedule, `BA_ARCHIVE_PREFIX=new-api` keeps historical backup names. Built-in default admin credentials — change on first login |
 | ntfy | 2586 | Config `/etc/ntfy/server.yml`; listens on `BA_BIND_ADDR` |
+
+Running `status` as root reports the installed release; a pinned install
+(`BA_VERSION`) confirms a matching release or warns that the installed release
+has drifted from the configured pin, while an unpinned install states that
+`install`/`update` follow the moving latest release.
 
 ## Hand-written apps
 
@@ -97,16 +104,6 @@ App-specific defaults:
   `redis`; package dependencies are explicitly `update_state: not_checked`
   because the deployment script does not own a comparable package-feed policy.
 
-### New API (`newapi`, port 8080)
-
-- LLM API aggregation gateway (SQLite by default), systemd-managed, nightly
-  backups. `SESSION_SECRET` is generated into the env file
-  (`/etc/newapi.env`, mode 600).
-- **First login uses the application's built-in default admin credentials —
-  change the password immediately.** The install summary warns about this but
-  does not print the credentials.
-- Key config: `DOMAIN`, `PORT`, `BACKUP_CRON` (default daily 03:30), `TZ`.
-
 ### CyberStrikeAI (`cyberstrikeai`, backend port 8083, public `PUBLIC_PORT` 80)
 
 - Python/Go AI gateway with optional nginx (`ENABLE_NGINX`), optional HTTPS
@@ -123,9 +120,14 @@ App-specific defaults:
 
 ### CPA Stack (`cpa_stack`)
 
-- Dockerized CPA + CPAMP deployment. Config: `CPA_DOMAIN`, `CPAMP_DOMAIN`,
-  `ENABLE_HTTPS`, `CPA_ALLOW_REMOTE`, `CERTBOT_EMAIL`, install/data/env
-  directories for both components.
+- Native CLIProxyAPI (CPA) and CPA Manager Plus deployment with systemd, an
+  Nginx reverse proxy, and optional HTTPS (certbot). Config: `CPA_DOMAIN`,
+  `CPAMP_DOMAIN`, `ENABLE_HTTPS`, `CPA_ALLOW_REMOTE`, `CERTBOT_EMAIL`,
+  install/data/env directories for both components.
+- Each component is installed from its repository's moving GitHub latest
+  release. `status` run as root reports the recorded versions
+  (`INSTALLED_CPA_VERSION` / `INSTALLED_CPAMP_VERSION`); `status-json` and
+  `check-update` expose the same state through the typed `components` manifest.
 
 ### TickFlow (`tickflow`, port 3018)
 
