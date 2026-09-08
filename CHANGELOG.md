@@ -59,6 +59,18 @@ for the framework release archives produced by `tools/build-release.sh`.
   `systemctl start` with heavyweight rollback. Default warn-only behavior is
   unchanged.
 
+- Standalone cron backup scripts for Vaultwarden, CyberStrikeAI, and Sub2API
+  now publish the same integrity triad as runtime backups: a mode-0600 archive
+  plus `.sha256` sidecar and `manifest.json`; retention cleanup removes the
+  companion metadata with each expired archive. Shared template fragments
+  (`backup_standalone_manifest_fragment`, `backup_standalone_publish_fragment`)
+  keep the generated scripts' publication and manifest logic identical across
+  the three apps, and behavior guards prove the contract end to end.
+- Pre-update and manual runtime backups of the hand-written applications now
+  finalize through the shared publisher with the integrity triad; Sub2API's
+  pre-update snapshots use the same archive naming and layout as its restore
+  contract so a later restore can find them.
+
 ### Fixed
 
 - `notify-config --test` now probes the merged in-memory values through a
@@ -106,6 +118,16 @@ for the framework release archives produced by `tools/build-release.sh`.
   control character; step names or error summaries containing control bytes no
   longer produce invalid JSON in operation state and history files.
 
+- The guard runner isolates each check through `run_isolated_check`, so a
+  failure names the exact check that failed instead of surfacing as a generic
+  guards failure.
+- Vaultwarden `restore` now restores the managed environment file from the
+  backup archive alongside the data directory, instead of leaving the env file
+  missing after a data-dir-only restore.
+- Rollback snapshot pruning no longer truncates snapshot paths that contain
+  spaces, and the standalone Vaultwarden backup script template no longer
+  emits broken heredoc delimiters.
+
 ### Changed
 
 - Shared JSON escaper core in `lib/operation.sh`; `app_json_string` and
@@ -123,3 +145,14 @@ for the framework release archives produced by `tools/build-release.sh`.
   `check_cyberstrikeai_mirrors_are_opt_in`,
   `check_no_explicit_release_lock_calls`,
   `check_app_registry_capabilities`.
+- Update rollback snapshot pruning is consolidated into the shared
+  `app_prune_update_backups` helper for binary-app updates and the Vaultwarden,
+  Sub2API, and CyberStrikeAI update flows: it keeps the newest snapshots and
+  reports per-path removal failures through app-localized keys.
+- Standalone backup publication for Vaultwarden, CyberStrikeAI, and Sub2API is
+  emitted from shared `backup_standalone_*` fragments so the generated cron
+  scripts stop drifting from each other and from runtime backups.
+- Shared backup helpers drop dead duplicate branches: `backup_create_gzip_archive`
+  captures the producer/gzip pipeline statuses once instead of through an
+  identical if/else pair, and `backup_restore_data_dir` no longer repeats the
+  same service-restart/error guard twice in each failure path.
