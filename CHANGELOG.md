@@ -74,6 +74,11 @@ for the framework release archives produced by `tools/build-release.sh`.
   CyberStrikeAI) now print a notice when no commit pin is configured, so
   an operator sees that the deployment follows a moving branch and how to
   pin an exact revision.
+- Root-level `status` for the branch-tracked applications (TickFlow and
+  CyberStrikeAI) now reports the installed git revision and its pin state:
+  pinned installs show the configured commit (and warn when the checkout has
+  drifted from it), while unpinned installs call out that the deployment
+  follows a moving branch and how to pin an exact revision.
 
 ### Fixed
 

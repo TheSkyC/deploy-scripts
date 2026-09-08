@@ -105,6 +105,24 @@ i18n_register_many \
   app.tickflow.status.service_disabled \
   "%s is not enabled on boot." \
   "%s 未设置开机自启。" \
+  app.tickflow.status.version \
+  "Version" \
+  "版本" \
+  app.tickflow.status.revision \
+  "revision" \
+  "提交" \
+  app.tickflow.status.pin \
+  "pin" \
+  "固定提交" \
+  app.tickflow.status.pin_ok \
+  "pinned to %s" \
+  "已固定到 %s" \
+  app.tickflow.status.pin_mismatch \
+  "pinned to %s but current HEAD is %s; run update" \
+  "固定到 %s，但当前 HEAD 为 %s；请运行更新" \
+  app.tickflow.status.pin_floating \
+  "follows moving branch %s; set TICKFLOW_COMMIT to a full 40-character commit SHA to pin an exact revision" \
+  "跟随会移动的分支 %s；如需固定到精确版本，请设置 TICKFLOW_COMMIT 为完整的 40 位提交 SHA" \
   app.tickflow.status.paths \
   "Paths" \
   "路径" \

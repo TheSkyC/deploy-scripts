@@ -1040,4 +1040,9 @@ check_cyberstrikeai_git_commit_version_contract() {
   grep -Fq 'if [[ -z "${GITHUB_COMMIT:-}" ]]; then' impl/install_cyberstrikeai.sh
   grep -Fq 'info "$(t app.cyberstrikeai.info.branch_floating "${GITHUB_BRANCH:-main}")"' impl/install_cyberstrikeai.sh
   grep -Fq 'app.cyberstrikeai.info.branch_floating' apps/cyberstrikeai.sh
+  grep -Fq 'local csai_revision csai_pin' impl/install_cyberstrikeai.sh
+  grep -Fq 't app.cyberstrikeai.status.pin_ok "$csai_pin"' impl/install_cyberstrikeai.sh
+  grep -Fq 't app.cyberstrikeai.status.pin_floating "${GITHUB_BRANCH:-main}"' impl/install_cyberstrikeai.sh
+  grep -Fq 'app.cyberstrikeai.status.pin_ok' apps/cyberstrikeai.sh
+  grep -Fq 'app.cyberstrikeai.status.pin_floating' apps/cyberstrikeai.sh
 }

@@ -414,6 +414,18 @@ i18n_register_many \
   app.cyberstrikeai.status.git_branch \
   "git branch" \
   "Git 分支" \
+  app.cyberstrikeai.status.pin \
+  "git pin" \
+  "Git 固定" \
+  app.cyberstrikeai.status.pin_ok \
+  "pinned to %s" \
+  "已固定到 %s" \
+  app.cyberstrikeai.status.pin_mismatch \
+  "pinned to %s but current HEAD is %s; run update" \
+  "固定到 %s，但当前 HEAD 为 %s；请运行更新" \
+  app.cyberstrikeai.status.pin_floating \
+  "follows moving branch %s; set GITHUB_COMMIT to a full 40-character commit SHA to pin an exact revision" \
+  "跟随会移动的分支 %s；如需固定到精确版本，请设置 GITHUB_COMMIT 为完整的 40 位提交 SHA" \
   app.cyberstrikeai.status.binary \
   "binary" \
   "二进制" \
