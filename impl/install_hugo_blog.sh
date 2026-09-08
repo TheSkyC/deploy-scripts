@@ -147,6 +147,7 @@ _blog_install_hugo_package() {
     success "$(t app.blog.pinned_version "$hugo_ver")"
   else
     success "$(t app.blog.latest_version "$hugo_ver")"
+    info "$(t app.blog.info.hugo_floating "$hugo_ver")"
   fi
   deb_url="https://github.com/gohugoio/hugo/releases/download/v${hugo_ver}/hugo_extended_${hugo_ver}_linux-${deb_arch}.deb"
   info "$(t app.blog.download_url "$deb_url")"

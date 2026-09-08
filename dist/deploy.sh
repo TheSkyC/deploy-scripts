@@ -12237,6 +12237,10 @@ i18n_register app.blog.latest_version \
 i18n_register app.blog.pinned_version \
   "Pinned Hugo version: v%s" \
   "固定 Hugo 版本：v%s"
+
+i18n_register app.blog.info.hugo_floating \
+  "Hugo follows the moving latest release (v%s); set HUGO_VERSION to an exact release to make future installs reproducible." \
+  "Hugo 跟随会移动的 latest 发布（v%s）；如需让后续安装可复现，请设置 HUGO_VERSION 为精确版本号。"
 i18n_register app.blog.download_url \
   "Download: %s" \
   "下载：%s"
@@ -18925,6 +18929,7 @@ _blog_install_hugo_package() {
     success "$(t app.blog.pinned_version "$hugo_ver")"
   else
     success "$(t app.blog.latest_version "$hugo_ver")"
+    info "$(t app.blog.info.hugo_floating "$hugo_ver")"
   fi
   deb_url="https://github.com/gohugoio/hugo/releases/download/v${hugo_ver}/hugo_extended_${hugo_ver}_linux-${deb_arch}.deb"
   info "$(t app.blog.download_url "$deb_url")"
