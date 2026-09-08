@@ -6,3 +6,6 @@ progress.log
 guards_final.log
 lib/*.sh.bak
 docs/progress.log
+# Local working plan and release changelog are not tracked in git.
+docs/project-progress-and-remediation.md
+CHANGELOG.md
