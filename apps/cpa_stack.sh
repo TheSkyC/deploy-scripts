@@ -177,6 +177,18 @@ i18n_register_many \
   app.cpa_stack.status.local_health \
   "Local health" \
   "本地健康检查" \
+  app.cpa_stack.status.versions \
+  "Component versions" \
+  "组件版本" \
+  app.cpa_stack.status.cpa_component \
+  "CLIProxyAPI (CPA)" \
+  "CLIProxyAPI (CPA)" \
+  app.cpa_stack.status.cpamp_component \
+  "CPA Manager Plus" \
+  "CPA Manager Plus" \
+  app.cpa_stack.status.components_follow_latest \
+  "Both components follow each repository's moving latest release; recorded versions reflect the last install/update, and check-update compares them with GitHub." \
+  "两个组件都跟随各自仓库会移动的 latest 发布；记录版本为最近一次安装/更新的结果，check-update 会与 GitHub 上的最新版比对。" \
   app.cpa_stack.banner \
   "CLIProxyAPI + CPA Manager Plus Stack" \
   "CLIProxyAPI + CPA Manager Plus Stack" \
