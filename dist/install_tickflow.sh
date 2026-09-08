@@ -1600,11 +1600,11 @@ backup_create_gzip_archive() {
   shift
   [[ -n "$archive" && "$#" -gt 0 ]] || return 1
   archive_tmp="$(mktemp "${archive}.tmp.XXXXXX")" || return 1
-  if "$@" | gzip >"$archive_tmp"; then
-    pipeline_status=("${PIPESTATUS[@]}")
-  else
-    pipeline_status=("${PIPESTATUS[@]}")
-  fi
+  # `|| true` keeps `set -e` from exiting before PIPESTATUS is captured; the
+  # producer/gzip statuses are inspected below and any failure removes the
+  # staging file and leaves an existing final archive untouched.
+  "$@" | gzip >"$archive_tmp" || true
+  pipeline_status=("${PIPESTATUS[@]}")
   producer_status="${pipeline_status[0]:-1}"
   gzip_status="${pipeline_status[1]:-1}"
   if (( producer_status != 0 || gzip_status != 0 )); then
@@ -1932,8 +1932,6 @@ backup_restore_data_dir() {
   if ! mv "$data_dir" "$staged_aside"; then
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
-    fi
-    if [[ -n "$service_name" ]]; then
       error "$(t backup.restore.invalid_archive "$archive")"
     fi
     return 1
@@ -1942,8 +1940,6 @@ backup_restore_data_dir() {
     mv "$staged_aside" "$data_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
-    fi
-    if [[ -n "$service_name" ]]; then
       error "$(t backup.restore.invalid_archive "$archive")"
     fi
     return 1
@@ -1966,8 +1962,6 @@ backup_restore_data_dir() {
     mv "$staged_aside" "$data_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
-    fi
-    if [[ -n "$service_name" ]]; then
       error "$(t backup.restore.invalid_archive "$archive")"
     fi
     return 1
