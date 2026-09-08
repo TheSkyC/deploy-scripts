@@ -12569,6 +12569,15 @@ i18n_register_many \
   app.blog.status.hugo_missing \
   "hugo command is not installed or not in PATH" \
   "hugo 命令未安装或不在 PATH 中" \
+  app.blog.status.hugo_pin_ok \
+  "Hugo is pinned to v%s" \
+  "Hugo 已固定到 v%s" \
+  app.blog.status.hugo_pin_mismatch \
+  "Hugo is pinned to v%s but installed v%s; run update" \
+  "Hugo 固定到 v%s，但已安装 v%s；请运行 update" \
+  app.blog.status.hugo_unpinned \
+  "Hugo is not pinned; install and update resolve the moving latest release. Set HUGO_VERSION to an exact release to make deploys reproducible." \
+  "Hugo 未固定版本；安装与更新会解析移动的 latest 发布。如需可复现部署，请设置 HUGO_VERSION 为精确版本号。" \
   app.blog.status.local_health \
   "Local HTTP health" \
   "本机 HTTP 健康检查" \
@@ -19742,6 +19751,20 @@ do_status() {
     printf '  %s: %s\n' "$(t app.blog.status.hugo)" "$(hugo version 2>/dev/null | head -1 || t status.unknown)"
   else
     printf '  %s: %b%s%b\n' "$(t app.blog.status.hugo)" "$YELLOW" "$(t app.blog.status.hugo_missing)" "$NC"
+  fi
+
+  if [[ $EUID -eq 0 ]] && command -v hugo >/dev/null 2>&1; then
+    local installed_hugo
+    installed_hugo="$(_blog_detect_hugo_version 2>/dev/null || true)"
+    if [[ -n "$HUGO_VERSION" ]]; then
+      if [[ "$installed_hugo" == "$HUGO_VERSION" ]]; then
+        echo -e "  ${GREEN}[✓]${NC} $(t app.blog.status.hugo_pin_ok "$HUGO_VERSION")"
+      elif [[ -n "$installed_hugo" ]]; then
+        echo -e "  ${YELLOW}[!]${NC} $(t app.blog.status.hugo_pin_mismatch "$HUGO_VERSION" "$installed_hugo")"
+      fi
+    else
+      echo -e "  ${YELLOW}[!]${NC} $(t app.blog.status.hugo_unpinned)"
+    fi
   fi
 
   if command -v curl >/dev/null 2>&1; then

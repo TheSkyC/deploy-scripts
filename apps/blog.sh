@@ -538,6 +538,15 @@ i18n_register_many \
   app.blog.status.hugo_missing \
   "hugo command is not installed or not in PATH" \
   "hugo 命令未安装或不在 PATH 中" \
+  app.blog.status.hugo_pin_ok \
+  "Hugo is pinned to v%s" \
+  "Hugo 已固定到 v%s" \
+  app.blog.status.hugo_pin_mismatch \
+  "Hugo is pinned to v%s but installed v%s; run update" \
+  "Hugo 固定到 v%s，但已安装 v%s；请运行 update" \
+  app.blog.status.hugo_unpinned \
+  "Hugo is not pinned; install and update resolve the moving latest release. Set HUGO_VERSION to an exact release to make deploys reproducible." \
+  "Hugo 未固定版本；安装与更新会解析移动的 latest 发布。如需可复现部署，请设置 HUGO_VERSION 为精确版本号。" \
   app.blog.status.local_health \
   "Local HTTP health" \
   "本机 HTTP 健康检查" \

@@ -962,6 +962,20 @@ do_status() {
     printf '  %s: %b%s%b\n' "$(t app.blog.status.hugo)" "$YELLOW" "$(t app.blog.status.hugo_missing)" "$NC"
   fi
 
+  if [[ $EUID -eq 0 ]] && command -v hugo >/dev/null 2>&1; then
+    local installed_hugo
+    installed_hugo="$(_blog_detect_hugo_version 2>/dev/null || true)"
+    if [[ -n "$HUGO_VERSION" ]]; then
+      if [[ "$installed_hugo" == "$HUGO_VERSION" ]]; then
+        echo -e "  ${GREEN}[✓]${NC} $(t app.blog.status.hugo_pin_ok "$HUGO_VERSION")"
+      elif [[ -n "$installed_hugo" ]]; then
+        echo -e "  ${YELLOW}[!]${NC} $(t app.blog.status.hugo_pin_mismatch "$HUGO_VERSION" "$installed_hugo")"
+      fi
+    else
+      echo -e "  ${YELLOW}[!]${NC} $(t app.blog.status.hugo_unpinned)"
+    fi
+  fi
+
   if command -v curl >/dev/null 2>&1; then
     local http_code
     http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || true)
