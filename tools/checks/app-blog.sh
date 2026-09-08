@@ -122,6 +122,14 @@ check_blog_hugo_version_contract() {
   grep -Fq 'APP_STATUS_VERSION_FN=_blog_status_version_json' impl/install_hugo_blog.sh
   grep -Fq 'info "$(t app.blog.info.hugo_floating "$hugo_ver")"' impl/install_hugo_blog.sh
   grep -Fq 'app.blog.info.hugo_floating' apps/blog.sh
+  grep -Fq 'if [[ $EUID -eq 0 ]] && command -v hugo >/dev/null 2>&1; then' impl/install_hugo_blog.sh
+  grep -Fq 'installed_hugo="$(_blog_detect_hugo_version 2>/dev/null || true)"' impl/install_hugo_blog.sh
+  grep -Fq 't app.blog.status.hugo_pin_ok "$HUGO_VERSION"' impl/install_hugo_blog.sh
+  grep -Fq 't app.blog.status.hugo_pin_mismatch "$HUGO_VERSION" "$installed_hugo"' impl/install_hugo_blog.sh
+  grep -Fq 't app.blog.status.hugo_unpinned' impl/install_hugo_blog.sh
+  grep -Fq 'app.blog.status.hugo_pin_ok' apps/blog.sh
+  grep -Fq 'app.blog.status.hugo_pin_mismatch' apps/blog.sh
+  grep -Fq 'app.blog.status.hugo_unpinned' apps/blog.sh
 }
 
 check_blog_config_persistence() {
