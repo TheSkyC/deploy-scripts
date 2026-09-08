@@ -474,6 +474,23 @@ check_binary_app_health_results_are_surfaced() {
   done
 }
 
+check_binary_app_unpinned_version_notice() {
+  awk '
+      /^bapp_install\(\)/ { current="install"; next }
+      /^bapp_update\(\)/ { current="update"; next }
+      /^}/ { current="" }
+      current == "install" && /info "\$\(t binary_app\.info\.unpinned_version "\$latest"\)"/ { saw_install=1 }
+      current == "update" && /info "\$\(t binary_app\.info\.unpinned_version "\$latest"\)"/ { saw_update=1 }
+      END {
+        if (!(saw_install && saw_update)) {
+          printf "%s unpinned binary-app installs and updates must surface a moving-latest notice when BA_VERSION is empty\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+  grep -Fq 'binary_app.info.unpinned_version' lib/binary_app.sh
+}
+
 check_no_unsupported_systemctl_options() {
   if grep -R -nE 'systemctl[[:space:]]+stop[[:space:]][^;&|]*--timeout' impl lib dist 2>/dev/null; then
     echo "systemctl stop does not support --timeout; use the default blocking stop behavior." >&2

@@ -458,6 +458,7 @@ main() {
       run_isolated_check check_binary_app_systemd_paths_are_validated
       run_isolated_check check_binary_app_pre_backup_hook_is_best_effort
       run_isolated_check check_binary_app_health_results_are_surfaced
+      run_isolated_check check_binary_app_unpinned_version_notice
       run_isolated_check check_blog_config_persistence
       run_isolated_check check_blog_hugo_version_contract
       run_isolated_check check_blog_dependency_failures_are_reported

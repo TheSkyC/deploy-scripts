@@ -208,6 +208,9 @@ i18n_register_many \
   binary_app.info.github_latest \
   "Latest version: %s" \
   "最新版本：%s" \
+  binary_app.info.unpinned_version \
+  "This deployment follows the moving latest release (v%s); set BA_VERSION to an exact release tag to make future installs and updates reproducible." \
+  "本次部署跟随会移动的 latest 发布（v%s）；如需让后续安装与更新可复现，请设置 BA_VERSION 为精确的发布标签。" \
   binary_app.success.latest \
   "Latest release: %s" \
   "最新版本：%s" \
@@ -1076,6 +1079,7 @@ bapp_install() {
     success "$(t binary_app.success.pinned_version "${BOLD}${latest}${NC}")"
   else
     success "$(t binary_app.success.latest "${BOLD}${latest}${NC}")"
+    info "$(t binary_app.info.unpinned_version "$latest")"
   fi
   step "$(t binary_app.step.deps)"
   if ! apt-get update -qq; then
@@ -1330,6 +1334,7 @@ bapp_update() {
     info "$(t binary_app.info.pinned_target "${YELLOW}${latest}${NC}")"
   else
     info "$(t binary_app.info.github_latest "${YELLOW}${latest}${NC}")"
+    info "$(t binary_app.info.unpinned_version "$latest")"
   fi
   if [[ "$current" == "$latest" ]]; then
     success "$(t binary_app.success.already_latest "$latest")"
