@@ -720,6 +720,18 @@ i18n_register_many \
   app.vaultwarden.status.binary_missing \
   "Vaultwarden binary was not found: %s" \
   "未找到 Vaultwarden 二进制：%s" \
+  app.vaultwarden.status.image_pin_ok \
+  "Image pinned to digest %s" \
+  "镜像已固定到摘要 %s" \
+  app.vaultwarden.status.image_pin_mismatch \
+  "Image pinned to digest %s but installed digest is %s; run update" \
+  "镜像固定到摘要 %s，但已安装摘要为 %s；请运行 update" \
+  app.vaultwarden.status.image_pin_configured \
+  "Image digest configured: %s (run update to apply)" \
+  "已配置镜像摘要：%s（运行 update 后生效）" \
+  app.vaultwarden.status.image_tag \
+  "Image follows tag %s; set VW_IMAGE_DIGEST to a full sha256 digest to make the image immutable" \
+  "镜像跟随标签 %s；如需镜像不可变，请设置 VW_IMAGE_DIGEST 为完整的 sha256 摘要" \
   app.vaultwarden.status.data_dir \
   "Data directory (%s)" \
   "数据目录（%s）" \

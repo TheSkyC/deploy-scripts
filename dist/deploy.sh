@@ -11230,6 +11230,18 @@ i18n_register_many \
   app.vaultwarden.status.binary_missing \
   "Vaultwarden binary was not found: %s" \
   "未找到 Vaultwarden 二进制：%s" \
+  app.vaultwarden.status.image_pin_ok \
+  "Image pinned to digest %s" \
+  "镜像已固定到摘要 %s" \
+  app.vaultwarden.status.image_pin_mismatch \
+  "Image pinned to digest %s but installed digest is %s; run update" \
+  "镜像固定到摘要 %s，但已安装摘要为 %s；请运行 update" \
+  app.vaultwarden.status.image_pin_configured \
+  "Image digest configured: %s (run update to apply)" \
+  "已配置镜像摘要：%s（运行 update 后生效）" \
+  app.vaultwarden.status.image_tag \
+  "Image follows tag %s; set VW_IMAGE_DIGEST to a full sha256 digest to make the image immutable" \
+  "镜像跟随标签 %s；如需镜像不可变，请设置 VW_IMAGE_DIGEST 为完整的 sha256 摘要" \
   app.vaultwarden.status.data_dir \
   "Data directory (%s)" \
   "数据目录（%s）" \
@@ -17283,6 +17295,19 @@ do_status() {
     echo -e "  $(t app.vaultwarden.status.binary_time "$_bin_time")"
   else
     echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.binary_missing "$VW_BIN")"
+  fi
+  if [[ $EUID -eq 0 ]]; then
+    if [[ -n "${VW_IMAGE_DIGEST:-}" ]]; then
+      if [[ -n "${INSTALLED_IMAGE_DIGEST:-}" && "$INSTALLED_IMAGE_DIGEST" == "$VW_IMAGE_DIGEST" ]]; then
+        echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.image_pin_ok "$VW_IMAGE_DIGEST")"
+      elif [[ -n "${INSTALLED_IMAGE_DIGEST:-}" ]]; then
+        echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.image_pin_mismatch "$VW_IMAGE_DIGEST" "$INSTALLED_IMAGE_DIGEST")"
+      else
+        echo -e "  $(t app.vaultwarden.status.image_pin_configured "$VW_IMAGE_DIGEST")"
+      fi
+    else
+      echo -e "  $(t app.vaultwarden.status.image_tag "${VW_IMAGE_TAG:-latest}")"
+    fi
   fi
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.data_dir "$VW_DATA_DIR")]${NC}"
   if [[ -d "$VW_DATA_DIR" ]]; then
