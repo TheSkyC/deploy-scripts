@@ -545,6 +545,23 @@ do_status() {
   fi
   systemctl status "$TICKFLOW_SERVICE_NAME" --no-pager -l 2>/dev/null \
     | head -12 | sed 's/^/  /' || true
+  if [[ $EUID -eq 0 && -d "$TICKFLOW_INSTALL_DIR/.git" ]]; then
+    local tickflow_revision
+    tickflow_revision="$(git -C "$TICKFLOW_INSTALL_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+    if [[ "$tickflow_revision" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+      echo -e "\n${BOLD}[$(t app.tickflow.status.version)]${NC}"
+      printf "  %-10s %s\n" "$(t app.tickflow.status.revision):" "$tickflow_revision"
+      if [[ -n "$TICKFLOW_COMMIT" ]]; then
+        if [[ "$tickflow_revision" == "$TICKFLOW_COMMIT" ]]; then
+          printf "  %-10s %s\n" "$(t app.tickflow.status.pin):" "$(t app.tickflow.status.pin_ok "$TICKFLOW_COMMIT")"
+        else
+          echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.pin_mismatch "${TICKFLOW_COMMIT:0:7}" "${tickflow_revision:0:7}")"
+        fi
+      else
+        echo -e "  ${YELLOW}[!]${NC} $(t app.tickflow.status.pin_floating "${TICKFLOW_BRANCH:-main}")"
+      fi
+    fi
+  fi
   echo -e "\n${BOLD}[$(t app.tickflow.status.paths)]${NC}"
   _print_status_path "$(t app.tickflow.status.install_dir)" "$TICKFLOW_INSTALL_DIR"
   _print_status_path "$(t app.tickflow.status.data_dir)" "$TICKFLOW_DATA_DIR"

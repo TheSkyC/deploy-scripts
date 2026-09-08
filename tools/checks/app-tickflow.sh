@@ -553,4 +553,9 @@ check_tickflow_git_commit_version_contract() {
   grep -Fq 'if [[ -z "${TICKFLOW_COMMIT:-}" ]]; then' impl/install_tickflow.sh
   grep -Fq 'info "$(t app.tickflow.info.branch_floating "${TICKFLOW_BRANCH:-main}")"' impl/install_tickflow.sh
   grep -Fq 'app.tickflow.info.branch_floating' apps/tickflow.sh
+  grep -Fq 'if [[ $EUID -eq 0 && -d "$TICKFLOW_INSTALL_DIR/.git" ]]; then' impl/install_tickflow.sh
+  grep -Fq 't app.tickflow.status.pin_ok "$TICKFLOW_COMMIT"' impl/install_tickflow.sh
+  grep -Fq 't app.tickflow.status.pin_floating "${TICKFLOW_BRANCH:-main}"' impl/install_tickflow.sh
+  grep -Fq 'app.tickflow.status.pin_ok' apps/tickflow.sh
+  grep -Fq 'app.tickflow.status.pin_floating' apps/tickflow.sh
 }

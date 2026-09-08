@@ -1005,6 +1005,20 @@ do_status() {
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_revision):" "$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || t status.unknown)"
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_branch):" "$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || t status.unknown)"
+    if [[ $EUID -eq 0 ]]; then
+      local csai_revision csai_pin
+      csai_revision="$(git -C "$INSTALL_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+      csai_pin="${GITHUB_COMMIT:-}"
+      if [[ -n "$csai_pin" ]]; then
+        if [[ "$csai_revision" == "$csai_pin" ]]; then
+          printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.pin):" "$(t app.cyberstrikeai.status.pin_ok "$csai_pin")"
+        else
+          printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.pin):" "$(t app.cyberstrikeai.status.pin_mismatch "${csai_pin:0:7}" "${csai_revision:0:7}")"
+        fi
+      else
+        printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.pin):" "$(t app.cyberstrikeai.status.pin_floating "${GITHUB_BRANCH:-main}")"
+      fi
+    fi
   fi
   if [[ -x "$BIN_PATH" ]]; then
     printf '  %-12s %s (%s)\n' "$(t app.cyberstrikeai.status.binary):" "$BIN_PATH" "$(du -sh "$BIN_PATH" 2>/dev/null | awk '{print $1}' || t status.unknown)"

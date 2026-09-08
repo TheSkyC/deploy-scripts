@@ -7022,6 +7022,18 @@ i18n_register_many \
   app.cyberstrikeai.status.git_branch \
   "git branch" \
   "Git 分支" \
+  app.cyberstrikeai.status.pin \
+  "git pin" \
+  "Git 固定" \
+  app.cyberstrikeai.status.pin_ok \
+  "pinned to %s" \
+  "已固定到 %s" \
+  app.cyberstrikeai.status.pin_mismatch \
+  "pinned to %s but current HEAD is %s; run update" \
+  "固定到 %s，但当前 HEAD 为 %s；请运行更新" \
+  app.cyberstrikeai.status.pin_floating \
+  "follows moving branch %s; set GITHUB_COMMIT to a full 40-character commit SHA to pin an exact revision" \
+  "跟随会移动的分支 %s；如需固定到精确版本，请设置 GITHUB_COMMIT 为完整的 40 位提交 SHA" \
   app.cyberstrikeai.status.binary \
   "binary" \
   "二进制" \
@@ -8179,6 +8191,20 @@ do_status() {
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_revision):" "$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || t status.unknown)"
     printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.git_branch):" "$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || t status.unknown)"
+    if [[ $EUID -eq 0 ]]; then
+      local csai_revision csai_pin
+      csai_revision="$(git -C "$INSTALL_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+      csai_pin="${GITHUB_COMMIT:-}"
+      if [[ -n "$csai_pin" ]]; then
+        if [[ "$csai_revision" == "$csai_pin" ]]; then
+          printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.pin):" "$(t app.cyberstrikeai.status.pin_ok "$csai_pin")"
+        else
+          printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.pin):" "$(t app.cyberstrikeai.status.pin_mismatch "${csai_pin:0:7}" "${csai_revision:0:7}")"
+        fi
+      else
+        printf '  %-12s %s\n' "$(t app.cyberstrikeai.status.pin):" "$(t app.cyberstrikeai.status.pin_floating "${GITHUB_BRANCH:-main}")"
+      fi
+    fi
   fi
   if [[ -x "$BIN_PATH" ]]; then
     printf '  %-12s %s (%s)\n' "$(t app.cyberstrikeai.status.binary):" "$BIN_PATH" "$(du -sh "$BIN_PATH" 2>/dev/null | awk '{print $1}' || t status.unknown)"
