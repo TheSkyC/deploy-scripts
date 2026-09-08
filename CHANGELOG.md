@@ -87,6 +87,10 @@ for the framework release archives produced by `tools/build-release.sh`.
   `HUGO_VERSION` (and warn when the installed binary drifts from it), while
   unpinned installs call out that install and update follow the moving latest
   release and how to pin an exact release.
+- Install and update of the GitHub-release binary applications (alist, beszel,
+  filebrowser, frps, gitea, gotify, meilisearch, navidrome, newapi, ntfy) now
+  print a notice when no `BA_VERSION` is configured, so an operator sees that the
+  deployment follows the moving latest release and how to pin an exact release tag.
 
 ### Fixed
 
