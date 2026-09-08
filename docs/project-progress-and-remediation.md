@@ -1,6 +1,6 @@
 # 项目当前进度与整改路线
 
-> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `088e137`（P3-S1：TickFlow/CyberStrikeAI 的 human `status` 上报已安装 git 提交与 pin 状态；P2-S2 共享原语审计与 `docs/progress.log` 本地化收尾）。
+> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `87e7e7a`（P3-S1：TickFlow/CyberStrikeAI 的 human `status` 上报已安装 git 提交与 pin 状态；Hugo Blog 安装/更新与 root `status` 提示浮动 latest 语义及固定方法；P2-S2 共享原语审计与 `docs/progress.log` 本地化收尾）。
 > **文档目的**：将另一 AI 提出的安全、架构和体验问题与当前代码逐项对照，区分“已修复”“部分完成”“仍待处理”，并给出下一阶段可执行顺序。
 >
 > **结论先行**：这份建议对应的是修复前状态。高优先级安全项 1–4 已在 2026-08-29 的连续提交中完成主要修复；功能建议中的版本固定、单应用 dry-run/help、一键 HTTPS、卸载前导出、多实例、配置 diff、CI push 校验也已经落地。当前最大的未完成项不是原建议中的安全基线，而是：**真实生产环境验证仍有限、四个手写应用的架构取舍尚未进一步推进、`dist/` 生成物的治理仍保留漂移风险、部分应用仍采用浮动分支/镜像版本语义**。
@@ -16,7 +16,7 @@
 | `dist/` 规模 | 约 135,274 行（按当前工作区统计） | 生成产物，不应手工编辑 |
 | 共享库 | 约 8,979 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
 | 工作区 | 干净 | 旧安装安全审计、行为级守卫及发布产物已提交 |
-| 当前整改代码基线 | `088e137` | P2-S2 收尾：备份发布/清单片段收敛、回滚快照清理共享 helper、Vaultwarden restore 恢复 env、guards 逐个隔离（至 `e3464ba`，`docs/progress.log` 转为本地未跟踪）；随后 drop 死代码分支与重复守卫（`0dc8c92`）、分支跟踪应用安装/更新打印浮动分支提示（`796691f`）、human `status` 上报 git 提交与 pin 状态（`088e137`） |
+| 当前整改代码基线 | `87e7e7a` | P2-S2 收尾：备份发布/清单片段收敛、回滚快照清理共享 helper、Vaultwarden restore 恢复 env、guards 逐个隔离（至 `e3464ba`，`docs/progress.log` 转为本地未跟踪）；随后 drop 死代码分支与重复守卫（`0dc8c92`）、分支跟踪应用安装/更新打印浮动分支提示（`796691f`）、human `status` 上报 git 提交与 pin 状态（`088e137`）；Hugo Blog 未设置 `HUGO_VERSION` 时安装/更新打印浮动 latest 提示（`3eb11f6`），root `status` 上报 Hugo pin 状态（固定确认/漂移告警/未固定提示，`87e7e7a`） |
 
 ### 1.2 已完成的主线能力
 
@@ -108,7 +108,7 @@
 当前 `BA_VERSION` 只对共享 GitHub Release 二进制应用提供通用 pin。当前共有 10 个应用使用该共享生命周期。仍有几类版本来源需要独立策略：
 
 - Vaultwarden：`VW_IMAGE_TAG` 可指定镜像 tag，现已可通过 `VW_IMAGE_DIGEST` 使用不可变 `sha256:<digest>`，并在 pinned 模式记录并本地比对镜像摘要；
-- Hugo：已支持 `HUGO_VERSION` 精确 release pin，并保存 `INSTALLED_VERSION`；未设置时仍采用 GitHub latest，`check-update` 使用共享 JSON 协议；
+- Hugo：已支持 `HUGO_VERSION` 精确 release pin，并保存 `INSTALLED_VERSION`；未设置 pin 时仍采用 GitHub latest，安装/更新与 root `status` 都会提示“跟随移动 latest”及固定方法（`3eb11f6`/`87e7e7a`）；`check-update` 使用共享 JSON 协议；
 - TickFlow：默认仍为 git branch 模式，但现已可通过 `TICKFLOW_COMMIT` 固定完整 SHA；未设置 pin 时 branch 会移动；安装/更新与 root `status` 都会提示“跟随移动分支”及固定方法（`796691f`/`088e137`）；
 - CyberStrikeAI：默认仍为 git branch 模式，但现已可通过 `GITHUB_COMMIT` 固定完整 SHA；未设置 pin 时 branch 会移动；安装/更新与 root `status` 都会提示“跟随移动分支”及固定方法（`796691f`/`088e137`）；
 - CPA Stack/Sub2API：多组件或自定义版本来源，需记录完整组件版本。
