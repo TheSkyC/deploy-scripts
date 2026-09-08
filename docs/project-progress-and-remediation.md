@@ -54,7 +54,7 @@
 
 | 编号 | 原建议 | 当前状态 | 证据与说明 |
 |---|---|---|---|
-| M15 | Sub2API/Vaultwarden/NewAPI/CyberStrikeAI 各自重复生命周期 | **部分完成** | New API 已迁移到共享 `binary_app`（提交 `5e52008`）。剩余三个手写应用仍保留，但已有共享 helper（备份、回滚、删除、配置、restore、版本检查）。`PLAN.md:54-62` 明确记录：Vaultwarden 是 Docker 镜像提取 + Web Vault/nginx/certbot，Sub2API 是多构件备份 + PostgreSQL/Redis，CyberStrikeAI 是源码构建，当前不适合强行套单二进制生命周期。 |
+| M15 | Sub2API/Vaultwarden/NewAPI/CyberStrikeAI 各自重复生命周期 | **部分完成** | New API 已迁移到共享 `binary_app`（提交 `5e52008`）。剩余三个手写应用仍保留，但已有共享 helper（备份、回滚、删除、配置、restore、版本检查）。`PLAN.md §4` 明确记录：Vaultwarden 是 Docker 镜像提取 + Web Vault/nginx/certbot，Sub2API 是多构件备份 + PostgreSQL/Redis，CyberStrikeAI 是源码构建，当前不适合强行套单二进制生命周期。 |
 | M1 | `dist/` 生成物可能与源码漂移 | **有防线，治理仍可优化** | `tools/verify.sh` 的 release/dispatch/guards 会确定性重建并检查 `dist`；`.github/workflows/verify.yml:3-5, 23-40` 已在 push/PR 执行 release 检查。因此提交过时 `dist` 会被 CI 拦截。风险仍存在于本地忘记重建、生成物体积大、源码与发布物双份审阅成本；后续可评估改为 release 时生成或保留提交产物但强化 pre-commit。 |
 | M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；Hugo 支持 `HUGO_VERSION` 精确 pin、安装记录和统一版本输出；TickFlow 支持 `TICKFLOW_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；CyberStrikeAI 支持 `GITHUB_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；Vaultwarden 支持 `VW_IMAGE_DIGEST` 的完整 sha256 image digest pin、安装记录和本地 JSON 比对。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
 | M11/M8 | Hugo `.deb` 无 SHA-256；Vaultwarden 用 root crontab 覆盖 | **已修复** | `impl/install_hugo_blog.sh:62-70, 308-340` 提取 GitHub asset digest 并校验后才 `dpkg -i`；Vaultwarden 使用 `/etc/cron.d/vaultwarden-backup` 与 `/etc/cron.d/certbot-renew` 原子写入，不再覆盖 root crontab。提交 `7640720`。 |
