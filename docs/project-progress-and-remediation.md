@@ -1,6 +1,6 @@
 # 项目当前进度与整改路线
 
-> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `87e7e7a`（P3-S1：TickFlow/CyberStrikeAI 的 human `status` 上报已安装 git 提交与 pin 状态；Hugo Blog 安装/更新与 root `status` 提示浮动 latest 语义及固定方法；P2-S2 共享原语审计与 `docs/progress.log` 本地化收尾）。
+> **审计基准**：P0-S2 安全审计代码基线为 `af6b511`（2026-08-30）；当前整改代码基线为 `1c84fc7`（P3-S1：TickFlow/CyberStrikeAI 的 human `status` 上报已安装 git 提交与 pin 状态；Hugo Blog 与共享二进制应用在未固定版本时，安装/更新提示浮动 latest 语义及固定方法（Hugo 另有 root `status` 提示）；P2-S2 共享原语审计与 `docs/progress.log` 本地化收尾）。
 > **文档目的**：将另一 AI 提出的安全、架构和体验问题与当前代码逐项对照，区分“已修复”“部分完成”“仍待处理”，并给出下一阶段可执行顺序。
 >
 > **结论先行**：这份建议对应的是修复前状态。高优先级安全项 1–4 已在 2026-08-29 的连续提交中完成主要修复；功能建议中的版本固定、单应用 dry-run/help、一键 HTTPS、卸载前导出、多实例、配置 diff、CI push 校验也已经落地。当前最大的未完成项不是原建议中的安全基线，而是：**真实生产环境验证仍有限、四个手写应用的架构取舍尚未进一步推进、`dist/` 生成物的治理仍保留漂移风险、部分应用仍采用浮动分支/镜像版本语义**。
@@ -16,7 +16,7 @@
 | `dist/` 规模 | 约 135,274 行（按当前工作区统计） | 生成产物，不应手工编辑 |
 | 共享库 | 约 8,979 行 | `lib/`，含 binary-app、备份、状态、通知、调度、迁移、Compose、Fleet 等能力 |
 | 工作区 | 干净 | 旧安装安全审计、行为级守卫及发布产物已提交 |
-| 当前整改代码基线 | `87e7e7a` | P2-S2 收尾：备份发布/清单片段收敛、回滚快照清理共享 helper、Vaultwarden restore 恢复 env、guards 逐个隔离（至 `e3464ba`，`docs/progress.log` 转为本地未跟踪）；随后 drop 死代码分支与重复守卫（`0dc8c92`）、分支跟踪应用安装/更新打印浮动分支提示（`796691f`）、human `status` 上报 git 提交与 pin 状态（`088e137`）；Hugo Blog 未设置 `HUGO_VERSION` 时安装/更新打印浮动 latest 提示（`3eb11f6`），root `status` 上报 Hugo pin 状态（固定确认/漂移告警/未固定提示，`87e7e7a`） |
+| 当前整改代码基线 | `1c84fc7` | P2-S2 收尾：备份发布/清单片段收敛、回滚快照清理共享 helper、Vaultwarden restore 恢复 env、guards 逐个隔离（至 `e3464ba`，`docs/progress.log` 转为本地未跟踪）；随后 drop 死代码分支与重复守卫（`0dc8c92`）、分支跟踪应用安装/更新打印浮动分支提示（`796691f`）、human `status` 上报 git 提交与 pin 状态（`088e137`）；Hugo Blog 未设置 `HUGO_VERSION` 时安装/更新打印浮动 latest 提示（`3eb11f6`），root `status` 上报 Hugo pin 状态（固定确认/漂移告警/未固定提示，`87e7e7a`）；共享二进制应用未设置 `BA_VERSION` 时安装/更新打印浮动 latest 提示（`1c84fc7`） |
 
 ### 1.2 已完成的主线能力
 
@@ -56,7 +56,7 @@
 |---|---|---|---|
 | M15 | Sub2API/Vaultwarden/NewAPI/CyberStrikeAI 各自重复生命周期 | **部分完成** | New API 已迁移到共享 `binary_app`（提交 `5e52008`）。剩余三个手写应用仍保留，但已有共享 helper（备份、回滚、删除、配置、restore、版本检查）。`PLAN.md §4` 明确记录：Vaultwarden 是 Docker 镜像提取 + Web Vault/nginx/certbot，Sub2API 是多构件备份 + PostgreSQL/Redis，CyberStrikeAI 是源码构建，当前不适合强行套单二进制生命周期。 |
 | M1 | `dist/` 生成物可能与源码漂移 | **有防线，治理仍可优化** | `tools/verify.sh` 的 release/dispatch/guards 会确定性重建并检查 `dist`；`.github/workflows/verify.yml:3-5, 23-40` 已在 push/PR 执行 release 检查。因此提交过时 `dist` 会被 CI 拦截。风险仍存在于本地忘记重建、生成物体积大、源码与发布物双份审阅成本；后续可评估改为 release 时生成或保留提交产物但强化 pre-commit。 |
-| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest，设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；Hugo 支持 `HUGO_VERSION` 精确 pin、安装记录和统一版本输出；TickFlow 支持 `TICKFLOW_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；CyberStrikeAI 支持 `GITHUB_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；Vaultwarden 支持 `VW_IMAGE_DIGEST` 的完整 sha256 image digest pin、安装记录和本地 JSON 比对。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
+| M1/M15 | 版本完全浮动，始终 `releases/latest` | **二进制应用已修复；自定义应用仍有差异** | `lib/binary_app.sh:596-600, 663-670` 支持并校验 `BA_VERSION`，安装配置记录 `INSTALLED_VERSION`；未设置时仍为 latest（此时安装/更新会打印“跟随移动 latest”提示及固定方法，`1c84fc7`），设置后 update 只针对 pinned tag，`check-update` 显示当前/目标。Sub2API 已接入共享版本查询适配器；Hugo 支持 `HUGO_VERSION` 精确 pin、安装记录和统一版本输出；TickFlow 支持 `TICKFLOW_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；CyberStrikeAI 支持 `GITHUB_COMMIT` 的完整 SHA pin、安装记录和本地 JSON 比对；Vaultwarden 支持 `VW_IMAGE_DIGEST` 的完整 sha256 image digest pin、安装记录和本地 JSON 比对。故“全部 10 个二进制应用浮动”已过时，但全仓库尚未统一版本策略。 |
 | M11/M8 | Hugo `.deb` 无 SHA-256；Vaultwarden 用 root crontab 覆盖 | **已修复** | `impl/install_hugo_blog.sh:62-70, 308-340` 提取 GitHub asset digest 并校验后才 `dpkg -i`；Vaultwarden 使用 `/etc/cron.d/vaultwarden-backup` 与 `/etc/cron.d/certbot-renew` 原子写入，不再覆盖 root crontab。提交 `7640720`。 |
 
 ### 2.3 一致性与体验问题
