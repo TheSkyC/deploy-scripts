@@ -6815,6 +6815,18 @@ i18n_register_many \
   app.cpa_stack.status.local_health \
   "Local health" \
   "本地健康检查" \
+  app.cpa_stack.status.versions \
+  "Component versions" \
+  "组件版本" \
+  app.cpa_stack.status.cpa_component \
+  "CLIProxyAPI (CPA)" \
+  "CLIProxyAPI (CPA)" \
+  app.cpa_stack.status.cpamp_component \
+  "CPA Manager Plus" \
+  "CPA Manager Plus" \
+  app.cpa_stack.status.components_follow_latest \
+  "Both components follow each repository's moving latest release; recorded versions reflect the last install/update, and check-update compares them with GitHub." \
+  "两个组件都跟随各自仓库会移动的 latest 发布；记录版本为最近一次安装/更新的结果，check-update 会与 GitHub 上的最新版比对。" \
   app.cpa_stack.banner \
   "CLIProxyAPI + CPA Manager Plus Stack" \
   "CLIProxyAPI + CPA Manager Plus Stack" \
@@ -7779,6 +7791,14 @@ do_status() {
   printf '\n[%s]\n' "$(t app.cpa_stack.status.local_health)"
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
+  # The deployment config is root-only, so recorded component versions are
+  # reported only when status runs as root and the config is readable.
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    printf '\n[%s]\n' "$(t app.cpa_stack.status.versions)"
+    printf '  %s: %s\n' "$(t app.cpa_stack.status.cpa_component)" "${INSTALLED_CPA_VERSION:-$(t status.unknown)}"
+    printf '  %s: %s\n' "$(t app.cpa_stack.status.cpamp_component)" "${INSTALLED_CPAMP_VERSION:-$(t status.unknown)}"
+    printf '  %s\n' "$(t app.cpa_stack.status.components_follow_latest)"
+  fi
   printf '\n[%s]\n' "$(t app.cpa_stack.status.paths)"
   for path in "$CPA_CONFIG_FILE" "$CPA_AUTH_DIR" "$CPAMP_ENV_FILE" "$CPAMP_DATA_DIR" "$NGINX_SITE" "$CPA_STACK_BACKUP_DIR"; do
     [[ -e "$path" ]] && printf '  [ok] %s\n' "$path" || printf '  [--] %s\n' "$path"

@@ -491,6 +491,7 @@ main() {
       run_isolated_check check_config_export_uses_atomic_copy
       run_isolated_check check_connectivity_helper_behavior
       run_isolated_check check_cpa_stack_status_backup_projection
+      run_isolated_check check_cpa_stack_status_reports_component_versions
       run_isolated_check check_cpa_stack_layout
       run_isolated_check check_cpa_stack_binary_backups_are_atomic
       run_isolated_check check_cron_logrotate_are_atomic

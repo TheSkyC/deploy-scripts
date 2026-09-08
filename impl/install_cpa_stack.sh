@@ -891,6 +891,14 @@ do_status() {
   printf '\n[%s]\n' "$(t app.cpa_stack.status.local_health)"
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
+  # The deployment config is root-only, so recorded component versions are
+  # reported only when status runs as root and the config is readable.
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    printf '\n[%s]\n' "$(t app.cpa_stack.status.versions)"
+    printf '  %s: %s\n' "$(t app.cpa_stack.status.cpa_component)" "${INSTALLED_CPA_VERSION:-$(t status.unknown)}"
+    printf '  %s: %s\n' "$(t app.cpa_stack.status.cpamp_component)" "${INSTALLED_CPAMP_VERSION:-$(t status.unknown)}"
+    printf '  %s\n' "$(t app.cpa_stack.status.components_follow_latest)"
+  fi
   printf '\n[%s]\n' "$(t app.cpa_stack.status.paths)"
   for path in "$CPA_CONFIG_FILE" "$CPA_AUTH_DIR" "$CPAMP_ENV_FILE" "$CPAMP_DATA_DIR" "$NGINX_SITE" "$CPA_STACK_BACKUP_DIR"; do
     [[ -e "$path" ]] && printf '  [ok] %s\n' "$path" || printf '  [--] %s\n' "$path"

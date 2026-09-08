@@ -71,6 +71,28 @@ CPATEST
   grep -Fq 'version_check_component_json cpamp' impl/install_cpa_stack.sh
 }
 
+check_cpa_stack_status_reports_component_versions() {
+  awk '
+      /^do_status\(\)/ { current="status"; next }
+      /^}/ { current="" }
+      current == "status" && /if \[\[ \$\{EUID:-\$\(id -u\)\} -eq 0 \]\]/ { saw_root_gate=1 }
+      current == "status" && /app\.cpa_stack\.status\.versions/ { saw_versions=1 }
+      current == "status" && /app\.cpa_stack\.status\.cpa_component/ { saw_cpa=1 }
+      current == "status" && /app\.cpa_stack\.status\.cpamp_component/ { saw_cpamp=1 }
+      current == "status" && /app\.cpa_stack\.status\.components_follow_latest/ { saw_follow=1 }
+      END {
+        if (!(saw_root_gate && saw_versions && saw_cpa && saw_cpamp && saw_follow)) {
+          printf "%s root cpa-stack status must report recorded component versions and the moving-latest semantics\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.versions' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.cpa_component' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.cpamp_component' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.components_follow_latest' apps/cpa_stack.sh
+}
+
 check_cpa_stack_binary_backups_are_atomic() {
   local output
   output="$($BASH_BIN <<'CPATEST'
