@@ -99,6 +99,10 @@ for the framework release archives produced by `tools/build-release.sh`.
   installed digest, or shows it is configured but not yet applied), while a
   tag-tracked deployment calls out that the image follows the tag and how to make
   it immutable with a full sha256 digest.
+- Vaultwarden install and update now print a notice when the image is not pinned
+  to a digest (`VW_IMAGE_DIGEST` unset): the deployment follows the moving tag,
+  and the operator is told how to make the image immutable with a full sha256
+  digest.
 
 ### Fixed
 

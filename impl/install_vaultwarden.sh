@@ -63,6 +63,15 @@ _vw_image_reference() {
   fi
 }
 
+# A tag without an immutable digest follows the registry: a later install or
+# update can pull a different image under the same tag. Surface that so an
+# operator who wants reproducible images sets VW_IMAGE_DIGEST.
+_vw_notice_if_floating_image() {
+  if [[ -z "${VW_IMAGE_DIGEST:-}" ]]; then
+    info "$(t app.vaultwarden.info.image_floating "${VW_IMAGE_TAG:-latest}")"
+  fi
+}
+
 _vw_pinned_image_json() {
   local update_state=up_to_date
   [[ "${INSTALLED_IMAGE_DIGEST:-}" == "$VW_IMAGE_DIGEST" ]] || update_state=update_available
@@ -638,6 +647,7 @@ do_install() {
   success "$(t app.vaultwarden.success.binary_installed "$VW_BIN")"
   VW_VER=$("$VW_BIN" --version 2>/dev/null || echo "unknown")
   info "$(t app.vaultwarden.info.version "$VW_VER")"
+  _vw_notice_if_floating_image
   step "$(t app.vaultwarden.step.web_vault)"
   local _wv_install_bak
   _wv_install_bak="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"
@@ -1307,6 +1317,7 @@ do_update() {
     || error "$(t app.vaultwarden.error.binary_install "$VW_BIN")"
   success "$(t app.vaultwarden.success.binary_updated)"
   NEW_VER=$(get_installed_version)
+  _vw_notice_if_floating_image
   step "$(t app.vaultwarden.step.update_web_vault)"
   local _wv_bak_ts
   _wv_bak_ts="${VW_WEB_DIR}.bak.$(date +%Y%m%d%H%M%S)"

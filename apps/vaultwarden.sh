@@ -207,6 +207,9 @@ i18n_register_many \
   app.vaultwarden.info.version \
   "Vaultwarden version: %s" \
   "Vaultwarden 版本：%s" \
+  app.vaultwarden.info.image_floating \
+  "Image follows the moving tag %s; set VW_IMAGE_DIGEST to a full sha256 digest to make future installs reproducible." \
+  "镜像跟随会移动的 tag %s；如需让后续安装可复现，请设置 VW_IMAGE_DIGEST 为完整的 sha256 摘要。" \
   app.vaultwarden.step.web_vault \
   "Step 4  Install Web Vault" \
   "Step 4  安装 Web Vault" \

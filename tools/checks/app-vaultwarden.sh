@@ -1298,6 +1298,23 @@ check_vaultwarden_image_digest_version_contract() {
   grep -Fq 'app.vaultwarden.status.image_pin_mismatch' apps/vaultwarden.sh
   grep -Fq 'app.vaultwarden.status.image_pin_configured' apps/vaultwarden.sh
   grep -Fq 'app.vaultwarden.status.image_tag' apps/vaultwarden.sh
+  awk '
+      /^do_install\(\)/ { in_install=1; next }
+      in_install && /^}/ { in_install=0 }
+      in_install && /_vw_notice_if_floating_image/ { saw_install=1 }
+      /^do_update\(\)/ { in_update=1; next }
+      in_update && /^}/ { in_update=0 }
+      in_update && /_vw_notice_if_floating_image/ { saw_update=1 }
+      END {
+        if (!(saw_install && saw_update)) {
+          printf "%s unpinned vaultwarden image installs and updates must surface a moving-tag notice when VW_IMAGE_DIGEST is empty\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh
+  grep -Fq '_vw_notice_if_floating_image()' impl/install_vaultwarden.sh
+  grep -Fq 'app.vaultwarden.info.image_floating' apps/vaultwarden.sh
+  grep -Fq 'app.vaultwarden.info.image_floating' impl/install_vaultwarden.sh
 }
 
 
