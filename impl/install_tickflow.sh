@@ -517,7 +517,7 @@ do_backup() {
     fi
   done
   local archive
-  archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
+  archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S)_${RANDOM}.tar.gz"
   if ! backup_create_tar_archive "$archive" \
       -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env; then
     error "$(t app.tickflow.backup.error_archive "$archive")"

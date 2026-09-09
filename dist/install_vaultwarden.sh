@@ -6126,7 +6126,7 @@ _ba_backup() {
     fi
   fi
   local archive
-  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -9349,7 +9349,7 @@ MSG_CLEANED="$(t app.vaultwarden.backup.script.cleaned)"
 MSG_REMOVE_FAILED="$(t app.vaultwarden.backup.script.remove_failed)"
 BKSH_VARS
     cat << 'BKSH'
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
 ARCHIVE="${BACKUP_DIR}/vaultwarden_${TIMESTAMP}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"   # Write to a temp file before moving it into place.
 
@@ -9438,7 +9438,7 @@ _backup_silent() {
     return 1
   fi
   local archive
-  archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${VW_BACKUP_DIR}/vaultwarden_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if [[ ! -d "$VW_DATA_DIR" ]]; then
     _log_backup_helper "$(t app.vaultwarden.backup.script.data_missing "$VW_DATA_DIR")"
     warn "$(t app.vaultwarden.warn.backup_data_missing "$VW_DATA_DIR")"

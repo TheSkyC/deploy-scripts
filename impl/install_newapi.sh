@@ -174,7 +174,7 @@ BKSH_HEADER
     cat <<'BKSH_BODY'
 
 LOG="${BACKUP_DIR}/backup.log"
-TS=$(date +%Y%m%d_%H%M%S)
+TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
 ARCHIVE="${BACKUP_DIR}/new-api_${TS}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"
 

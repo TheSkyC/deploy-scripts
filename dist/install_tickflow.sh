@@ -6126,7 +6126,7 @@ _ba_backup() {
     fi
   fi
   local archive
-  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -7782,7 +7782,7 @@ do_backup() {
     fi
   done
   local archive
-  archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S).tar.gz"
+  archive="${backup_dir}/tickflow-data-$(date +%Y%m%d%H%M%S)_${RANDOM}.tar.gz"
   if ! backup_create_tar_archive "$archive" \
       -C "$TICKFLOW_INSTALL_DIR" data tiers.yaml .env; then
     error "$(t app.tickflow.backup.error_archive "$archive")"

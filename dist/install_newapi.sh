@@ -6126,7 +6126,7 @@ _ba_backup() {
     fi
   fi
   local archive
-  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -7196,7 +7196,7 @@ BKSH_HEADER
     cat <<'BKSH_BODY'
 
 LOG="${BACKUP_DIR}/backup.log"
-TS=$(date +%Y%m%d_%H%M%S)
+TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
 ARCHIVE="${BACKUP_DIR}/new-api_${TS}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"
 

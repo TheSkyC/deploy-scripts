@@ -6126,7 +6126,7 @@ _ba_backup() {
     fi
   fi
   local archive
-  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -8693,7 +8693,7 @@ do_backup() {
   fi
 
   local timestamp archive archive_tmp stage copied=false
-  timestamp=$(date +%Y%m%d_%H%M%S)
+  timestamp="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   archive="${BLOG_BACKUP_DIR}/blog_${timestamp}.tar.gz"
   archive_tmp="${archive}.tmp"
   if ! stage=$(mktemp -d "${BLOG_BACKUP_DIR}/.blog-backup.XXXXXX"); then

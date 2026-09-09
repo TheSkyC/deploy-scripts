@@ -6126,7 +6126,7 @@ _ba_backup() {
     fi
   fi
   local archive
-  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -8805,7 +8805,7 @@ BKSH_HEADER
     cat << 'BKSH_BODY_PRE'
 
 LOG="${BACKUP_DIR}/backup.log"
-TS=$(date +%Y%m%d_%H%M%S)
+TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
 ARCHIVE="${BACKUP_DIR}/sub2api_data_${TS}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"
 PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
@@ -8934,7 +8934,7 @@ _backup_silent() {
   fi
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive
-    pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
+    pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.sql.gz"
     if backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr "${PG_DSN}"; then
       if ! backup_finalize_archive "$pg_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
         warn "$(t app.sub2api.warn.backup_integrity "$pg_archive")"
@@ -8952,7 +8952,7 @@ _backup_silent() {
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
     local conf_archive
-    conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+    conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
     if backup_create_tar_archive "$conf_archive" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
       if ! backup_finalize_archive "$conf_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
@@ -9102,7 +9102,7 @@ do_install() {
   rm -f "$TMP_ARCHIVE"
   local OLD_BIN_BAK=""
   if [[ -f "$BIN_PATH" ]]; then
-    local OLD_TS; OLD_TS=$(date +%Y%m%d_%H%M%S)
+    local OLD_TS; OLD_TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
     OLD_BIN_BAK="${INSTALL_DIR}/sub2api.bak.${OLD_TS}"
   fi
   if ! _install_binary_candidate "$TMP_BIN" "$OLD_BIN_BAK"; then
@@ -9237,7 +9237,7 @@ do_update() {
   TMP_BIN=$(extract_and_verify "$TMP_ARCHIVE" "$INSTALL_DIR")
   rm -f "$TMP_ARCHIVE"
   step "$(t app.sub2api.step.replace_restart)"
-  local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
+  local BAK_TS; BAK_TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   local BAK_PATH="${INSTALL_DIR}/sub2api.bak.${BAK_TS}"
   _backup_current_binary "$BAK_PATH" \
     || error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
@@ -9323,7 +9323,7 @@ do_backup() {
     warn "$(t app.sub2api.warn.pg_dsn_missing)"
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
-    local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
     if backup_create_tar_archive "$CONF_ARCHIVE" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
         if ! backup_finalize_archive "$CONF_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
@@ -9338,7 +9338,7 @@ do_backup() {
     warn "$(t app.sub2api.warn.config_missing "$CONFIG_DIR")"
   fi
   if [[ -d "$DATA_DIR" ]]; then
-    local DATA_ARCHIVE; DATA_ARCHIVE="${BACKUP_DIR}/sub2api_data_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local DATA_ARCHIVE; DATA_ARCHIVE="${BACKUP_DIR}/sub2api_data_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
     if backup_create_tar_archive "$DATA_ARCHIVE" \
         --exclude="*.log" --exclude="*.log.*" \
         -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then

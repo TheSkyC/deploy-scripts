@@ -951,7 +951,7 @@ do_backup() {
   step "$(t app.cpa_stack.step.backup)"
   mkdir -p "$CPA_STACK_BACKUP_DIR" || error "$(t app.cpa_stack.error.backup "$CPA_STACK_BACKUP_DIR")"
   local timestamp archive cpamp_was_active=false
-  timestamp="$(date +%Y%m%d_%H%M%S)"
+  timestamp="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   archive="${CPA_STACK_BACKUP_DIR}/cpa-stack-${timestamp}.tar.gz"
   systemctl is-active --quiet "$CPAMP_SERVICE_NAME" && cpamp_was_active=true
   if $cpamp_was_active; then

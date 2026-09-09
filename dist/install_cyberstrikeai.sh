@@ -6126,7 +6126,7 @@ _ba_backup() {
     fi
   fi
   local archive
-  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+  archive="${BACKUP_DIR}/${BA_ARCHIVE_PREFIX:-${APP_ID}}_${label}_$(date +%Y%m%d_%H%M%S)_${RANDOM}.tar.gz"
   if backup_create_tar_archive "$archive" \
       --exclude="*.log" --exclude="*.log.*" \
       -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -8270,7 +8270,7 @@ if command -v sqlite3 >/dev/null 2>&1; then
   done < <(find "\$INSTALL_DIR/data" -maxdepth 1 -name "*.db" -type f -print0 2>/dev/null)
 fi
 
-ts=\$(date +%Y%m%d_%H%M%S)
+ts="\$(date +%Y%m%d_%H%M%S)_\${RANDOM}"
 archive="\$BACKUP_DIR/cyberstrike-ai_\${ts}.tar.gz"
 tmp="\${archive}.tmp"
 
