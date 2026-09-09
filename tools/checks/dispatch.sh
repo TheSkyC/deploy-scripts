@@ -368,6 +368,42 @@ check_i18n_keys_are_consistent() {
   fi
 }
 
+# Framework i18n keys (everything outside app.<prefix>) must be registered in
+# lib/*.sh, apps/*.sh, or impl/*.sh, and every literal t-call must resolve.
+# check_i18n_keys_are_consistent only covers per-app app.<prefix> keys and
+# previously missed shared keys such as status.title.
+check_framework_i18n_keys_are_consistent() {
+  local tmp_dir fail=0 file
+  tmp_dir="$(mktemp -d)"
+  # Registered keys: i18n_register single lines plus i18n_register_many
+  # continuation tokens (key on its own line, optional trailing backslash).
+  awk '
+      /^[[:space:]]*i18n_register(_many)?[[:space:]]+/ {
+        key = $2
+        if (key ~ /^[a-z][a-z0-9_]*\.[a-z0-9_.]+$/) print key
+      }
+      /^[[:space:]]*[a-z][a-z0-9_]*\.[a-z0-9_.]+[[:space:]]*\\?$/ { print $1 }
+    ' lib/*.sh apps/*.sh impl/*.sh 2>/dev/null | sort -u > "$tmp_dir/reg"
+  while IFS= read -r file; do
+    [[ -f "$file" ]] || continue
+    # Full-line comments are prose, not t-calls; drop them before extraction.
+    grep -vE '^[[:space:]]*#' "$file" 2>/dev/null \
+      | grep -oE '(^|[^A-Za-z0-9_])t[[:space:]]+[a-z][a-z0-9_]*\.[a-z0-9_.]+' \
+      | sed -E 's/.*[^A-Za-z0-9_]t[[:space:]]+//' \
+      >> "$tmp_dir/used" || true
+  done < <(find lib apps impl bin -name '*.sh' -type f; printf '%s\n' deploy.sh tools/verify.sh tools/checks/*.sh)
+  sort -u "$tmp_dir/used" -o "$tmp_dir/used" 2>/dev/null || : > "$tmp_dir/used"
+  while IFS= read -r key; do
+    echo "unregistered i18n key used via t: $key" >&2
+    fail=1
+  done < <(comm -23 "$tmp_dir/used" "$tmp_dir/reg")
+  rm -rf "$tmp_dir"
+  [[ "$fail" -eq 0 ]] || {
+    echo "every literal t-call key must be registered in lib/i18n.sh, lib/*.sh, apps/*.sh, or impl/*.sh." >&2
+    return 1
+  }
+}
+
 check_app_localized_descriptions() {
   expect_app_description cyberstrikeai en "Source build deployment with Go, Python, systemd, Nginx, and backups."
   expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"

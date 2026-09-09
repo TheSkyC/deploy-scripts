@@ -167,3 +167,4 @@ dispatch_action() {
     *) error "$(t common.invalid_choice "$action")" ;;
   esac
 }
+
