@@ -72,9 +72,14 @@ and `--continue-on-error` are accepted for symmetry.
 
 Applications with a configured version pin compare against that immutable
 target instead of the moving upstream release: shared binary apps report
-`BA_VERSION`, Hugo reports `HUGO_VERSION`, and the pinned verdict is computed
-locally (`cache_state=pinned`) without querying GitHub. `update-all` only
-plans such apps when the installed version differs from the pin.
+`BA_VERSION`, Hugo reports `HUGO_VERSION`, CPA Stack pins each component via
+`CPA_VERSION`/`CPAMP_VERSION`, Sub2API pins its release via
+`SUB2API_VERSION`, and the pinned verdict is computed locally
+(`cache_state=pinned`) without querying GitHub. Multi-component stacks keep
+the per-component verdicts in their typed `components` manifest, so a stack
+can be partially pinned; the top-level verdict reflects the worst component
+state. `update-all` only plans such apps when the installed version differs
+from the pin.
 
 ### `update-all`
 
