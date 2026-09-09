@@ -623,6 +623,7 @@ main() {
       run_isolated_check check_safe_path_guard
       run_isolated_check check_safe_rm_dir_is_idempotent
       run_isolated_check check_service_status_label
+      run_isolated_check check_wait_for_service_confirms_stable_start
       run_isolated_check check_shared_validators_accept_and_reject
       run_isolated_check check_silent_backup_tar_diagnostics_use_stderr
       run_isolated_check check_status_commands_allow_non_root

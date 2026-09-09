@@ -798,3 +798,51 @@ check_config_export_uses_atomic_copy() {
       }
     ' lib/cli.sh
 }
+# Behavioral check for wait_for_service: a Type=simple unit can report active
+# the instant its process forks and then crash. wait_for_service must confirm
+# the unit is still healthy after a short settle instead of trusting the first
+# active sample, while a service that stays active must still pass quickly.
+check_wait_for_service_confirms_stable_start() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  cat > "${tmp_dir}/systemctl" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "is-active --quiet")
+    mode="$(cat "$WAIT_MODE_FILE" 2>/dev/null || echo stable)"
+    if [[ "$mode" == "crash" ]]; then
+      # First sample is the transient active state before the crash.
+      if [[ -e "$WAIT_ACTIVE_SEEN" ]]; then
+        exit 3
+      fi
+      : > "$WAIT_ACTIVE_SEEN"
+      exit 0
+    fi
+    exit 0
+    ;;
+  "is-failed --quiet")
+    [[ "$(cat "$WAIT_MODE_FILE" 2>/dev/null || echo stable)" == "crash" ]] && exit 0
+    exit 1
+    ;;
+esac
+exit 1
+STUB
+  chmod +x "${tmp_dir}/systemctl"
+
+  if ! PATH="${tmp_dir}:$PATH" WAIT_MODE_FILE="${tmp_dir}/mode" WAIT_ACTIVE_SEEN="${tmp_dir}/seen" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    echo stable > "$WAIT_MODE_FILE"
+    wait_for_service stable-service 5
+    echo crash > "$WAIT_MODE_FILE"
+    rm -f "$WAIT_ACTIVE_SEEN"
+    if wait_for_service crash-service 5; then
+      echo "wait_for_service accepted a unit that crashed right after activation" >&2
+      exit 1
+    fi
+  '; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  rm -rf "$tmp_dir"
+}

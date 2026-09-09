@@ -776,7 +776,19 @@ wait_for_service() {
   local elapsed=0
   while (( elapsed < timeout )); do
     if systemctl is-active --quiet "$service_name"; then
-      return 0
+      # Type=simple units report active the moment the main process forks,
+      # before a bad config or an immediate crash can move the unit to failed.
+      # Confirm the unit is still healthy after a short settle so a crash
+      # right after activation is not mistaken for a successful start.
+      sleep 1
+      elapsed=$((elapsed + 1))
+      if systemctl is-active --quiet "$service_name"; then
+        return 0
+      fi
+      if systemctl is-failed --quiet "$service_name"; then
+        return 1
+      fi
+      continue
     fi
     if systemctl is-failed --quiet "$service_name"; then
       return 1
