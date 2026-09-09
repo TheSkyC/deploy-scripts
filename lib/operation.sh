@@ -67,23 +67,28 @@ operation_json_nullable() {
   fi
 }
 
-operation_safe_summary() {
-  local value="${1:-}" max_bytes="${2:-512}"
-  value="${value//$'\n'/ }"; value="${value//$'\r'/ }"
-  value="$(printf '%s' "$value" | sed -E \
+# Single source of truth for credential redaction. Operation summaries, operation
+# logs, and outgoing notifications must use the same patterns so a secret that is
+# safe in one channel cannot leak through another.
+operation_redact_text() {
+  local value="${1:-}"
+  printf '%s' "$value" | sed -E \
     -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g')"
+    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+}
+
+operation_safe_summary() {
+  local value max_bytes="${2:-512}"
+  value="${1:-}"
+  value="${value//$'\n'/ }"; value="${value//$'\r'/ }"
+  value="$(operation_redact_text "$value")"
   (( ${#value} > max_bytes )) && value="${value:0:max_bytes}"
   printf '%s' "$value"
 }
 
 operation_redact_line() {
-  local line="$1"
-  printf '%s\n' "$line" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
-    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+  printf '%s\n' "$(operation_redact_text "${1:-}")"
 }
 
 operation_log_stream() {

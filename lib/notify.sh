@@ -40,14 +40,10 @@ notify_load_config() {
   done < "$conf_file"
 }
 
-# Redact anything that looks like a credential from message bodies before
-# they leave the machine. Reuses the operation-log redaction patterns.
+# Redact anything that looks like a credential before it leaves the machine.
+# operation.sh owns the shared redaction implementation.
 notify_redact() {
-  local text="$1"
-  printf '%s' "$text" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
-    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+  operation_redact_text "${1:-}"
 }
 
 # Send one notification. Never fails the caller: every error path warns to
