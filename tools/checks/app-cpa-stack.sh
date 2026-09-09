@@ -287,3 +287,32 @@ check_cpa_stack_e2e_pinned_fixture() {
       return 1
     }
 }
+# CPAMP release archives have appeared both with and without the leading "v"
+# in the version segment. The pinned-install resolver must accept either
+# spelling so an upstream rename cannot break pinned installs.
+check_cpa_stack_cpamp_asset_resolution() {
+  local output
+  output="$($BASH_BIN <<'CPAMPASSET'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source apps/cpa_stack.sh >/dev/null 2>&1
+source impl/install_cpa_stack.sh >/dev/null 2>&1
+json_with_v='{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_v0.4.1_linux_amd64.tar.gz"}]}'
+json_without_v='{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_0.4.1_linux_amd64.tar.gz"}]}'
+with_v="$(cpa_stack_resolve_cpamp_asset "$json_with_v" v0.4.1 amd64)"
+without_v="$(cpa_stack_resolve_cpamp_asset "$json_without_v" v0.4.1 amd64)"
+[[ "$with_v" == "cpa-manager-plus_v0.4.1_linux_amd64.tar.gz" ]]
+[[ "$without_v" == "cpa-manager-plus_0.4.1_linux_amd64.tar.gz" ]]
+if cpa_stack_resolve_cpamp_asset '{"assets":[]}' v0.4.1 amd64 >/dev/null 2>&1; then
+  echo "resolver must fail when no candidate asset exists" >&2
+  exit 1
+fi
+printf ok
+CPAMPASSET
+  )"
+  [[ "$output" == ok ]] || {
+    echo "cpamp asset resolution must accept v-prefixed and bare version asset names." >&2
+    return 1
+  }
+}

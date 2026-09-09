@@ -7333,12 +7333,36 @@ cpa_stack_cpa_asset_name() {
   esac
 }
 
-cpa_stack_cpamp_asset_name() {
+# CPAMP release archives have shipped both with and without the leading "v"
+# in the version segment, so resolve against both spellings and pick the
+# asset the release actually publishes. The bare version stays first because
+# that is the name the pinned e2e fixture and the verified asset mapping use.
+cpa_stack_cpamp_asset_names() {
   local tag="$1" arch="$2"
+  # Expand the version from the already-assigned tag: variable assignments in
+  # a single `local` statement are expanded before the tag assignment lands.
+  local version="${tag#v}"
   case "$arch" in
-    amd64) printf 'cpa-manager-plus_%s_linux_amd64.tar.gz\n' "$tag" ;;
-    arm64) printf 'cpa-manager-plus_%s_linux_arm64.tar.gz\n' "$tag" ;;
+    amd64)
+      printf 'cpa-manager-plus_%s_linux_amd64.tar.gz\n' "$version"
+      printf 'cpa-manager-plus_%s_linux_amd64.tar.gz\n' "$tag"
+      ;;
+    arm64)
+      printf 'cpa-manager-plus_%s_linux_arm64.tar.gz\n' "$version"
+      printf 'cpa-manager-plus_%s_linux_arm64.tar.gz\n' "$tag"
+      ;;
   esac
+}
+
+cpa_stack_resolve_cpamp_asset() {
+  local json="$1" tag="$2" arch="$3" candidate
+  while IFS= read -r candidate; do
+    if [[ -n "$(cpa_stack_release_asset_url "$json" "$candidate")" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done < <(cpa_stack_cpamp_asset_names "$tag" "$arch")
+  return 1
 }
 
 cpa_stack_release_json() {
@@ -7448,10 +7472,15 @@ cpa_stack_install_release() {
   arch="$(cpa_stack_arch)"
   if [[ "$component" == "cpa" ]]; then
     asset="$(cpa_stack_cpa_asset_name "$tag" "$arch")"
+    [[ -n "$(cpa_stack_release_asset_url "$json" "$asset")" ]] || error "$(t app.cpa_stack.error.release_asset "$tag" "$repository" "$asset")"
   else
-    asset="$(cpa_stack_cpamp_asset_name "$tag" "$arch")"
+    asset="$(cpa_stack_resolve_cpamp_asset "$json" "$tag" "$arch")" || asset=""
+    if [[ -z "$asset" ]]; then
+      local -a cpamp_asset_candidates=()
+      mapfile -t cpamp_asset_candidates < <(cpa_stack_cpamp_asset_names "$tag" "$arch")
+      error "$(t app.cpa_stack.error.release_asset "$tag" "$repository" "${cpamp_asset_candidates[0]}")"
+    fi
   fi
-  [[ -n "$(cpa_stack_release_asset_url "$json" "$asset")" ]] || error "$(t app.cpa_stack.error.release_asset "$tag" "$repository" "$asset")"
   step "$(t app.cpa_stack.step.download "$component" "$tag")"
   archive="$(mktemp "/tmp/${component}.XXXXXX")" || error "$(t app.cpa_stack.error.download "$asset")"
   extract_dir="$(mktemp -d "/tmp/${component}.XXXXXX")" || { rm -f "$archive"; error "$(t app.cpa_stack.error.extract "$asset")"; }
