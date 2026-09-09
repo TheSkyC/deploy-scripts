@@ -5487,7 +5487,7 @@ ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    if download_retry curl -fL --progress-bar -o "$target" "$url"; then
+    if download_retry curl -fL --proto '=https' --proto-redir '=https' --progress-bar -o "$target" "$url"; then
       return 0
     fi
     rm -f "$target" 2>/dev/null || true
