@@ -860,8 +860,17 @@ github_latest_release_tag_checked() {
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
   curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
-  [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+  # GITHUB_TOKEN must stay out of the process list: a plain -H argument is
+  # readable by every local user via /proc/*/cmdline. curl's @file header
+  # syntax (7.55+) fed from a /dev/fd process substitution keeps the secret
+  # out of argv and off disk.
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    json="$(curl "${curl_args[@]}" \
+      -H @<(printf 'Authorization: Bearer %s' "$GITHUB_TOKEN") \
+      "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+  else
+    json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+  fi
   tag="$(json_tag_name "$json")"
   [[ "${tag:-}" =~ ^v?[0-9] ]] || return 2
   printf '%s\n' "$tag"
