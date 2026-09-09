@@ -131,6 +131,7 @@ i18n_register config.saved "Saved deployment config: %s" "部署配置已持久�
 i18n_register error.command_required "Required command is missing: %s" "缺少必要命令：%s"
 i18n_register error.config_permission "Refusing to load unsafe config permissions: %s" "拒绝加载权限不安全的配置文件：%s"
 i18n_register error.config_owner "Refusing to load config not owned by root: %s" "拒绝加载非 root 拥有的配置文件：%s"
+i18n_register error.config_symlink "Refusing to load config through a symbolic link: %s" "拒绝加载符号链接指向的配置文件：%s"
 i18n_register error.config_write "Failed to save deployment config: %s" "部署配置保存失败：%s"
 i18n_register error.tmpdir "Failed to create a private temporary file; aborting." "无法创建私有临时文件，已中止。"
 i18n_register error.lock_failed "Another deployment process is running: %s" "已有部署进程正在运行：%s"
@@ -689,6 +690,9 @@ trim_conf_token() {
 config_file_is_safe() {
   local conf_file="$1"
   [[ -f "$conf_file" ]] || return 0
+  # A symlink is refused like the version-cache trust gate: stat would follow
+  # the link, and the link itself can be retargeted independently of the file.
+  [[ ! -L "$conf_file" ]] || error "$(t error.config_symlink "$conf_file")"
 
   if command -v stat >/dev/null 2>&1; then
     local owner mode

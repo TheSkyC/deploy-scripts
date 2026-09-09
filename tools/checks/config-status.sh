@@ -331,14 +331,51 @@ check_unsafe_config_loads_fail_closed() {
   awk '
       /error "\$\(t error\.config_owner "\$conf_file"\)"/ { saw_owner=1 }
       /error "\$\(t error\.config_permission "\$conf_file"\)"/ { saw_permission=1 }
+      /error "\$\(t error\.config_symlink "\$conf_file"\)"/ { saw_symlink=1 }
       /warn "\$\(t warn\.config_(owner|permission)/ { saw_warn=1 }
       END {
-        if (!(saw_owner && saw_permission) || saw_warn) {
-          print "Unsafe config ownership or permissions must fail closed with config errors." > "/dev/stderr"
+        if (!(saw_owner && saw_permission && saw_symlink) || saw_warn) {
+          print "Unsafe config ownership, permissions, or symlinks must fail closed with config errors." > "/dev/stderr"
           exit 1
         }
       }
     ' lib/config.sh
+
+  # Behavioral: a symlinked config must be refused even when the stat stub
+  # reports a trusted owner and mode, matching the version-cache trust gate.
+  local tmp_dir target symlink st
+  tmp_dir="$(mktemp -d)"
+  target="${tmp_dir}/real.conf"
+  printf 'PORT=9090\n' > "$target"
+  symlink="${tmp_dir}/deploy.conf"
+  ln -s "$target" "$symlink"
+  cat > "${tmp_dir}/stat" <<'STUB'
+#!/usr/bin/env bash
+case "${2:-}" in
+  %U) echo root ;;
+  %a) echo 600 ;;
+  *) /usr/bin/stat "$@" ;;
+esac
+STUB
+  chmod +x "${tmp_dir}/stat"
+  ( PATH="${tmp_dir}:$PATH" "$BASH_BIN" -c '
+      set -euo pipefail
+      source "$1/lib/logging.sh"
+      source "$1/lib/i18n.sh"
+      source "$1/lib/config.sh"
+      PORT=""
+      set +e
+      ( load_config_file "$2" PORT ) 2>/dev/null
+      status=$?
+      set -e
+      [[ "$status" -ne 0 ]] || { echo "load_config_file accepted a symlinked config" >&2; exit 1; }
+      [[ -z "$PORT" ]] || { echo "symlinked config values were loaded" >&2; exit 1; }
+      exit 0
+    ' _ "$ROOT_DIR" "$symlink"
+  )
+  st=$?
+  rm -rf "$tmp_dir"
+  [[ "$st" -eq 0 ]] || return "$st"
 }
 
 check_config_save_failures_are_explicit() {
