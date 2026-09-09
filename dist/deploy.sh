@@ -5129,6 +5129,9 @@ i18n_register_many \
   binary_app.summary.local_bind \
   "Listening on 127.0.0.1:%s (local only). Use a reverse proxy to publish it securely." \
   "正在监听 127.0.0.1:%s（仅本机）。如需对外提供服务，请通过反向代理安全发布。" \
+  binary_app.summary.tls_proxy \
+  "Served through the managed nginx reverse proxy with TLS." \
+  "已通过受管的 nginx 反向代理（TLS）对外提供服务。" \
   binary_app.summary.management \
   "Management" \
   "常用管理命令" \
@@ -5706,7 +5709,11 @@ bapp_summary() {
   fi
   echo "  =========================================================="
   if [[ -n "$DOMAIN" ]]; then
-    echo -e "  $(t binary_app.summary.public)  ${CYAN}http://${DOMAIN}${GREEN}"
+    if deploy_value_truthy "${BA_ENABLE_HTTPS:-0}"; then
+      echo -e "  $(t binary_app.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
+    else
+      echo -e "  $(t binary_app.summary.public)  ${CYAN}http://${DOMAIN}${GREEN}"
+    fi
   fi
   echo -e "  $(t binary_app.summary.internal)  ${CYAN}http://${internal_ip}:${PORT}${GREEN}"
   echo -e "  $(t binary_app.summary.version)  ${YELLOW}${version}${GREEN}"
@@ -5722,6 +5729,8 @@ bapp_summary() {
     echo -e "  ${YELLOW}$(t binary_app.summary.proxy_hint)${NC}"
   elif app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}"; then
     echo -e "  ${YELLOW}$(t binary_app.summary.public_bind)${NC}"
+  elif deploy_value_truthy "${BA_ENABLE_HTTPS:-0}"; then
+    echo -e "  $(t binary_app.summary.tls_proxy)"
   else
     echo -e "  $(t binary_app.summary.local_bind "${PORT}")"
   fi
