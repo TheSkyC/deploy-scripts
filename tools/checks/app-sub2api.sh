@@ -1131,3 +1131,78 @@ SUB2APITEST
   grep -Fq 'INSTALLED_POSTGRES_VERSION INSTALLED_REDIS_VERSION' impl/install_sub2api.sh
   grep -Fq '_sub2api_record_runtime_versions' impl/install_sub2api.sh
 }
+# A pinned Sub2API release (SUB2API_VERSION persisted in a trusted config)
+# must be an immutable target: install/update resolve that exact tag, and both
+# the central check-update adapter and the status-json projection compare the
+# installed version against the pin locally (cache_state=pinned) without
+# querying the moving GitHub latest. Without a pin the same adapters keep the
+# floating-latest behavior.
+check_sub2api_pinned_version_contract() {
+  local output
+  output="$($BASH_BIN <<'SUB2APITEST'
+set -euo pipefail
+temp_root="$(mktemp -d)"
+trap 'rm -rf "$temp_root"' EXIT
+export DEPLOY_VERSION_CACHE_ROOT="${temp_root}/version-cache"
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+APP_ID=sub2api
+APP_NAME="Sub2API"
+app_conf_file() { printf '%s' '/nonexistent/sub2api-deploy.conf'; }
+github_latest_release_tag_checked() { printf 'pinned projection must not query the moving latest\n' >&2; return 97; }
+
+SUB2API_VERSION=v0.2.3
+INSTALLED_VERSION=v0.1.185
+source impl/install_sub2api.sh >/dev/null 2>&1
+
+pinned="$(_sub2api_check_update_json "$INSTALLED_VERSION" 1 1)"
+[[ "$(state_json_field "$pinned" installed)" == v0.1.185 ]]
+[[ "$(state_json_field "$pinned" latest)" == v0.2.3 ]]
+[[ "$(state_json_field "$pinned" update_state)" == update_available ]]
+[[ "$(state_json_field "$pinned" source)" == github_release ]]
+[[ "$(state_json_field "$pinned" cache_state)" == pinned ]]
+[[ "$(state_json_field "$pinned" components.sub2api.cache_state)" == pinned ]]
+
+INSTALLED_VERSION=v0.2.3
+up_to_date="$(_sub2api_check_update_json v0.2.3 1 1)"
+[[ "$(state_json_field "$up_to_date" update_state)" == up_to_date ]]
+
+INSTALLED_VERSION=v0.1.185
+status_pinned="$(_sub2api_status_version_json)"
+[[ "$(state_json_field "$status_pinned" installed)" == v0.1.185 ]]
+[[ "$(state_json_field "$status_pinned" latest)" == v0.2.3 ]]
+[[ "$(state_json_field "$status_pinned" update_state)" == update_available ]]
+[[ "$(state_json_field "$status_pinned" cache_state)" == pinned ]]
+
+SUB2API_VERSION=""
+github_latest_release_tag_checked() { printf 'v0.2.3\n'; }
+floating="$(_sub2api_check_update_json v0.1.185 1 0)"
+[[ "$(state_json_field "$floating" installed)" == v0.1.185 ]]
+[[ "$(state_json_field "$floating" latest)" == v0.2.3 ]]
+[[ "$(state_json_field "$floating" update_state)" == update_available ]]
+[[ "$(state_json_field "$floating" source)" == github_release ]]
+printf ok
+SUB2APITEST
+  )"
+  [[ "$output" == ok ]] || return 1
+  grep -Fq 'SUB2API_VERSION="${SUB2API_VERSION:-}"' impl/install_sub2api.sh
+  grep -Fq 'SUB2API_VERSION INSTALLED_VERSION' impl/install_sub2api.sh
+  grep -Fq 'success "$(t app.sub2api.success.pinned_version "${BOLD}${LATEST}${NC}")"' impl/install_sub2api.sh
+  grep -Fq 'info "$(t app.sub2api.info.unpinned_version "$LATEST")"' impl/install_sub2api.sh
+  grep -Fq 'info "$(t app.sub2api.info.pinned_target "${YELLOW}${LATEST}${NC}")"' impl/install_sub2api.sh
+  grep -Fq 'success "$(t app.sub2api.success.already_pinned "$LATEST")"' impl/install_sub2api.sh
+  grep -Fq 'error "$(t app.sub2api.error.pinned_version_invalid "$SUB2API_VERSION")"' impl/install_sub2api.sh
+  grep -Fq 't app.sub2api.status.pin_ok "$SUB2API_VERSION"' impl/install_sub2api.sh
+  grep -Fq 't app.sub2api.status.pin_mismatch "$SUB2API_VERSION" "$INSTALLED_VERSION"' impl/install_sub2api.sh
+  grep -Fq 't app.sub2api.status.pin_set "$SUB2API_VERSION"' impl/install_sub2api.sh
+  grep -Fq 't app.sub2api.status.unpinned' impl/install_sub2api.sh
+  grep -Fq 'app.sub2api.success.pinned_version' apps/sub2api.sh
+  grep -Fq 'app.sub2api.info.unpinned_version' apps/sub2api.sh
+  grep -Fq 'app.sub2api.info.pinned_target' apps/sub2api.sh
+  grep -Fq 'app.sub2api.success.already_pinned' apps/sub2api.sh
+  grep -Fq 'app.sub2api.error.pinned_version_invalid' apps/sub2api.sh
+  grep -Fq 'app.sub2api.status.pin_ok' apps/sub2api.sh
+  grep -Fq 'app.sub2api.status.pin_mismatch' apps/sub2api.sh
+  grep -Fq 'app.sub2api.status.pin_set' apps/sub2api.sh
+  grep -Fq 'app.sub2api.status.unpinned' apps/sub2api.sh
+}

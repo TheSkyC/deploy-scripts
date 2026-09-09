@@ -444,9 +444,18 @@ i18n_register_many \
   app.sub2api.error.version_lookup \
   "Failed to get the version. Check network connectivity and retry." \
   "获取版本号失败，请检查网络后重试。" \
+  app.sub2api.error.pinned_version_invalid \
+  "SUB2API_VERSION is invalid: '%s'. Use an exact GitHub release tag like v1.2.3." \
+  "SUB2API_VERSION 无效：'%s'。请使用类似 v1.2.3 的 GitHub 发布标签。" \
   app.sub2api.success.latest_version \
   "Latest version: %s" \
   "最新版本：%s" \
+  app.sub2api.success.pinned_version \
+  "Installing pinned version %s (SUB2API_VERSION)." \
+  "正在安装固定版本 %s（SUB2API_VERSION）。" \
+  app.sub2api.info.unpinned_version \
+  "This deployment follows the moving latest release (%s); set SUB2API_VERSION to an exact release tag (for example v1.2.3) to make future installs and updates reproducible." \
+  "本次部署跟随会移动的 latest 发布（%s）；如需让后续安装与更新可复现，请设置 SUB2API_VERSION 为精确的发布标签（例如 v1.2.3）。" \
   app.sub2api.info.download_url \
   "Download URL: %s" \
   "下载地址：%s" \
@@ -582,6 +591,12 @@ i18n_register_many \
   app.sub2api.success.already_latest \
   "Already on the latest version (%s); no update needed." \
   "已是最新版本（%s），无需更新。" \
+  app.sub2api.info.pinned_target \
+  "Pinned target version: %s" \
+  "固定目标版本：%s" \
+  app.sub2api.success.already_pinned \
+  "Already on the pinned version (%s); no update needed." \
+  "已固定在该版本（%s），无需更新。" \
   app.sub2api.warn.update_failed_state \
   "The service was already failed before update; this update will also reset the failed marker." \
   "更新前服务处于 failed 状态，本次更新将同时重置故障标记。" \
@@ -723,6 +738,18 @@ i18n_register_many \
   app.sub2api.status.unknown \
   "unknown" \
   "未知" \
+  app.sub2api.status.pin_set \
+  "Release is pinned to %s (SUB2API_VERSION)." \
+  "版本已固定到 %s（SUB2API_VERSION）。" \
+  app.sub2api.status.pin_ok \
+  "Release is pinned to %s (SUB2API_VERSION); installed version matches." \
+  "版本已固定到 %s（SUB2API_VERSION），且已安装版本一致。" \
+  app.sub2api.status.pin_mismatch \
+  "Release is pinned to %s (SUB2API_VERSION) but installed version is %s; run update to apply." \
+  "版本固定到 %s（SUB2API_VERSION），但已安装版本为 %s；请运行 update 应用该版本。" \
+  app.sub2api.status.unpinned \
+  "Not pinned: install and update follow the moving latest release. Set SUB2API_VERSION to an exact release tag (for example v1.2.3) to pin it." \
+  "未固定版本：安装与更新跟随会移动的 latest 发布。如需固定，请设置 SUB2API_VERSION 为精确的发布标签（例如 v1.2.3）。" \
   app.sub2api.status.binary_no_version \
   "(binary does not support --version)" \
   "（二进制不支持 --version）" \

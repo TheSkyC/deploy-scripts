@@ -401,6 +401,7 @@ main() {
       check_update_cpa_stack_merge_verdicts
       check_cpa_stack_component_version_manifest
       check_sub2api_component_version_manifest
+      check_sub2api_pinned_version_contract
       echo "Update verification passed"
       return 0
       ;;
@@ -594,6 +595,7 @@ main() {
       run_isolated_check check_sub2api_nginx_reload_results_are_checked
       run_isolated_check check_sub2api_pg_dump_errors_stay_out_of_backups
       run_isolated_check check_sub2api_pg_password_is_escaped
+      run_isolated_check check_sub2api_pinned_version_contract
       run_isolated_check check_sub2api_uri_encode_ascii
       run_isolated_check check_sub2api_postgres_rpm_setup_failures_are_explicit
       run_isolated_check check_sub2api_redis_service_handling_is_explicit
