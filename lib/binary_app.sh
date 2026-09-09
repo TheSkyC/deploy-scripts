@@ -25,6 +25,9 @@ i18n_register_many \
   binary_app.warn.github_api \
   "Cannot reach GitHub API." \
   "无法访问 GitHub API。" \
+  binary_app.warn.github_api_rate_limit \
+  "GitHub API rate limit reached (HTTP 403/429). Set GITHUB_TOKEN or retry after the rate-limit window resets." \
+  "GitHub API 已达速率限制（HTTP 403/429）。请设置 GITHUB_TOKEN，或在限流窗口结束后重试。" \
   binary_app.error.version_failed \
   "Could not determine the latest release version." \
   "无法获取最新版本号。" \
@@ -738,7 +741,7 @@ ba_resolve_version() {
 # Echo the latest release tag for GITHUB_REPO, or the empty string.
 ba_latest_version() {
   local tag
-  tag="$(github_latest_release_tag "$GITHUB_REPO" "binary_app.warn.github_api")"
+  tag="$(github_latest_release_tag "$GITHUB_REPO" "binary_app.warn.github_api" "binary_app.warn.github_api_rate_limit")"
   printf '%s\n' "$tag"
 }
 

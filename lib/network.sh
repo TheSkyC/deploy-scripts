@@ -77,22 +77,29 @@ json_tag_name() {
 # handle failures without contaminating stdout. GITHUB_TOKEN, when present,
 # is passed to curl only and is never logged or returned.
 github_latest_release_tag_checked() {
-  local repo="$1" json tag timeout_seconds
-  local -a curl_args
+  local repo="$1" json tag timeout_seconds code url
+  local -a curl_args auth_args
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
-  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  curl_args=(-sSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
   # GITHUB_TOKEN must stay out of the process list: a plain -H argument is
   # readable by every local user via /proc/*/cmdline. curl's @file header
   # syntax (7.55+) fed from a /dev/fd process substitution keeps the secret
   # out of argv and off disk.
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    json="$(curl "${curl_args[@]}" \
-      -H @<(printf 'Authorization: Bearer %s' "$GITHUB_TOKEN") \
-      "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
-  else
-    json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+    auth_args=(-H @<(printf 'Authorization: Bearer %s' "$GITHUB_TOKEN"))
+  fi
+  url="https://api.github.com/repos/${repo}/releases/latest"
+  if ! json="$(curl -f "${curl_args[@]}" "${auth_args[@]}" "$url" 2>/dev/null)"; then
+    # --fail collapses every HTTP error into one exit status, so re-request
+    # without the body to learn the status code. Rate limits (403/429) are
+    # returned as 3 so callers can tell them apart from transport failures.
+    code="$(curl "${curl_args[@]}" "${auth_args[@]}" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if [[ "$code" == 403 || "$code" == 429 ]]; then
+      return 3
+    fi
+    return 1
   fi
   tag="$(json_tag_name "$json")"
   [[ "${tag:-}" =~ ^v?[0-9] ]] || return 2
@@ -101,15 +108,24 @@ github_latest_release_tag_checked() {
 
 # Compatibility wrapper for existing lifecycle paths. It retains the prior
 # warning-and-empty-output contract while delegating request handling to the
-# silent helper used by the central version checker.
+# silent helper used by the central version checker. When the request fails
+# because the GitHub API rate limit was reached, a dedicated warning key is
+# used so the operator learns the actionable cause instead of a generic
+# reachability message.
 github_latest_release_tag() {
-  local repo="$1" warn_key="$2" tag
-  if ! tag="$(github_latest_release_tag_checked "$repo")"; then
-    warn "$(t "$warn_key")"
-    printf '\n'
+  local repo="$1" warn_key="$2" rate_limit_key="${3:-}" tag status
+  if tag="$(github_latest_release_tag_checked "$repo")"; then
+    printf '%s\n' "$tag"
     return 0
+  else
+    status=$?
+    if [[ "$status" -eq 3 && -n "$rate_limit_key" ]]; then
+      warn "$(t "$rate_limit_key")"
+    else
+      warn "$(t "$warn_key")"
+    fi
+    printf '\n'
   fi
-  printf '%s\n' "$tag"
 }
 
 is_valid_dns_name() {

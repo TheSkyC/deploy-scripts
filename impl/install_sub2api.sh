@@ -1081,7 +1081,7 @@ do_install() {
     success "$(t app.sub2api.success.pinned_version "${BOLD}${LATEST}${NC}")"
   else
     info "$(t app.sub2api.info.query_release)"
-    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
+    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api" "app.sub2api.warn.github_api_rate_limit")
     [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.version_lookup)"
     success "$(t app.sub2api.success.latest_version "${BOLD}${LATEST}${NC}")"
     info "$(t app.sub2api.info.unpinned_version "$LATEST")"
@@ -1231,7 +1231,7 @@ do_update() {
     info "$(t app.sub2api.info.pinned_target "${YELLOW}${LATEST}${NC}")"
   else
     info "$(t app.sub2api.info.query_release)"
-    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
+    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api" "app.sub2api.warn.github_api_rate_limit")
     [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.latest_lookup)"
     info "$(t app.sub2api.info.github_latest "${YELLOW}${LATEST}${NC}")"
     info "$(t app.sub2api.info.unpinned_version "$LATEST")"

@@ -199,7 +199,7 @@ version_check_cached_binary_release_json() {
 # curl and reports an expired cache as stale.
 version_check_binary_release_json() {
   local app_id="$1" repo="$2" installed="$3" refresh="${4:-0}" no_network="${5:-0}"
-  local latest checked_at result cache_state=miss
+  local latest checked_at result cache_state=miss failure_reason="release check failed" fetch_status=0
   [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || {
     version_check_emit_json "$installed" "" "" unsupported github_release unsupported "binary release repository is not configured"
@@ -221,7 +221,9 @@ version_check_binary_release_json() {
     fi
     return 0
   fi
-  if latest="$(github_latest_release_tag_checked "$repo")"; then
+  local fetch_status=0
+  latest="$(github_latest_release_tag_checked "$repo")" || fetch_status=$?
+  if (( fetch_status == 0 )); then
     checked_at="$(state_now)"
     result="$(version_check_result_for_versions "$installed" "$latest")"
     if version_cache_write "$app_id" "$latest" "$checked_at" "$result" github_release; then
@@ -232,10 +234,16 @@ version_check_binary_release_json() {
     version_check_emit_json "$installed" "$latest" "$checked_at" "$result" github_release "$cache_state"
     return 0
   fi
+  if (( fetch_status == 3 )); then
+    # The GitHub API rate limit is a transient, operator-actionable state
+    # (set GITHUB_TOKEN or wait for the reset window), so surface it instead
+    # of reporting a generic release-check failure.
+    failure_reason="GitHub API rate limit exceeded; set GITHUB_TOKEN or retry later"
+  fi
   if [[ -n "$VERSION_CACHE_LATEST" ]]; then
-    version_check_emit_json "$installed" "$VERSION_CACHE_LATEST" "$VERSION_CACHE_CHECKED_AT" stale "$VERSION_CACHE_SOURCE" stale "release check failed; using stale cache"
+    version_check_emit_json "$installed" "$VERSION_CACHE_LATEST" "$VERSION_CACHE_CHECKED_AT" stale "$VERSION_CACHE_SOURCE" stale "${failure_reason}; using stale cache"
   else
-    version_check_emit_json "$installed" "" "" check_failed github_release miss "release check failed"
+    version_check_emit_json "$installed" "" "" check_failed github_release miss "$failure_reason"
   fi
 }
 

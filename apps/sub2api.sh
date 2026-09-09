@@ -21,6 +21,9 @@ i18n_register_many \
   app.sub2api.warn.github_api \
   "Cannot reach GitHub API." \
   "无法访问 GitHub API。" \
+  app.sub2api.warn.github_api_rate_limit \
+  "GitHub API rate limit reached (HTTP 403/429). Set GITHUB_TOKEN or retry after the rate-limit window resets." \
+  "GitHub API 已达速率限制（HTTP 403/429）。请设置 GITHUB_TOKEN，或在限流窗口结束后重试。" \
   app.sub2api.error.checksum_temp \
   "Cannot create a temporary checksum file; refusing to install an unverified archive." \
   "无法创建临时校验文件，拒绝安装未经校验的归档文件。" \

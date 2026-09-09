@@ -274,6 +274,35 @@ check_github_release_tag_behavior() {
     curl() { return 1; }
     tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
     [[ -z "$tag" ]] || { echo "expected empty tag on failure, got: ${tag}" >&2; exit 1; }
+
+    # A rate-limited API (the --fail request fails, the status probe then
+    # reports 403) must be distinguishable from a transport failure.
+    curl() {
+      case " $* " in
+        *" -w "*) printf 403 ;;
+        *) return 22 ;;
+      esac
+    }
+    github_latest_release_tag_checked "owner/repo" 2>/dev/null && { echo "rate-limited request unexpectedly succeeded" >&2; exit 1; }
+    st=$?
+    [[ "$st" -eq 3 ]] || { echo "expected status 3 for rate limit, got: ${st}" >&2; exit 1; }
+
+    # The warning wrapper must prefer the dedicated rate-limit key when the
+    # checked helper reports the API rate limit.
+    curl() {
+      case " $* " in
+        *" -w "*) printf 403 ;;
+        *) return 22 ;;
+      esac
+    }
+    warn_log="$(mktemp)"
+    warn() { printf "%s\n" "$1" >> "$warn_log"; }
+    github_latest_release_tag "owner/repo" "generic.warn" "rate.warn" >/dev/null
+    grep -Fxq "rate.warn" "$warn_log" || { echo "rate-limit wrapper did not warn with the dedicated key; log=[$(cat "$warn_log")]" >&2; exit 1; }
+    if grep -Fxq "generic.warn" "$warn_log"; then
+      echo "rate-limit wrapper fell back to the generic key" >&2
+      exit 1
+    fi
   ' _ "$ROOT_DIR"
 }
 
