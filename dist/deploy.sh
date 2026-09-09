@@ -9895,6 +9895,9 @@ i18n_register_many \
   app.sub2api.error.tar_extract \
   "tar extraction failed; the archive may be corrupted." \
   "tar 解压失败，归档文件可能已损坏。" \
+  app.sub2api.error.unsafe_archive \
+  "Archive contains unsafe paths (absolute, .., or backslash members); refusing to extract it." \
+  "归档包含不安全路径（绝对路径、.. 或反斜杠成员），已拒绝解压。" \
   app.sub2api.error.archive_missing_binary \
   "sub2api binary was not found in the tar.gz archive. Confirm the download URL." \
   "tar.gz 中未找到 sub2api 二进制文件，请确认下载 URL 是否正确。" \
@@ -14587,6 +14590,15 @@ extract_and_verify() {
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
     fi
     error "$(t app.sub2api.error.tar_extract)"
+  fi
+  # Reject path-traversal members before extraction so a compromised or
+  # replaced upstream archive cannot write outside the staging directory.
+  if ! backup_validate_archive_members "$archive"; then
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
+    rm -rf "$tmp_extract"
+    error "$(t app.sub2api.error.unsafe_archive)"
   fi
   if ! tar -xzf "$archive" -C "$tmp_extract" >&2; then
     if ! rm -f "$archive"; then
@@ -20457,14 +20469,10 @@ do_verify() {
 }
 
 _blog_archive_paths_are_safe() {
-  local archive="$1" member
-  tar -tzf "$archive" | while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        return 1
-        ;;
-    esac
-  done
+  # Delegate to the shared backup guard so handwritten restore paths keep the
+  # same traversal rejection (absolute paths, ../ segments, backslashes) as
+  # every framework restore instead of maintaining a private copy.
+  backup_validate_archive_members "$1"
 }
 
 _blog_restore_dir_from_backup() {
@@ -21373,7 +21381,11 @@ do_restore() {
     error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
   fi
   # The archive holds exactly the three members do_backup stores: data/,
-  # tiers.yaml, .env — all relative to INSTALL_DIR.
+  # tiers.yaml, .env — all relative to INSTALL_DIR. Reject traversal members
+  # through the shared guard, then check the expected member names below.
+  if ! backup_validate_archive_members "$archive"; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+  fi
   local member_list member found_data=false found_env=false found_tiers=false
   if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
     error "$(t backup.restore.invalid_archive "$archive")"
@@ -22628,6 +22640,11 @@ do_restore() {
   else
     archive="$(backup_latest_archive "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$CPA_STACK_BACKUP_DIR")"
+  fi
+  # Shared traversal guard first (absolute paths, ../ segments, backslashes),
+  # then the app-level whitelist that the root-relative archive may contain.
+  if ! backup_validate_archive_members "$archive"; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
   fi
   local member_list member found=false
   if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then

@@ -1141,14 +1141,10 @@ do_verify() {
 }
 
 _blog_archive_paths_are_safe() {
-  local archive="$1" member
-  tar -tzf "$archive" | while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        return 1
-        ;;
-    esac
-  done
+  # Delegate to the shared backup guard so handwritten restore paths keep the
+  # same traversal rejection (absolute paths, ../ segments, backslashes) as
+  # every framework restore instead of maintaining a private copy.
+  backup_validate_archive_members "$1"
 }
 
 _blog_restore_dir_from_backup() {

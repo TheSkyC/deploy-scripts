@@ -1169,6 +1169,11 @@ do_restore() {
     archive="$(backup_latest_archive "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$CPA_STACK_BACKUP_DIR")"
   fi
+  # Shared traversal guard first (absolute paths, ../ segments, backslashes),
+  # then the app-level whitelist that the root-relative archive may contain.
+  if ! backup_validate_archive_members "$archive"; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+  fi
   local member_list member found=false
   if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
     error "$(t backup.restore.invalid_archive "$archive")"

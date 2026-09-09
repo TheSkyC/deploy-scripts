@@ -258,6 +258,15 @@ extract_and_verify() {
     fi
     error "$(t app.sub2api.error.tar_extract)"
   fi
+  # Reject path-traversal members before extraction so a compromised or
+  # replaced upstream archive cannot write outside the staging directory.
+  if ! backup_validate_archive_members "$archive"; then
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
+    rm -rf "$tmp_extract"
+    error "$(t app.sub2api.error.unsafe_archive)"
+  fi
   if ! tar -xzf "$archive" -C "$tmp_extract" >&2; then
     if ! rm -f "$archive"; then
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"

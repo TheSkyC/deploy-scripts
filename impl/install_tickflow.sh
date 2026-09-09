@@ -699,7 +699,11 @@ do_restore() {
     error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
   fi
   # The archive holds exactly the three members do_backup stores: data/,
-  # tiers.yaml, .env — all relative to INSTALL_DIR.
+  # tiers.yaml, .env — all relative to INSTALL_DIR. Reject traversal members
+  # through the shared guard, then check the expected member names below.
+  if ! backup_validate_archive_members "$archive"; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+  fi
   local member_list member found_data=false found_env=false found_tiers=false
   if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
     error "$(t backup.restore.invalid_archive "$archive")"

@@ -42,6 +42,9 @@ i18n_register_many \
   app.sub2api.error.tar_extract \
   "tar extraction failed; the archive may be corrupted." \
   "tar 解压失败，归档文件可能已损坏。" \
+  app.sub2api.error.unsafe_archive \
+  "Archive contains unsafe paths (absolute, .., or backslash members); refusing to extract it." \
+  "归档包含不安全路径（绝对路径、.. 或反斜杠成员），已拒绝解压。" \
   app.sub2api.error.archive_missing_binary \
   "sub2api binary was not found in the tar.gz archive. Confirm the download URL." \
   "tar.gz 中未找到 sub2api 二进制文件，请确认下载 URL 是否正确。" \

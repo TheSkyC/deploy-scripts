@@ -6920,6 +6920,9 @@ i18n_register_many \
   app.sub2api.error.tar_extract \
   "tar extraction failed; the archive may be corrupted." \
   "tar 解压失败，归档文件可能已损坏。" \
+  app.sub2api.error.unsafe_archive \
+  "Archive contains unsafe paths (absolute, .., or backslash members); refusing to extract it." \
+  "归档包含不安全路径（绝对路径、.. 或反斜杠成员），已拒绝解压。" \
   app.sub2api.error.archive_missing_binary \
   "sub2api binary was not found in the tar.gz archive. Confirm the download URL." \
   "tar.gz 中未找到 sub2api 二进制文件，请确认下载 URL 是否正确。" \
@@ -8163,6 +8166,15 @@ extract_and_verify() {
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
     fi
     error "$(t app.sub2api.error.tar_extract)"
+  fi
+  # Reject path-traversal members before extraction so a compromised or
+  # replaced upstream archive cannot write outside the staging directory.
+  if ! backup_validate_archive_members "$archive"; then
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
+    rm -rf "$tmp_extract"
+    error "$(t app.sub2api.error.unsafe_archive)"
   fi
   if ! tar -xzf "$archive" -C "$tmp_extract" >&2; then
     if ! rm -f "$archive"; then
