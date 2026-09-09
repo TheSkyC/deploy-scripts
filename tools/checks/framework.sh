@@ -234,3 +234,25 @@ check_acquire_lock_preserves_file_and_waits() {
     wait "$hold_pid"
   ' _ "$ROOT_DIR"
 }
+
+
+# Guardrail: color output must stay escape-free on non-TTY stderr unless
+# DEPLOY_FORCE_COLOR=1 is set, and NO_COLOR/TERM=dumb must always win.
+check_logging_colors_are_tty_gated() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    run() { "$1" -c '\''source "$2/lib/logging.sh"; printf "%s" "$RED"'\'' _ bash "$2" 2>/dev/null; }
+    # Default non-TTY capture: no escape sequences.
+    [[ -z "$(NO_COLOR= TERM=xterm run bash "$1" 2>/dev/null)" ]] \
+      || { echo "colors leaked into non-TTY output without DEPLOY_FORCE_COLOR" >&2; exit 1; }
+    # DEPLOY_FORCE_COLOR=1 re-enables colors for captures.
+    out="$(NO_COLOR= TERM=xterm DEPLOY_FORCE_COLOR=1 run bash "$1" 2>/dev/null)"
+    [[ -n "$out" ]] || { echo "DEPLOY_FORCE_COLOR=1 did not re-enable colors" >&2; exit 1; }
+    # NO_COLOR always wins, even with DEPLOY_FORCE_COLOR=1.
+    out="$(NO_COLOR=1 TERM=xterm DEPLOY_FORCE_COLOR=1 run bash "$1" 2>/dev/null)"
+    [[ -z "$out" ]] || { echo "NO_COLOR was ignored despite DEPLOY_FORCE_COLOR" >&2; exit 1; }
+    # TERM=dumb always wins, even with DEPLOY_FORCE_COLOR=1.
+    out="$(NO_COLOR= TERM=dumb DEPLOY_FORCE_COLOR=1 run bash "$1" 2>/dev/null)"
+    [[ -z "$out" ]] || { echo "TERM=dumb was ignored despite DEPLOY_FORCE_COLOR" >&2; exit 1; }
+  ' _ "$ROOT_DIR"
+}
