@@ -1516,7 +1516,7 @@ bapp_restore() {
     archive="$(backup_latest_archive "$BACKUP_DIR" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
-  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
+  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive" "${SERVICE_USER}:${SERVICE_USER}"
   # Data was restored but the service is not restarted by restore; a probe
   # failure here is expected and must not be reported as an app fault.
   bapp_health_probe || true

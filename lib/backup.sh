@@ -410,7 +410,10 @@ backup_restore_directory() {
 # empty service name is for multi-artifact restores whose caller already owns
 # the service lifecycle (for example, Sub2API's data/config/database stages).
 backup_restore_data_dir() {
-  local data_dir="$1" service_name="$2" archive="$3"
+  # $4 (optional) is the owner to normalize the restored data to, for example
+  # the service account the app runs as. When omitted, root:root is applied to
+  # preserve the historical caller-managed behavior.
+  local data_dir="$1" service_name="$2" archive="$3" restore_owner="${4:-}"
   if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
     if [[ -n "$service_name" ]]; then
       error "$(t backup.verify.failed "$(basename "$archive")")"
@@ -469,7 +472,12 @@ backup_restore_data_dir() {
     fi
     return 1
   fi
-  chown -R root:root "$data_dir" 2>/dev/null || true
+  if [[ -n "$restore_owner" ]]; then
+    chown -R "$restore_owner" "$data_dir" 2>/dev/null \
+      || warn "$(t backup.restore.owner_failed "$data_dir" "$restore_owner")"
+  else
+    chown -R root:root "$data_dir" 2>/dev/null || true
+  fi
   if [[ -z "$service_name" ]]; then
     rm -rf "$staged_aside"
     success "$(t backup.restore.restored "$(basename "$archive")")"

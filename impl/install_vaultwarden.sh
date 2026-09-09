@@ -1936,7 +1936,7 @@ do_restore() {
   fi
   # The cron script archives DATA_BASE plus (when present) the absolute env
   # file path, so accept both layouts via the shared payload resolution.
-  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive"
+  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive" "${VW_USER}:${VW_GROUP}"
   # Backup snapshots also carry VW_ENV_FILE when present, but the shared
   # data-dir helper only replaces DATA_DIR, so restore the env file separately
   # under the service lifecycle to avoid silently discarding secrets on restore.

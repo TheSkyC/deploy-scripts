@@ -1212,5 +1212,5 @@ do_restore() {
     archive="$(backup_latest_archive "$BACKUP_DIR" 'cyberstrike-ai_*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
-  backup_restore_data_dir "$INSTALL_DIR" "$SERVICE_NAME" "$archive"
+  backup_restore_data_dir "$INSTALL_DIR" "$SERVICE_NAME" "$archive" "${SERVICE_USER}:${SERVICE_USER}"
 }

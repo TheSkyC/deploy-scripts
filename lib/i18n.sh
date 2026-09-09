@@ -63,6 +63,7 @@ i18n_register backup.restore.restored "Data restored from %s; service restarted.
 i18n_register backup.restore.start_failed_rollback "Service failed to start after restore; rolling back to previous data." "恢复后服务启动失败，正在回滚到先前数据。"
 i18n_register backup.restore.rollback_done "Rollback complete; the previous data directory is intact." "回滚完成，原数据目录保持不变。"
 i18n_register backup.restore.rollback_failed "Rollback FAILED; the staged data remains at %s for manual recovery." "回滚失败，暂存数据保留在 %s 以便手动恢复。"
+i18n_register backup.restore.owner_failed "Could not set ownership of restored data at %s to %s; check the data directory permissions." "无法将恢复的数据目录 %s 的属主设置为 %s，请检查目录权限。"
 i18n_register notify.warn.untrusted_config "Notification config failed the trust gate; notifications skipped." "通知配置未通过信任门检查，已跳过通知。"
 i18n_register notify.warn.no_backend "Notification backend is not set to ntfy or gotify; notification skipped." "通知后端不是 ntfy 或 gotify，已跳过通知。"
 i18n_register notify.warn.no_url "Notification URL is empty; notification skipped." "通知服务地址为空，已跳过通知。"

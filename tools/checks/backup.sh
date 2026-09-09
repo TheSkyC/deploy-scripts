@@ -1660,7 +1660,7 @@ check_shared_impls_have_restore_delegate() {
   done
   awk '
     /^bapp_restore\(\)/ { in_fn=1; saw_delegate=0; next }
-    in_fn && /backup_restore_data_dir "\$DATA_DIR" "\$SERVICE_NAME"/ { saw_delegate=1 }
+    in_fn && /backup_restore_data_dir "\$DATA_DIR" "\$SERVICE_NAME" "\$archive" "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}"/ { saw_delegate=1 }
     in_fn && /^}$/ {
       if (!saw_delegate) {
         print "bapp_restore must delegate to backup_restore_data_dir" > "/dev/stderr"
@@ -2047,6 +2047,13 @@ check_registry_restore_capability_matches_impl() {
     grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for "$app_id")" \
       || { echo "$app_id do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
   done
+  # Restores for service-account apps must normalize the restored data to that
+  # account; the shared helper defaults to root:root only for caller-managed
+  # paths that historically expect it.
+  grep -q 'backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive" "${VW_USER}:${VW_GROUP}"' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden restore must normalize restored data ownership to VW_USER:VW_GROUP" >&2; return 1; }
+  grep -q 'backup_restore_data_dir "$INSTALL_DIR" "$SERVICE_NAME" "$archive" "${SERVICE_USER}:${SERVICE_USER}"' impl/install_cyberstrikeai.sh \
+    || { echo "cyberstrikeai restore must normalize restored data ownership to SERVICE_USER" >&2; return 1; }
   grep -q '^do_restore() {' impl/install_tickflow.sh \
     || { echo "tickflow declares restore capability but has no do_restore" >&2; return 1; }
   awk '
@@ -2240,6 +2247,31 @@ STUB
       "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null 2>&1
     grep -q caller-managed "$DATA_DIR/f.txt" || exit 51
     [[ ! -s "$SYSTEMCTL_LOG" ]] || exit 52
+
+    # Case 6: a managed restore with an explicit owner normalizes the restored
+    # data through chown (verified with a stubbed chown; the suite is not
+    # guaranteed to run as root).
+    rm -f "$tmp/backups"/*.tar.gz "$tmp/backups"/*.sha256
+    mkdir -p "$tmp/owner-stage/data"
+    printf owned-data > "$tmp/owner-stage/data/f.txt"
+    tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" -C "$tmp/owner-stage" data
+    backup_write_sha256 "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null
+    cat > "$tmp/bin/chown" <<'"'"'CHOWN_STUB'"'"'
+#!/bin/bash
+printf "chown %s\n" "$*" >> "$CHOWN_LOG"
+exit 0
+CHOWN_STUB
+    chmod +x "$tmp/bin/chown"
+    export CHOWN_LOG="$tmp/chown.log"
+    : > "$CHOWN_LOG"
+    # Earlier lifecycle cases resolved the real chown (root:root path); clear
+    # clear the command hash so this case picks up the stub.
+    hash -r
+    echo normal > "$tmp/mode"
+    backup_restore_data_dir "$DATA_DIR" testsvc \
+      "$tmp/backups/app_manual_20260101_000000.tar.gz" svcuser:svcgroup >/dev/null 2>&1
+    grep -q "chown -R svcuser:svcgroup" "$CHOWN_LOG" || exit 61
+    grep -q owned-data "$DATA_DIR/f.txt" || exit 62
     echo ok
   ')"
   [[ "$output" == ok ]]

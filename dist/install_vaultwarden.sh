@@ -76,6 +76,7 @@ i18n_register backup.restore.restored "Data restored from %s; service restarted.
 i18n_register backup.restore.start_failed_rollback "Service failed to start after restore; rolling back to previous data." "恢复后服务启动失败，正在回滚到先前数据。"
 i18n_register backup.restore.rollback_done "Rollback complete; the previous data directory is intact." "回滚完成，原数据目录保持不变。"
 i18n_register backup.restore.rollback_failed "Rollback FAILED; the staged data remains at %s for manual recovery." "回滚失败，暂存数据保留在 %s 以便手动恢复。"
+i18n_register backup.restore.owner_failed "Could not set ownership of restored data at %s to %s; check the data directory permissions." "无法将恢复的数据目录 %s 的属主设置为 %s，请检查目录权限。"
 i18n_register notify.warn.untrusted_config "Notification config failed the trust gate; notifications skipped." "通知配置未通过信任门检查，已跳过通知。"
 i18n_register notify.warn.no_backend "Notification backend is not set to ntfy or gotify; notification skipped." "通知后端不是 ntfy 或 gotify，已跳过通知。"
 i18n_register notify.warn.no_url "Notification URL is empty; notification skipped." "通知服务地址为空，已跳过通知。"
@@ -1975,7 +1976,10 @@ backup_restore_directory() {
 # empty service name is for multi-artifact restores whose caller already owns
 # the service lifecycle (for example, Sub2API's data/config/database stages).
 backup_restore_data_dir() {
-  local data_dir="$1" service_name="$2" archive="$3"
+  # $4 (optional) is the owner to normalize the restored data to, for example
+  # the service account the app runs as. When omitted, root:root is applied to
+  # preserve the historical caller-managed behavior.
+  local data_dir="$1" service_name="$2" archive="$3" restore_owner="${4:-}"
   if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
     if [[ -n "$service_name" ]]; then
       error "$(t backup.verify.failed "$(basename "$archive")")"
@@ -2034,7 +2038,12 @@ backup_restore_data_dir() {
     fi
     return 1
   fi
-  chown -R root:root "$data_dir" 2>/dev/null || true
+  if [[ -n "$restore_owner" ]]; then
+    chown -R "$restore_owner" "$data_dir" 2>/dev/null \
+      || warn "$(t backup.restore.owner_failed "$data_dir" "$restore_owner")"
+  else
+    chown -R root:root "$data_dir" 2>/dev/null || true
+  fi
   if [[ -z "$service_name" ]]; then
     rm -rf "$staged_aside"
     success "$(t backup.restore.restored "$(basename "$archive")")"
@@ -6221,7 +6230,7 @@ bapp_restore() {
     archive="$(backup_latest_archive "$BACKUP_DIR" "${BA_ARCHIVE_PREFIX:-${APP_ID}}_*.tar.gz" || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
   fi
-  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive"
+  backup_restore_data_dir "$DATA_DIR" "$SERVICE_NAME" "$archive" "${SERVICE_USER}:${SERVICE_USER}"
   # Data was restored but the service is not restarted by restore; a probe
   # failure here is expected and must not be reported as an app fault.
   bapp_health_probe || true
@@ -9849,7 +9858,7 @@ do_restore() {
   fi
   # The cron script archives DATA_BASE plus (when present) the absolute env
   # file path, so accept both layouts via the shared payload resolution.
-  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive"
+  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive" "${VW_USER}:${VW_GROUP}"
   # Backup snapshots also carry VW_ENV_FILE when present, but the shared
   # data-dir helper only replaces DATA_DIR, so restore the env file separately
   # under the service lifecycle to avoid silently discarding secrets on restore.
