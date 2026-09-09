@@ -298,8 +298,8 @@ source lib/core.sh
 export DEPLOY_IMPL_SOURCE_ONLY=1
 source apps/cpa_stack.sh >/dev/null 2>&1
 source impl/install_cpa_stack.sh >/dev/null 2>&1
-json_with_v='{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_v0.4.1_linux_amd64.tar.gz"}]}'
-json_without_v='{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_0.4.1_linux_amd64.tar.gz"}]}'
+json_with_v='{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_v0.4.1_linux_amd64.tar.gz","browser_download_url":"https://github.com/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_v0.4.1_linux_amd64.tar.gz"}]}'
+json_without_v='{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_0.4.1_linux_amd64.tar.gz","browser_download_url":"https://github.com/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_0.4.1_linux_amd64.tar.gz"}]}'
 with_v="$(cpa_stack_resolve_cpamp_asset "$json_with_v" v0.4.1 amd64)"
 without_v="$(cpa_stack_resolve_cpamp_asset "$json_without_v" v0.4.1 amd64)"
 [[ "$with_v" == "cpa-manager-plus_v0.4.1_linux_amd64.tar.gz" ]]
