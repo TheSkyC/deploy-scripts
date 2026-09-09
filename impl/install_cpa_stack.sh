@@ -364,7 +364,16 @@ cpa_stack_download_verified_archive() {
     rm -f "$destination" "$checksum_file"
     error "$(t app.cpa_stack.error.download "checksums.txt")"
   fi
-  expected="$(awk -v asset="$asset" '$NF == asset || $NF == "./" asset { print $1; exit }' "$checksum_file")"
+  # Tolerate binary-mode markers ("*asset") and CRLF line endings in
+  # upstream checksum files; both appear in the wild.
+  expected="$(awk -v asset="$asset" '
+    {
+      name = $NF
+      sub(/\r$/, "", name)
+      sub(/^\*/, "", name)
+      if (name == asset || name == "./" asset) { print $1; exit }
+    }
+  ' "$checksum_file")"
   actual="$(sha256sum "$destination" | awk '{print $1}')"
   rm -f "$checksum_file"
   if [[ -z "$expected" || "$expected" != "$actual" ]]; then

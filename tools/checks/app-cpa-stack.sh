@@ -263,3 +263,27 @@ CPATEST
   grep -Fq 'app.cpa_stack.status.pin_mismatch' apps/cpa_stack.sh
   grep -Fq 'app.cpa_stack.status.pin_set' apps/cpa_stack.sh
 }
+
+# The Docker e2e smoke must keep exercising the real pinned CPA Stack flow:
+# per-component release-tag fixtures with checksums, the tags/<tag> endpoint
+# in the curl shim, pinned status-json assertions, and the already-pinned
+# update short-circuit. This guard keeps a future fixture edit from silently
+# dropping that scenario.
+check_cpa_stack_e2e_pinned_fixture() {
+  local fixture="tools/e2e-smoke.sh"
+  grep -Fq "releases/tags/*)" "$fixture" \
+    && grep -Fq "router-for-me-CLIProxyAPI_tags_v1.2.3.json" "$fixture" \
+    && grep -Fq "seakee-CPA-Manager-Plus_tags_v0.4.1.json" "$fixture" \
+    && grep -Fq "sha256sum CLIProxyAPI_1.2.3_linux_amd64.tar.gz > checksums.txt" "$fixture" \
+    && grep -Fq "sha256sum cpa-manager-plus_0.4.1_linux_amd64.tar.gz > checksums.txt" "$fixture" \
+    && grep -Fq "CPA_VERSION=v1.2.3 CPAMP_VERSION=v0.4.1" "$fixture" \
+    && grep -Fq '"pinned release v1.2.3"' "$fixture" \
+    && grep -Fq '"pinned release v0.4.1"' "$fixture" \
+    && grep -Fq 'info["cache_state"] == "pinned"' "$fixture" \
+    && grep -Fq '"skipping download"' "$fixture" \
+    && grep -Fq "CPA_STACK_PINNED_SMOKE_OK" "$fixture" \
+    || {
+      echo "CPA Stack e2e must retain its pinned per-component release scenario with checksum and update-skip assertions." >&2
+      return 1
+    }
+}

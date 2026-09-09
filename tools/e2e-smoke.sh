@@ -13,6 +13,9 @@
 #   - binary_app lifecycle path (ntfy): install -> backup -> verify
 #   - newapi migrated lifecycle (env file + cron backup script): install -> backup
 #   - Sub2API: real PostgreSQL/Redis processes, database bootstrap, and pg_dump backup
+#   - CPA Stack pinned install/update: per-component GitHub release tag
+#     fixtures, checksum verification, unit/nginx/env files, and pinned
+#     status-json projection
 #   - compose path (tickflow): install files + config generation
 #
 # Usage: bash tools/e2e-smoke.sh        (requires docker; Linux recommended)
@@ -90,11 +93,38 @@ tar -czf "$WORK/www/Wei-Shaw/sub2api/releases/download/v0.1.0/sub2api_0.1.0_linu
   sha256sum sub2api_0.1.0_linux_amd64.tar.gz > checksums.txt
 )
 
+# Fake CPA Stack pinned release assets: each component gets a tarball with
+# the expected binary name plus the checksums.txt the install flow verifies.
+mkdir -p "$WORK/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3"
+mkdir -p "$WORK/www/cpa-stage"
+printf '#!/bin/sh\necho cpa\n' > "$WORK/www/cpa-stage/cli-proxy-api"
+tar -czf "$WORK/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz" \
+  -C "$WORK/www/cpa-stage" cli-proxy-api
+(
+  cd "$WORK/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3"
+  sha256sum CLIProxyAPI_1.2.3_linux_amd64.tar.gz > checksums.txt
+)
+mkdir -p "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1"
+mkdir -p "$WORK/www/cpamp-stage"
+printf '#!/bin/sh\necho cpamp\n' > "$WORK/www/cpamp-stage/cpa-manager-plus"
+tar -czf "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_0.4.1_linux_amd64.tar.gz" \
+  -C "$WORK/www/cpamp-stage" cpa-manager-plus
+(
+  cd "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1"
+  sha256sum cpa-manager-plus_0.4.1_linux_amd64.tar.gz > checksums.txt
+)
+
 # Fake GitHub API responses per repo path.
 mkdir -p "$WORK/www/api"
 printf '{"tag_name":"v2.27.0"}\n' > "$WORK/www/api/binwiederhier-ntfy_latest.json"
 printf '{"tag_name":"v0.6.1"}\n' > "$WORK/www/api/QuantumNous-new-api_latest.json"
 printf '{"tag_name":"v0.1.0"}\n' > "$WORK/www/api/Wei-Shaw-sub2api_latest.json"
+# Pinned installs resolve tags/<tag> endpoints; include the asset records
+# so the install flow can verify the expected asset exists before download.
+printf '{"tag_name":"v1.2.3","assets":[{"name":"CLIProxyAPI_1.2.3_linux_amd64.tar.gz","browser_download_url":"https://github.com/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"}]}\n' \
+  > "$WORK/www/api/router-for-me-CLIProxyAPI_tags_v1.2.3.json"
+printf '{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_0.4.1_linux_amd64.tar.gz","browser_download_url":"https://github.com/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_0.4.1_linux_amd64.tar.gz"}]}\n' \
+  > "$WORK/www/api/seakee-CPA-Manager-Plus_tags_v0.4.1.json"
 
 # A stub systemctl + a curl shim that serves GitHub requests from the
 # mounted /www tree (no network needed, works on every Docker host):
@@ -133,6 +163,13 @@ for arg in "$@"; do
       # owner/repo -> owner-repo to match the stub file name.
       repo="${repo//\//-}"
       url="/www/api/${repo}_latest.json"
+      ;;
+    https://api.github.com/repos/*/releases/tags/*)
+      rest="${arg#*repos/}"
+      repo="${rest%%/releases/*}"
+      tag="${rest##*/releases/tags/}"
+      repo="${repo//\//-}"
+      url="/www/api/${repo}_tags_${tag}.json"
       ;;
     https://github.com/*/releases/download/*)
       path="${arg#https://github.com/}"
@@ -366,6 +403,84 @@ docker run --rm \
   -v "$WWW_MOUNT:/www:ro" \
   -v "$WORK_MOUNT:/fixture-work:ro" \
   deploy-e2e-smoke bash /fixture-work/sub2api-real-dependencies.sh || exit 1
+
+echo "=== e2e-smoke: CPA Stack pinned install/update (per-component release tags) ==="
+# The scenario body lives in a separately mounted script so embedded python
+# assertions can use quotes freely (same pattern as the Sub2API fixture).
+cat > "$WORK/cpa-stack-pinned.sh" <<'CPA_E2E'
+#!/bin/bash
+set -euo pipefail
+export PATH="/stub:$PATH"
+LOG=/tmp/e2e.log
+# apt-get (deps), nginx (config validation), and systemctl are stubbed; the
+# real download, checksum verification, extraction, user/dir creation, unit
+# writing, and config persistence all run for real.
+cat > /usr/local/bin/apt-get <<APT
+#!/bin/bash
+exit 0
+APT
+cat > /usr/local/bin/nginx <<NGINX
+#!/bin/bash
+exit 0
+NGINX
+chmod +x /usr/local/bin/apt-get /usr/local/bin/nginx
+CPA_DOMAIN=api.cpa-e2e.test CPAMP_DOMAIN=panel.cpa-e2e.test ENABLE_HTTPS=false \
+CPA_VERSION=v1.2.3 CPAMP_VERSION=v0.4.1 \
+bash /repo/dist/install_cpa_stack.sh install >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "CPA_STACK_INSTALL_FAILED"
+  exit 1
+}
+# The summary is pending because stubbed systemd never starts listeners.
+grep -q "service health check is pending" "$LOG" || { echo "NO_SUMMARY"; cat "$LOG"; exit 1; }
+grep -q "pinned release v1.2.3" "$LOG" || { echo "CPA_PIN_NOT_ANNOUNCED"; cat "$LOG"; exit 1; }
+grep -q "pinned release v0.4.1" "$LOG" || { echo "CPAMP_PIN_NOT_ANNOUNCED"; cat "$LOG"; exit 1; }
+test -x /opt/cli-proxy-api/cli-proxy-api || { echo "CPA_BINARY_MISSING"; exit 1; }
+test -x /opt/cpa-manager-plus/cpa-manager-plus || { echo "CPAMP_BINARY_MISSING"; exit 1; }
+test -f /etc/systemd/system/cli-proxy-api.service || { echo "CPA_UNIT_MISSING"; exit 1; }
+test -f /etc/systemd/system/cpa-manager-plus.service || { echo "CPAMP_UNIT_MISSING"; exit 1; }
+test -f /etc/cli-proxy-api/config.yaml || { echo "CPA_CONFIG_MISSING"; exit 1; }
+test -f /etc/cpa-stack/cpamp.env || { echo "CPAMP_ENV_MISSING"; exit 1; }
+test "$(stat -c %a /etc/cpa-stack/cpamp.env)" = 600 || { echo "CPAMP_ENV_MODE_BAD"; exit 1; }
+test -f /etc/nginx/sites-available/cpa-stack || { echo "NGINX_SITE_MISSING"; exit 1; }
+grep -q "proxy_pass http://127.0.0.1:8317;" /etc/nginx/sites-available/cpa-stack || { echo "CPA_PROXY_MISSING"; exit 1; }
+grep -q "proxy_pass http://127.0.0.1:18317;" /etc/nginx/sites-available/cpa-stack || { echo "CPAMP_PROXY_MISSING"; exit 1; }
+test -f /etc/nginx/conf.d/cpa-stack-connection-upgrade.conf || { echo "NGINX_MAP_MISSING"; exit 1; }
+test -f /etc/cpa_stack-deploy.conf || { echo "CONF_MISSING"; exit 1; }
+# Persisted pins and recorded component versions must survive the real flow.
+source /etc/cpa_stack-deploy.conf
+[[ "${CPA_VERSION}" == "v1.2.3" ]] || { echo "CPA_PIN_NOT_SAVED"; exit 1; }
+[[ "${CPAMP_VERSION}" == "v0.4.1" ]] || { echo "CPAMP_PIN_NOT_SAVED"; exit 1; }
+[[ "${INSTALLED_CPA_VERSION}" == "v1.2.3" ]] || { echo "CPA_VERSION_NOT_SAVED"; exit 1; }
+[[ "${INSTALLED_CPAMP_VERSION}" == "v0.4.1" ]] || { echo "CPAMP_VERSION_NOT_SAVED"; exit 1; }
+# status-json must project the pinned components locally without network.
+bash /repo/dist/install_cpa_stack.sh status-json | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+info = payload["version_info"]
+assert info["installed"] == "v1.2.3/v0.4.1"
+assert info["latest"] == "v1.2.3/v0.4.1"
+assert info["update_state"] == "up_to_date"
+assert info["cache_state"] == "pinned"
+assert info["components"]["cpa"]["repository"] == "router-for-me/CLIProxyAPI"
+assert info["components"]["cpa"]["cache_state"] == "pinned"
+assert info["components"]["cpa"]["update_state"] == "up_to_date"
+assert info["components"]["cpamp"]["repository"] == "seakee/CPA-Manager-Plus"
+assert info["components"]["cpamp"]["latest"] == "v0.4.1"
+' || { echo "PINNED_STATUS_JSON_BAD"; exit 1; }
+# A pinned update must skip re-downloading matching binaries.
+bash /repo/dist/install_cpa_stack.sh update >"$LOG" 2>&1 || { cat "$LOG"; echo "CPA_STACK_UPDATE_FAILED"; exit 1; }
+updates_skipped="$(grep -c "skipping download" "$LOG")"
+[[ "$updates_skipped" == 2 ]] || { echo "PINNED_UPDATE_NOT_SKIPPED ($updates_skipped)"; cat "$LOG"; exit 1; }
+echo "CPA_STACK_PINNED_SMOKE_OK"
+CPA_E2E
+chmod +x "$WORK/cpa-stack-pinned.sh"
+docker run --rm \
+  -v "$ROOT_MOUNT:/repo:ro" \
+  -v "$STUB_MOUNT:/stub:ro" \
+  -v "$WWW_MOUNT:/www:ro" \
+  -v "$WORK_MOUNT:/fixture-work:ro" \
+  deploy-e2e-smoke bash /fixture-work/cpa-stack-pinned.sh || exit 1
 
 echo "=== e2e-smoke: compose path (tickflow config + compose delegation) ==="
 docker run --rm \
