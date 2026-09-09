@@ -531,6 +531,7 @@ main() {
       run_isolated_check check_cpa_stack_cpamp_asset_resolution
       run_isolated_check check_cron_logrotate_are_atomic
       run_isolated_check check_binary_app_certbot_cron_is_published_atomically
+      run_isolated_check check_binary_app_tls_failures_roll_back_artifacts
       run_isolated_check check_logrotate_writes_use_shared_helper
       run_isolated_check check_cyberstrikeai_backups_are_atomic
       run_isolated_check check_cyberstrikeai_backup_script_is_published_atomically

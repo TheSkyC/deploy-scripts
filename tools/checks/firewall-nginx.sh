@@ -234,6 +234,45 @@ check_binary_app_certbot_cron_is_published_atomically() {
       }
     ' lib/binary_app.sh
 }
+# TLS artifacts must never outlive a failed install: the certbot-failure and
+# nginx-test failure paths clean up after themselves, the install rollback
+# removes the reverse proxy when the service never started, and uninstall
+# removes the per-app renewal drop-in instead of the legacy shared one.
+check_binary_app_tls_failures_roll_back_artifacts() {
+  awk '
+      /^ba_cleanup_tls_artifacts\(\) \{/ { in_helper=1 }
+      in_helper && /rm -f "\$\(ba_tls_cron_file\)"/ { saw_cron=1 }
+      in_helper && /app_nginx_default_site_restore/ { saw_restore=1 }
+      /^ba_configure_tls\(\) \{/ { in_tls=1 }
+      in_tls && /ba_cleanup_tls_artifacts/ { saw_tls_cleanup++ }
+      /^bapp_install\(\) \{/ { in_install=1 }
+      in_install && /warn "\$\(t binary_app\.warn\.start_rollback\)"/ { in_rollback=1 }
+      in_rollback && /"\$\{BA_ENABLE_HTTPS:-0\}" == "1"/ { saw_https_guard=1 }
+      in_rollback && /ba_cleanup_tls_artifacts/ { saw_rollback_cleanup=1 }
+      in_rollback && /fi$/ && saw_rollback_cleanup { in_rollback=0 }
+      /^bapp_uninstall\(\) \{/ { in_uninstall=1 }
+      in_uninstall && /tls_cron_file="\$\(ba_tls_cron_file\)"/ { saw_uninstall_cron=1 }
+      END {
+        if (!(saw_cron && saw_restore)) {
+          print "ba_cleanup_tls_artifacts must remove the per-app renewal cron and restore the default nginx site." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_tls_cleanup < 2) {
+          print "ba_configure_tls must clean up artifacts on certbot and final nginx-test failures." > "/dev/stderr"
+          exit 1
+        }
+        if (!(saw_https_guard && saw_rollback_cleanup)) {
+          print "the bapp_install start-failure rollback must remove TLS artifacts for BA_ENABLE_HTTPS=1 installs." > "/dev/stderr"
+          exit 1
+        }
+        if (!saw_uninstall_cron) {
+          print "bapp_uninstall must remove the per-app renewal drop-in." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+}
+
 check_cron_logrotate_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
     echo "cron and logrotate configs must be written through temporary files before replacement." >&2
