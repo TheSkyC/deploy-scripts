@@ -306,9 +306,16 @@ check_shared_validators_accept_and_reject() {
     app_validate_http_url "URL" "http://example.com/path" || { echo "valid http url rejected" >&2; exit 1; }
     app_validate_http_url "URL" "https://api.github.com/v3" || { echo "valid https url rejected" >&2; exit 1; }
     app_validate_http_url "URL" "http://localhost:8080/x" || { echo "localhost url rejected" >&2; exit 1; }
+    app_validate_http_url "URL" "http://[::1]:8080/x" || { echo "bracketed ipv6 literal url rejected" >&2; exit 1; }
+    app_validate_http_url "URL" "http://[2001:db8::1]/path" || { echo "bracketed ipv6 url without port rejected" >&2; exit 1; }
     ( app_validate_http_url "URL" "ftp://example.com" ) 2>/dev/null && { echo "non-http scheme accepted" >&2; exit 1; }
     ( app_validate_http_url "URL" "http://" ) 2>/dev/null && { echo "empty host accepted" >&2; exit 1; }
     ( app_validate_http_url "URL" "http://bad name.com" ) 2>/dev/null && { echo "url with space accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://::1/" ) 2>/dev/null && { echo "unbracketed ipv6 accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[::1" ) 2>/dev/null && { echo "unclosed ipv6 bracket accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[::1]evil/" ) 2>/dev/null && { echo "junk after ipv6 literal accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[]/" ) 2>/dev/null && { echo "empty ipv6 literal accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[g::1]/" ) 2>/dev/null && { echo "non-hex ipv6 literal accepted" >&2; exit 1; }
     app_validate_https_url "URL" "https://example.com" || { echo "valid https-only url rejected" >&2; exit 1; }
     ( app_validate_https_url "URL" "http://example.com" ) 2>/dev/null && { echo "http url accepted by https validator" >&2; exit 1; }
     # Go proxy

@@ -3848,7 +3848,10 @@ app_validate_domain() {
 }
 
 app_validate_http_url() {
-  local name="$1" value="$2" scheme host
+  local name="$1" value="$2" scheme host rest addr tail
+  # The IPv6 literal check relies on a hex character range; pin the C locale
+  # so the range stays byte-exact regardless of the server collation.
+  local LC_ALL=C
   case "$value" in
     http://*|https://*) ;;
     *) error "$(t error.url_invalid "$name" "$value")" ;;
@@ -3861,6 +3864,17 @@ app_validate_http_url() {
   scheme="${value%%://*}"
   host="${value#"${scheme}"://}"
   host="${host%%/*}"
+  if [[ "$host" == "["* ]]; then
+    # Bracketed IPv6 literal authority, for example http://[::1]:8080/ or
+    # http://[2001:db8::1]/path. Unbracketed IPv6 stays rejected because the
+    # colons are ambiguous with the port separator.
+    rest="${host#\[}"
+    addr="${rest%%\]*}"
+    tail="${rest#*\]}"
+    [[ -n "$addr" && "$addr" == *:* && "$addr" != *[!0-9A-Fa-f:]* && "$tail" =~ ^(:[0-9]+)?$ ]] \
+      || error "$(t error.url_invalid "$name" "$value")"
+    return 0
+  fi
   host="${host%%:*}"
   if [[ "$host" != "localhost" && ! "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]] && ! is_valid_dns_name "$host"; then
     error "$(t error.url_invalid "$name" "$value")"
