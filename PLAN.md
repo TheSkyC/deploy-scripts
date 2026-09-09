@@ -16,12 +16,16 @@
 - binary app 安装摘要：TLS 场景显示正确 `https` 与托管 nginx 代理状态。
 - TLS 失败回滚：清理 nginx 站点、默认站点备份与续签 cron；续签 cron 改为按应用命名；卸载仅在没有其他托管站点时删除旧全局 cron。
 - 状态文档：补充 `DEPLOY_STATUS_TIMEOUT_SECONDS`、`DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS`、`DEPLOY_STATUS_NO_PROBE`、`DEPLOY_STATUS_NO_NETWORK`。
+- 凭据 redaction：把 operation 摘要、operation 日志与通知共用的正则收敛到 `operation_redact_text()`，防止不同出口漂移；`verify.sh operation` 通过。
 - 文档引用：修正 PLAN 对未跟踪工作日志的引用，避免新 clone 后出现悬空路径。
+
+### 已评估但不改
+
+- `__deploy_run_exit_handlers` 中的重复 handler 调用看似冗余，实际是用 `if __deploy_set_exit_status "$status"` 的条件上下文向 handler 传递退出码。简单合并分支会让非零状态触发 `set -e` 或丢失 `$?`，保持现状更安全。
 
 ### 后续候选
 
-- 检查状态采集超时在各应用路径中的一致性，重点确认每应用实现是否都在受控 timeout 下执行。
-- 消除退出处理与敏感信息 redaction 的重复实现；清理只在真实行为相同的情况下进行，并保持 shellcheck/guards 通过。
+- 继续观察状态采集超时行为；当前设计只在 `status-all` 聚合路径强制子 shell 超时，单应用交互命令依赖内部探针自身的 `curl --max-time`。
 - 关注并行 verify 中出现过一次的后备备份行为抖动；若再次出现，先定位 `run_checks_parallel` 隔离性再调整测试。
 
 
