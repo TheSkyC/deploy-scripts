@@ -4773,6 +4773,9 @@ i18n_register_many \
   binary_app.error.dir_owner \
   "Failed to set ownership %s on %s." \
   "设置 %s 的所有者为 %s 失败。" \
+  binary_app.error.config_dir_secure \
+  "Failed to restrict access to config directory: %s" \
+  "配置文件目录权限设置失败：%s" \
   binary_app.error.path_whitespace \
   "Path for %s must not contain whitespace: %s" \
   "%s 的路径不能包含空白字符：%s" \
@@ -5639,6 +5642,16 @@ bapp_inspect_binary() {
   success "$(t binary_app.success.binary_verified "$size_mb")"
 }
 # Set up the service user, directories, and ownership for a fresh install.
+# Restrict a managed /etc config directory so it is not world-listable while
+# the service account (its primary group) can still traverse it to read the
+# configuration the service needs at runtime.
+ba_secure_config_dir() {
+  local dir="$1"
+  if ! chown "root:${SERVICE_USER}" "$dir" 2>/dev/null || ! chmod 750 "$dir"; then
+    error "$(t binary_app.error.config_dir_secure "$dir")"
+  fi
+}
+
 ba_setup_user_dirs() {
   local dirs=("$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR")
   local d
@@ -7045,6 +7058,7 @@ EOF
   then
     error "$(t app.ntfy.error.config_write "$config_file")"
   fi
+  ba_secure_config_dir "$config_dir"
   success "$(t app.ntfy.success.config_written "$config_file")"
 }
 

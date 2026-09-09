@@ -76,6 +76,7 @@ EOF
   then
     error "$(t app.gitea.error.config_write "$config_file")"
   fi
+  ba_secure_config_dir "$config_dir"
   success "$(t app.gitea.success.config_written "$config_file")"
 }
 

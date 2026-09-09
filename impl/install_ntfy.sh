@@ -55,6 +55,7 @@ EOF
   then
     error "$(t app.ntfy.error.config_write "$config_file")"
   fi
+  ba_secure_config_dir "$config_dir"
   success "$(t app.ntfy.success.config_written "$config_file")"
 }
 
