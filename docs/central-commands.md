@@ -27,6 +27,14 @@ deploy.sh status-all [--json] [--short] [--strict] [--errors-only]
 
 `problems` implies `--strict`; `health-all` implies `--only-installed`.
 
+Status collection honors the following environment variables:
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `DEPLOY_STATUS_TIMEOUT_SECONDS` | `8` | Upper bound, in seconds, for the timeout wrapper used while collecting each app's status. |
+| `DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS` | `5` | Per-request `curl` timeout, in seconds, for live binary-app health probes. |
+| `DEPLOY_STATUS_NO_PROBE` / `DEPLOY_STATUS_NO_NETWORK` | `0` | Set to `1` to apply the same defaults as the `--no-probe` / `--no-network` flags (for scheduled or automation environments). |
+
 ### `doctor-all`
 
 ```text
