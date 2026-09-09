@@ -96,6 +96,13 @@ has drifted from the configured pin, while an unpinned install states that
   entry point). `SUB2API_TZ` replaces the old hardcoded `Asia/Shanghai`
   (empty = server local time).
 - Restore: `install_sub2api.sh restore` loads the DB dump via `psql`.
+- Release pin: set `SUB2API_VERSION` to an upstream tag (`vX.Y.Z`) to make
+  install/update an immutable target. Pinned installs skip the GitHub-latest
+  lookup, pinned `update` skips re-downloading when the recorded version
+  already matches, and root `status` reports pin match/mismatch. In
+  `check-update`/`status-json` the pinned release is compared locally
+  (`cache_state: pinned`) without a network request; leave it empty to follow
+  the moving latest release.
 - Version records: the deployment config persists `INSTALLED_VERSION` for the
   Sub2API release plus `INSTALLED_POSTGRES_VERSION` and
   `INSTALLED_REDIS_VERSION` after a successful install/update. `check-update`
