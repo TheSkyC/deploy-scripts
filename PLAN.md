@@ -2,7 +2,28 @@
 
 > 本文档记录本仓库“为高契合度候选自托管项目新增部署脚本（共享二进制应用扩展）”工作的目标、候选核实与实现快照；该阶段已完成并归档。
 > 后续若要为共享 `binary_app` 框架新增应用：资产映射以 §2 为准，硬性步骤见 §7，环境与验证注意见 §7/§9。
-> 仓库整体持续进度改由 `docs/progress.log` 记录，治理/修复对照见 `docs/project-progress-and-remediation.md`，本文件不再逐条追加后续 commit。
+> 仓库整体持续进度以 Git 提交历史为准；`docs/progress.log` 与 `docs/project-progress-and-remediation.md` 是本机工作日志，已不纳入 Git 跟踪，新 clone 中不会存在。
+
+## 0. 2026-09 Linux 修复与优化推进
+
+当前目标是在 Linux 开发环境（bash 5.2、systemd、shellcheck；Docker 守护进程不可用）中健壮地推进此前的审查清单。验证基线为仓库 `tools/verify.sh`，涉及 dist 的源码变更必须用
+`DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 bash tools/build-release.sh all` 重建并同 commit 提交。
+
+### 已完成
+
+- Python 可移植性：优先使用 `python3`，保留 `DEPLOY_PYTHON` 覆盖，验证套件在仅 `python3` 环境也可运行。
+- i18n：注册缺失的 `status.title`，并为框架共享键增加一致性 guard。
+- binary app 安装摘要：TLS 场景显示正确 `https` 与托管 nginx 代理状态。
+- TLS 失败回滚：清理 nginx 站点、默认站点备份与续签 cron；续签 cron 改为按应用命名；卸载仅在没有其他托管站点时删除旧全局 cron。
+- 状态文档：补充 `DEPLOY_STATUS_TIMEOUT_SECONDS`、`DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS`、`DEPLOY_STATUS_NO_PROBE`、`DEPLOY_STATUS_NO_NETWORK`。
+- 文档引用：修正 PLAN 对未跟踪工作日志的引用，避免新 clone 后出现悬空路径。
+
+### 后续候选
+
+- 检查状态采集超时在各应用路径中的一致性，重点确认每应用实现是否都在受控 timeout 下执行。
+- 消除退出处理与敏感信息 redaction 的重复实现；清理只在真实行为相同的情况下进行，并保持 shellcheck/guards 通过。
+- 关注并行 verify 中出现过一次的后备备份行为抖动；若再次出现，先定位 `run_checks_parallel` 隔离性再调整测试。
+
 
 ## 1. 总目标
 
@@ -110,7 +131,7 @@ i18n 一致性只校验 `app.<prefix>.*` 键（`binary_app.*` 在 lib 注册，�
 
 ## 8. 归档说明与后续
 
-- 本阶段（共享二进制扩展 + newapi 迁移）已完成归档；逐条 commit 记录与持续进度见 `docs/progress.log`，治理/修复对照见 `docs/project-progress-and-remediation.md`。
+- 本阶段（共享二进制扩展 + newapi 迁移）已完成归档；持续修复以 Git 提交历史为准，不要假设上述两个未跟踪日志在新 clone 中存在。
 - 暂缓候选与“明确不做”项见 §2.2；若未来要接入需先补齐其前置条件（数据库 hook / 多端口模型 / 发布渠道核实等）。
 
 ## 9. 环境与踩坑记录
