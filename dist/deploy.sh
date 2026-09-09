@@ -8181,6 +8181,22 @@ notify_send() {
   esac
 }
 
+# Persist the merged NOTIFY_* values to a config file through the shared
+# atomic publisher with mode 600. Callers keep cleanup and localized-error
+# responsibility so a probe scratch file can be removed on a failed write.
+notify_write_config_file() {
+  local target="$1"
+  atomic_write_file "$target" 600 <<CONF
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+CONF
+}
+
 # Interactive/CLI configuration for the notification backends. Values are
 # merged over the existing config so each flag can be set independently;
 # --disable flips NOTIFY_ENABLED while keeping the rest, and --test sends a
@@ -8232,7 +8248,6 @@ notify_config_main() {
       esac
     done < "$conf_file"
   fi
-  [[ -n "$backend" ]] || true
   case "${backend,,}" in
     ""|ntfy|gotify) : ;;
     *) error "$(t error.url_invalid NOTIFY_BACKEND "$backend")" ;;
@@ -8250,16 +8265,7 @@ notify_config_main() {
     # of claiming success while silently skipping the send.
     local probe_file probe_status
     probe_file="$(mktemp "${TMPDIR:-/tmp}/deploy-notify-probe.XXXXXX")" || error "$(t error.tmpdir)"
-    if ! atomic_write_file "$probe_file" 600 <<PROBE
-NOTIFY_ENABLED="${NOTIFY_ENABLED}"
-NOTIFY_BACKEND="${NOTIFY_BACKEND}"
-NOTIFY_URL="${NOTIFY_URL}"
-NOTIFY_TOPIC="${NOTIFY_TOPIC}"
-NOTIFY_TOKEN="${NOTIFY_TOKEN}"
-NOTIFY_USERNAME="${NOTIFY_USERNAME}"
-NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
-PROBE
-    then
+    if ! notify_write_config_file "$probe_file"; then
       rm -f "$probe_file"
       error "$(t error.config_write "$probe_file")"
     fi
@@ -8273,31 +8279,13 @@ PROBE
     fi
     # The probe succeeded with the merged values, so persist them so the
     # tested configuration is exactly what later runs will use.
-    if ! atomic_write_file "$conf_file" 600 <<CONF
-NOTIFY_ENABLED="${NOTIFY_ENABLED}"
-NOTIFY_BACKEND="${NOTIFY_BACKEND}"
-NOTIFY_URL="${NOTIFY_URL}"
-NOTIFY_TOPIC="${NOTIFY_TOPIC}"
-NOTIFY_TOKEN="${NOTIFY_TOKEN}"
-NOTIFY_USERNAME="${NOTIFY_USERNAME}"
-NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
-CONF
-    then
+    if ! notify_write_config_file "$conf_file"; then
       error "$(t error.config_write "$conf_file")"
     fi
     success "$(t notify.test.sent_ok)"
     return 0
   fi
-  if ! atomic_write_file "$conf_file" 600 <<CONF
-NOTIFY_ENABLED="${NOTIFY_ENABLED}"
-NOTIFY_BACKEND="${NOTIFY_BACKEND}"
-NOTIFY_URL="${NOTIFY_URL}"
-NOTIFY_TOPIC="${NOTIFY_TOPIC}"
-NOTIFY_TOKEN="${NOTIFY_TOKEN}"
-NOTIFY_USERNAME="${NOTIFY_USERNAME}"
-NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
-CONF
-  then
+  if ! notify_write_config_file "$conf_file"; then
     error "$(t error.config_write "$conf_file")"
   fi
   success "$(t notify.config.saved "$conf_file")"

@@ -2297,12 +2297,22 @@ check_notification_fail_open_and_redaction() {
       }
       in_send=0
     }
-    /^notify_config_main\(\)/ { in_cfg=1; saw_atomic=0; saw_mode=0; saw_probe=0; next }
-    in_cfg && /atomic_write_file "\$conf_file" 600/ { saw_atomic=1; saw_mode=1 }
+    /^notify_write_config_file\(\)/ { in_write=1; saw_atomic=0; saw_mode=0; next }
+    in_write && /atomic_write_file "\$target" 600/ { saw_atomic=1; saw_mode=1 }
+    in_write && /^}$/ {
+      if (!(saw_atomic && saw_mode)) {
+        print "notify config persistence must go through atomic_write_file with mode 600" > "/dev/stderr"
+        exit 1
+      }
+      in_write=0
+    }
+    /^notify_config_main\(\)/ { in_cfg=1; saw_persist=0; saw_probe=0; next }
+    in_cfg && /notify_write_config_file "\$probe_file"/ { saw_persist=1 }
+    in_cfg && /notify_write_config_file "\$conf_file"/ { saw_persist=1 }
     in_cfg && /NOTIFY_CONF_FILE="\$probe_file"/ { saw_probe=1 }
     in_cfg && /^}$/ {
-      if (!(saw_atomic && saw_probe)) {
-        print "notify_config_main must persist atomically with mode 600 and probe --test against a staged merged config" > "/dev/stderr"
+      if (!(saw_persist && saw_probe)) {
+        print "notify_config_main must persist through the shared atomic writer (mode 600) and probe --test against a staged merged config" > "/dev/stderr"
         exit 1
       }
       in_cfg=0
