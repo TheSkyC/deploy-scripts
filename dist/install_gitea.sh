@@ -278,6 +278,10 @@ fi
 info() { echo -e "${BLUE}[i]${NC} $*" >&2; }
 success() { echo -e "${GREEN}[+]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[!]${NC} $*" >&2; }
+# error() terminates the current shell, which is only the command
+# substitution subshell when called inside $() — callers that must tolerate
+# a failed lookup should check the guard themselves instead of relying on
+# error() inside a substitution.
 error() { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
 step() { echo -e "\n${CYAN}${BOLD}== $* ==${NC}" >&2; }
 prompt() { echo -ne "${YELLOW}[?]${NC} $* " >&2; }

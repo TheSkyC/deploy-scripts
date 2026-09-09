@@ -4,6 +4,20 @@
 > 后续若要为共享 `binary_app` 框架新增应用：资产映射以 §2 为准，硬性步骤见 §7，环境与验证注意见 §7/§9。
 > 仓库整体持续进度以 Git 提交历史为准；`docs/progress.log` 与 `docs/project-progress-and-remediation.md` 是本机工作日志，已不纳入 Git 跟踪，新 clone 中不会存在。
 
+## 0b. 2026-09 深度审查修复批次
+
+按优先级逐项修复深度审查清单（每项独立提交，均重建 dist 并通过 `bash tools/verify.sh release`）：
+
+- **发布包完整性（高）**：`lib/binary_app.sh` 新增 `bapp_verify_download`，支持 `BA_SHA256`（固定 64 位摘要）与 `BA_SHA256_ASSET_TEMPLATE`（上游 sha256sum 格式校验文件，ARCH 感知、按主资产 URL 推导、fail-closed）。install/update 两条生命周期均在暂存前校验；未配置时保持旧行为，非空/最小尺寸/ELF 校验仍生效。guard：`tools/checks/framework.sh#check_binary_app_download_integrity` 覆盖固定摘要、校验文件、摘要不匹配与未配置四条路径。
+- **锁文件（高）**：`acquire_lock` 改为读写方式打开（`9<>`），不再截断锁文件中的注记；新增 `DEPLOY_LOCK_WAIT_SECONDS` 有界等待（默认仍为 fail-fast）。guard：`check_acquire_lock_preserves_file_and_waits`；`tools/checks/backup.sh` 的结构性断言同步更新。
+- **日志颜色（中）**：颜色仅在 stderr 为 TTY 时输出，`NO_COLOR`/`TERM=dumb` 仍全局关闭，新增 `DEPLOY_FORCE_COLOR=1` 供捕获场景强制开启。guard：`check_logging_colors_are_tty_gated`。
+- **GitHub 版本查询（中）**：`json_tag_name` 的 `grep -P` 探测按进程缓存，避免重复 fork；`GITHUB_TOKEN` 改经 curl `@file`（/dev/fd 进程替换）传递，不再出现在 `/proc/*/cmdline`。guard：`check_github_release_tag_behavior` 增加令牌不进 argv 断言。
+- **self-update 下载诊断（中）**：`self_update_fetch_file` 与检查路径不再丢弃 curl stderr，失败原因（DNS/TLS/超时/max-filesize）会输出到 stderr 并进入 check-json 消息。
+- **cron 回退校验（中）**：非 systemd 回退新增 `schedule_cron_expression_is_valid`，按字段校验数值范围（分钟/小时/日/月/周 0-7）、拒绝畸形列表与反序范围；月/周英文名仍仅限 systemd OnCalendar。guard：`check_schedule_cron_expression_validator`。
+- **shellcheck 噪音（低）**：`impl/install_*.sh` 增加文件级 `# shellcheck disable=SC2034` 及原因注释，说明这些变量由 lib/app.sh 按名消费；verify 门的全局排除与理由保持不变。
+
+有意不改（维持既有评估）：`operation.sh` 的受控 `eval`（trap 恢复场景）、`error()` 在 `$()` 内只退出子 shell 的语义（已在 `lib/logging.sh` 加注释说明）、单应用交互命令的状态超时策略（依赖探针自身 `curl --max-time`）、端口冲突默认仅告警（README 已文档化 `DEPLOY_FAIL_ON_PORT_CONFLICT`）。
+
 ## 0. 2026-09 Linux 修复与优化推进
 
 当前目标是在 Linux 开发环境中健壮地推进此前的审查清单。本机基线为 bash 5.2、Debian 包 Docker（经镜像拉取基础镜像）、shellcheck 0.11.0 和仅带 `python3` 的 PATH；`python` 兼容 shim 已在脚本与验证套件内解决。验证基线为仓库 `tools/verify.sh`，涉及 dist 的源码变更必须重建 generated release 并同 commit 提交。

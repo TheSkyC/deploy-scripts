@@ -99,6 +99,13 @@ deploy.sh update-all [--dry-run] [--yes] [--json] [--refresh|--no-network]
 Execution is always serial and never aborts on one app's failure
 (`--continue-on-error` is the inherent behavior). `--yes` skips the prompt.
 
+### Locking
+
+Batch and per-app actions take `flock`-based locks and fail fast while
+another run holds them. Scripts that race a scheduled batch can set
+`DEPLOY_LOCK_WAIT_SECONDS` to a positive integer to wait up to that many
+seconds for the lock before aborting.
+
 ### Other central commands
 
 ```text
