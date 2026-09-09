@@ -157,7 +157,7 @@ check_no_argument_menu() {
 
 check_manager_menu_shortcuts() {
   local output
-  output="$($BASH_BIN -c '
+  output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
     manager_status_main() { [[ "$1" == status-all ]]; }

@@ -6,6 +6,13 @@ BASH_BIN="${BASH_BIN:-bash}"
 
 cd "$ROOT_DIR"
 
+# Localization-independent harness: most check modules assert English output
+# from bash -c snippets that do not set DEPLOY_LANG themselves. Default the
+# harness language to English so a Chinese desktop locale (LANGUAGE=zh_CN)
+# cannot make those assertions fail, while checks that exercise translations
+# keep passing DEPLOY_LANG explicitly (an assignment overrides this export).
+export DEPLOY_LANG="${DEPLOY_LANG:-en}"
+
 # Check modules and the self-update smoke check validate JSON payloads with a
 # Python interpreter. Linux distributions commonly ship only python3, while
 # the suite historically calls the unversioned `python` command, so resolve
