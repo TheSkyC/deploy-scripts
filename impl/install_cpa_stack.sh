@@ -6,6 +6,10 @@ ENABLE_HTTPS="${ENABLE_HTTPS:-true}"
 CPA_ALLOW_REMOTE="${CPA_ALLOW_REMOTE:-true}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 CPA_STACK_COMPONENT="${CPA_STACK_COMPONENT:-all}"
+# Pin either component to an upstream GitHub release tag (vX.Y.Z). Leave
+# empty to follow the repository's moving latest release.
+CPA_VERSION="${CPA_VERSION:-}"
+CPAMP_VERSION="${CPAMP_VERSION:-}"
 CPA_MANAGEMENT_KEY="${CPA_MANAGEMENT_KEY:-}"
 CPA_API_KEY="${CPA_API_KEY:-}"
 CPAMP_ADMIN_KEY="${CPAMP_ADMIN_KEY:-}"
@@ -48,6 +52,8 @@ CONFIG_KEYS=(
   CPA_DATA_DIR
   CPAMP_DATA_DIR
   CPAMP_ENV_DIR
+  CPA_VERSION
+  CPAMP_VERSION
   INSTALLED_CPA_VERSION
   INSTALLED_CPAMP_VERSION
 )
@@ -98,10 +104,17 @@ _cpa_stack_merge_version_json() {
   elif [[ -n "$b_checked" && "$b_checked" > "$checked_at" ]]; then
     checked_at="$b_checked"
   fi
+  if [[ "$a_cache" == pinned && "$b_cache" == pinned ]]; then
+    cache_state=pinned
+  elif [[ "$a_cache" == pinned ]]; then
+    cache_state="$b_cache"
+  elif [[ "$b_cache" == pinned ]]; then
+    cache_state="$a_cache"
+  fi
   case ",$a_cache,$b_cache," in
     *,stale,*) cache_state=stale ;;
     *,fresh,*|*,refreshed,*|*,not_persisted,*) cache_state=refreshed ;;
-    *) cache_state=miss ;;
+    *) cache_state="${cache_state:-miss}" ;;
   esac
   error_summary="${a_error:+cpa: ${a_error}}"
   if [[ -n "$error_summary" && -n "$b_error" ]]; then
@@ -148,16 +161,34 @@ _cpa_stack_load_installed_versions() {
 _cpa_stack_check_update_json() {
   local refresh="${2:-0}" no_network="${3:-0}" a_json b_json
   _cpa_stack_load_installed_versions
-  a_json="$(version_check_binary_release_json "cpa-stack-cpa" "$CPA_REPOSITORY" "${INSTALLED_CPA_VERSION:-}" "$refresh" "$no_network")"
-  b_json="$(version_check_binary_release_json "cpa-stack-cpamp" "$CPAMP_REPOSITORY" "${INSTALLED_CPAMP_VERSION:-}" "$refresh" "$no_network")"
+  # Pinned components compare locally against the pin; only unpinned ones
+  # touch the version cache or GitHub latest.
+  if [[ -n "${CPA_VERSION:-}" ]]; then
+    a_json="$(version_check_pinned_release_json "${INSTALLED_CPA_VERSION:-}" "$CPA_VERSION")"
+  else
+    a_json="$(version_check_binary_release_json "cpa-stack-cpa" "$CPA_REPOSITORY" "${INSTALLED_CPA_VERSION:-}" "$refresh" "$no_network")"
+  fi
+  if [[ -n "${CPAMP_VERSION:-}" ]]; then
+    b_json="$(version_check_pinned_release_json "${INSTALLED_CPAMP_VERSION:-}" "$CPAMP_VERSION")"
+  else
+    b_json="$(version_check_binary_release_json "cpa-stack-cpamp" "$CPAMP_REPOSITORY" "${INSTALLED_CPAMP_VERSION:-}" "$refresh" "$no_network")"
+  fi
   _cpa_stack_merge_version_json "$a_json" "$b_json"
 }
 APP_CHECK_UPDATE_FN=_cpa_stack_check_update_json
 _cpa_stack_status_version_json() {
   _cpa_stack_load_installed_versions
   local a_json b_json
-  a_json="$(version_check_cached_binary_release_json "cpa-stack-cpa" "${INSTALLED_CPA_VERSION:-}")"
-  b_json="$(version_check_cached_binary_release_json "cpa-stack-cpamp" "${INSTALLED_CPAMP_VERSION:-}")"
+  if [[ -n "${CPA_VERSION:-}" ]]; then
+    a_json="$(version_check_pinned_release_json "${INSTALLED_CPA_VERSION:-}" "$CPA_VERSION")"
+  else
+    a_json="$(version_check_cached_binary_release_json "cpa-stack-cpa" "${INSTALLED_CPA_VERSION:-}")"
+  fi
+  if [[ -n "${CPAMP_VERSION:-}" ]]; then
+    b_json="$(version_check_pinned_release_json "${INSTALLED_CPAMP_VERSION:-}" "$CPAMP_VERSION")"
+  else
+    b_json="$(version_check_cached_binary_release_json "cpa-stack-cpamp" "${INSTALLED_CPAMP_VERSION:-}")"
+  fi
   _cpa_stack_merge_version_json "$a_json" "$b_json"
 }
 APP_STATUS_VERSION_FN=_cpa_stack_status_version_json
@@ -190,6 +221,19 @@ cpa_stack_validate_component() {
   esac
 }
 
+# Pinned tags must look like upstream GitHub release tags (vX.Y.Z) so a
+# typo cannot silently install nothing or break the download asset name.
+cpa_stack_validate_pins() {
+  local pinned_key pinned_value
+  for pinned_key in CPA_VERSION CPAMP_VERSION; do
+    pinned_value="${!pinned_key}"
+    if [[ -n "$pinned_value" ]] \
+        && ! [[ "$pinned_value" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+      error "$(t app.cpa_stack.error.pinned_version_invalid "$pinned_key" "$pinned_value")"
+    fi
+  done
+}
+
 _validate_config_values() {
   app_validate_domain "CPA_DOMAIN" "$CPA_DOMAIN"
   app_validate_domain "CPAMP_DOMAIN" "$CPAMP_DOMAIN"
@@ -199,6 +243,7 @@ _validate_config_values() {
     app_validate_email "CERTBOT_EMAIL" "$CERTBOT_EMAIL"
   fi
   [[ "$BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] || error "$(t app.cpa_stack.error.keep_days)"
+  cpa_stack_validate_pins
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
   if [[ -n "$CPA_DOMAIN" && "$CPA_DOMAIN" == "$CPAMP_DOMAIN" ]]; then
     error "$(t app.cpa_stack.error.domains_same)"
@@ -255,6 +300,7 @@ cpa_stack_preflight() {
   fi
   cpa_stack_validate_component
   app_load_config
+  cpa_stack_validate_pins
 }
 
 cpa_stack_arch() {
@@ -282,11 +328,12 @@ cpa_stack_cpamp_asset_name() {
 }
 
 cpa_stack_release_json() {
-  local repository="$1"
+  local repository="$1" tag="${2:-}" endpoint="releases/latest"
+  [[ -n "$tag" ]] && endpoint="releases/tags/${tag}"
   curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: deploy-scripts-cpa-stack' \
-    "https://api.github.com/repos/${repository}/releases/latest"
+    "https://api.github.com/repos/${repository}/${endpoint}"
 }
 
 cpa_stack_release_tag() {
@@ -342,19 +389,39 @@ cpa_stack_install_binary() {
 }
 
 cpa_stack_install_release() {
-  local component="$1" repository tag arch asset json archive extract_dir binary
+  local component="$1" repository tag pin installed_version target_bin
+  local arch asset json archive extract_dir binary
   case "$component" in
     cpa)
       repository="$CPA_REPOSITORY"
+      pin="${CPA_VERSION:-}"
+      installed_version="${INSTALLED_CPA_VERSION:-}"
+      target_bin="$CPA_BIN"
       ;;
     cpamp)
       repository="$CPAMP_REPOSITORY"
+      pin="${CPAMP_VERSION:-}"
+      installed_version="${INSTALLED_CPAMP_VERSION:-}"
+      target_bin="$CPAMP_BIN"
       ;;
     *) return 1 ;;
   esac
-  json="$(cpa_stack_release_json "$repository" 2>/dev/null)" || error "$(t app.cpa_stack.error.github "$repository")"
-  tag="$(cpa_stack_release_tag "$json")"
-  [[ -n "$tag" ]] || error "$(t app.cpa_stack.error.github "$repository")"
+  # A pinned binary that already matches the recorded installed version and
+  # is executable must not be re-downloaded on every update pass.
+  if [[ -n "$pin" && -n "$installed_version" && "$installed_version" == "$pin" && -x "$target_bin" ]]; then
+    success "$(t app.cpa_stack.success.already_pinned "$component" "$pin")"
+    return 0
+  fi
+  if [[ -n "$pin" ]]; then
+    json="$(cpa_stack_release_json "$repository" "$pin" 2>/dev/null)" || error "$(t app.cpa_stack.error.github "$repository")"
+    tag="$pin"
+    success "$(t app.cpa_stack.success.pinned_version "$component" "$tag")"
+  else
+    json="$(cpa_stack_release_json "$repository" 2>/dev/null)" || error "$(t app.cpa_stack.error.github "$repository")"
+    tag="$(cpa_stack_release_tag "$json")"
+    [[ -n "$tag" ]] || error "$(t app.cpa_stack.error.github "$repository")"
+    info "$(t app.cpa_stack.info.unpinned_version "$component" "$tag")"
+  fi
   arch="$(cpa_stack_arch)"
   if [[ "$component" == "cpa" ]]; then
     asset="$(cpa_stack_cpa_asset_name "$tag" "$arch")"
@@ -897,7 +964,28 @@ do_status() {
     printf '\n[%s]\n' "$(t app.cpa_stack.status.versions)"
     printf '  %s: %s\n' "$(t app.cpa_stack.status.cpa_component)" "${INSTALLED_CPA_VERSION:-$(t status.unknown)}"
     printf '  %s: %s\n' "$(t app.cpa_stack.status.cpamp_component)" "${INSTALLED_CPAMP_VERSION:-$(t status.unknown)}"
-    printf '  %s\n' "$(t app.cpa_stack.status.components_follow_latest)"
+    local pin_component pin_value pin_installed
+    for pin_component in cpa cpamp; do
+      if [[ "$pin_component" == cpa ]]; then
+        pin_value="${CPA_VERSION:-}"
+        pin_installed="${INSTALLED_CPA_VERSION:-}"
+      else
+        pin_value="${CPAMP_VERSION:-}"
+        pin_installed="${INSTALLED_CPAMP_VERSION:-}"
+      fi
+      if [[ -n "$pin_value" ]]; then
+        if [[ -n "$pin_installed" && "$pin_installed" == "$pin_value" ]]; then
+          echo -e "  ${GREEN}[✓]${NC} $(t app.cpa_stack.status.pin_ok "$pin_component" "$pin_value")"
+        elif [[ -n "$pin_installed" ]]; then
+          echo -e "  ${YELLOW}[!]${NC} $(t app.cpa_stack.status.pin_mismatch "$pin_component" "$pin_value" "$pin_installed")"
+        else
+          echo -e "  ${YELLOW}[!]${NC} $(t app.cpa_stack.status.pin_set "$pin_component" "$pin_value")"
+        fi
+      fi
+    done
+    if [[ -z "${CPA_VERSION:-}" && -z "${CPAMP_VERSION:-}" ]]; then
+      printf '  %s\n' "$(t app.cpa_stack.status.components_follow_latest)"
+    fi
   fi
   printf '\n[%s]\n' "$(t app.cpa_stack.status.paths)"
   for path in "$CPA_CONFIG_FILE" "$CPA_AUTH_DIR" "$CPAMP_ENV_FILE" "$CPAMP_DATA_DIR" "$NGINX_SITE" "$CPA_STACK_BACKUP_DIR"; do

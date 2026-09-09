@@ -124,10 +124,17 @@ has drifted from the configured pin, while an unpinned install states that
   Nginx reverse proxy, and optional HTTPS (certbot). Config: `CPA_DOMAIN`,
   `CPAMP_DOMAIN`, `ENABLE_HTTPS`, `CPA_ALLOW_REMOTE`, `CERTBOT_EMAIL`,
   install/data/env directories for both components.
-- Each component is installed from its repository's moving GitHub latest
-  release. `status` run as root reports the recorded versions
-  (`INSTALLED_CPA_VERSION` / `INSTALLED_CPAMP_VERSION`); `status-json` and
-  `check-update` expose the same state through the typed `components` manifest.
+- Each component is installed from its repository's GitHub latest release
+  unless pinned. `CPA_VERSION` and `CPAMP_VERSION` pin the CPA and CPAMP
+  components to an exact upstream release tag (`vX.Y.Z`); pinned `install`
+  downloads that tag from the release endpoint, and pinned `update` skips
+  re-downloading when the recorded version already matches the pin.
+  `status` run as root reports the recorded versions
+  (`INSTALLED_CPA_VERSION` / `INSTALLED_CPAMP_VERSION`) plus per-component
+  pin match/mismatch warnings, and `status-json`/`check-update` expose the
+  same state through the typed `components` manifest. Pinned components are
+  compared locally (`cache_state: pinned`) without querying the moving
+  latest; leave both pins empty to follow the moving latest releases.
 
 ### TickFlow (`tickflow`, port 3018)
 

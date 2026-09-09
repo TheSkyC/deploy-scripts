@@ -400,6 +400,7 @@ main() {
       check_update_git_branch_checker
       check_update_cpa_stack_merge_verdicts
       check_cpa_stack_component_version_manifest
+      check_cpa_stack_pinned_versions_contract
       check_sub2api_component_version_manifest
       check_sub2api_pinned_version_contract
       echo "Update verification passed"
@@ -496,6 +497,7 @@ main() {
       run_isolated_check check_cpa_stack_status_reports_component_versions
       run_isolated_check check_cpa_stack_layout
       run_isolated_check check_cpa_stack_binary_backups_are_atomic
+      run_isolated_check check_cpa_stack_pinned_versions_contract
       run_isolated_check check_cron_logrotate_are_atomic
       run_isolated_check check_binary_app_certbot_cron_is_published_atomically
       run_isolated_check check_logrotate_writes_use_shared_helper

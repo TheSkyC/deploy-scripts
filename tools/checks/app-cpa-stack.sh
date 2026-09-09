@@ -157,3 +157,87 @@ CPATEST
       }
     ' impl/install_cpa_stack.sh
 }
+
+# Pinned CPA/CPAMP releases (CPA_VERSION / CPAMP_VERSION persisted in the
+# trusted deployment config) are immutable targets: install resolves the exact
+# GitHub tags/<tag> endpoint, an already-matching pinned binary is not
+# re-downloaded, and the central check-update/status adapters compare the
+# installed versions against the pins locally (cache_state=pinned) without
+# querying the moving latest. Without pins the adapters keep the
+# floating-latest behavior.
+check_cpa_stack_pinned_versions_contract() {
+  local output
+  output="$($BASH_BIN <<'CPATEST'
+set -euo pipefail
+temp_root="$(mktemp -d)"
+trap 'rm -rf "$temp_root"' EXIT
+export DEPLOY_VERSION_CACHE_ROOT="${temp_root}/version-cache"
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+APP_ID=cpa_stack
+APP_NAME="CPA Stack"
+app_conf_file() { printf '%s' '/nonexistent/cpa-stack-deploy.conf'; }
+github_latest_release_tag_checked() { printf 'pinned projection must not query the moving latest\n' >&2; return 97; }
+source apps/cpa_stack.sh >/dev/null 2>&1
+
+CPA_VERSION=v1.0.0
+CPAMP_VERSION=v2.0.0
+INSTALLED_CPA_VERSION=v0.9.0
+INSTALLED_CPAMP_VERSION=v2.0.0
+source impl/install_cpa_stack.sh >/dev/null 2>&1
+
+pinned="$(_cpa_stack_check_update_json 1 1)"
+[[ "$(state_json_field "$pinned" installed)" == "v0.9.0/v2.0.0" ]]
+[[ "$(state_json_field "$pinned" latest)" == "v1.0.0/v2.0.0" ]]
+[[ "$(state_json_field "$pinned" update_state)" == update_available ]]
+[[ "$(state_json_field "$pinned" source)" == github_release ]]
+[[ "$(state_json_field "$pinned" cache_state)" == pinned ]]
+[[ "$(state_json_field "$pinned" components.cpa.cache_state)" == pinned ]]
+[[ "$(state_json_field "$pinned" components.cpamp.update_state)" == up_to_date ]]
+
+status_pinned="$(_cpa_stack_status_version_json)"
+[[ "$(state_json_field "$status_pinned" cache_state)" == pinned ]]
+
+# An installed binary that already matches the pin must short-circuit without
+# touching GitHub; a curl stub fails the run if the tagged endpoint is hit.
+cpa_stack_arch() { printf 'amd64\n'; }
+curl() { printf 'already-pinned install must not download\n' >&2; return 97; }
+INSTALLED_CPA_VERSION=v1.0.0
+CPA_BIN="${temp_root}/cpa-bin"
+printf '#!/bin/sh\n' > "$CPA_BIN"
+chmod 0755 "$CPA_BIN"
+result="$(cpa_stack_install_release cpa 2>&1)"
+[[ "$result" == *"v1.0.0"* ]]
+
+CPA_VERSION=""
+CPAMP_VERSION=""
+INSTALLED_CPA_VERSION=v0.9.0
+github_latest_release_tag_checked() { case "$1" in "$CPAMP_REPOSITORY") printf 'v2.1.0\n' ;; *) printf 'v1.1.0\n' ;; esac; }
+floating="$(_cpa_stack_check_update_json 1 0)"
+[[ "$(state_json_field "$floating" installed)" == "v0.9.0/v2.0.0" ]]
+[[ "$(state_json_field "$floating" latest)" == "v1.1.0/v2.1.0" ]]
+[[ "$(state_json_field "$floating" update_state)" == update_available ]]
+[[ "$(state_json_field "$floating" source)" == github_release ]]
+printf ok
+CPATEST
+  )"
+  [[ "$output" == ok ]] || return 1
+  grep -Fq 'CPA_VERSION="${CPA_VERSION:-}"' impl/install_cpa_stack.sh
+  grep -Fq 'CPAMP_VERSION="${CPAMP_VERSION:-}"' impl/install_cpa_stack.sh
+  grep -Fq 'CPA_VERSION CPAMP_VERSION' impl/install_cpa_stack.sh
+  grep -Fq 'endpoint="releases/tags/${tag}"' impl/install_cpa_stack.sh
+  grep -Fq 'success "$(t app.cpa_stack.success.already_pinned "$component" "$pin")"' impl/install_cpa_stack.sh
+  grep -Fq 'success "$(t app.cpa_stack.success.pinned_version "$component" "$tag")"' impl/install_cpa_stack.sh
+  grep -Fq 'info "$(t app.cpa_stack.info.unpinned_version "$component" "$tag")"' impl/install_cpa_stack.sh
+  grep -Fq 'error "$(t app.cpa_stack.error.pinned_version_invalid "$pinned_key" "$pinned_value")"' impl/install_cpa_stack.sh
+  grep -Fq 't app.cpa_stack.status.pin_ok "$pin_component" "$pin_value"' impl/install_cpa_stack.sh
+  grep -Fq 't app.cpa_stack.status.pin_mismatch "$pin_component" "$pin_value" "$pin_installed"' impl/install_cpa_stack.sh
+  grep -Fq 't app.cpa_stack.status.pin_set "$pin_component" "$pin_value"' impl/install_cpa_stack.sh
+  grep -Fq 'app.cpa_stack.success.pinned_version' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.success.already_pinned' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.info.unpinned_version' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.error.pinned_version_invalid' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.pin_ok' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.pin_mismatch' apps/cpa_stack.sh
+  grep -Fq 'app.cpa_stack.status.pin_set' apps/cpa_stack.sh
+}

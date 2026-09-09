@@ -135,6 +135,12 @@ i18n_register_many \
   app.cpa_stack.success.updated \
   "CPA Stack update completed." \
   "CPA Stack 更新完成。" \
+  app.cpa_stack.success.pinned_version \
+  "Installing %s from pinned release %s." \
+  "正在按固定版本安装 %s：%s。" \
+  app.cpa_stack.success.already_pinned \
+  "%s already matches pinned release %s; skipping download." \
+  "%s 已与固定版本 %s 一致，跳过下载。" \
   app.cpa_stack.success.https \
   "HTTPS certificate issued; Nginx switched to TLS for %s and %s." \
   "HTTPS 证书已签发；Nginx 已为 %s 与 %s 启用 TLS。" \
@@ -156,6 +162,9 @@ i18n_register_many \
   app.cpa_stack.info.kept_data \
   "Keeping persistent data: %s" \
   "保留持久数据：%s" \
+  app.cpa_stack.info.unpinned_version \
+  "%s is not pinned; installing the repository's moving latest release (%s)." \
+  "%s 未设置固定版本，将安装该仓库会移动的 latest 发布（%s）。" \
   app.cpa_stack.prompt.cpa_domain \
   "CPA public API domain:" \
   "CPA 公网 API 域名：" \
@@ -189,6 +198,15 @@ i18n_register_many \
   app.cpa_stack.status.components_follow_latest \
   "Both components follow each repository's moving latest release; recorded versions reflect the last install/update, and check-update compares them with GitHub." \
   "两个组件都跟随各自仓库会移动的 latest 发布；记录版本为最近一次安装/更新的结果，check-update 会与 GitHub 上的最新版比对。" \
+  app.cpa_stack.status.pin_ok \
+  "%s matches pinned release %s." \
+  "%s 与固定版本 %s 一致。" \
+  app.cpa_stack.status.pin_mismatch \
+  "%s is pinned to %s but the installed version is %s." \
+  "%s 已固定为 %s，但当前安装版本为 %s。" \
+  app.cpa_stack.status.pin_set \
+  "%s is pinned to %s but the recorded installed version is unknown; run install or update to apply." \
+  "%s 已固定为 %s，但记录的安装版本未知；请执行 install 或 update 以应用。" \
   app.cpa_stack.banner \
   "CLIProxyAPI + CPA Manager Plus Stack" \
   "CLIProxyAPI + CPA Manager Plus Stack" \
@@ -234,6 +252,9 @@ i18n_register_many \
   app.cpa_stack.error.keep_days \
   "BACKUP_KEEP_DAYS must be a non-negative integer." \
   "BACKUP_KEEP_DAYS 必须是非负整数。" \
+  app.cpa_stack.error.pinned_version_invalid \
+  "%s must look like an upstream GitHub release tag (vX.Y.Z), got: %s." \
+  "%s 必须是上游 GitHub 发布标签（vX.Y.Z）格式，当前为：%s。" \
   app.cpa_stack.error.binary_backup \
   "Failed to back up existing binary: %s" \
   "备份现有二进制文件失败：%s" \
