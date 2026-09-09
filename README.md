@@ -8,6 +8,27 @@ Reference documentation:
 - [Instances, TLS, and migration runbook](docs/instances-tls-migration.md) — instance config/lock boundaries, reverse-proxy TLS, and export/import restore rehearsal.
 - `sudo bash deploy.sh doctor security [--json]` — read-only audit for legacy credentials, public listeners, and root backup schedules.
 
+## Requirements
+
+The scripts target Debian/Ubuntu servers running systemd with the standard GNU
+toolchain those distributions ship; this is the supported baseline, and a stock
+macOS or BSD userland is not sufficient because the framework intentionally
+uses GNU extensions:
+
+- GNU coreutils: `stat -c`, `date -d` (epoch and timezone formatting), and
+  `readlink -f`.
+- GNU findutils: `find -printf`, used together with the coreutils NUL-aware
+  `sort -z` / `head -z` / `tail -z` so file names stay intact even when they
+  contain newlines.
+- curl 7.55+: `-H @<(...)` needs the `@file` header syntax added in curl
+  7.55.0; the framework uses it to keep `GITHUB_TOKEN` out of the process list.
+- Bash 4+ (associative arrays via `declare -A`).
+
+On a current Debian/Ubuntu install every requirement above is already met.
+Git Bash on Windows works for development and for the `tools/verify.sh` suite
+(see PLAN §9 for its known quirks), but production deployments expect the
+Debian/Ubuntu baseline.
+
 ## Quick Start
 
 Run a script from the repository checkout:
