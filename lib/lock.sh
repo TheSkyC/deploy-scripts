@@ -12,6 +12,14 @@
 # run while any of them is active. Distinct fds keep the scopes independent —
 # an app lock must never release the manager lock.
 #
+# Lock files are opened read-write (`<>`) so repeated acquisitions never
+# truncate a file that other tooling may annotate (PID, holder info).
+#
+# Acquisitions are fail-fast by default (flock -n), matching the historical
+# "another run is active" abort behavior. Set DEPLOY_LOCK_WAIT_SECONDS to a
+# positive integer to wait up to that many seconds for the lock before
+# failing — useful for scripted invocations that race a scheduled batch.
+#
 # Release discipline: acquire_lock registers release_lock on the shared exit
 # handler stack (deploy_add_exit_handler), so the lock is always freed on
 # normal exit, error, or signal — do NOT call release_lock explicitly at the
@@ -58,10 +66,15 @@ acquire_lock() {
   if ! mkdir -p "$(dirname "$lock_file")"; then
     error "$(t error.lock_failed "$lock_file")"
   fi
-  if ! exec 9>"$lock_file"; then
+  if ! exec 9<>"$lock_file"; then
     error "$(t error.lock_failed "$lock_file")"
   fi
-  flock -n 9 || error "$(t error.lock_failed "$lock_file")"
+  local wait_seconds="${DEPLOY_LOCK_WAIT_SECONDS:-0}"
+  if [[ "$wait_seconds" =~ ^[0-9]+$ && "$wait_seconds" -gt 0 ]]; then
+    flock -w "$wait_seconds" 9 || error "$(t error.lock_failed "$lock_file")"
+  else
+    flock -n 9 || error "$(t error.lock_failed "$lock_file")"
+  fi
   if [[ "${__DEPLOY_LOCK_EXIT_REGISTERED:-0}" != "1" ]]; then
     deploy_add_exit_handler release_lock
     __DEPLOY_LOCK_EXIT_REGISTERED=1

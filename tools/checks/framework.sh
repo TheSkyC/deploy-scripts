@@ -194,3 +194,43 @@ check_binary_app_download_integrity() {
     bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
   ' _ "$ROOT_DIR"
 }
+
+
+# Guardrail: acquire_lock must open lock files read-write (annotation
+# content survives acquisitions), keep failing fast by default, and honor
+# DEPLOY_LOCK_WAIT_SECONDS as an optional bounded wait.
+check_acquire_lock_preserves_file_and_waits() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    lock_dir="$(mktemp -d)"
+    trap '\''rm -rf "$lock_dir"'\'' EXIT
+    lock_file="${lock_dir}/app.lock"
+    printf "holder-annotation" > "$lock_file"
+
+    # Fail-fast acquisition (default) succeeds on a free lock file and must
+    # not truncate annotations already stored in it.
+    acquire_lock "$lock_file" 2>/dev/null
+    [[ "$(cat "$lock_file")" == "holder-annotation" ]] \
+      || { echo "acquire_lock truncated the lock file" >&2; exit 1; }
+    release_lock
+
+    # Fail-fast mode still aborts while another process holds the lock.
+    {
+      exec 3>"$lock_file"
+      flock -x 3
+      sleep 0.4
+      flock -u 3
+    } &
+    hold_pid=$!
+    if ( acquire_lock "$lock_file" ) >/dev/null 2>&1; then
+      echo "acquire_lock succeeded while the lock was held" >&2
+      exit 1
+    fi
+
+    # Wait mode acquires the same lock once the holder releases it.
+    DEPLOY_LOCK_WAIT_SECONDS=10 acquire_lock "$lock_file" 2>/dev/null
+    release_lock
+    wait "$hold_pid"
+  ' _ "$ROOT_DIR"
+}

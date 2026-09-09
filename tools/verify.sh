@@ -471,6 +471,7 @@ main() {
       run_isolated_check check_atomic_write_command_file_helper
       run_isolated_check check_custom_app_http_health_probes_use_shared_helper
       run_isolated_check check_binary_app_download_integrity
+      run_isolated_check check_acquire_lock_preserves_file_and_waits
       run_isolated_check check_custom_executable_installs_use_shared_helper
       run_isolated_check check_update_rollback_cleanup_uses_shared_helper
       run_isolated_check check_apt_sources_are_atomic
