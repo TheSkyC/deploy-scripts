@@ -7890,19 +7890,19 @@ deploy_app_impl_file_for() {
 }
 
 deploy_app_script_name_for() {
-  local app_id="$1"
-  case "$app_id" in
-    blog) echo "install_hugo_blog.sh" ;;
-    *) echo "install_${app_id//-/_}.sh" ;;
-  esac
+  local app_id="$1" impl_file
+  # The root wrapper name mirrors the registry implementation file (for
+  # example blog -> install_hugo_blog.sh), so derive it from the spec
+  # instead of maintaining an id-to-name special case.
+  impl_file="$(deploy_app_impl_file_for "$app_id")" || return 1
+  printf '%s\n' "${impl_file##*/}"
 }
 
 deploy_app_bundled_impl_script_name_for() {
-  local app_id="$1"
-  case "$app_id" in
-    blog) echo "install_hugo_blog_impl.sh" ;;
-    *) echo "install_${app_id}_impl.sh" ;;
-  esac
+  local app_id="$1" impl_file base
+  impl_file="$(deploy_app_impl_file_for "$app_id")" || return 1
+  base="${impl_file##*/}"
+  printf '%s\n' "${base%.sh}_impl.sh"
 }
 
 deploy_app_name_for() {
@@ -21554,7 +21554,7 @@ do_restore() {
 }
 __DEPLOY_APP_IMPL_SCRIPT_END__
 
-__DEPLOY_APP_IMPL_SCRIPT__ install_cpa-stack_impl.sh
+__DEPLOY_APP_IMPL_SCRIPT__ install_cpa_stack_impl.sh
 #!/usr/bin/env bash
 
 # shellcheck disable=SC2034

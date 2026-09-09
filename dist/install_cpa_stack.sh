@@ -6667,7 +6667,7 @@ compose_health() {
 }
 
 # ----- lib/app_loader.sh -----
-BUNDLED_APP_IMPL_SCRIPT_NAME="install_cpa-stack_impl.sh"
+BUNDLED_APP_IMPL_SCRIPT_NAME="install_cpa_stack_impl.sh"
 
 ensure_bundled_impl_dir() {
   [[ "${DEPLOY_BUNDLED:-0}" == "1" ]] || return 0
