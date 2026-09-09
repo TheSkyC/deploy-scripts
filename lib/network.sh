@@ -28,7 +28,16 @@ json_tag_name() {
   if [[ "${2:-}" == "--strip-v" ]]; then
     strip_v=true
   fi
-  if echo "test" | grep -qP 'test' 2>/dev/null; then
+  # The grep -P probe forks a subshell; cache the result per process so
+  # version lookups that resolve many assets do not re-probe every call.
+  if [[ -z "${__DEPLOY_GREP_P_AVAILABLE:-}" ]]; then
+    if echo "test" | grep -qP 'test' 2>/dev/null; then
+      __DEPLOY_GREP_P_AVAILABLE=1
+    else
+      __DEPLOY_GREP_P_AVAILABLE=0
+    fi
+  fi
+  if [[ "$__DEPLOY_GREP_P_AVAILABLE" == "1" ]]; then
     tag=$(printf '%s' "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
   fi
   if [[ -z "${tag:-}" ]]; then
