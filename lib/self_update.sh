@@ -262,7 +262,7 @@ self_update_check_json() {
 self_update_fetch_file() {
   local url="$1" output="$2" max_bytes="$3" curl_error=""
   self_update_validate_https_url "$url" || return 1
-  if ! curl_error="$(curl -fsSL --proto '=https' --proto-redir '=https' \
+  if ! curl_error="$(download_retry curl -fsSL --proto '=https' --proto-redir '=https' \
     --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" \
     --max-filesize "$max_bytes" -o "$output" "$url" 2>&1)"; then
     # Surface curl's own failure reason (DNS, TLS, timeout, --max-filesize)
@@ -426,7 +426,7 @@ self_update_check_main() {
   chmod 700 "$temp_dir" || { rm -rf "$temp_dir"; return 1; }
   manifest_file="${temp_dir}/manifest.json"
   local curl_error=""
-  if ! curl_error="$(curl -fsSL --proto '=https' --proto-redir '=https' --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" --max-filesize "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" -o "$manifest_file" "$manifest_url" 2>&1)"; then
+  if ! curl_error="$(download_retry curl -fsSL --proto '=https' --proto-redir '=https' --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" --max-filesize "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" -o "$manifest_file" "$manifest_url" 2>&1)"; then
     rm -rf "$temp_dir"
     if [[ "$json" == 1 ]]; then self_update_check_json check_failed "manifest download failed${curl_error:+: $curl_error}"; else printf 'manifest download failed%s\n' "${curl_error:+: $curl_error}" >&2; fi
     return 1

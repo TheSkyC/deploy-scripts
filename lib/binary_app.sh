@@ -757,7 +757,7 @@ ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    if curl -fL --progress-bar -o "$target" "$url"; then
+    if download_retry curl -fL --progress-bar -o "$target" "$url"; then
       return 0
     fi
     rm -f "$target" 2>/dev/null || true
@@ -799,7 +799,7 @@ bapp_fetch_checksum_digest() {
   local version="$1" asset="$2" url tmp digest
   url="$(bapp_checksum_asset_url "$version")" || error "$(t binary_app.error.checksum_fetch "unresolved")"
   tmp="$(mktemp "${TMPDIR:-/tmp}/ba-checksum.XXXXXX")" || error "$(t binary_app.error.checksum_fetch "$url")"
-  if ! curl -fsSL --proto '=https' --proto-redir '=https' \
+  if ! download_retry curl -fsSL --proto '=https' --proto-redir '=https' \
       --max-time "${DEPLOY_CHECKSUM_TIMEOUT_SECONDS:-30}" -o "$tmp" "$url"; then
     rm -f "$tmp" 2>/dev/null || true
     error "$(t binary_app.error.checksum_fetch "$url")"

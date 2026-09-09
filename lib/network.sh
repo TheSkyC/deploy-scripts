@@ -1,5 +1,27 @@
 #!/usr/bin/env bash
 
+# Bounded retry wrapper for download commands. A transient network blip must
+# not abort an install or self-update: re-run the command up to
+# DEPLOY_DOWNLOAD_RETRIES times (default 3) with DEPLOY_DOWNLOAD_RETRY_DELAY
+# seconds (default 2) between attempts, then return the final failure. The
+# command line is re-evaluated per attempt; callers keep their own cleanup and
+# diagnostics (download_retry itself prints nothing).
+download_retry() {
+  local max_attempts="${DEPLOY_DOWNLOAD_RETRIES:-3}" delay="${DEPLOY_DOWNLOAD_RETRY_DELAY:-2}" attempt=1
+  [[ "$max_attempts" =~ ^[0-9]+$ && "$max_attempts" -ge 1 ]] || max_attempts=3
+  [[ "$delay" =~ ^[0-9]+$ ]] || delay=2
+  while :; do
+    if "$@"; then
+      return 0
+    fi
+    if (( attempt >= max_attempts )); then
+      return 1
+    fi
+    sleep "$delay"
+    attempt=$((attempt + 1))
+  done
+}
+
 check_connectivity_urls() {
   local url
   for url in "$@"; do

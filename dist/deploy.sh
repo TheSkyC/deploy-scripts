@@ -803,6 +803,28 @@ service_status_label() {
 
 # ----- lib/network.sh -----
 
+# Bounded retry wrapper for download commands. A transient network blip must
+# not abort an install or self-update: re-run the command up to
+# DEPLOY_DOWNLOAD_RETRIES times (default 3) with DEPLOY_DOWNLOAD_RETRY_DELAY
+# seconds (default 2) between attempts, then return the final failure. The
+# command line is re-evaluated per attempt; callers keep their own cleanup and
+# diagnostics (download_retry itself prints nothing).
+download_retry() {
+  local max_attempts="${DEPLOY_DOWNLOAD_RETRIES:-3}" delay="${DEPLOY_DOWNLOAD_RETRY_DELAY:-2}" attempt=1
+  [[ "$max_attempts" =~ ^[0-9]+$ && "$max_attempts" -ge 1 ]] || max_attempts=3
+  [[ "$delay" =~ ^[0-9]+$ ]] || delay=2
+  while :; do
+    if "$@"; then
+      return 0
+    fi
+    if (( attempt >= max_attempts )); then
+      return 1
+    fi
+    sleep "$delay"
+    attempt=$((attempt + 1))
+  done
+}
+
 check_connectivity_urls() {
   local url
   for url in "$@"; do
@@ -5441,7 +5463,7 @@ ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    if curl -fL --progress-bar -o "$target" "$url"; then
+    if download_retry curl -fL --progress-bar -o "$target" "$url"; then
       return 0
     fi
     rm -f "$target" 2>/dev/null || true
@@ -5483,7 +5505,7 @@ bapp_fetch_checksum_digest() {
   local version="$1" asset="$2" url tmp digest
   url="$(bapp_checksum_asset_url "$version")" || error "$(t binary_app.error.checksum_fetch "unresolved")"
   tmp="$(mktemp "${TMPDIR:-/tmp}/ba-checksum.XXXXXX")" || error "$(t binary_app.error.checksum_fetch "$url")"
-  if ! curl -fsSL --proto '=https' --proto-redir '=https' \
+  if ! download_retry curl -fsSL --proto '=https' --proto-redir '=https' \
       --max-time "${DEPLOY_CHECKSUM_TIMEOUT_SECONDS:-30}" -o "$tmp" "$url"; then
     rm -f "$tmp" 2>/dev/null || true
     error "$(t binary_app.error.checksum_fetch "$url")"
@@ -6909,7 +6931,7 @@ self_update_check_json() {
 self_update_fetch_file() {
   local url="$1" output="$2" max_bytes="$3" curl_error=""
   self_update_validate_https_url "$url" || return 1
-  if ! curl_error="$(curl -fsSL --proto '=https' --proto-redir '=https' \
+  if ! curl_error="$(download_retry curl -fsSL --proto '=https' --proto-redir '=https' \
     --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" \
     --max-filesize "$max_bytes" -o "$output" "$url" 2>&1)"; then
     # Surface curl's own failure reason (DNS, TLS, timeout, --max-filesize)
@@ -7073,7 +7095,7 @@ self_update_check_main() {
   chmod 700 "$temp_dir" || { rm -rf "$temp_dir"; return 1; }
   manifest_file="${temp_dir}/manifest.json"
   local curl_error=""
-  if ! curl_error="$(curl -fsSL --proto '=https' --proto-redir '=https' --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" --max-filesize "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" -o "$manifest_file" "$manifest_url" 2>&1)"; then
+  if ! curl_error="$(download_retry curl -fsSL --proto '=https' --proto-redir '=https' --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" --max-filesize "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" -o "$manifest_file" "$manifest_url" 2>&1)"; then
     rm -rf "$temp_dir"
     if [[ "$json" == 1 ]]; then self_update_check_json check_failed "manifest download failed${curl_error:+: $curl_error}"; else printf 'manifest download failed%s\n' "${curl_error:+: $curl_error}" >&2; fi
     return 1
