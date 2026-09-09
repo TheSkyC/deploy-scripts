@@ -427,6 +427,86 @@ check_framework_i18n_keys_are_consistent() {
   }
 }
 
+# Format-string guard for translations: every registered en/zh pair must use
+# the same number of printf conversions, and neither side may contain a stray
+# % that is not a conversion or an escaped %%. Without this, a translator who
+# adds a literal "%" (for example "100% of disk") while the other language
+# keeps %s placeholders would make printf fail at runtime (i18n_print passes
+# the text as the format string). The existing consistency check only proves
+# t-call keys are registered.
+check_framework_i18n_format_pairs_are_consistent() {
+  python3 - <<'PY'
+import glob, re, shlex, sys
+
+spec = re.compile(r'%(?:[0-9]+\$)?[-+ #0]*[0-9]*(?:\.[0-9]+)?[a-zA-Z]')
+
+def count_specs(text):
+    count = 0
+    invalid = 0
+    i = 0
+    while i < len(text):
+        if text[i] != '%':
+            i += 1
+            continue
+        m = spec.match(text, i)
+        if m:
+            count += 1
+            i = m.end()
+            continue
+        if i + 1 < len(text) and text[i + 1] == '%':
+            i += 2
+            continue
+        invalid += 1
+        i += 1
+    return count, invalid
+
+def logical_lines(path):
+    raw = open(path, encoding='utf-8').read().splitlines()
+    lines = []
+    buf = ''
+    for line in raw:
+        buf = (buf + ' ' + line.lstrip()) if buf else line
+        if buf.rstrip().endswith('\\'):
+            buf = buf.rstrip()[:-1]
+            continue
+        lines.append(buf)
+        buf = ''
+    if buf:
+        lines.append(buf)
+    return lines
+
+failures = 0
+pairs = 0
+for path in sorted(glob.glob('lib/*.sh') + glob.glob('apps/*.sh') + glob.glob('impl/*.sh')):
+    for line in logical_lines(path):
+        m = re.match(r'(i18n_register|i18n_register_many)\s+(.*)', line.strip())
+        if not m:
+            continue
+        kind, rest = m.group(1), m.group(2)
+        try:
+            tokens = shlex.split(rest)
+        except ValueError as exc:
+            print('%s: cannot parse i18n registration: %s' % (path, exc), file=sys.stderr)
+            failures += 1
+            continue
+        groups = [tokens] if kind == 'i18n_register' else [tokens[i:i + 3] for i in range(0, len(tokens), 3)]
+        for group in groups:
+            if len(group) != 3:
+                continue
+            key, en, zh = group
+            pairs += 1
+            en_specs, en_invalid = count_specs(en)
+            zh_specs, zh_invalid = count_specs(zh)
+            if en_specs != zh_specs or en_invalid or zh_invalid:
+                failures += 1
+                print('%s: %s en/zh format mismatch (en specs=%s, zh specs=%s, en stray %%s=%s, zh stray %%s=%s): %r / %r' % (
+                    path, key, en_specs, zh_specs, en_invalid, zh_invalid, en, zh), file=sys.stderr)
+if failures:
+    print('i18n registration pairs must use matching printf conversions with no stray %% characters.', file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 check_app_localized_descriptions() {
   expect_app_description cyberstrikeai en "Source build deployment with Go, Python, systemd, Nginx, and backups."
   expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"

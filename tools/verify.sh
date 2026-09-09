@@ -386,6 +386,7 @@ main() {
       check_blog_localized_defaults
       check_app_localized_descriptions
       check_framework_i18n_keys_are_consistent
+      check_framework_i18n_format_pairs_are_consistent
       echo "Dispatch verification passed"
       return 0
       ;;
