@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
+
 CPA_DOMAIN="${CPA_DOMAIN:-}"
 CPAMP_DOMAIN="${CPAMP_DOMAIN:-}"
 ENABLE_HTTPS="${ENABLE_HTTPS:-true}"

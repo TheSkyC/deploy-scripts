@@ -7853,6 +7853,10 @@ main "$@"
 exit 0
 __DEPLOY_APP_IMPL_SCRIPT__
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 VW_DOMAIN="${VW_DOMAIN:-vault.example.com}"

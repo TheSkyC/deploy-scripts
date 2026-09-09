@@ -7588,6 +7588,10 @@ main "$@"
 exit 0
 __DEPLOY_APP_IMPL_SCRIPT__
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 BLOG_DOMAIN="${BLOG_DOMAIN:-blog.example.com}"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"

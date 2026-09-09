@@ -14001,6 +14001,10 @@ __DEPLOY_APP_DEFINITION_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_newapi_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -14321,6 +14325,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_sub2api_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 PORT="${PORT:-8082}"
@@ -16137,6 +16145,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_vaultwarden_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 VW_DOMAIN="${VW_DOMAIN:-vault.example.com}"
@@ -18080,6 +18092,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_cyberstrikeai_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 CSAI_DOMAIN="${CSAI_DOMAIN:-}"
@@ -19295,6 +19311,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_hugo_blog_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 BLOG_DOMAIN="${BLOG_DOMAIN:-blog.example.com}"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"
@@ -20649,6 +20669,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_tickflow_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -21431,6 +21455,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_cpa-stack_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 
 CPA_DOMAIN="${CPA_DOMAIN:-}"
 CPAMP_DOMAIN="${CPAMP_DOMAIN:-}"
@@ -22651,6 +22679,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_ntfy_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -22770,6 +22802,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_meilisearch_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -22884,6 +22920,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_alist_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -23041,6 +23081,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_filebrowser_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -23150,6 +23194,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_navidrome_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -23266,6 +23314,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_frps_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -23406,6 +23458,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_gitea_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -23546,6 +23602,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_gotify_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -23662,6 +23722,10 @@ __DEPLOY_APP_IMPL_SCRIPT_END__
 
 __DEPLOY_APP_IMPL_SCRIPT__ install_beszel_impl.sh
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
