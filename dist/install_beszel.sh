@@ -2132,7 +2132,9 @@ app_verify_latest_backup() {
 
 # Extract one top-level string field from a manifest.json produced by
 # backup_write_manifest. Prints the raw (still escaped) value; returns nonzero
-# when the field is absent or the document is not the expected shape.
+# when the field is absent or the document is not the expected shape. A quote
+# escaped with an odd number of backslashes is part of the value, so the field
+# is not truncated at the first embedded \" the way a naive split would.
 backup_manifest_field() {
   local manifest="$1" field="$2"
   [[ -f "$manifest" ]] || return 1
@@ -2145,9 +2147,24 @@ backup_manifest_field() {
         sub(/^[[:space:]]*/, "", rest)
         if (substr(rest, 1, 1) == "\"") {
           value = substr(rest, 2)
-          end = index(value, "\"")
-          if (end > 1 || length(value) == 0) {
-            print substr(value, 1, end - 1)
+          if (length(value) == 0) {
+            print ""
+            found = 1
+            exit
+          }
+          # Walk the raw value one character at a time: a backslash escapes
+          # the next character (so \" stays inside the value), and the first
+          # unescaped quote closes the field.
+          close_idx = 0
+          i = 1
+          while (i <= length(value)) {
+            ch = substr(value, i, 1)
+            if (ch == "\\") { i += 2; continue }
+            if (ch == "\"") { close_idx = i; break }
+            i++
+          }
+          if (close_idx > 0) {
+            print substr(value, 1, close_idx - 1)
             found = 1
             exit
           }

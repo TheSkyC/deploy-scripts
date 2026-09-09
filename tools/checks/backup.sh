@@ -2957,3 +2957,33 @@ PY
   ' | grep -q ok
   rm -rf "$evil_tmp"
 }
+
+# The manifest field parser must not truncate a value at an embedded quote
+# escaped with a backslash (for example a message field that legitimately
+# contains \" inside JSON), while plain values keep parsing as before.
+check_backup_manifest_field_skips_escaped_quotes() {
+  local tmp_dir manifest field
+  tmp_dir="$(mktemp -d)"
+  manifest="${tmp_dir}/quoted.json"
+  printf '%s\n' '{"app":"say \"hi\"","version":"a\\b","sha256":"abc"}' > "$manifest" \
+    || { rm -rf "$tmp_dir"; return 1; }
+  field="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    backup_manifest_field "$1" app || exit 1
+  ' _ "$manifest")" || { rm -rf "$tmp_dir"; return 1; }
+  [[ "$field" == 'say \"hi\"' ]] || { echo "app field truncated at escaped quote: ${field}" >&2; rm -rf "$tmp_dir"; return 1; }
+  field="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    backup_manifest_field "$1" version || exit 1
+  ' _ "$manifest")" || { rm -rf "$tmp_dir"; return 1; }
+  [[ "$field" == 'a\\b' ]] || { echo "version field misparsed around backslashes: ${field}" >&2; rm -rf "$tmp_dir"; return 1; }
+  field="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    backup_manifest_field "$1" sha256 || exit 1
+  ' _ "$manifest")" || { rm -rf "$tmp_dir"; return 1; }
+  [[ "$field" == abc ]] || { echo "sha256 field misparsed: ${field}" >&2; rm -rf "$tmp_dir"; return 1; }
+  rm -rf "$tmp_dir"
+}
