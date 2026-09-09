@@ -32,7 +32,12 @@ show_manager_menu() {
 
   prompt "$(t manager.selection_prompt)"
   local choice app_id status
-  read -r choice
+  if ! read -r choice; then
+    # stdin reached EOF (non-TTY/scripted invocation): print the central
+    # usage text instead of failing on the read.
+    manager_usage
+    return 1
+  fi
   case "${choice,,}" in
     s|status-all) manager_status_main status-all; return ;;
     p|problems) manager_status_main problems; return ;;

@@ -380,6 +380,7 @@ main() {
       check_no_argument_menu
       check_manager_list
       check_manager_menu_shortcuts
+      check_no_tty_menu_usage
       check_app_registry_metadata
       check_app_registry_capabilities
       check_blog_localized_defaults

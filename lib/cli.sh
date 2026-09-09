@@ -73,7 +73,12 @@ show_menu() {
   echo
   prompt "$(t common.selection_prompt)"
   local choice
-  read -r choice
+  if ! read -r choice; then
+    # stdin reached EOF (non-TTY/scripted invocation): there is no selection
+    # to dispatch, so show the usage text instead of failing on the read.
+    usage
+    return 1
+  fi
   dispatch_action "$choice"
 }
 
