@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Standalone consumers (guards, validators) reach the shared interpreter
+# helper through this relative self-source; the checkout and the bundled
+# release load lib/python.sh (or its emitted copy) before this file.
+if ! declare -F deploy_python_cmd >/dev/null 2>&1; then
+  source "${DEPLOY_FRAMEWORK_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}/python.sh"
+fi
+
 # Framework identity, release-manifest validation, and managed-release activation.
 # Checkout and standalone executions remain strictly read-only.
 
@@ -604,7 +611,7 @@ self_update_interrupted_cleanup() {
 }
 
 self_update_smoke_check() {
-  local release_root="$1" output_dir status command_output
+  local release_root="$1" output_dir status command_output python_bin
   output_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-scripts-smoke.XXXXXX")" || return 1
   chmod 700 "$output_dir" || { rm -rf "$output_dir"; return 1; }
   command_output="${output_dir}/list.out"
@@ -616,7 +623,16 @@ self_update_smoke_check() {
     rm -rf "$output_dir"
     return 1
   fi
-  if ! python - "${output_dir}/version.out" <<'PY'
+  # JSON payload assertions need a Python interpreter; hosts may only provide
+  # python3. When neither interpreter exists, the commands above already
+  # prove the release starts, so skip the content assertions with a warning
+  # instead of failing activation on a hard runtime dependency.
+  if ! python_bin="$(deploy_python_cmd)"; then
+    warn "python3/python not found; skipping self-update smoke JSON assertions."
+    rm -rf "$output_dir"
+    return 0
+  fi
+  if ! "$python_bin" - "${output_dir}/version.out" <<'PY'
 import json
 import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
@@ -632,7 +648,7 @@ PY
     rm -rf "$output_dir"
     return 1
   fi
-  python - "${output_dir}/status.out" <<'PY'
+  "$python_bin" - "${output_dir}/status.out" <<'PY'
 import json
 import sys
 with open(sys.argv[1], encoding="utf-8") as handle:

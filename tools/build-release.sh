@@ -222,7 +222,9 @@ build_manager() {
     emit_release_root_setup
     echo
     emit_common_release_libs
-    emit_release_files lib/self_update.sh lib/app_registry.sh
+    # lib/python.sh must precede self_update.sh: its top-level guard sources
+    # it on demand, and the bundled layout has no standalone file to source.
+    emit_release_files lib/python.sh lib/self_update.sh lib/app_registry.sh
     emit_release_files "${MANAGER_ONLY_RELEASE_LIB_FILES[@]}"
     emit_app_loader_file
     emit_release_files lib/cli.sh lib/manager_security_doctor.sh lib/manager_cli.sh
