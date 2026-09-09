@@ -1230,23 +1230,21 @@ operation_stream_error() {
   operation_log_stream "$log_path" >&2
 }
 
-operation_discard_output_streams() {
+# Close the operation output capture. finish mode (default) waits for the
+# stream readers to drain and exit after the wrapped action closed its output;
+# discard mode first stops the readers so an interrupted operation cannot block
+# on them. Both paths then close the saved descriptors and remove the capture
+# directory.
+operation_close_output_streams() {
+  local mode="${1:-finish}"
   local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
   [[ -n "$output_dir" ]] || return 0
-  [[ -z "$stdout_pid" ]] || kill "$stdout_pid" 2>/dev/null || true
-  [[ -z "$stderr_pid" ]] || kill "$stderr_pid" 2>/dev/null || true
+  if [[ "$mode" == "discard" ]]; then
+    [[ -z "$stdout_pid" ]] || kill "$stdout_pid" 2>/dev/null || true
+    [[ -z "$stderr_pid" ]] || kill "$stderr_pid" 2>/dev/null || true
+  fi
   [[ -z "$stdout_pid" ]] || wait "$stdout_pid" 2>/dev/null || true
   [[ -z "$stderr_pid" ]] || wait "$stderr_pid" 2>/dev/null || true
-  [[ -z "$saved_stdout_fd" ]] || eval "exec ${saved_stdout_fd}>&-" || true
-  [[ -z "$saved_stderr_fd" ]] || eval "exec ${saved_stderr_fd}>&-" || true
-  rm -rf -- "$output_dir"
-  unset OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD
-}
-operation_finish_output_streams() {
-  local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
-  [[ -n "$output_dir" ]] || return 0
-  [[ -z "$stdout_pid" ]] || wait "$stdout_pid" || true
-  [[ -z "$stderr_pid" ]] || wait "$stderr_pid" || true
   [[ -z "$saved_stdout_fd" ]] || eval "exec ${saved_stdout_fd}>&-" || true
   [[ -z "$saved_stderr_fd" ]] || eval "exec ${saved_stderr_fd}>&-" || true
   rm -rf -- "$output_dir"
@@ -1450,9 +1448,9 @@ operation_action_exit_trap() {
       "${OPERATION_INTERRUPTION_CLEANUP_FN}" "$status" || true
     fi
     if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]]; then
-      operation_discard_output_streams || true
+      operation_close_output_streams discard || true
     else
-      operation_finish_output_streams || true
+      operation_close_output_streams finish || true
     fi
     if [[ "$status" -eq 0 ]]; then
       operation_step_finish execute succeeded || true
@@ -1539,7 +1537,7 @@ operation_run_app_action() {
   # `exit`, errexit termination, and ordinary non-zero returns alike.
   "$function_name" "$@" >"${output_dir}/stdout" 2>"${output_dir}/stderr"
   status=$?
-  operation_finish_output_streams || true
+  operation_close_output_streams finish || true
   operation_restore_signal_traps || true
   operation_restore_exit_trap "$previous_trap" || true
   if [[ "$status" -eq 0 ]]; then
