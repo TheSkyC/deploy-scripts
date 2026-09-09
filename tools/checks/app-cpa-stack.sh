@@ -222,6 +222,28 @@ printf ok
 CPATEST
   )"
   [[ "$output" == ok ]] || return 1
+  # Pin format validation must reject malformed tags in every action
+  # preflight, not only during first install, so a mistyped persisted pin
+  # cannot silently hit the wrong endpoint.
+  output="$($BASH_BIN <<'CPATEST'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source apps/cpa_stack.sh >/dev/null 2>&1
+set +e
+invalid="$( { CPA_VERSION="1.2.3"; CPAMP_VERSION=""; cpa_stack_validate_pins; } 2>&1 )"
+invalid_rc=$?
+set -e
+[[ "$invalid_rc" -ne 0 ]]
+[[ "$invalid" == *CPA_VERSION* ]]
+set +e
+valid_rc="$( { CPA_VERSION="v1.2.3-rc1"; CPAMP_VERSION="v0.4.1"; cpa_stack_validate_pins; } 2>&1 )"
+set -e
+[[ "$valid_rc" == "" ]]
+printf ok
+CPATEST
+  )"
+  [[ "$output" == ok ]] || return 1
   grep -Fq 'CPA_VERSION="${CPA_VERSION:-}"' impl/install_cpa_stack.sh
   grep -Fq 'CPAMP_VERSION="${CPAMP_VERSION:-}"' impl/install_cpa_stack.sh
   grep -Fq 'CPA_VERSION CPAMP_VERSION' impl/install_cpa_stack.sh
