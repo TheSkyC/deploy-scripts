@@ -9,6 +9,10 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/sub2api}"
 SERVICE_NAME="${SERVICE_NAME:-sub2api}"
 SERVICE_USER="${SERVICE_USER:-sub2api}"
 GITHUB_REPO="${GITHUB_REPO:-Wei-Shaw/sub2api}"
+# Leave SUB2API_VERSION empty to follow the moving GitHub latest release. Set
+# an exact GitHub release tag (for example v1.2.3) to make install and update
+# reproducible.
+SUB2API_VERSION="${SUB2API_VERSION:-}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/sub2api-backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 SUB2API_DOMAIN="${SUB2API_DOMAIN:-}"
@@ -26,7 +30,7 @@ BIN_PATH="${INSTALL_DIR}/sub2api"
 CONFIG_KEYS=(
   PORT INSTALL_DIR DATA_DIR LOG_DIR CONFIG_DIR SERVICE_NAME SERVICE_USER
   GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS PG_USER PG_PASS PG_DB PG_DSN
-  SUB2API_DOMAIN SUB2API_BIND_ADDR SUB2API_TZ INSTALLED_VERSION
+  SUB2API_DOMAIN SUB2API_BIND_ADDR SUB2API_TZ SUB2API_VERSION INSTALLED_VERSION
   INSTALLED_POSTGRES_VERSION INSTALLED_REDIS_VERSION
 )
 _SUB2API_DERIVE_PATHS() {
@@ -83,15 +87,25 @@ _sub2api_attach_component_manifest() {
   version_check_attach_components_json "$release_json" "$components_json"
 }
 _sub2api_check_update_json() {
-  local release_json
-  release_json="$(app_check_update_json "sub2api" "$1" "${2:-0}" "${3:-0}")"
+  local release_json installed="${1:-}" refresh="${2:-0}" no_network="${3:-0}"
+  _sub2api_load_version_config
+  installed="${INSTALLED_VERSION:-$installed}"
+  if [[ -n "${SUB2API_VERSION:-}" ]]; then
+    release_json="$(version_check_pinned_release_json "$installed" "$SUB2API_VERSION")"
+  else
+    release_json="$(app_check_update_json "sub2api" "$installed" "$refresh" "$no_network")"
+  fi
   _sub2api_attach_component_manifest "$release_json"
 }
 APP_CHECK_UPDATE_FN=_sub2api_check_update_json
 _sub2api_status_version_json() {
   local release_json
   _sub2api_load_version_config
-  release_json="$(version_check_cached_binary_release_json "sub2api" "${INSTALLED_VERSION:-}")"
+  if [[ -n "${SUB2API_VERSION:-}" ]]; then
+    release_json="$(version_check_pinned_release_json "${INSTALLED_VERSION:-}" "$SUB2API_VERSION")"
+  else
+    release_json="$(version_check_cached_binary_release_json "sub2api" "${INSTALLED_VERSION:-}")"
+  fi
   _sub2api_attach_component_manifest "$release_json"
 }
 APP_STATUS_VERSION_FN=_sub2api_status_version_json
@@ -166,6 +180,12 @@ _validate_config_values() {
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  # A pinned tag must look like an upstream GitHub release tag (vX.Y.Z);
+  # anything else would produce a broken download URL.
+  if [[ -n "$SUB2API_VERSION" ]] \
+      && ! [[ "$SUB2API_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+    error "$(t app.sub2api.error.pinned_version_invalid "$SUB2API_VERSION")"
+  fi
 }
 
 _tag_to_ver() { echo "${1#v}"; }
@@ -1042,11 +1062,17 @@ do_install() {
   acquire_lock
   step "$(t app.sub2api.step.latest)"
   check_connectivity
-  info "$(t app.sub2api.info.query_release)"
   local LATEST
-  LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
-  [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.version_lookup)"
-  success "$(t app.sub2api.success.latest_version "${BOLD}${LATEST}${NC}")"
+  if [[ -n "${SUB2API_VERSION:-}" ]]; then
+    LATEST="$SUB2API_VERSION"
+    success "$(t app.sub2api.success.pinned_version "${BOLD}${LATEST}${NC}")"
+  else
+    info "$(t app.sub2api.info.query_release)"
+    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
+    [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.version_lookup)"
+    success "$(t app.sub2api.success.latest_version "${BOLD}${LATEST}${NC}")"
+    info "$(t app.sub2api.info.unpinned_version "$LATEST")"
+  fi
   local DOWNLOAD_URL; DOWNLOAD_URL=$(get_download_url "$LATEST")
   info "$(t app.sub2api.info.download_url "$DOWNLOAD_URL")"
   step "$(t app.sub2api.step.base_deps)"
@@ -1186,14 +1212,25 @@ do_update() {
     && error "$(t app.sub2api.error.binary_missing_install "$BIN_PATH")"
   step "$(t app.sub2api.step.check_update)"
   check_connectivity
-  info "$(t app.sub2api.info.query_release)"
-  local LATEST; LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
-  [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.latest_lookup)"
+  local LATEST
+  if [[ -n "${SUB2API_VERSION:-}" ]]; then
+    LATEST="$SUB2API_VERSION"
+    info "$(t app.sub2api.info.pinned_target "${YELLOW}${LATEST}${NC}")"
+  else
+    info "$(t app.sub2api.info.query_release)"
+    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
+    [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.latest_lookup)"
+    info "$(t app.sub2api.info.github_latest "${YELLOW}${LATEST}${NC}")"
+    info "$(t app.sub2api.info.unpinned_version "$LATEST")"
+  fi
   local CURRENT="${INSTALLED_VERSION:-unknown}"
   info "$(t app.sub2api.info.current_version "${YELLOW}${CURRENT}${NC}")"
-  info "$(t app.sub2api.info.github_latest "${YELLOW}${LATEST}${NC}")"
   if [[ "$CURRENT" == "$LATEST" ]]; then
-    success "$(t app.sub2api.success.already_latest "$LATEST")"
+    if [[ -n "${SUB2API_VERSION:-}" ]]; then
+      success "$(t app.sub2api.success.already_pinned "$LATEST")"
+    else
+      success "$(t app.sub2api.success.already_latest "$LATEST")"
+    fi
     exit 0
   fi
   local _pre_svc_state
@@ -1386,6 +1423,19 @@ do_status() {
   fi
   echo -e "\n${BOLD}[$(t app.sub2api.status.version_info)]${NC}"
   echo -e "  $(t app.sub2api.status.installed_version): ${YELLOW}${INSTALLED_VERSION:-$(t app.sub2api.status.unknown)}${NC}"
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    if [[ -n "${SUB2API_VERSION:-}" ]]; then
+      if [[ -n "${INSTALLED_VERSION:-}" && "$INSTALLED_VERSION" == "$SUB2API_VERSION" ]]; then
+        echo -e "  ${GREEN}[✓]${NC} $(t app.sub2api.status.pin_ok "$SUB2API_VERSION")"
+      elif [[ -n "${INSTALLED_VERSION:-}" ]]; then
+        echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.pin_mismatch "$SUB2API_VERSION" "$INSTALLED_VERSION")"
+      else
+        echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.pin_set "$SUB2API_VERSION")"
+      fi
+    else
+      echo -e "  ${YELLOW}[!]${NC} $(t app.sub2api.status.unpinned)"
+    fi
+  fi
   if [[ -x "$BIN_PATH" ]]; then
     local _bin_ver
     _bin_ver=$("$BIN_PATH" --version 2>/dev/null | head -1 || t app.sub2api.status.binary_no_version)
