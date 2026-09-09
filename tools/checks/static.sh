@@ -474,6 +474,32 @@ check_binary_app_health_results_are_surfaced() {
   done
 }
 
+check_binary_app_summary_management_hints() {
+  awk '
+      /^bapp_management_command_script\(\) \{/ { in_helper=1 }
+      in_helper && /DEPLOY_BUNDLED:-0/ { saw_bundled=1 }
+      in_helper && /DEPLOY_MANAGER_ENTRYPOINT:-0/ { saw_manager=1 }
+      in_helper && /APP_ID:-\}/ { saw_app_id=1 }
+      in_helper && /printf .%q %q./ { saw_app_selector=1 }
+      /^bapp_summary\(\) \{/ { in_summary=1 }
+      in_summary && /bash \$\(bapp_management_command_script\) / { saw_summary_calls++ }
+      END {
+        if (!(saw_bundled && saw_manager && saw_app_id && saw_app_selector)) {
+          print "bapp_management_command_script must distinguish bundled scripts and the central manager, adding APP_ID in manager mode." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_summary_calls < 4) {
+          print "all four bapp_summary management hints must use bapp_management_command_script." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+  grep -Fq 'DEPLOY_MANAGER_ENTRYPOINT=1' bin/deploy.sh || {
+    echo "bin/deploy.sh must mark itself as the central manager entrypoint for summary hints." >&2
+    return 1
+  }
+}
+
 check_binary_app_unpinned_version_notice() {
   awk '
       /^bapp_install\(\)/ { current="install"; next }

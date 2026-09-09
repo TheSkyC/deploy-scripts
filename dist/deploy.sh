@@ -5721,6 +5721,21 @@ CRON
   success "$(t binary_app.success.tls_renewal)"
 }
 
+# Render the command prefix used by the install summary. Bundled scripts are
+# app-specific, while the central manager needs the app selector before the
+# action; per-app development wrappers already point directly at the app.
+bapp_management_command_script() {
+  if [[ "${DEPLOY_BUNDLED:-0}" == "1" ]]; then
+    printf '%q' "$0"
+    return 0
+  fi
+  if [[ "${DEPLOY_MANAGER_ENTRYPOINT:-0}" == "1" && -n "${APP_ID:-}" ]]; then
+    printf '%q %q' "$0" "$APP_ID"
+    return 0
+  fi
+  printf '%q' "$0"
+}
+
 # Print the install summary box (localized, generic fields). The second
 # argument is the health state: "ready" (default) or "pending" when the
 # service did not pass its HTTP health probe within the wait window.
@@ -5769,10 +5784,10 @@ bapp_summary() {
   echo "  =========================================================="
   echo -e "${NC}"
   echo -e "  ${BOLD}$(t binary_app.summary.management)${NC}"
-  echo -e "    ${CYAN}bash $0 status${NC}      - $(t binary_app.summary.status_cmd)"
-  echo -e "    ${CYAN}bash $0 update${NC}      - $(t binary_app.summary.update_cmd)"
-  echo -e "    ${CYAN}bash $0 backup${NC}      - $(t binary_app.summary.backup_cmd)"
-  echo -e "    ${CYAN}bash $0 uninstall${NC}   - $(t binary_app.summary.uninstall_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) status${NC}      - $(t binary_app.summary.status_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) update${NC}      - $(t binary_app.summary.update_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) backup${NC}      - $(t binary_app.summary.backup_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) uninstall${NC}   - $(t binary_app.summary.uninstall_cmd)"
   echo ""
   echo -e "  ${BOLD}$(t binary_app.summary.systemd)${NC}"
   echo -e "    ${CYAN}systemctl status ${SERVICE_NAME}${NC}     $(t binary_app.summary.show_status)"
