@@ -478,6 +478,7 @@ main() {
       run_isolated_check check_atomic_write_command_file_helper
       run_isolated_check check_custom_app_http_health_probes_use_shared_helper
       run_isolated_check check_binary_app_download_integrity
+      run_isolated_check check_binary_app_archive_members_are_validated
       run_isolated_check check_acquire_lock_preserves_file_and_waits
       run_isolated_check check_logging_colors_are_tty_gated
       run_isolated_check check_schedule_cron_expression_validator

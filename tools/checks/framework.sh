@@ -196,6 +196,62 @@ check_binary_app_download_integrity() {
 }
 
 
+# Guardrail: binary-app release archives must be member-validated before
+# extraction (tar.gz and zip), so a compromised upstream release or replaced
+# tag cannot write outside the staging directory. The tar.gz branch is proven
+# behaviorally with a traversal member; the zip branch shares the same helper.
+check_binary_app_archive_members_are_validated() {
+  BA_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" <<'MEMBERTEST'
+set -euo pipefail
+source "$BA_TEST_ROOT/lib/core.sh"
+APP_ID="membershiptest" APP_NAME="MembershipTest"
+GITHUB_REPO="example/membershiptest"
+BA_ARCH="amd64"
+BA_ASSET_TEMPLATE="membershiptest-ARCH.tar.gz"
+BA_BIN_NAME="membershiptest"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/ba-members.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+# Clean tar.gz: the binary is found inside the staging directory.
+python3 - "$tmp/good.tar.gz" <<'PY'
+import sys, tarfile, io
+with tarfile.open(sys.argv[1], "w:gz") as t:
+    data = b"payload-bytes"
+    info = tarfile.TarInfo("membershiptest")
+    info.size = len(data)
+    t.addfile(info, io.BytesIO(data))
+PY
+BA_ARCHIVE_TYPE="tar.gz"
+mkdir "$tmp/good-stage"
+good_bin="$(ba_prepare_binary "$tmp/good.tar.gz" "$tmp/good-stage")"
+[[ -n "$good_bin" && -f "$good_bin" ]]   || { echo "clean tar.gz did not produce the staged binary" >&2; exit 1; }
+
+# Traversal tar.gz: must be rejected before extraction.
+python3 - "$tmp/evil.tar.gz" <<'PY'
+import sys, tarfile, io
+with tarfile.open(sys.argv[1], "w:gz") as t:
+    data = b"evil"
+    info = tarfile.TarInfo("../escaped-membershiptest")
+    info.size = len(data)
+    t.addfile(info, io.BytesIO(data))
+PY
+mkdir "$tmp/evil-stage"
+if ( BA_ARCHIVE_TYPE="tar.gz" ba_prepare_binary "$tmp/evil.tar.gz" "$tmp/evil-stage" ) >/dev/null 2>&1; then
+  echo "tar.gz with a ../ member was accepted" >&2
+  exit 1
+fi
+[[ ! -e "$tmp/../escaped-membershiptest" ]]   || { echo "traversal archive escaped the staging directory" >&2; exit 1; }
+[[ -z "$(find "$tmp/evil-stage" -mindepth 1 -print -quit 2>/dev/null)" ]]   || { echo "traversal archive wrote into the staging directory" >&2; exit 1; }
+
+# Unreadable archive: rejected without touching the stage.
+mkdir "$tmp/missing-stage"
+if ( BA_ARCHIVE_TYPE="tar.gz" ba_prepare_binary "$tmp/does-not-exist.tar.gz" "$tmp/missing-stage" ) >/dev/null 2>&1; then
+  echo "unreadable archive was accepted" >&2
+  exit 1
+fi
+MEMBERTEST
+}
+
 # Guardrail: acquire_lock must open lock files read-write (annotation
 # content survives acquisitions), keep failing fast by default, and honor
 # DEPLOY_LOCK_WAIT_SECONDS as an optional bounded wait.

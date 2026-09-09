@@ -5520,15 +5520,43 @@ bapp_verify_download() {
   success "$(t binary_app.success.checksum_verified "$asset")"
 }
 
+# List a downloaded release archive and reject path-traversal members
+# (absolute paths, .. segments, and Windows backslashes) before extraction.
+# A compromised upstream release or a replaced tag must not be able to write
+# outside the staging directory. Returns nonzero for unreadable archives.
+bapp_archive_members_are_safe() {
+  local downloaded="$1" listing member
+  case "${BA_ARCHIVE_TYPE:-none}" in
+    tar.gz)
+      listing="$(tar -tzf "$downloaded" 2>/dev/null)" || return 1
+      ;;
+    zip)
+      command -v unzip >/dev/null 2>&1 || return 1
+      listing="$(unzip -Z1 "$downloaded" 2>/dev/null)" || return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+  while IFS= read -r member; do
+    [[ -n "$member" ]] || continue
+    case "$member" in
+      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*) return 1 ;;
+    esac
+  done <<< "$listing"
+}
+
 # Extract/copy the downloaded release into a staging directory and print the
 # path of the binary inside it.  Handles raw binaries, tar.gz, and zip.
 ba_prepare_binary() {
   local downloaded="$1" stage="$2" found
   case "${BA_ARCHIVE_TYPE:-none}" in
     tar.gz)
-      tar -xzf "$downloaded" -C "$stage" || return 1
+      bapp_archive_members_are_safe "$downloaded" || return 1
+      tar -xzf "$downloaded" -C "$stage" --no-same-owner || return 1
       ;;
     zip)
+      bapp_archive_members_are_safe "$downloaded" || return 1
       command -v unzip >/dev/null 2>&1 || return 1
       unzip -q "$downloaded" -d "$stage" || return 1
       ;;
