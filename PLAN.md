@@ -6,22 +6,30 @@
 
 ## 0. 2026-09 Linux 修复与优化推进
 
-当前目标是在 Linux 开发环境（bash 5.2、systemd、shellcheck；Docker 守护进程不可用）中健壮地推进此前的审查清单。验证基线为仓库 `tools/verify.sh`，涉及 dist 的源码变更必须用
-`DEPLOY_BUILD_COMMIT=verified SOURCE_DATE_EPOCH=0 bash tools/build-release.sh all` 重建并同 commit 提交。
+当前目标是在 Linux 开发环境中健壮地推进此前的审查清单。本机基线为 bash 5.2、Debian 包 Docker（经镜像拉取基础镜像）、shellcheck 0.11.0 和仅带 `python3` 的 PATH；`python` 兼容 shim 已在脚本与验证套件内解决。验证基线为仓库 `tools/verify.sh`，涉及 dist 的源码变更必须重建 generated release 并同 commit 提交。
 
 ### 已完成
 
 - Python 可移植性：优先使用 `python3`，保留 `DEPLOY_PYTHON` 覆盖，验证套件在仅 `python3` 环境也可运行。
 - i18n：注册缺失的 `status.title`，并为框架共享键增加一致性 guard。
-- binary app 安装摘要：TLS 场景显示正确 `https` 与托管 nginx 代理状态。
-- TLS 失败回滚：清理 nginx 站点、默认站点备份与续签 cron；续签 cron 改为按应用命名；卸载仅在没有其他托管站点时删除旧全局 cron。
+- binary app 安装摘要：TLS 场景显示正确 `https` 与托管 nginx 代理状态；中央 `deploy.sh` 的管理命令提示补上应用选择器，bundled/per-app 提示保持直接动作，并增加 shell 引用转义。
+- TLS 失败回滚：清理 nginx 站点、默认站点备份与续签 cron；续签 cron 改为按应用命名；卸载仅在没有其他托管站点时删除旧全局 cron。新增 guard 覆盖失败安装、最终 nginx 校验失败和卸载清理。
+- CPA stack release 资产解析：兼容 GitHub tag 带/不带 `v` 前缀，修正 bash `local` 同行赋值的展开顺序问题，并增加解析 guard。
+- E2E 修复：CPA smoke 期望的配置路径从错误的 `/etc/cpa_stack-deploy.conf` 修正为 APP_ID 对应的 `/etc/cpa-stack-deploy.conf`；release fixture 增加 GitHub payload 所需的 `browser_download_url`。
 - 状态文档：补充 `DEPLOY_STATUS_TIMEOUT_SECONDS`、`DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS`、`DEPLOY_STATUS_NO_PROBE`、`DEPLOY_STATUS_NO_NETWORK`。
-- 凭据 redaction：把 operation 摘要、operation 日志与通知共用的正则收敛到 `operation_redact_text()`，防止不同出口漂移；`verify.sh operation` 通过。
+- 凭据 redaction：把 operation 摘要、operation 日志与通知共用的正则收敛到 `operation_redact_text()`，防止不同出口漂移。
 - 文档引用：修正 PLAN 对未跟踪工作日志的引用，避免新 clone 后出现悬空路径。
+
+### 验证结果
+
+- `bash tools/verify.sh all`：通过。
+- `sudo bash tools/e2e-smoke.sh`：五条场景全部通过（binary app、newapi、sub2api、pinned CPA stack、compose path）。
+- Docker 注意：当前网络不能直连 Docker Hub；可先拉取 `docker.m.daocloud.io/library/debian:bookworm-slim` 后 retag 为 `debian:bookworm-slim`。§9 的 Windows/Git-Bash 记录保留为历史背景。
 
 ### 已评估但不改
 
 - `__deploy_run_exit_handlers` 中的重复 handler 调用看似冗余，实际是用 `if __deploy_set_exit_status "$status"` 的条件上下文向 handler 传递退出码。简单合并分支会让非零状态触发 `set -e` 或丢失 `$?`，保持现状更安全。
+- `lib/operation.sh` 中的 `eval` 属于 trap/restore 场景的受控构造，未引入外部不可信输入。
 
 ### 后续候选
 
