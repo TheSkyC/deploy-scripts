@@ -868,7 +868,7 @@ print_summary() {
     fi
   fi
   echo ""
-  echo "$(t app.cyberstrikeai.summary.commands)"
+  t app.cyberstrikeai.summary.commands
   echo "  systemctl status ${SERVICE_NAME} --no-pager"
   echo "  journalctl -u ${SERVICE_NAME} -n 80 --no-pager"
   echo "  bash $0 status"
@@ -1092,13 +1092,13 @@ do_uninstall() {
   require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"
   step "$(t app.cyberstrikeai.step.uninstall)"
   echo -e "${RED}${BOLD}"
-  echo "$(t app.cyberstrikeai.uninstall.removes)"
+  t app.cyberstrikeai.uninstall.removes
   echo "  - $(t app.cyberstrikeai.uninstall.systemd "$SERVICE_NAME")"
   echo "  - $(t app.cyberstrikeai.uninstall.nginx "$NGINX_CONF")"
   echo "  - $(t app.cyberstrikeai.uninstall.logrotate_cron)"
   echo "  - $(t app.cyberstrikeai.uninstall.deploy_config "$CONF_FILE")"
   echo ""
-  echo "$(t app.cyberstrikeai.uninstall.keep_default)"
+  t app.cyberstrikeai.uninstall.keep_default
   echo -e "${NC}"
   local confirm
   if deploy_assume_yes; then

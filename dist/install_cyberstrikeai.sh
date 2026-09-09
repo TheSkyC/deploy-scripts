@@ -4609,14 +4609,14 @@ app_doctor_config_diff() {
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
       if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
-        echo "$(t doctor.config_diff_secret "$key")"
+        t doctor.config_diff_secret "$key"
       else
-        echo "$(t doctor.config_diff "$key" "$saved" "$current")"
+        t doctor.config_diff "$key" "$saved" "$current"
       fi
       changed=$((changed + 1))
     fi
   done
-  [[ "$changed" -eq 0 ]] && echo "$(t doctor.config_diff_none)"
+  [[ "$changed" -eq 0 ]] && t doctor.config_diff_none
   return 0
 }
 
@@ -6797,17 +6797,17 @@ show_banner() {
 }
 
 usage() {
-  echo "$(t common.usage "$0")" >&2
+  t common.usage "$0" >&2
   echo "      $(t common.no_argument_menu)" >&2
   if [[ "${1:-}" == "--help" ]] && declare -p CONFIG_KEYS >/dev/null 2>&1; then
     local key
     echo "" >&2
-    echo "$(t common.help_config_keys)" >&2
+    t common.help_config_keys >&2
     for key in "${CONFIG_KEYS[@]}"; do
       printf '  %-24s %s\n' "$key" "${!key:-}" >&2
     done
     echo "" >&2
-    echo "$(t common.help_env_hint)" >&2
+    t common.help_env_hint >&2
   fi
 }
 
@@ -6842,7 +6842,7 @@ app_dry_run_list_config() {
   [[ "${DEPLOY_DRY_RUN_SHOW_CONFIG:-0}" == "1" ]] || return 0
   local key
   if declare -p CONFIG_KEYS >/dev/null 2>&1; then
-    echo "$(t common.dry_run_config)" >&2
+    t common.dry_run_config >&2
     for key in "${CONFIG_KEYS[@]}"; do
       printf '  %-24s %s\n' "$key" "${!key:-}" >&2
     done
@@ -6851,7 +6851,7 @@ app_dry_run_list_config() {
 
 show_menu() {
   show_banner
-  echo "$(t common.choose_action)"
+  t common.choose_action
   echo
   echo "  1) install    - $(t menu.install_desc)"
   echo "  2) update     - $(t menu.update_desc)"
@@ -8417,7 +8417,7 @@ print_summary() {
     fi
   fi
   echo ""
-  echo "$(t app.cyberstrikeai.summary.commands)"
+  t app.cyberstrikeai.summary.commands
   echo "  systemctl status ${SERVICE_NAME} --no-pager"
   echo "  journalctl -u ${SERVICE_NAME} -n 80 --no-pager"
   echo "  bash $0 status"
@@ -8641,13 +8641,13 @@ do_uninstall() {
   require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"
   step "$(t app.cyberstrikeai.step.uninstall)"
   echo -e "${RED}${BOLD}"
-  echo "$(t app.cyberstrikeai.uninstall.removes)"
+  t app.cyberstrikeai.uninstall.removes
   echo "  - $(t app.cyberstrikeai.uninstall.systemd "$SERVICE_NAME")"
   echo "  - $(t app.cyberstrikeai.uninstall.nginx "$NGINX_CONF")"
   echo "  - $(t app.cyberstrikeai.uninstall.logrotate_cron)"
   echo "  - $(t app.cyberstrikeai.uninstall.deploy_config "$CONF_FILE")"
   echo ""
-  echo "$(t app.cyberstrikeai.uninstall.keep_default)"
+  t app.cyberstrikeai.uninstall.keep_default
   echo -e "${NC}"
   local confirm
   if deploy_assume_yes; then

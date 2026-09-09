@@ -788,14 +788,14 @@ app_doctor_config_diff() {
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
       if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
-        echo "$(t doctor.config_diff_secret "$key")"
+        t doctor.config_diff_secret "$key"
       else
-        echo "$(t doctor.config_diff "$key" "$saved" "$current")"
+        t doctor.config_diff "$key" "$saved" "$current"
       fi
       changed=$((changed + 1))
     fi
   done
-  [[ "$changed" -eq 0 ]] && echo "$(t doctor.config_diff_none)"
+  [[ "$changed" -eq 0 ]] && t doctor.config_diff_none
   return 0
 }
 

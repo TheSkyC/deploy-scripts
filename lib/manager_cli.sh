@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 manager_usage() {
-  echo "$(t manager.usage "$0")" >&2
-  echo "$(t manager.usage_central)" >&2
-  echo "$(t manager.usage_examples "$0" "$0" "$0")" >&2
-  echo "$(t manager.available_apps "$(deploy_app_ids | tr '\n' ' ' | sed 's/[[:space:]]*$//')")" >&2
+  t manager.usage "$0" >&2
+  t manager.usage_central >&2
+  t manager.usage_examples "$0" "$0" "$0" >&2
+  t manager.available_apps "$(deploy_app_ids | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >&2
 }
 
 show_manager_banner() {
@@ -14,7 +14,7 @@ show_manager_banner() {
 
 show_manager_menu() {
   show_manager_banner
-  echo "$(t manager.choose_app)"
+  t manager.choose_app
   echo
 
   local index=1 app_id app_name
