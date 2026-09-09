@@ -446,9 +446,9 @@ test -f /etc/nginx/sites-available/cpa-stack || { echo "NGINX_SITE_MISSING"; exi
 grep -q "proxy_pass http://127.0.0.1:8317;" /etc/nginx/sites-available/cpa-stack || { echo "CPA_PROXY_MISSING"; exit 1; }
 grep -q "proxy_pass http://127.0.0.1:18317;" /etc/nginx/sites-available/cpa-stack || { echo "CPAMP_PROXY_MISSING"; exit 1; }
 test -f /etc/nginx/conf.d/cpa-stack-connection-upgrade.conf || { echo "NGINX_MAP_MISSING"; exit 1; }
-test -f /etc/cpa_stack-deploy.conf || { echo "CONF_MISSING"; exit 1; }
+test -f /etc/cpa-stack-deploy.conf || { echo "CONF_MISSING"; exit 1; }
 # Persisted pins and recorded component versions must survive the real flow.
-source /etc/cpa_stack-deploy.conf
+source /etc/cpa-stack-deploy.conf
 [[ "${CPA_VERSION}" == "v1.2.3" ]] || { echo "CPA_PIN_NOT_SAVED"; exit 1; }
 [[ "${CPAMP_VERSION}" == "v0.4.1" ]] || { echo "CPAMP_PIN_NOT_SAVED"; exit 1; }
 [[ "${INSTALLED_CPA_VERSION}" == "v1.2.3" ]] || { echo "CPA_VERSION_NOT_SAVED"; exit 1; }
