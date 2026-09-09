@@ -447,6 +447,7 @@ main() {
     self-update)
       check_release_package_artifacts
       check_self_version_and_manifest_checks
+      check_self_update_manifest_validation_preserves_lock_flag
       check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
       check_self_update_managed_rehearsal
@@ -808,6 +809,7 @@ main() {
       run_isolated_check check_update_all_writes_manager_operation_record
       run_isolated_check check_release_package_artifacts
       run_isolated_check check_self_version_and_manifest_checks
+      run_isolated_check check_self_update_manifest_validation_preserves_lock_flag
       run_isolated_check check_self_update_protects_checkout_and_standalone
       run_isolated_check check_self_update_dry_run_validation
       run_isolated_check check_self_update_managed_rehearsal

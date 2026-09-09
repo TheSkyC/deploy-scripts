@@ -653,3 +653,21 @@ PY
   rm -rf "$temp_root"
   return "$status"
 }
+
+# Structural guardrail: manifest validation parses untrusted release metadata
+# and must stay free of side effects on coordination-lock state. A stray reset
+# of SELF_UPDATE_MANAGER_LOCK_ACQUIRED here would make the release_coordination_locks
+# calls in the apply flow silently skip manager_update_release_lock.
+check_self_update_manifest_validation_preserves_lock_flag() {
+  awk '
+    /^self_update_validate_manifest_file\(\)/ { in_fn=1; depth=1; next }
+    in_fn {
+      depth += gsub(/\{/, "{") - gsub(/\}/, "}")
+      if (/SELF_UPDATE_MANAGER_LOCK_ACQUIRED/) {
+        print "self_update_validate_manifest_file must not modify SELF_UPDATE_MANAGER_LOCK_ACQUIRED" > "/dev/stderr"
+        exit 1
+      }
+      if (depth <= 0) { in_fn = 0 }
+    }
+  ' lib/self_update.sh || return 1
+}

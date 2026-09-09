@@ -214,7 +214,6 @@ self_update_validate_manifest_file() {
   local manifest_file="$1" object schema project channel version artifact_name artifact_url sha256 size_bytes
   SELF_UPDATE_MANIFEST_ERROR=""
   SELF_UPDATE_MANIFEST_VALID=1
-SELF_UPDATE_MANAGER_LOCK_ACQUIRED=0
   [[ -s "$manifest_file" ]] || self_update_manifest_set_error 'manifest is empty'
   object="$(cat "$manifest_file" 2>/dev/null)" || self_update_manifest_set_error 'manifest cannot be read'
   schema="$(state_json_field "$object" schema_version 2>/dev/null || true)"
