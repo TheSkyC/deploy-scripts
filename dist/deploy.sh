@@ -4771,6 +4771,24 @@ i18n_register_many \
   binary_app.success.binary_verified \
   "Binary verification passed (ELF, %s MB)." \
   "二进制校验通过（ELF，%s MB）。" \
+  binary_app.error.checksum_pin_invalid \
+  "BA_SHA256 must be a 64-character hex digest (got: %s)." \
+  "BA_SHA256 必须是 64 位十六进制摘要（当前：%s）。" \
+  binary_app.error.checksum_fetch \
+  "Failed to download the checksum asset from %s." \
+  "下载校验文件失败：%s。" \
+  binary_app.error.checksum_missing \
+  "Checksum asset does not contain an entry for %s." \
+  "校验文件中没有 %s 的条目。" \
+  binary_app.error.checksum_mismatch \
+  "Checksum mismatch for %s (expected %s, got %s); the download may be corrupted or tampered with." \
+  "%s 校验不匹配（期望 %s，实际 %s）；下载可能损坏或被篡改。" \
+  binary_app.error.checksum_sha_tool \
+  "No sha256sum or shasum available to verify the download." \
+  "系统缺少 sha256sum 或 shasum，无法校验下载文件。" \
+  binary_app.success.checksum_verified \
+  "Checksum verified for %s." \
+  "%s 校验通过。" \
   binary_app.error.binary_install \
   "Failed to install the binary at %s." \
   "安装二进制到 %s 失败。" \
@@ -5391,6 +5409,78 @@ ba_download_release() {
   return 1
 }
 
+# Print the sha256 digest of a file as 64 lowercase hex characters. Uses
+# sha256sum with a shasum fallback (same contract as backup_sha256_file, kept
+# independent so download verification never depends on the backup library).
+bapp_sha256_file() {
+  local digest=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest="$(sha256sum "$1" 2>/dev/null | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    digest="$(shasum -a 256 "$1" 2>/dev/null | awk '{print $1}')"
+  fi
+  [[ "${digest:-}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
+}
+
+# URL of the checksum asset for the current release. Derived from the primary
+# asset URL so repository mirrors and app-overridden ba_download_urls keep
+# working; BA_SHA256_ASSET_TEMPLATE supports the same ARCH placeholder as
+# BA_ASSET_TEMPLATE.
+bapp_checksum_asset_url() {
+  local version="$1" asset primary_url
+  asset="${BA_SHA256_ASSET_TEMPLATE//ARCH/${BA_ARCH}}"
+  primary_url="$(ba_download_urls "$version" | head -1)"
+  [[ -n "$primary_url" ]] || return 1
+  printf '%s\n' "${primary_url%/*}/${asset}"
+}
+
+# Resolve the expected sha256 digest for the primary release asset from the
+# configured checksum asset. Prints the digest on success; a fetch or parse
+# failure is fatal (error exits the command substitution, which fails the
+# caller's assignment under errexit).
+bapp_fetch_checksum_digest() {
+  local version="$1" asset="$2" url tmp digest
+  url="$(bapp_checksum_asset_url "$version")" || error "$(t binary_app.error.checksum_fetch "unresolved")"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ba-checksum.XXXXXX")" || error "$(t binary_app.error.checksum_fetch "$url")"
+  if ! curl -fsSL --proto '=https' --proto-redir '=https' \
+      --max-time "${DEPLOY_CHECKSUM_TIMEOUT_SECONDS:-30}" -o "$tmp" "$url"; then
+    rm -f "$tmp" 2>/dev/null || true
+    error "$(t binary_app.error.checksum_fetch "$url")"
+  fi
+  # Accept sha256sum-style lines: "<digest>  <asset>" and binary mode
+  # "<digest> *<asset>". Everything else in the file is ignored.
+  digest="$(awk -v asset="$asset" '$1 ~ /^[0-9a-fA-F]{64}$/ && ($2 == asset || $2 == "*"asset) { print tolower($1); exit }' "$tmp")"
+  rm -f "$tmp" 2>/dev/null || true
+  [[ -n "$digest" ]] || error "$(t binary_app.error.checksum_missing "$asset")"
+  printf '%s\n' "$digest"
+}
+
+# Verify a downloaded release artifact against the configured integrity
+# source: BA_SHA256 (pinned digest) or BA_SHA256_ASSET_TEMPLATE (upstream
+# checksum file). With neither configured this is a no-op so apps without
+# upstream checksum publication keep working; the non-empty/size/ELF sanity
+# checks in bapp_inspect_binary still apply.
+bapp_verify_download() {
+  local downloaded="$1" version="$2" asset expected actual
+  asset="$(ba_asset_name "$version")"
+  if [[ -n "${BA_SHA256:-}" ]]; then
+    if ! app_validate_sha256 "BA_SHA256" "${BA_SHA256}"; then
+      error "$(t binary_app.error.checksum_pin_invalid "${BA_SHA256}")"
+    fi
+    expected="${BA_SHA256,,}"
+  elif [[ -n "${BA_SHA256_ASSET_TEMPLATE:-}" ]]; then
+    expected="$(bapp_fetch_checksum_digest "$version" "$asset")"
+  else
+    return 0
+  fi
+  actual="$(bapp_sha256_file "$downloaded")" || error "$(t binary_app.error.checksum_sha_tool)"
+  if [[ "$actual" != "$expected" ]]; then
+    error "$(t binary_app.error.checksum_mismatch "$asset" "$expected" "$actual")"
+  fi
+  success "$(t binary_app.success.checksum_verified "$asset")"
+}
+
 # Extract/copy the downloaded release into a staging directory and print the
 # path of the binary inside it.  Handles raw binaries, tar.gz, and zip.
 ba_prepare_binary() {
@@ -5838,6 +5928,7 @@ bapp_install() {
     rm -f "$tmp_bin" 2>/dev/null || true
     error "$(t binary_app.error.download "$download_url")"
   fi
+  bapp_verify_download "$tmp_bin" "$latest"
   local stage
   if ! stage="$(mktemp -d "${INSTALL_DIR}/.${BA_BIN_NAME}.stage.XXXXXX")"; then
     rm -f "$tmp_bin" 2>/dev/null || true
@@ -6096,6 +6187,7 @@ bapp_update() {
     rm -f "$tmp_bin" 2>/dev/null || true
     error "$(t binary_app.error.download "$download_url")"
   fi
+  bapp_verify_download "$tmp_bin" "$latest"
   local stage candidate
   if ! stage="$(mktemp -d "${INSTALL_DIR}/.${BA_BIN_NAME}.stage.XXXXXX")"; then
     rm -f "$tmp_bin" 2>/dev/null || true

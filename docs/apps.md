@@ -32,6 +32,8 @@ Common keys (defaults in parentheses):
 | `BACKUP_DIR` / `BACKUP_KEEP_DAYS` | Backups (default 30 days) |
 | `BA_BIND_ADDR` | Listen address, `127.0.0.1` by default (reverse-proxy friendly). Set `0.0.0.0` only when the app is meant to be public; the install summary warns about plain-HTTP exposure |
 | `BA_VERSION` | Pin an exact GitHub release tag (e.g. `v1.2.3`). Unset = latest. `update` upgrades to the pinned tag when set |
+| `BA_SHA256_ASSET_TEMPLATE` | Optional upstream checksum asset published next to the release (supports `ARCH`, e.g. `checksums.txt`); when set, downloads are verified against it and a mismatch aborts the install/update |
+| `BA_SHA256` | Pin the expected sha256 of the release asset (64-hex). When set, any download whose digest differs is rejected |
 | `INSTALLED_VERSION` | Recorded at install; do not edit |
 
 App-specific defaults:

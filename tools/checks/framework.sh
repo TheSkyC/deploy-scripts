@@ -112,3 +112,85 @@ check_root_wrappers_match_bin_loaders() {
   [[ "$missing" -eq 0 ]] || return 1
 }
 
+
+
+# Guardrail: binary-app downloads must be verifiable against an upstream
+# checksum asset (BA_SHA256_ASSET_TEMPLATE) or a pinned digest (BA_SHA256),
+# and both the install and update lifecycles must invoke the verifier so a
+# new lifecycle path cannot silently bypass integrity checking.
+check_binary_app_download_integrity() {
+  grep -Fq 'bapp_verify_download "$tmp_bin" "$latest"' lib/binary_app.sh \
+    || { echo "lib/binary_app.sh must call bapp_verify_download after downloading a release" >&2; return 1; }
+  local call_sites
+  call_sites="$(grep -cF 'bapp_verify_download "$tmp_bin" "$latest"' lib/binary_app.sh)"
+  [[ "$call_sites" -ge 2 ]] \
+    || { echo "bapp_verify_download must be wired into both bapp_install and bapp_update (found ${call_sites} call sites)" >&2; return 1; }
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    APP_ID="integritytest" APP_NAME="IntegrityTest"
+    GITHUB_REPO="example/integritytest"
+    BA_ARCH="amd64"
+    BA_ASSET_TEMPLATE="integritytest-ARCH.tar.gz"
+    BA_BIN_NAME="integritytest"
+    BA_ARCHIVE_TYPE="none"
+    payload_file="$(mktemp "${TMPDIR:-/tmp}/ba-integrity.XXXXXX")"
+    trap '\''rm -f "$payload_file"'\'' EXIT
+    printf "payload-bytes" > "$payload_file"
+    good_digest="$(sha256sum "$payload_file" | awk '"'"'{print $1}'"'"')"
+
+    # Pinned digest accepted.
+    BA_SHA256="$good_digest"
+    bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
+
+    # Pinned digest mismatch rejected.
+    BA_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+    if ( bapp_verify_download "$payload_file" "v1.0.0" ) >/dev/null 2>&1; then
+      echo "mismatched pinned digest was accepted" >&2
+      exit 1
+    fi
+
+    # Malformed pinned digest rejected before any download.
+    BA_SHA256="not-a-digest"
+    if ( bapp_verify_download "$payload_file" "v1.0.0" ) >/dev/null 2>&1; then
+      echo "malformed pinned digest was accepted" >&2
+      exit 1
+    fi
+
+    # Checksum-asset path: stub curl to serve a sha256sum-style checksum file.
+    unset BA_SHA256
+    BA_SHA256_ASSET_TEMPLATE="checksums.txt"
+    curl() {
+      local out="" arg
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          -o) out="$2"; shift 2 ;;
+          *) shift ;;
+        esac
+      done
+      printf "%s  integritytest-amd64.tar.gz\n" "$good_digest" > "$out"
+    }
+    bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
+
+    # A checksum asset without an entry for the primary asset is fatal.
+    curl() {
+      local out="" arg
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          -o) out="$2"; shift 2 ;;
+          *) shift ;;
+        esac
+      done
+      printf "%s  other-asset.tar.gz\n" "$good_digest" > "$out"
+    }
+    if ( bapp_verify_download "$payload_file" "v1.0.0" ) >/dev/null 2>&1; then
+      echo "checksum asset without a matching entry was accepted" >&2
+      exit 1
+    fi
+
+    # No integrity source configured: verification is a no-op.
+    unset BA_SHA256 BA_SHA256_ASSET_TEMPLATE
+    bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
+  ' _ "$ROOT_DIR"
+}
