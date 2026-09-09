@@ -151,6 +151,50 @@ schedule_validate_calendar() {
   return 2
 }
 
+# Validate one crontab field against its maximum value. Accepts *, lists,
+# ranges, and steps. The cron fallback previously only shape-checked the
+# expression, letting out-of-range values (e.g. "99 99 99 99 99") through to
+# cron, where the entry would parse but the schedule would silently never
+# behave as intended; numeric bounds are enforced here instead.
+schedule_cron_field_is_valid() {
+  local field="$1" max="$2" part lo hi
+  [[ -n "$field" ]] || return 1
+  local -a parts
+  IFS=',' read -ra parts <<< "$field"
+  for part in "${parts[@]}"; do
+    [[ -n "$part" ]] || return 1
+    part="${part%%/*}"
+    if [[ "$part" == "*" ]]; then
+      continue
+    fi
+    if [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      lo="${BASH_REMATCH[1]}"
+      hi="${BASH_REMATCH[2]}"
+      (( lo <= hi && hi <= max )) || return 1
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      (( part <= max )) || return 1
+    else
+      return 1
+    fi
+  done
+  return 0
+}
+
+# Validate a 5-field crontab expression for the non-systemd fallback:
+# minute(0-59) hour(0-23) day-of-month(1-31) month(1-12) day-of-week(0-7;
+# cron treats both 0 and 7 as Sunday). Names (MON, JAN) stay rejected so
+# only the systemd OnCalendar path accepts them.
+schedule_cron_expression_is_valid() {
+  local -a fields
+  read -ra fields <<< "$1" || return 1
+  [[ "${#fields[@]}" -eq 5 ]] || return 1
+  schedule_cron_field_is_valid "${fields[0]}" 59 || return 1
+  schedule_cron_field_is_valid "${fields[1]}" 23 || return 1
+  schedule_cron_field_is_valid "${fields[2]}" 31 || return 1
+  schedule_cron_field_is_valid "${fields[3]}" 12 || return 1
+  schedule_cron_field_is_valid "${fields[4]}" 7 || return 1
+}
+
 # Write or refresh the scheduling units. Prefers systemd timers; falls back
 # to /etc/cron.d where systemd is unavailable.
 schedule_apply() {
@@ -191,6 +235,10 @@ TIMER
       cron_spec="$((10#${BASH_REMATCH[2]})) $((10#${BASH_REMATCH[1]})) * * *"
     fi
     if ! [[ "$cron_spec" =~ ^[0-9*,-/]+[[:space:]]+[0-9*,-/]+[[:space:]]+[0-9*,-/]+[[:space:]]+[0-9*,-/]+[[:space:]]+[0-9*,-/]+$ ]]; then
+      echo "Invalid schedule specification: $calendar" >&2
+      return 2
+    fi
+    if ! schedule_cron_expression_is_valid "$cron_spec"; then
       echo "Invalid schedule specification: $calendar" >&2
       return 2
     fi

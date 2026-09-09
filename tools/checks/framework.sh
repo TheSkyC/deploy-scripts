@@ -256,3 +256,24 @@ check_logging_colors_are_tty_gated() {
     [[ -z "$out" ]] || { echo "TERM=dumb was ignored despite DEPLOY_FORCE_COLOR" >&2; exit 1; }
   ' _ "$ROOT_DIR"
 }
+
+
+# Guardrail: the non-systemd cron fallback must reject out-of-range fields,
+# malformed lists/ranges, and month/weekday names instead of writing a
+# /etc/cron.d entry that cron then parses but never runs as intended.
+check_schedule_cron_expression_validator() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    for expr in "30 4 * * *" "*/15 * * * *" "0 2 * * 1-5" "0 0 1 * *" "5 4 * * 0" "0 3 * * 7" "0,30 4-6 * * 1,3,5"; do
+      schedule_cron_expression_is_valid "$expr" \
+        || { echo "valid cron expression rejected: $expr" >&2; exit 1; }
+    done
+    for expr in "99 4 * * *" "30 25 * * *" "0 2 32 * *" "0 2 * 13 *" "0 2 * * 8" "30 4" "30 4 * * * *" "abc" "0 2 * * MON" "0 2 * * JAN" "1,,2 * * * *" "5-1 * * * *" "61-59 * * * *"; do
+      if schedule_cron_expression_is_valid "$expr"; then
+        echo "invalid cron expression accepted: $expr" >&2
+        exit 1
+      fi
+    done
+  ' _ "$ROOT_DIR"
+}

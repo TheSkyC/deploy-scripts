@@ -473,6 +473,7 @@ main() {
       run_isolated_check check_binary_app_download_integrity
       run_isolated_check check_acquire_lock_preserves_file_and_waits
       run_isolated_check check_logging_colors_are_tty_gated
+      run_isolated_check check_schedule_cron_expression_validator
       run_isolated_check check_custom_executable_installs_use_shared_helper
       run_isolated_check check_update_rollback_cleanup_uses_shared_helper
       run_isolated_check check_apt_sources_are_atomic
