@@ -236,6 +236,9 @@ security_doctor_check_cron_residue() {
   for cron_file in "$cron_dir"/*; do
     [[ -f "$cron_file" && -r "$cron_file" ]] || continue
     base="${cron_file##*/}"
+    case "$base" in
+      certbot-renew-*) continue ;;
+    esac
     case " ${expected_files[*]} " in
       *" ${base} "*) continue ;;
     esac

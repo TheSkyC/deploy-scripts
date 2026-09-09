@@ -953,11 +953,35 @@ ba_configure_ops() {
     "binary_app.error.logrotate" "binary_app.success.logrotate"
 }
 
+# Per-app certbot renewal drop-in. The file name embeds the service name so
+# two TLS-enabled apps never delete each other's renewal entry on uninstall.
+ba_tls_cron_file() {
+  printf '/etc/cron.d/certbot-renew-%s\n' "$SERVICE_NAME"
+}
+
+# Best-effort removal of the TLS reverse proxy artifacts created by
+# ba_configure_tls: nginx site files, the per-app renewal cron, and the
+# backed-up default site. Used when certificate issuance fails and on install
+# rollback so a failed install never leaves nginx proxying to a dead port.
+ba_cleanup_tls_artifacts() {
+  local nginx_conf="/etc/nginx/sites-available/${SERVICE_NAME}"
+  rm -f "/etc/nginx/sites-enabled/${SERVICE_NAME}" 2>/dev/null || true
+  rm -f "$nginx_conf" 2>/dev/null || true
+  rm -f "$(ba_tls_cron_file)" 2>/dev/null || true
+  app_nginx_default_site_restore
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+  fi
+}
+
 # One-shot HTTPS: when BA_ENABLE_HTTPS=1 and DOMAIN is set, install nginx and
 # certbot, obtain a Let's Encrypt certificate, and publish the loopback-bound
 # service on 443 through an nginx reverse proxy. The service itself keeps
 # binding BA_BIND_ADDR (loopback by default). Requires CERTBOT_EMAIL for the
-# ACME registration. Failures are fatal (the user explicitly asked for TLS).
+# ACME registration. Failures are fatal (the user explicitly asked for TLS);
+# partial artifacts are removed before aborting.
 ba_configure_tls() {
   [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]] || return 0
   [[ -n "${DOMAIN:-}" ]] || error "$(t binary_app.error.tls_requires_domain "$APP_NAME")"
@@ -998,6 +1022,7 @@ EOF
   info "$(t binary_app.info.tls_certbot "$DOMAIN")"
   if ! certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" \
       --email "$CERTBOT_EMAIL" --agree-tos --non-interactive >&2; then
+    ba_cleanup_tls_artifacts
     error "$(t binary_app.error.tls_certbot "$DOMAIN")"
   fi
   success "$(t binary_app.success.tls_certbot)"
@@ -1036,11 +1061,13 @@ server {
 }
 EOF
   if ! nginx -t || ! systemctl reload nginx; then
+    ba_cleanup_tls_artifacts
     error "$(t binary_app.error.tls_nginx_test)"
   fi
   success "$(t binary_app.success.tls_live "https://${DOMAIN}")"
   # Renewal via /etc/cron.d, published by the shared atomic writer.
-  local cron_file="/etc/cron.d/certbot-renew"
+  local cron_file
+  cron_file="$(ba_tls_cron_file)"
   if ! atomic_write_file "$cron_file" 644 root:root <<'CRON'
 30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'
 CRON
@@ -1202,6 +1229,11 @@ bapp_install() {
     app_save_config
   else
     warn "$(t binary_app.warn.start_rollback)"
+    if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+      # The nginx site and renewal cron were published before the start
+      # attempt; roll them back so no proxy keeps pointing at a dead port.
+      ba_cleanup_tls_artifacts
+    fi
     if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
       warn "$(t binary_app.warn.stop_failed "$SERVICE_NAME")"
     fi
@@ -1578,8 +1610,18 @@ bapp_uninstall() {
       fi
     fi
   fi
-  if [[ -e "/etc/cron.d/certbot-renew" ]]; then
-    ba_remove_file_or_error "/etc/cron.d/certbot-renew" "TLS_RENEWAL_CRON"
+  local tls_cron_file
+  tls_cron_file="$(ba_tls_cron_file)"
+  if [[ -e "$tls_cron_file" || -L "$tls_cron_file" ]]; then
+    ba_remove_file_or_error "$tls_cron_file" "TLS_RENEWAL_CRON"
+  elif [[ -e "/etc/cron.d/certbot-renew" ]]; then
+    # Legacy releases shared one global renewal entry. Remove it only when
+    # this is the last managed nginx site so other apps keep renewing.
+    local other_site
+    other_site="$(find /etc/nginx/sites-available -maxdepth 1 -type f ! -name '.*' ! -name "${SERVICE_NAME}" -print -quit 2>/dev/null || true)"
+    if [[ -z "$other_site" ]]; then
+      ba_remove_file_or_error "/etc/cron.d/certbot-renew" "TLS_RENEWAL_CRON"
+    fi
   fi
   if [[ "${BA_USE_ENV_FILE:-0}" == "1" ]]; then
     ba_remove_file_or_error "$ENV_FILE" "ENV_FILE"
