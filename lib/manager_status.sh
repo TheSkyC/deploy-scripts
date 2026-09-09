@@ -110,7 +110,7 @@ manager_status_collect() {
 }
 
 manager_status_render_json() {
-  local temp_dir="$1" problems="${2:-0}" errors_only="${3:-0}" file first=1 app_count=0 installed=0 healthy=0 degraded=0 unhealthy=0 not_installed=0 updates=0 error_count=0 severity registered
+  local temp_dir="$1" problems="${2:-0}" errors_only="${3:-0}" file first=1 app_count=0 installed=0 healthy=0 degraded=0 unhealthy=0 not_installed=0 updates=0 error_count=0 severity registered app_id code summary
   registered="${MANAGER_STATUS_REGISTERED_COUNT:-0}"
   local selected="${MANAGER_STATUS_SELECTED_COUNT:-0}"
   local framework_mode=checkout framework_version=unknown
@@ -137,7 +137,7 @@ manager_status_render_json() {
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
     (( first )) || printf ','; first=0
-    local app_id code summary; app_id="${file%%:*}"; code="${file#*:}"; code="${code%%:*}"; summary="${file#*:*:}"
+    app_id="${file%%:*}"; code="${file#*:}"; code="${code%%:*}"; summary="${file#*:*:}"
     printf '{"app_id":%s,"code":%s,"summary":%s}' "$(app_json_string "$app_id")" "$code" "$(app_json_string "$summary")"
   done <"${temp_dir}/errors"
   printf ']}\n'

@@ -769,7 +769,6 @@ self_update_apply_main() {
     if (( json )); then self_update_apply_json failed 'unable to create self-update operation record'; else printf '%s\n' 'unable to create self-update operation record' >&2; fi
     return 1
   fi
-  operation_started=1
   temp_dir="$(self_update_prepare_activation_root "$SELF_UPDATE_MANAGED_ROOT")" || {
     self_update_operation_finish 1 failed 'unable to create private activation staging directory'
     self_update_release_coordination_locks

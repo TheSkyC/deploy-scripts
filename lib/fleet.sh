@@ -169,7 +169,13 @@ fleet_main() {
   local history_dir history_file
   history_dir="${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}"
   history_file="${history_dir}/fleet-history.jsonl"
-  mkdir -p "$history_dir" 2>/dev/null || true
-  printf '%s\n' "$summary" >> "$history_file" 2>/dev/null || true
+  # History lives under the framework log root (/var/log by default), so only
+  # a root run can record it. Surface an unexpected failure instead of letting
+  # the user believe the run was recorded; non-root orchestrators skip it.
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    if ! mkdir -p "$history_dir" 2>/dev/null || ! printf '%s\n' "$summary" >> "$history_file" 2>/dev/null; then
+      printf 'fleet: warning: could not record run history to %s\n' "$history_file" >&2
+    fi
+  fi
   rm -rf "$tmp_root"
 }

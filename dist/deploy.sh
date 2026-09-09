@@ -2912,7 +2912,7 @@ manager_status_collect() {
 }
 
 manager_status_render_json() {
-  local temp_dir="$1" problems="${2:-0}" errors_only="${3:-0}" file first=1 app_count=0 installed=0 healthy=0 degraded=0 unhealthy=0 not_installed=0 updates=0 error_count=0 severity registered
+  local temp_dir="$1" problems="${2:-0}" errors_only="${3:-0}" file first=1 app_count=0 installed=0 healthy=0 degraded=0 unhealthy=0 not_installed=0 updates=0 error_count=0 severity registered app_id code summary
   registered="${MANAGER_STATUS_REGISTERED_COUNT:-0}"
   local selected="${MANAGER_STATUS_SELECTED_COUNT:-0}"
   local framework_mode=checkout framework_version=unknown
@@ -2939,7 +2939,7 @@ manager_status_render_json() {
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
     (( first )) || printf ','; first=0
-    local app_id code summary; app_id="${file%%:*}"; code="${file#*:}"; code="${code%%:*}"; summary="${file#*:*:}"
+    app_id="${file%%:*}"; code="${file#*:}"; code="${code%%:*}"; summary="${file#*:*:}"
     printf '{"app_id":%s,"code":%s,"summary":%s}' "$(app_json_string "$app_id")" "$code" "$(app_json_string "$summary")"
   done <"${temp_dir}/errors"
   printf ']}\n'
@@ -7445,7 +7445,6 @@ self_update_apply_main() {
     if (( json )); then self_update_apply_json failed 'unable to create self-update operation record'; else printf '%s\n' 'unable to create self-update operation record' >&2; fi
     return 1
   fi
-  operation_started=1
   temp_dir="$(self_update_prepare_activation_root "$SELF_UPDATE_MANAGED_ROOT")" || {
     self_update_operation_finish 1 failed 'unable to create private activation staging directory'
     self_update_release_coordination_locks
@@ -9008,8 +9007,14 @@ fleet_main() {
   local history_dir history_file
   history_dir="${DEPLOY_OPERATION_LOG_ROOT:-/var/log/deploy-scripts}"
   history_file="${history_dir}/fleet-history.jsonl"
-  mkdir -p "$history_dir" 2>/dev/null || true
-  printf '%s\n' "$summary" >> "$history_file" 2>/dev/null || true
+  # History lives under the framework log root (/var/log by default), so only
+  # a root run can record it. Surface an unexpected failure instead of letting
+  # the user believe the run was recorded; non-root orchestrators skip it.
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    if ! mkdir -p "$history_dir" 2>/dev/null || ! printf '%s\n' "$summary" >> "$history_file" 2>/dev/null; then
+      printf 'fleet: warning: could not record run history to %s\n' "$history_file" >&2
+    fi
+  fi
   rm -rf "$tmp_root"
 }
 
