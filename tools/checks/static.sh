@@ -437,12 +437,45 @@ check_binary_app_systemd_paths_are_validated() {
     grep -Fq 'bapp_validate_no_whitespace' "$file" \
       && grep -Fq 'binary_app.error.path_whitespace' "$file" \
       && grep -Fq 'require_safe_path "BA_READWRITE_PATHS"' "$file" \
-      && grep -Fq 'ExecStart="${BIN_PATH}"${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}' "$file" \
+      && grep -Fq 'ExecStart="${BIN_PATH}"${service_args:+ ${service_args}}' "$file" \
       || {
         echo "$file must validate binary-app systemd paths (no whitespace) and quote ExecStart." >&2
         return 1
       }
   done
+}
+
+# The default health probe and nginx proxy must address the configured
+# loopback family, and systemd percent specifiers in service arguments must be
+# escaped rather than interpreted by the unit parser.
+check_binary_app_local_targets_follow_bind_addr() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source lib/binary_app.sh
+    BA_BIND_ADDR=::1
+    [[ "$(ba_local_ip_host)" == "[::1]" ]]
+    BA_BIND_ADDR=0.0.0.0
+    [[ "$(ba_local_ip_host)" == "127.0.0.1" ]]
+
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"\$tmp\"" EXIT
+    systemd_write_unit() { cat > "$tmp/unit"; }
+    SERVICE_NAME=testsvc
+    BIN_PATH=/opt/test/app
+    DATA_DIR=/var/lib/test
+    LOG_DIR=/var/log/test
+    SERVICE_USER=testsvc
+    APP_NAME=Test
+    GITHUB_REPO=example/test
+    BA_SERVICE_ARGS="--listen %p"
+    ba_systemd_unit >/dev/null
+    grep -Fq "ExecStart=\"${BIN_PATH}\" --listen %%p" "$tmp/unit"
+    if (BA_SERVICE_ARGS=$'"'"'--bad\nvalue'"'"' ba_systemd_unit) >/dev/null 2>&1; then
+      echo "control characters accepted in BA_SERVICE_ARGS"
+      exit 21
+    fi
+  '
 }
 
 check_binary_app_pre_backup_hook_is_best_effort() {

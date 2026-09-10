@@ -5394,7 +5394,10 @@ i18n_register_many \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
   binary_app.error.logrotate \
   "Logrotate config write failed: /etc/logrotate.d/%s" \
-  "日志轮转配置写入失败：/etc/logrotate.d/%s。"
+  "日志轮转配置写入失败：/etc/logrotate.d/%s。" \
+  binary_app.error.service_args_invalid \
+  "BA_SERVICE_ARGS contains invalid control characters." \
+  "BA_SERVICE_ARGS 含有无效的控制字符。"
 
 # Derive standard paths from the app configuration.  Apps may override
 # APP_CONFIG_DERIVE_HOOK before load; this default matches the binary-app
@@ -5412,6 +5415,16 @@ _binary_app_derive_paths() {
   # backup archives discoverable (e.g. BA_ARCHIVE_PREFIX=new-api).
   BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-${APP_ID}}"
 }
+# Probe and reverse-proxy targets must follow the configured loopback family;
+# a service bound to ::1 is not reachable at 127.0.0.1.
+ba_local_ip_host() {
+  case "${BA_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0) printf '127.0.0.1\n' ;;
+    ::1|::) printf '[::1]\n' ;;
+    *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
+  esac
+}
+
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
 # generated unit file.
@@ -5816,7 +5829,12 @@ ba_remove_dir_or_error() {
 # ExecStart flags, environment, or hardening needs.
 ba_systemd_unit() {
   local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
-  local env_line=""
+  local env_line="" service_args="${BA_SERVICE_ARGS:-}"
+  if [[ "$service_args" =~ [[:cntrl:]] ]]; then
+    error "$(t binary_app.error.service_args_invalid)"
+  fi
+  # systemd treats an unescaped % as the start of a specifier (for example %i).
+  service_args="${service_args//%/%%}"
   if [[ "${BA_USE_ENV_FILE:-0}" == "1" ]]; then
     env_line="EnvironmentFile=${ENV_FILE}"
   fi
@@ -5836,7 +5854,7 @@ Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${DATA_DIR}
-ExecStart="${BIN_PATH}"${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}
+ExecStart="${BIN_PATH}"${service_args:+ ${service_args}}
 Restart=always
 RestartSec=5
 StartLimitInterval=60
@@ -5878,7 +5896,10 @@ ba_start_service() {
 # Default HTTP health check; apps override bapp_health_probe when the service
 # exposes a different endpoint or requires other status codes.
 bapp_health_probe() {
-  local url="${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}"
+  local default_url host
+  host="$(ba_local_ip_host)"
+  default_url="http://${host}:${PORT}/"
+  local url="${BA_HEALTH_URL:-$default_url}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
   until code="$(app_http_status_code "$url" 5)" \
@@ -5938,6 +5959,8 @@ ba_cleanup_tls_artifacts() {
 # ACME registration. Failures are fatal (the user explicitly asked for TLS);
 # partial artifacts are removed before aborting.
 ba_configure_tls() {
+  local proxy_host
+  proxy_host="$(ba_local_ip_host)"
   [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]] || return 0
   [[ -n "${DOMAIN:-}" ]] || error "$(t binary_app.error.tls_requires_domain "$APP_NAME")"
   app_validate_email "CERTBOT_EMAIL" "${CERTBOT_EMAIL:-}"
@@ -6005,7 +6028,7 @@ server {
     ssl_session_cache shared:MozTLS:10m;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     location / {
-        proxy_pass         http://127.0.0.1:${PORT};
+        proxy_pass         http://${proxy_host}:${PORT};
         proxy_http_version 1.1;
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
