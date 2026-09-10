@@ -21362,36 +21362,49 @@ _write_env_file() {
     fi
     [[ -n "$auth_password" ]] || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
   fi
-  atomic_write_file "$TICKFLOW_ENV_FILE" 600 <<EOF \
-    || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
-TICKFLOW_API_KEY=${tickflow_api_key}
-AI_PROVIDER=${ai_provider}
-AI_BASE_URL=${ai_base_url}
-AI_API_KEY=${ai_api_key}
-AI_MODEL=${ai_model}
-AI_DAILY_TOKEN_BUDGET=${ai_daily_token_budget}
+  local env_content
+  env_content="$(cat <<'EOF'
+TICKFLOW_API_KEY=@TICKFLOW_API_KEY@
+AI_PROVIDER=@AI_PROVIDER@
+AI_BASE_URL=@AI_BASE_URL@
+AI_API_KEY=@AI_API_KEY@
+AI_MODEL=@AI_MODEL@
+AI_DAILY_TOKEN_BUDGET=@AI_DAILY_TOKEN_BUDGET@
 HOST=0.0.0.0
-PORT=${TICKFLOW_PORT}
-LOG_LEVEL=${log_level}
-AUTH_PASSWORD=${auth_password}
-BACKEND_EXTRAS=${TICKFLOW_BACKEND_EXTRAS}
+PORT=@TICKFLOW_PORT@
+LOG_LEVEL=@LOG_LEVEL@
+AUTH_PASSWORD=@AUTH_PASSWORD@
+BACKEND_EXTRAS=@TICKFLOW_BACKEND_EXTRAS@
 DATA_DIR=./data
 EOF
+)"
+  env_content="${env_content//@TICKFLOW_API_KEY@/${tickflow_api_key}}"
+  env_content="${env_content//@AI_PROVIDER@/${ai_provider}}"
+  env_content="${env_content//@AI_BASE_URL@/${ai_base_url}}"
+  env_content="${env_content//@AI_API_KEY@/${ai_api_key}}"
+  env_content="${env_content//@AI_MODEL@/${ai_model}}"
+  env_content="${env_content//@AI_DAILY_TOKEN_BUDGET@/${ai_daily_token_budget}}"
+  env_content="${env_content//@TICKFLOW_PORT@/${TICKFLOW_PORT}}"
+  env_content="${env_content//@LOG_LEVEL@/${log_level}}"
+  env_content="${env_content//@AUTH_PASSWORD@/${auth_password}}"
+  env_content="${env_content//@TICKFLOW_BACKEND_EXTRAS@/${TICKFLOW_BACKEND_EXTRAS}}"
+  atomic_write_file "$TICKFLOW_ENV_FILE" 600 <<<"$env_content" \
+    || error "$(t app.tickflow.error.env_write "$TICKFLOW_ENV_FILE")"
 }
 
 _write_compose_file() {
-  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<EOF \
-    || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
+  local compose_content
+  compose_content="$(cat <<'EOF'
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
+        BACKEND_EXTRAS: @TICKFLOW_BACKEND_EXTRAS@
     container_name: TickFlow_Stock_Panel
     ports:
-      - "${TICKFLOW_BIND_ADDR:-127.0.0.1}:${TICKFLOW_PORT}:3018"
+      - "@TICKFLOW_BIND_ADDR@:@TICKFLOW_PORT@:3018"
     env_file:
       - .env
     volumes:
@@ -21399,6 +21412,12 @@ services:
       - ./tiers.yaml:/app/tiers.yaml:ro
     restart: unless-stopped
 EOF
+)"
+  compose_content="${compose_content//@TICKFLOW_BACKEND_EXTRAS@/${TICKFLOW_BACKEND_EXTRAS}}"
+  compose_content="${compose_content//@TICKFLOW_BIND_ADDR@/${TICKFLOW_BIND_ADDR:-127.0.0.1}}"
+  compose_content="${compose_content//@TICKFLOW_PORT@/${TICKFLOW_PORT}}"
+  atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<<"$compose_content" \
+    || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 }
 
 _write_systemd_unit() {

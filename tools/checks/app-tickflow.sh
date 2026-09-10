@@ -100,6 +100,47 @@ check_tickflow_preflight_defers_docker_runtime_checks() {
     ' impl/install_tickflow.sh
 }
 
+check_tickflow_generated_files_are_expansion_safe() {
+  local malicious
+  malicious='$(touch hacked) `id` "quotes"'
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_tickflow.sh
+
+    tmp_dir="$1"
+    malicious="$2"
+    trap '"'"'rm -rf "$tmp_dir"'"'"' EXIT
+    TICKFLOW_INSTALL_DIR="${tmp_dir}/tickflow"
+    TICKFLOW_ENV_FILE="${TICKFLOW_INSTALL_DIR}/.env"
+    TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/docker-compose.yml"
+    TICKFLOW_PORT="4010"
+    TICKFLOW_AUTH_PASSWORD="newpass123"
+    TICKFLOW_BIND_ADDR="127.0.0.1"
+    mkdir -p "$TICKFLOW_INSTALL_DIR"
+    cat > "$TICKFLOW_ENV_FILE" <<EOF
+TICKFLOW_API_KEY=panel-key
+AI_PROVIDER=anthropic_compat
+AI_BASE_URL=https://example.com/v1
+AI_API_KEY=${malicious}
+AI_MODEL=model
+AI_DAILY_TOKEN_BUDGET=123
+HOST=127.0.0.1
+PORT=9999
+LOG_LEVEL=DEBUG
+AUTH_PASSWORD=oldpass
+BACKEND_EXTRAS=old
+DATA_DIR=./old-data
+EOF
+    _write_env_file
+    grep -Fxq "AI_API_KEY=${malicious}" "$TICKFLOW_ENV_FILE"
+    TICKFLOW_BACKEND_EXTRAS="$malicious"
+    _write_compose_file
+    grep -Fxq "        BACKEND_EXTRAS: ${malicious}" "$TICKFLOW_COMPOSE_FILE"
+    [[ ! -e "$tmp_dir/hacked" ]]
+  ' _ "$(mktemp -d)" "$malicious"
+}
+
 check_tickflow_env_rewrites_preserve_existing_secrets() {
   "$BASH_BIN" -c '
     set -euo pipefail

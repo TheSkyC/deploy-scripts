@@ -688,6 +688,7 @@ main() {
       run_isolated_check check_tickflow_config_files_are_atomic
       run_isolated_check check_tickflow_dependency_failures_are_reported
       run_isolated_check check_tickflow_directory_setup_failures_are_explicit
+      run_isolated_check check_tickflow_generated_files_are_expansion_safe
       run_isolated_check check_tickflow_env_rewrites_preserve_existing_secrets
       run_isolated_check check_tickflow_git_commit_version_contract
       run_isolated_check check_tickflow_manual_backup_is_explicit
