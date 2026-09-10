@@ -94,6 +94,7 @@ i18n_register schedule.info.saved "Schedule configuration saved." "定时计划�
 i18n_register schedule.info.removed "Schedule removed (timer/cron and config cleaned up)." "定时计划已移除（timer/cron 与配置已清理）。"
 i18n_register schedule.warn.retry "Scheduled batch failed (exit %s); retry %s of %s after backoff." "定时批次失败（退出码 %s），退避后进行第 %s/%s 次重试。"
 i18n_register migrate.usage "Usage: sudo bash %s export [--output PATH] [--redact]; sudo bash %s import --input PATH" "用法：sudo bash %s export [--output 路径] [--redact]；sudo bash %s import --input 路径"
+i18n_register migrate.warn.impl_missing "Could not load app implementation for backup inventory: %s" "无法加载应用实现以生成备份清单：%s"
 i18n_register migrate.error.nothing_to_export "No deployment or notification configs found to export." "未找到可导出的部署或通知配置。"
 i18n_register migrate.error.archive_missing "Migration archive not found: %s" "迁移归档不存在：%s"
 i18n_register migrate.info.exported "Migration archive written: %s (sha256 sidecar included)" "迁移归档已生成：%s（含 sha256 sidecar）"
@@ -7162,14 +7163,14 @@ CONFIG_KEYS=(
   BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
-# The binary asset name embeds the version (without a leading v) and the
-# architecture (arm64 asset uses the "arm64" suffix).
+# Upstream embeds the full version tag (including the leading v) in both
+# architecture-specific asset names.
 ba_asset_name() {
   local version="$1"
   if [[ "$BA_ARCH" == "amd64" ]]; then
-    printf 'new-api-%s\n' "${version#v}"
+    printf 'new-api-%s\n' "$version"
   else
-    printf 'new-api-arm64-%s\n' "${version#v}"
+    printf 'new-api-arm64-%s\n' "$version"
   fi
 }
 

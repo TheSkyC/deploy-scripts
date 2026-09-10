@@ -2988,3 +2988,57 @@ check_backup_manifest_field_skips_escaped_quotes() {
   [[ "$field" == abc ]] || { echo "sha256 field misparsed: ${field}" >&2; rm -rf "$tmp_dir"; return 1; }
   rm -rf "$tmp_dir"
 }
+
+# The backup inventory is only useful when it can find app implementations
+# both in a repository checkout (even from an unrelated working directory)
+# and in a bundled single-file release.  Exercise both materialization paths.
+check_migrate_backups_inventory_materializes_impls() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    repo="$1"
+    cd /
+    source "$repo/lib/core.sh"
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/impl" "$tmp/backups" "$tmp/stage" "$tmp/out"
+    printf payload > "$tmp/stage/payload"
+    tar -czf "$tmp/backups/one_20260101000000.tar.gz" -C "$tmp/stage" .
+    backup_write_sha256 "$tmp/backups/one_20260101000000.tar.gz" >/dev/null
+    cat > "$tmp/impl/one" <<MIGRATE_IMPL
+APP_ID=one
+BACKUP_DIR="$tmp/backups"
+app_load_config() { :; }
+MIGRATE_IMPL
+    DEPLOY_APP_IDS=(one)
+    DEPLOY_ROOT_DIR="$tmp"
+    deploy_app_impl_file_for() { printf "impl/%s" "$1"; }
+    migrate_backups_inventory "$tmp/out"
+    grep -Fq "\"app\":\"one\"" "$tmp/out/backups-inventory.json"
+    grep -Fq "\"state\":\"verified\"" "$tmp/out/backups-inventory.json"
+  ' bash "$ROOT_DIR"
+
+  [[ -f dist/deploy.sh ]] || {
+    echo "dist/deploy.sh is required to verify bundled migration inventory" >&2
+    return 1
+  }
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    repo="$1"
+    cd /
+    source "$repo/lib/core.sh"
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/backups" "$tmp/stage" "$tmp/out"
+    printf payload > "$tmp/stage/payload"
+    tar -czf "$tmp/backups/new-api_20260101000000.tar.gz" -C "$tmp/stage" .
+    backup_write_sha256 "$tmp/backups/new-api_20260101000000.tar.gz" >/dev/null
+    export BACKUP_DIR="$tmp/backups"
+    export DEPLOY_BUNDLED=1
+    export DEPLOY_SCRIPT_PATH="$repo/dist/deploy.sh"
+    DEPLOY_APP_IDS=(newapi)
+    app_load_config() { :; }
+    migrate_backups_inventory "$tmp/out"
+    grep -Fq "\"app\":\"newapi\"" "$tmp/out/backups-inventory.json"
+    grep -Fq "\"state\":\"verified\"" "$tmp/out/backups-inventory.json"
+  ' bash "$ROOT_DIR"
+}

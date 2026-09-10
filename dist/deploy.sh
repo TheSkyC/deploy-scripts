@@ -95,6 +95,7 @@ i18n_register schedule.info.saved "Schedule configuration saved." "定时计划�
 i18n_register schedule.info.removed "Schedule removed (timer/cron and config cleaned up)." "定时计划已移除（timer/cron 与配置已清理）。"
 i18n_register schedule.warn.retry "Scheduled batch failed (exit %s); retry %s of %s after backoff." "定时批次失败（退出码 %s），退避后进行第 %s/%s 次重试。"
 i18n_register migrate.usage "Usage: sudo bash %s export [--output PATH] [--redact]; sudo bash %s import --input PATH" "用法：sudo bash %s export [--output 路径] [--redact]；sudo bash %s import --input 路径"
+i18n_register migrate.warn.impl_missing "Could not load app implementation for backup inventory: %s" "无法加载应用实现以生成备份清单：%s"
 i18n_register migrate.error.nothing_to_export "No deployment or notification configs found to export." "未找到可导出的部署或通知配置。"
 i18n_register migrate.error.archive_missing "Migration archive not found: %s" "迁移归档不存在：%s"
 i18n_register migrate.info.exported "Migration archive written: %s (sha256 sidecar included)" "迁移归档已生成：%s（含 sha256 sidecar）"
@@ -8785,23 +8786,59 @@ migrate_stage_tree() {
 # new machine knows which backups to replicate before restoring.
 migrate_backups_inventory() {
   local stage="$1"
-  local out first=1 app_id impl_file backup_dir_var backup_dir glob record
+  local out first=1 app_id impl_file bundled_impl_file backup_dir glob record
   out="{\"schema_version\":1,\"apps\":["
   for app_id in "${DEPLOY_APP_IDS[@]}"; do
-    impl_file="$(deploy_app_impl_file_for "$app_id")"
-    [[ -f "$impl_file" ]] || continue
-    record="$("${BASH_BIN:-bash}" -c '
-      source lib/core.sh 2>/dev/null
-      APP_ID="'"$app_id"'"
-      source "'"$(pwd)/$impl_file"'" >/dev/null 2>&1 || exit 0
+    bundled_impl_file=""
+    if [[ "${DEPLOY_BUNDLED:-0}" == "1" ]]; then
+      # Bundled releases do not keep impl/ on disk.  Materialize just the
+      # implementation for this app in a private temporary file; the command
+      # substitution below shares this shell's already-loaded framework.
+      impl_file="$(mktemp "${TMPDIR:-/tmp}/deploy-migrate-${app_id}.XXXXXX")" || {
+        warn "$(t migrate.warn.impl_missing "$app_id")"
+        continue
+      }
+      bundled_impl_file="$impl_file"
+      chmod 700 "$impl_file" 2>/dev/null || true
+      if ! awk -v marker="__DEPLOY_APP_IMPL_SCRIPT__ $(deploy_app_bundled_impl_script_name_for "$app_id")" '
+          $0 == marker { found=1; next }
+          found && $0 == "__DEPLOY_APP_IMPL_SCRIPT_END__" { exit }
+          found { print }
+        ' "${DEPLOY_SCRIPT_PATH:-${BASH_SOURCE[0]}}" > "$impl_file" || [[ ! -s "$impl_file" ]]; then
+        warn "$(t migrate.warn.impl_missing "$app_id")"
+        rm -rf "$bundled_impl_file"
+        continue
+      fi
+    else
+      impl_file="$(deploy_app_impl_file_for "$app_id")"
+      if [[ "$impl_file" != /* ]]; then
+        impl_file="${DEPLOY_ROOT_DIR:?}/${impl_file}"
+      fi
+      if [[ ! -f "$impl_file" ]]; then
+        warn "$(t migrate.warn.impl_missing "$app_id")"
+        continue
+      fi
+    fi
+
+    # Run the implementation in a command substitution so app variables and
+    # hooks cannot leak between apps.  Unlike a separate bash -c process, this
+    # keeps the already-loaded framework available in bundled releases.
+    record="$(
+      set +e
+      if ! DEPLOY_IMPL_SOURCE_ONLY=1 source "$impl_file" >/dev/null 2>&1; then
+        echo "__MIGRATE_IMPL_SOURCE_FAILED__"
+        exit 0
+      fi
       app_load_config >/dev/null 2>&1 || true
       dir=""
       for candidate in BACKUP_DIR VW_BACKUP_DIR CPA_STACK_BACKUP_DIR; do
         v="${!candidate:-}"
         [[ -n "$v" ]] && { dir="$v"; break; }
       done
-      [[ -n "$dir" && -d "$dir" ]] || exit 0
-      case '"$app_id"' in
+      if [[ -z "$dir" || ! -d "$dir" ]]; then
+        exit 0
+      fi
+      case "$app_id" in
         blog) glob="blog_*.tar.gz" ;;
         tickflow) glob="tickflow-data-*.tar.gz" ;;
         cpa-stack) glob="cpa-stack-*.tar.gz" ;;
@@ -8811,8 +8848,13 @@ migrate_backups_inventory() {
         sub2api) glob="sub2api_*.tar.gz sub2api_db_*.sql.gz" ;;
         *) glob="${APP_ID}_*.tar.gz" ;;
       esac
-      backup_verify_latest_json "$dir" $glob
-    ' 2>/dev/null)" || record=""
+      backup_verify_latest_json "$dir" $glob || true
+    )"
+    if [[ "$record" == "__MIGRATE_IMPL_SOURCE_FAILED__" ]]; then
+      record=""
+      warn "$(t migrate.warn.impl_missing "$app_id")"
+    fi
+    [[ -n "$bundled_impl_file" ]] && rm -rf "$bundled_impl_file"
     [[ -n "$record" ]] || continue
     (( first )) || out+=","
     first=0
@@ -14211,14 +14253,14 @@ CONFIG_KEYS=(
   BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
-# The binary asset name embeds the version (without a leading v) and the
-# architecture (arm64 asset uses the "arm64" suffix).
+# Upstream embeds the full version tag (including the leading v) in both
+# architecture-specific asset names.
 ba_asset_name() {
   local version="$1"
   if [[ "$BA_ARCH" == "amd64" ]]; then
-    printf 'new-api-%s\n' "${version#v}"
+    printf 'new-api-%s\n' "$version"
   else
-    printf 'new-api-arm64-%s\n' "${version#v}"
+    printf 'new-api-arm64-%s\n' "$version"
   fi
 }
 
