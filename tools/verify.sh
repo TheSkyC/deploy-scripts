@@ -824,6 +824,7 @@ main() {
       run_isolated_check check_compose_health_supports_legacy_v1_tables
       run_isolated_check check_fleet_host_validation_and_isolation
       run_isolated_check check_migration_export_import_roundtrip
+      run_isolated_check check_migrate_backups_inventory_materializes_impls
       run_isolated_check check_batch_target_selection_is_local_only
       run_isolated_check check_doctor_all_target
       run_isolated_check check_binary_app_pinned_target_adapters
