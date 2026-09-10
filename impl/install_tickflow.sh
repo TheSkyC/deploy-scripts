@@ -340,7 +340,13 @@ WorkingDirectory=${TICKFLOW_INSTALL_DIR}
 ExecStart=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} up -d --build'
 ExecStop=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} down'
 ExecReload=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} up -d --build'
-TimeoutStartSec=0
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=${TICKFLOW_INSTALL_DIR}
+TimeoutStartSec=600
 TimeoutStopSec=120
 
 [Install]

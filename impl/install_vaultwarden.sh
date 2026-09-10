@@ -812,6 +812,7 @@ LimitNOFILE=1048576
 LimitNPROC=64
 
 # systemd sandboxing for defense in depth.
+NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true

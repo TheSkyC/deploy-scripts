@@ -15,7 +15,7 @@ umask 077
 # backup script, and the credential warning in the install summary.
 # See PLAN.md section 2 for the verified release asset mapping.
 
-DOMAIN="${DOMAIN:-api.example.com}"
+DOMAIN="${DOMAIN:-}"
 PORT="${PORT:-8080}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/new-api}"
 DATA_DIR="${DATA_DIR:-/opt/new-api/data}"
@@ -117,7 +117,9 @@ ba_summary_extra() {
   local internal_ip
   internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   internal_ip="${internal_ip:-YOUR_SERVER_IP}"
-  echo -e "  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
+  if [[ "${BA_ENABLE_HTTPS:-0}" == "1" && -n "$DOMAIN" ]]; then
+    echo -e "  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
+  fi
   echo -e "  $(t app.newapi.summary.internal)  ${CYAN}http://${internal_ip}:${PORT}${GREEN}"
   echo -e "  ${RED}${BOLD}$(t app.newapi.summary.credential_warning)${GREEN}"
   echo -e "  $(t app.newapi.summary.credential_hint)"

@@ -1169,8 +1169,11 @@ do_restore() {
     archive="$(backup_latest_archive "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$CPA_STACK_BACKUP_DIR")"
   fi
-  # Shared traversal guard first (absolute paths, ../ segments, backslashes),
-  # then the app-level whitelist that the root-relative archive may contain.
+  # Verify the integrity sidecar before touching system paths, then apply the
+  # shared traversal guard and the app-level whitelist.
+  if [[ -f "$archive.sha256" ]] && ! backup_verify_archive "$archive"; then
+    error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
+  fi
   if ! backup_validate_archive_members "$archive"; then
     error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
   fi
@@ -1206,7 +1209,7 @@ do_restore() {
       mv "/${target}" "${aside_dir}/${target}.restore.${stamp}" && had_aside=true
     fi
   done
-  tar -xzf "$archive" -C / >&2 || extract_ok=false
+  tar -xzf "$archive" --no-same-owner -C / >&2 || extract_ok=false
   if [[ "$extract_ok" != "true" ]]; then
     for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
         var/lib/cpa-manager-plus var/lib/cli-proxy-api; do

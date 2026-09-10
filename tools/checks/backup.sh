@@ -2070,13 +2070,15 @@ check_registry_restore_capability_matches_impl() {
     }
   ' impl/install_tickflow.sh || return 1
   awk '
-    /^do_restore\(\)/ { in_fn=1; saw_members=0; saw_stop=0; saw_aside=0; next }
+    /^do_restore\(\)/ { in_fn=1; saw_verify=0; saw_members=0; saw_stop=0; saw_aside=0; saw_owner=0; next }
+    in_fn && /backup_verify_archive "\$archive"/ { saw_verify=1 }
+    in_fn && /tar -xzf "\$archive" --no-same-owner/ { saw_owner=1 }
     in_fn && index($0, "../*") > 0 { saw_members=1 }
     in_fn && /systemctl stop "\$CPAMP_SERVICE_NAME"/ { saw_stop=1 }
     in_fn && /restore-aside/ { saw_aside=1 }
     in_fn && /^}$/ {
-      if (!(saw_members && saw_stop && saw_aside)) {
-        print "cpa_stack do_restore must reject unsafe members, stop CPAMP first, and aside-copy existing targets" > "/dev/stderr"
+      if (!(saw_verify && saw_members && saw_stop && saw_aside && saw_owner)) {
+        print "cpa_stack do_restore must verify sidecars, reject unsafe members, stop CPAMP first, aside-copy existing targets, and ignore archive ownership" > "/dev/stderr"
         exit 1
       }
       in_fn=0

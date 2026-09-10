@@ -688,3 +688,12 @@ check_self_update_keep_releases_accepts_all_nonzero_counts() {
     fi
   done
 }
+
+# Do not expose self-update signature settings until detached signature
+# verification actually exists; otherwise operators may trust a dead switch.
+check_self_update_has_no_signature_dead_keys() {
+  if grep -R -nE 'DEPLOY_SELF_UPDATE_(REQUIRE_SIGNATURE|PUBLIC_KEY)' lib apps impl docs; then
+    echo "self-update signature configuration keys must not exist without implementation" >&2
+    return 1
+  fi
+}

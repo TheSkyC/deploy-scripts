@@ -616,3 +616,18 @@ check_uninstall_cancellations_return_nonzero() {
     }
   done
 }
+
+check_status_framework_version_is_reported() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    DEPLOY_ROOT_DIR="$tmp"
+    DEPLOY_BUILD_VERSION="v9.8.7-test"
+    : > "$tmp/files"
+    : > "$tmp/errors"
+    output="$(manager_status_render_json "$tmp")"
+    grep -Fq "\"version\":\"v9.8.7-test\"" <<< "$output"
+  ' bash "$ROOT_DIR"
+}

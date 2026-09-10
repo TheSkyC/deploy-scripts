@@ -581,3 +581,22 @@ check_tickflow_restore_keeps_aside_for_rollback() {
       }
     ' impl/install_tickflow.sh
 }
+
+check_tickflow_systemd_unit_is_sandboxed() {
+  awk '
+      /_write_systemd_unit\(\)/ { in_fn=1; next }
+      in_fn {
+        if (/NoNewPrivileges=true/) saw_nnp=1
+        if (/PrivateTmp=true/) saw_tmp=1
+        if (/ProtectSystem=strict/) saw_system=1
+        if (/ReadWritePaths=\$\{TICKFLOW_INSTALL_DIR\}/) saw_rw=1
+        if (/TimeoutStartSec=[1-9][0-9]*/) saw_timeout=1
+      }
+      END {
+        if (!(saw_nnp && saw_tmp && saw_system && saw_rw && saw_timeout)) {
+          print "TickFlow unit must enable systemd sandboxing and a finite start timeout" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_tickflow.sh
+}

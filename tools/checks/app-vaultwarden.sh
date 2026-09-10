@@ -1326,3 +1326,10 @@ check_vaultwarden_fail2ban_configs_use_shared_atomic_write() {
       }
     ' impl/install_vaultwarden.sh
 }
+
+check_vaultwarden_systemd_displays_no_new_privileges() {
+  grep -Fq 'NoNewPrivileges=true' impl/install_vaultwarden.sh || {
+    echo "Vaultwarden unit must set NoNewPrivileges=true." >&2
+    return 1
+  }
+}

@@ -191,3 +191,21 @@ check_newapi_asset_names_keep_version_prefix() {
     return 1
   }
 }
+
+check_newapi_summary_does_not_invent_public_url() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/apps/newapi.sh"
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_newapi.sh"
+    unset DOMAIN
+    BA_ENABLE_HTTPS=0 ba_summary_extra
+  ' bash "$ROOT_DIR" > /dev/null
+  grep -Fq 'DOMAIN="${DOMAIN:-}"' impl/install_newapi.sh \
+    && grep -Fq 'BA_ENABLE_HTTPS:-0' impl/install_newapi.sh \
+    && grep -Fq '&& -n "$DOMAIN"' impl/install_newapi.sh || {
+      echo "NewAPI public URL must be shown only for configured HTTPS domains." >&2
+      return 1
+    }
+}

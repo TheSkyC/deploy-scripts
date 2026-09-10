@@ -339,6 +339,7 @@ main() {
       check_status_json_dispatch
       check_status_json_legacy_contract
       check_status_json_services_and_version
+      check_status_framework_version_is_reported
       check_port_conflict_is_warn_only
       check_port_conflict_strict_mode_aborts
       check_doctor_validates_saved_config
@@ -346,6 +347,7 @@ main() {
       check_help_masks_sensitive_config_values
       check_newapi_status_backup_projection
       check_newapi_asset_names_keep_version_prefix
+      check_newapi_summary_does_not_invent_public_url
       check_newapi_summary_warns_about_default_credentials
       check_sub2api_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
@@ -367,6 +369,7 @@ main() {
       check_vaultwarden_install_supports_noninteractive_mode
       check_vaultwarden_install_surfaces_default_nginx_site_removal_failures
       check_vaultwarden_install_summary_is_localized
+      check_vaultwarden_systemd_displays_no_new_privileges
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_status_backup_projection
       check_blog_uninstall_supports_noninteractive_mode
@@ -377,6 +380,7 @@ main() {
       check_cyberstrikeai_uninstall_checks_file_removal_errors
       check_tickflow_status_backup_projection
       check_tickflow_restore_keeps_aside_for_rollback
+      check_tickflow_systemd_unit_is_sandboxed
       check_tickflow_uninstall_supports_noninteractive_mode
       check_tickflow_uninstall_checks_directory_removal_errors
       check_tickflow_uninstall_checks_file_removal_errors
@@ -455,6 +459,7 @@ main() {
       check_self_version_and_manifest_checks
       check_self_update_manifest_validation_preserves_lock_flag
       check_self_update_keep_releases_accepts_all_nonzero_counts
+      check_self_update_has_no_signature_dead_keys
       check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
       check_self_update_managed_rehearsal

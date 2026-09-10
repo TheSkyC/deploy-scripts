@@ -9,8 +9,9 @@ For instance-qualified commands, reverse-proxy TLS, and an export/import restore
 
 Every app supports `--help` (lists configuration keys with current values) and
 `--dry-run <action>` (previews what install/update/backup/uninstall would do
-without touching the system). Configuration keys are environment variables;
-export any key to override its default.
+without touching the system). Configuration keys are environment variables; set them before the first install to
+override script defaults. After a config file is persisted, that trusted file takes
+precedence over ad-hoc environment variables on later commands.
 
 ## Binary apps (shared lifecycle)
 
