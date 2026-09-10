@@ -94,6 +94,28 @@ check_status_json_services_and_version() {
   expect_success_output en install_newapi.sh status-json '"version":null'
 }
 
+check_doctor_config_diff_ignores_saved_quotes() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/lib/logging.sh"
+    source "$1/lib/fs.sh"
+    source "$1/lib/config.sh"
+    source "$1/lib/app.sh"
+    tmp="$(mktemp -d)"
+    trap '"'"'rm -rf "$tmp"'"'"' EXIT
+    _APP_CONF_LEGACY="$tmp/app.conf"
+    CONFIG_KEYS=(PORT)
+    PORT=7000
+    printf '"'"'PORT="7000"\n'"'"' > "$_APP_CONF_LEGACY"
+    output="$(app_doctor_config_diff)"
+    [[ "$output" == *No\ configuration\ drift* ]] || { echo "$output" >&2; exit 1; }
+    PORT=8000
+    output="$(app_doctor_config_diff)"
+    [[ "$output" == *PORT*7000*8000* ]] || { echo "$output" >&2; exit 2; }
+  ' bash "$ROOT_DIR"
+}
+
 check_doctor_validates_saved_config() {
   awk '
       /doctor\.config_parse_ok/ { saw_ok_key=1 }

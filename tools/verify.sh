@@ -342,6 +342,7 @@ main() {
       check_port_conflict_is_warn_only
       check_port_conflict_strict_mode_aborts
       check_doctor_validates_saved_config
+      check_doctor_config_diff_ignores_saved_quotes
       check_newapi_status_backup_projection
       check_newapi_summary_warns_about_default_credentials
       check_sub2api_status_backup_projection
