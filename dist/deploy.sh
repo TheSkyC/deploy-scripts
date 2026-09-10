@@ -2929,9 +2929,15 @@ manager_status_selected_ids() {
 
 manager_status_collect_app_json() {
   local app_id="$1" output_file="$2" error_file="$3" status pid start timeout_seconds
+  local monitor_was_enabled=0
   : >"$output_file"; : >"$error_file"
+  # Job control places the collector and the probes that it starts in their
+  # own process group, so a timeout cannot orphan curl or systemctl children.
+  [[ $- == *m* ]] && monitor_was_enabled=1
+  set -m
   ( manager_load_app "$app_id"; app_status_collect_json ) >"$output_file" 2>"$error_file" &
   pid=$!
+  [[ "$monitor_was_enabled" == 1 ]] || set +m
   timeout_seconds="${DEPLOY_STATUS_TIMEOUT_SECONDS:-8}"
   if [[ "$timeout_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk "BEGIN { exit !($timeout_seconds > 0) }"; then
     # `date` is relatively expensive on Git Bash/Windows. Calling it from the
@@ -2942,7 +2948,7 @@ manager_status_collect_app_json() {
     (( timeout_limit > 0 )) || timeout_limit=1
     while kill -0 "$pid" 2>/dev/null; do
       if (( SECONDS - start_seconds >= timeout_limit )); then
-        kill "$pid" 2>/dev/null || true
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
         printf 'status collection timed out after %ss' "$timeout_seconds" >>"$error_file"
         return 124
@@ -2968,8 +2974,8 @@ manager_status_json_field() {
 
 manager_status_collect() {
   local include_csv="${1:-}" exclude_csv="${2:-}" only_installed="${3:-0}"
-  local temp_dir app_id output error_file status parsed_ids
-  local -a ids=() json_files=() errors=()
+  local temp_dir app_id output error_file status parsed_ids status_file
+  local -a ids=() json_files=() errors=() job_ids=() job_pids=() job_statuses=()
   temp_dir="$(mktemp -d)" || return 1
   chmod 700 "$temp_dir" || { rm -rf "$temp_dir"; return 1; }
   set +e
@@ -2979,11 +2985,29 @@ manager_status_collect() {
   [[ -n "$parsed_ids" ]] && mapfile -t ids < <(printf '%s\n' "$parsed_ids")
   for app_id in "${ids[@]}"; do
     output="${temp_dir}/${app_id}.json"; error_file="${temp_dir}/${app_id}.err"
-    if manager_status_collect_app_json "$app_id" "$output" "$error_file"; then
+    status_file="${temp_dir}/${app_id}.status"
+    job_ids+=("$app_id")
+    (
+      set +e
+      manager_status_collect_app_json "$app_id" "$output" "$error_file"
+      status=$?
+      printf '%s\n' "$status" >"$status_file"
+      exit "$status"
+    ) &
+    job_pids+=("$!")
+  done
+  set +e
+  for job_pid in "${job_pids[@]}"; do
+    wait "$job_pid"; job_statuses+=("$?")
+  done
+  set -e
+  for ((job_index = 0; job_index < ${#job_ids[@]}; job_index++)); do
+    app_id="${job_ids[job_index]}"; status="${job_statuses[job_index]}"
+    output="${temp_dir}/${app_id}.json"; error_file="${temp_dir}/${app_id}.err"
+    if (( status == 0 )); then
       if [[ "$only_installed" == 1 ]] && [[ "$(manager_status_json_field "$output" install_state)" != installed ]]; then continue; fi
       json_files+=("$output")
     else
-      status=$?
       errors+=("${app_id}:${status}:$(operation_safe_summary "$(tr '\n' ' ' < "$error_file" 2>/dev/null)")")
     fi
   done

@@ -229,6 +229,51 @@ check_state_status_matrix() {
   [[ "$output" == *'"state":"not_checked"'* ]]
   [[ "$output" == *'"update_state":"unknown"'* ]]
 }
+check_state_timeout_kills_process_group() {
+  local temp_root status child_pid
+  temp_root="$(mktemp -d)"
+  set +e
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    temp_root="$1"
+    manager_load_app() { :; }
+    app_status_collect_json() {
+      printf "%s\n" "$$" >"$temp_root/collector_pid"
+      sleep 30 & printf "%s\n" "$!" >"$temp_root/child_pid"
+      wait "$!"
+    }
+    DEPLOY_STATUS_TIMEOUT_SECONDS=1
+    manager_status_collect_app_json slow "$temp_root/out.json" "$temp_root/err"
+  ' _ "$temp_root"
+  status=$?
+  set -e
+  if [[ "$status" -ne 124 ]]; then
+    rm -rf "$temp_root"
+    return "$status"
+  fi
+  if [[ ! -s "$temp_root/child_pid" ]]; then
+    rm -rf "$temp_root"
+    return 1
+  fi
+  child_pid="$(cat "$temp_root/child_pid")"
+  alive=false
+  for ((attempt = 0; attempt < 10; attempt++)); do
+    if kill -0 "$child_pid" 2>/dev/null; then
+      alive=true
+      sleep 0.1
+    else
+      alive=false
+      break
+    fi
+  done
+  rm -rf "$temp_root"
+  if [[ "$alive" == true ]]; then
+    echo "Status collection timeout did not kill the collector process group." >&2
+    return 1
+  fi
+}
+
 check_state_load_failure_isolation() {
   local temp_root output status json_file
   temp_root="$(mktemp -d)"

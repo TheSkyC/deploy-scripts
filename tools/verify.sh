@@ -412,6 +412,7 @@ main() {
       check_state_binary_backup_adapter
       check_state_backup_config_trust_gate
       check_state_status_matrix
+      check_state_timeout_kills_process_group
       check_state_load_failure_isolation
       check_state_no_network_locality
       check_state_problems_filtering
@@ -774,6 +775,7 @@ main() {
       run_isolated_check check_state_binary_backup_adapter
       run_isolated_check check_state_backup_config_trust_gate
       run_isolated_check check_state_status_matrix
+      run_isolated_check check_state_timeout_kills_process_group
       run_isolated_check check_state_load_failure_isolation
       run_isolated_check check_state_no_network_locality
       run_isolated_check check_state_problems_filtering
