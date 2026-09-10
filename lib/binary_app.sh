@@ -550,6 +550,9 @@ i18n_register_many \
   binary_app.success.ufw_port \
   "ufw allows port %s." \
   "ufw 已放行端口 %s。" \
+  binary_app.success.firewalld_port \
+  "firewalld allows port %s." \
+  "firewalld 已放行端口 %s。" \
   binary_app.warn.firewall_config_failed \
   "Automatic firewall configuration failed for port %s. Open it manually or retry after fixing the firewall service." \
   "端口 %s 的防火墙自动配置失败。请在修复防火墙服务后重试，或手动放行该端口。" \
@@ -1102,10 +1105,11 @@ bapp_health_probe() {
 # Firewall + logrotate for the service port and log directory.
 # BA_FIREWALL defaults to 0: opening a firewall port for a plain-HTTP
 # service bound to 0.0.0.0 exposes it to the public internet.  Apps that
-# genuinely need a public port (e.g. frps) opt in explicitly.
+# genuinely need a public port (e.g. frps) opt in explicitly.  Firewalld is
+# enabled so RHEL-family hosts get the same behavior as ufw/iptables hosts.
 ba_configure_ops() {
   if [[ "${BA_FIREWALL:-0}" == "1" ]]; then
-    app_configure_firewall "$PORT" "binary_app" "$APP_NAME"
+    app_configure_firewall "$PORT" "binary_app" "$APP_NAME" true
   fi
   app_write_logrotate "/etc/logrotate.d/${SERVICE_NAME}" "$LOG_DIR" \
     "binary_app.error.logrotate" "binary_app.success.logrotate"

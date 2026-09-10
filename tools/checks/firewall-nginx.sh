@@ -425,7 +425,8 @@ check_firewall_success_paths_validate_command_results() {
         in_block=0
       }
     ' lib/app.sh
-  grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
+  grep -Fq 'app_configure_firewall "$PORT" "binary_app" "$APP_NAME" true' lib/binary_app.sh \
+    && grep -Fq 'app_configure_firewall "$PORT" "app.sub2api" "Sub2API" true' impl/install_sub2api.sh \
     && grep -Fq 'app_configure_firewall "$port_to_open" "app.cyberstrikeai" "CyberStrikeAI"' impl/install_cyberstrikeai.sh \
     || {
       echo "Sub2API and CyberStrikeAI firewall configuration must use the shared app_configure_firewall helper." >&2
@@ -437,6 +438,7 @@ check_firewall_success_paths_validate_command_results() {
   fi
   awk '
       /binary_app\.success\.ufw_port/ { framework_ufw=1 }
+      /binary_app\.success\.firewalld_port/ { framework_firewalld=1 }
       /binary_app\.success\.iptables_saved/ { framework_saved=1 }
       /binary_app\.info\.iptables_rules_written/ { framework_info=1 }
       /binary_app\.warn\.iptables_write_failed/ { framework_write_failed=1 }
@@ -462,7 +464,7 @@ check_firewall_success_paths_validate_command_results() {
       /app\.cyberstrikeai\.warn\.firewall_config_failed/ { csai_cfg_failed=1 }
       /app\.cyberstrikeai\.warn\.no_firewall/ { csai_no_fw=1 }
       END {
-        if (!(framework_ufw && framework_saved && framework_info && framework_write_failed &&
+        if (!(framework_ufw && framework_firewalld && framework_saved && framework_info && framework_write_failed &&
               framework_not_persisted && framework_port && framework_cfg_failed && framework_no_fw &&
               sub2api_ufw && sub2api_firewalld && sub2api_saved && sub2api_info &&
               sub2api_write_failed && sub2api_not_persisted && sub2api_port &&
