@@ -732,3 +732,58 @@ check_apt_installs_are_minimal() {
     fi
   done
 }
+
+# A failed install must roll back more than the binary: environment/config
+# extras, logrotate state, and firewall rules need best-effort cleanup, and
+# download/stage temporaries need an EXIT safety net.
+check_binary_app_install_rollback_cleans_system_state() {
+  # This behavior test covers the caller-owned paths that can be written in a
+  # non-root sandbox. Logrotate removal is covered by the awk contract below.
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source lib/binary_app.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"\$tmp\"" EXIT
+    ENV_FILE="$tmp/app.env"
+    SERVICE_NAME=appsvc
+    APP_NAME=Test
+    PORT=8080
+    BA_USE_ENV_FILE=1
+    app_remove_firewall() { printf "firewall %s\n" "$1" >> "$tmp/log"; }
+    ba_uninstall_extra() { printf "extra\n" >> "$tmp/log"; }
+    printf config > "$ENV_FILE"
+    ba_cleanup_install_artifacts
+    [[ ! -e "$ENV_FILE" ]]
+    grep -Fq "extra" "$tmp/log"
+    grep -Fq "firewall 8080" "$tmp/log"
+  '
+  awk '
+      /^ba_cleanup_install_artifacts\(\)/ { in_fn=1; saw_uninstall=0; saw_logrotate=0; saw_firewall=0; next }
+      in_fn && /ba_uninstall_extra/ { saw_uninstall=1 }
+      in_fn && /\/etc\/logrotate\.d\/\$\{SERVICE_NAME\}/ { saw_logrotate=1 }
+      in_fn && /app_remove_firewall "\$PORT"/ { saw_firewall=1 }
+      in_fn && /^}/ {
+        if (!(saw_uninstall && saw_logrotate && saw_firewall)) {
+          print "install rollback must clean app config extras, logrotate, and firewall state" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+  ' lib/binary_app.sh
+}
+
+check_binary_app_install_temporary_cleanup_helper() {
+  awk '
+      /^bapp_install_cleanup_temp_files\(\)/ { in_fn=1; saw_tmp=0; saw_stage=0; next }
+      in_fn && /rm -f -- "\$tmp_bin"/ { saw_tmp=1 }
+      in_fn && /safe_rm_dir "\$stage"/ { saw_stage=1 }
+      in_fn && /^}/ {
+        if (!(saw_tmp && saw_stage)) {
+          print "temporary install cleanup must remove both download and staging paths" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+  ' lib/binary_app.sh
+}

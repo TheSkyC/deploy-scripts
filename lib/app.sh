@@ -714,6 +714,21 @@ app_prune_update_backups() {
     fi
   fi
 }
+# Reverse the port-opening performed by app_configure_firewall. Used only by
+# best-effort rollback cleanup; failures are reported by the caller and never
+# block binary rollback.
+app_remove_firewall() {
+  local port="$1"
+  if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw --force delete allow "${port}/tcp" >/dev/null 2>&1 || true
+  fi
+  if command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null; then
+    firewall-cmd --permanent --remove-port="${port}/tcp" >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+  fi
+  iptables -D INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
+}
+
 # Opens the service port through the active firewall manager: ufw first, then
 # optionally firewalld (opt-in for apps that support it), then iptables with
 # persistence. Localized keys are addressed through the app key prefix and the

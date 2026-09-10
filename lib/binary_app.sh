@@ -322,6 +322,9 @@ i18n_register_many \
   binary_app.info.old_binary \
   "Previous binary kept at: %s" \
   "旧二进制保留在：%s" \
+  binary_app.warn.rollback_cleanup \
+  "Failed to clean installation artifact: %s" \
+  "清理安装产物失败：%s。" \
   binary_app.warn.old_binary_backup \
   "Old binary backed up as %s." \
   "旧二进制已备份为 %s。" \
@@ -1108,6 +1111,35 @@ ba_configure_ops() {
     "binary_app.error.logrotate" "binary_app.success.logrotate"
 }
 
+# Best-effort removal of configuration, log rotation, and firewall state
+# published before service start. A failed fresh install should not leave the
+# host partially configured while reporting that the application was rolled
+# back. Existing binaries are restored by the caller; this only removes
+# artifacts created by the failed installation attempt.
+ba_cleanup_install_artifacts() {
+  if [[ "${BA_USE_ENV_FILE:-0}" == "1" && -e "${ENV_FILE:-}" ]]; then
+    rm -f -- "$ENV_FILE" 2>/dev/null || warn "$(t binary_app.warn.rollback_cleanup "$ENV_FILE")"
+  fi
+  if declare -f ba_uninstall_extra >/dev/null 2>&1; then
+    if ! ( ba_uninstall_extra ) >/dev/null 2>&1; then
+      warn "$(t binary_app.warn.rollback_cleanup "$APP_NAME")"
+    fi
+  fi
+  if [[ -e "/etc/logrotate.d/${SERVICE_NAME}" ]]; then
+    rm -f -- "/etc/logrotate.d/${SERVICE_NAME}" 2>/dev/null       || warn "$(t binary_app.warn.rollback_cleanup "/etc/logrotate.d/${SERVICE_NAME}")"
+  fi
+  if [[ -n "${PORT:-}" ]]; then
+    app_remove_firewall "$PORT"
+  fi
+}
+
+# Remove download and extraction temporaries when installation exits before
+# they have been moved into their final locations.
+bapp_install_cleanup_temp_files() {
+  [[ -z "${tmp_bin:-}" ]] || rm -f -- "$tmp_bin" 2>/dev/null || true
+  [[ -z "${stage:-}" ]] || safe_rm_dir "$stage" "binary staging directory" 2>/dev/null || true
+}
+
 # Per-app certbot renewal drop-in. The file name embeds the service name so
 # two TLS-enabled apps never delete each other's renewal entry on uninstall.
 ba_tls_cron_file() {
@@ -1344,6 +1376,8 @@ bapp_install() {
   if ! tmp_bin="$(mktemp "${INSTALL_DIR}/.${BA_BIN_NAME}.tmp.XXXXXX")"; then
     error "$(t binary_app.error.download "$GITHUB_REPO")"
   fi
+  local stage=""
+  trap 'bapp_install_cleanup_temp_files' EXIT
   local download_url
   download_url="$(ba_download_urls "$latest" | head -1)"
   info "$(t binary_app.info.download_url "$download_url")"
@@ -1352,7 +1386,6 @@ bapp_install() {
     error "$(t binary_app.error.download "$download_url")"
   fi
   bapp_verify_download "$tmp_bin" "$latest"
-  local stage
   if ! stage="$(mktemp -d "${INSTALL_DIR}/.${BA_BIN_NAME}.stage.XXXXXX")"; then
     rm -f "$tmp_bin" 2>/dev/null || true
     error "$(t binary_app.error.extract)"
@@ -1400,8 +1433,10 @@ bapp_install() {
   if ba_start_service; then
     INSTALLED_VERSION="$latest"
     app_save_config
+    trap - EXIT
   else
     warn "$(t binary_app.warn.start_rollback)"
+    ba_cleanup_install_artifacts
     if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
       # The nginx site and renewal cron were published before the start
       # attempt; roll them back so no proxy keeps pointing at a dead port.

@@ -518,6 +518,8 @@ main() {
       run_isolated_check check_binary_app_systemd_paths_are_validated
       run_isolated_check check_binary_app_local_targets_follow_bind_addr
       run_isolated_check check_apt_installs_are_minimal
+      run_isolated_check check_binary_app_install_rollback_cleans_system_state
+      run_isolated_check check_binary_app_install_temporary_cleanup_helper
       run_isolated_check check_binary_app_pre_backup_hook_is_best_effort
       run_isolated_check check_binary_app_health_results_are_surfaced
       run_isolated_check check_binary_app_summary_management_hints
