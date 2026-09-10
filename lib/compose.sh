@@ -35,9 +35,7 @@ compose_require_runtime() {
 # Returns nonzero (never exits) so probes can treat validation as a check;
 # compose_run escalates the failure with a localized error.
 compose_validate_project() {
-  local work_dir="$1" project_file="$2" work_name project_name
-  work_name="$(basename "$work_dir")"
-  project_name="$(basename "$project_file")"
+  local work_dir="$1" project_file="$2"
   is_safe_path "$work_dir" || return 1
   is_safe_path "$project_file" || return 1
   [[ -d "$work_dir" && -f "$project_file" ]] || return 1
@@ -48,13 +46,6 @@ compose_validate_project() {
     work_dir="${work_dir%/}"
   done
   [[ "$project_file" == "$work_dir/"* ]] || return 1
-}
-
-# Echo an argv-ready compose invocation prefix given the working directory
-# and project file. Example: "docker compose --project-directory /opt/app -f /opt/app/compose.yml"
-compose_base_args() {
-  local work_dir="$1" project_file="$2"
-  printf -- '--project-directory %q -f %q' "$work_dir" "$project_file"
 }
 
 # Run one compose operation against the project, streaming output to stderr.
@@ -68,8 +59,9 @@ compose_run() {
   local compose_cmd
   compose_cmd="$(compose_command)"
   [[ -n "$compose_cmd" ]] || error "$(t compose.error.runtime_missing)"
-  local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  # Keep paths as individual argv elements; shell-quoted strings lose spaces
+  # when passed through a quote-stripping word splitter.
+  local -a base_args=(--project-directory "$work_dir" -f "$project_file")
   # shellcheck disable=SC2086
   $compose_cmd "${base_args[@]}" "$@" >&2
 }
@@ -83,8 +75,7 @@ compose_try() {
   compose_cmd="$(compose_command)"
   [[ -n "$compose_cmd" ]] || return 1
   compose_validate_project "$work_dir" "$project_file" || return 1
-  local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  local -a base_args=(--project-directory "$work_dir" -f "$project_file")
   # shellcheck disable=SC2086
   out="$($compose_cmd "${base_args[@]}" "$@" 2>&1)" || {
     printf '%s\n' "$out" >&2
@@ -117,14 +108,19 @@ compose_health() {
   compose_cmd="$(compose_command)"
   [[ -n "$compose_cmd" ]] || return 1
   compose_validate_project "$work_dir" "$project_file" || return 1
-  local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  local -a base_args=(--project-directory "$work_dir" -f "$project_file")
   # shellcheck disable=SC2086
-  out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || return 1
+  if ! out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || [[ -z "$out" ]]; then
+    # docker-compose v1 (<1.25) does not understand --format json.  Fall back
+    # to its table output; the same state words are present in the State
+    # column and the scan below remains fail-closed when no services exist.
+    # shellcheck disable=SC2086
+    out="$($compose_cmd "${base_args[@]}" ps 2>/dev/null)" || return 1
+  fi
   # Case-insensitive state scan: running/healthy pass; exited, dead, or
   # restarting services fail the check. docker compose uses lowercase
   # values ("running"), docker-compose uses title case ("Running").
-  printf '%s' "$out" | grep -qi '"running"\|"Running"\|"healthy"\|"Healthy"' \
-    && ! printf '%s' "$out" | grep -qi '"exited"\|"Exited"\|"dead"\|"Dead"\|"restarting"\|"Restarting"' \
+  printf '%s' "$out" | grep -Eiq '"?running"?|"?healthy"?' \
+    && ! printf '%s' "$out" | grep -Eiq '"?exited"?|"?dead"?|"?restarting"?' \
     || return 1
 }

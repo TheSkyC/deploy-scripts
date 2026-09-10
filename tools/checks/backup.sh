@@ -2735,7 +2735,7 @@ check_compose_lifecycle_and_health() {
     in_d && /^}$/ { if (!saw_d) { print "compose_down must delegate to compose_run" > "/dev/stderr"; exit 1 }; in_d=0 }
     /^compose_health\(\)/ { in_h=1; saw_ps=0; saw_fail=0; next }
     in_h && /ps --format json/ { saw_ps=1 }
-    in_h && index($0, "Exited") > 0 { saw_fail=1 }
+    in_h && /(exited|Exited|dead|Dead|restarting|Restarting)/ { saw_fail=1 }
     in_h && /^}$/ {
       if (!(saw_ps && saw_fail)) {
         print "compose_health must parse ps json and fail on exited services" > "/dev/stderr"
@@ -2764,6 +2764,7 @@ check_compose_lifecycle_and_health() {
     cat > "$tmp/bin/docker" <<'"'"'STUB'"'"'
 #!/bin/bash
 if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+printf "%s\n" "$@" > "$COMPOSE_ARGS_FILE"
 for a in "$@"; do
   if [[ "$a" == "ps" ]]; then
     printf "%s" "$COMPOSE_PS_OUTPUT"
@@ -2775,7 +2776,21 @@ STUB
     chmod +x "$tmp/bin/docker"
     export PATH="$tmp/bin:$PATH"
     export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"running\"}"
+    export COMPOSE_ARGS_FILE="$tmp/compose-args"
     compose_health "$tmp/project" "$tmp/project/compose.yml" || { echo HEALTH_RUNNING_FAILED; exit 111; }
+    grep -Fxq -- "--project-directory" "$COMPOSE_ARGS_FILE" || { echo NO_PROJECT_DIRECTORY_ARG; exit 113; }
+
+    # Project paths containing spaces must remain a single argv element.
+    spaced="$tmp/my project"
+    mkdir -p "$spaced"
+    printf "services: []\n" > "$spaced/compose.yml"
+    export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"running\"}"
+    compose_health "$spaced" "$spaced/compose.yml" || { echo HEALTH_SPACED_FAILED; exit 114; }
+    if grep -qx -- "/opt/my\ app" "$COMPOSE_ARGS_FILE"; then
+      echo SPACED_PATH_QUOTED; exit 115
+    fi
+    grep -Fxq -- "$spaced" "$COMPOSE_ARGS_FILE" || { echo SPACED_PATH_SPLIT; exit 116; }
+
     export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"Exited\"}"
     if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
       echo HEALTH_EXITED_ACCEPTED; exit 112
@@ -3041,4 +3056,76 @@ MIGRATE_IMPL
     grep -Fq "\"app\":\"newapi\"" "$tmp/out/backups-inventory.json"
     grep -Fq "\"state\":\"verified\"" "$tmp/out/backups-inventory.json"
   ' bash "$ROOT_DIR"
+}
+
+# Credentials passed directly in curl argv are visible to every local user
+# through the process list.  Token headers and basic-auth config must use
+# curl's /dev/fd input syntax.
+check_notify_credentials_stay_out_of_argv() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export NOTIFY_CONF_FILE="$tmp/notify.conf"
+    export NOTIFY_ARGS_FILE="$tmp/argv"
+    app_conf_trusted_value() { return 0; }
+    mkdir -p "$tmp/bin"
+    cat > "$tmp/bin/curl" <<CURL_STUB
+#!/bin/bash
+printf "%s\\n" "$@" > "$NOTIFY_ARGS_FILE"
+exit 0
+CURL_STUB
+    chmod +x "$tmp/bin/curl"
+
+    printf "NOTIFY_ENABLED=\"true\"\nNOTIFY_BACKEND=\"ntfy\"\nNOTIFY_URL=\"%s\"\nNOTIFY_TOKEN=\"secret-token\"\n" \
+      "$tmp/server" > "$NOTIFY_CONF_FILE"
+    PATH="$tmp/bin:$PATH" notify_send t b >/dev/null 2>&1
+    ! grep -Fq secret-token "$NOTIFY_ARGS_FILE" || { echo NTFY_TOKEN_IN_ARGV; exit 11; }
+
+    printf "NOTIFY_ENABLED=\"true\"\nNOTIFY_BACKEND=\"gotify\"\nNOTIFY_URL=\"%s\"\nNOTIFY_USERNAME=\"user\"\nNOTIFY_PASSWORD=\"secret-pass\"\n" \
+      "$tmp/server" > "$NOTIFY_CONF_FILE"
+    PATH="$tmp/bin:$PATH" notify_send t b >/dev/null 2>&1
+    ! grep -Fq secret-pass "$NOTIFY_ARGS_FILE" || { echo GOTIFY_PASSWORD_IN_ARGV; exit 12; }
+    echo ok
+  ' | grep -q ok
+}
+
+# compose_health must remain useful on legacy docker-compose releases whose
+# `ps --format json` is unavailable, without weakening the state scan.
+check_compose_health_supports_legacy_v1_tables() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin" "$tmp/project"
+    printf "services: []\\n" > "$tmp/project/compose.yml"
+    cat > "$tmp/bin/docker" <<'"'"'DOCKER'"'"'
+#!/bin/bash
+exit 1
+DOCKER
+    cat > "$tmp/bin/docker-compose" <<'"'"'COMPOSE'"'"'
+#!/bin/bash
+if [[ "$*" == *--format* ]]; then exit 64; fi
+for a in "$@"; do
+  if [[ "$a" == "ps" ]]; then
+    printf "%s" "$COMPOSE_PS_OUTPUT"
+    exit 0
+  fi
+done
+exit 0
+COMPOSE
+    chmod +x "$tmp/bin/docker" "$tmp/bin/docker-compose"
+    export PATH="$tmp/bin:$PATH"
+    export COMPOSE_PS_OUTPUT="Name Command State Ports
+app app running 8080"
+    compose_health "$tmp/project" "$tmp/project/compose.yml" || { echo LEGACY_HEALTH_FAILED; exit 21; }
+    export COMPOSE_PS_OUTPUT="Name Command State Ports
+app app Exited 8080"
+    if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
+      echo LEGACY_EXITED_ACCEPTED; exit 22
+    fi
+    echo ok
+  ' | grep -q ok
 }
