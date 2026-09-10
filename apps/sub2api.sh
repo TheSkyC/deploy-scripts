@@ -351,6 +351,9 @@ i18n_register_many \
   app.sub2api.summary.version \
   "Version" \
   "版本" \
+  app.sub2api.summary.setup_wizard \
+  "Setup Wizard" \
+  "Setup Wizard" \
   app.sub2api.summary.postgres_title \
   "PostgreSQL account (Setup Wizard -> Database)" \
   "PostgreSQL 账号（Setup Wizard → 数据库配置）" \

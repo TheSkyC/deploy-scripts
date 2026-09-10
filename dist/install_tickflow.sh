@@ -7989,32 +7989,27 @@ _health_check() {
 
 _print_summary() {
   local state="$1"
+  local summary_title
   local internal_ip
   internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   internal_ip="${internal_ip:-YOUR_SERVER_IP}"
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔══════════════════════════════════════════════════════╗"
   if [[ "$state" == "pending" ]]; then
-    printf "  ║               %s                     ║\n" "$(t app.tickflow.summary.title_pending)"
+    summary_title="$(t app.tickflow.summary.title_pending)"
   else
-    printf "  ║               %s                     ║\n" "$(t app.tickflow.summary.title_ready)"
+    summary_title="$(t app.tickflow.summary.title_ready)"
   fi
-  echo "  ╠══════════════════════════════════════════════════════╣"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
   if [[ -n "$TICKFLOW_DOMAIN" ]]; then
-    echo -e "  ║  $(t app.tickflow.summary.public)  ${CYAN}http://${TICKFLOW_DOMAIN}${GREEN}"
+    echo -e "  $(t app.tickflow.summary.public): ${CYAN}http://${TICKFLOW_DOMAIN}${NC}"
   fi
-  echo -e "  ║  $(t app.tickflow.summary.internal)  ${CYAN}http://${internal_ip}:${TICKFLOW_PORT}${GREEN}"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.tickflow.summary.repo)  ${YELLOW}${TICKFLOW_REPO}${GREEN}"
-  echo -e "  ║  $(t app.tickflow.summary.compose)  ${YELLOW}${TICKFLOW_INSTALL_DIR}${GREEN}"
-  echo -e "  ║  $(t app.tickflow.summary.data)  ${YELLOW}${TICKFLOW_DATA_DIR}${GREEN}"
-  echo -e "  ║  $(t app.tickflow.summary.env)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.tickflow.summary.auth_file)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
-  echo -e "  ║  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${GREEN}"
-  echo "  ╚══════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+  echo -e "  $(t app.tickflow.summary.internal): ${CYAN}http://${internal_ip}:${TICKFLOW_PORT}${NC}"
+  echo -e "  $(t app.tickflow.summary.repo): ${YELLOW}${TICKFLOW_REPO}${NC}"
+  echo -e "  $(t app.tickflow.summary.compose): ${YELLOW}${TICKFLOW_INSTALL_DIR}${NC}"
+  echo -e "  $(t app.tickflow.summary.data): ${YELLOW}${TICKFLOW_DATA_DIR}${NC}"
+  echo -e "  $(t app.tickflow.summary.env): ${YELLOW}${TICKFLOW_ENV_FILE}${NC}"
+  echo -e "  $(t app.tickflow.summary.auth_file): ${YELLOW}${TICKFLOW_ENV_FILE}${NC}"
+  echo -e "  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${NC}"
   echo -e "  ${BOLD}$(t app.tickflow.summary.systemd)${NC}"
   echo ""
   echo -e "  ${CYAN}systemctl status ${TICKFLOW_SERVICE_NAME}${NC}      $(t app.tickflow.summary.status_cmd)"

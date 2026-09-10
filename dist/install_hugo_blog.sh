@@ -8813,6 +8813,7 @@ fi
 app_save_config
 step "$(t app.blog.step_health)"
 local _blog_summary_state="ready"
+local _blog_summary_title
 HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
 if [[ "$HTTP_CODE" == "200" ]]; then
   success "$(t app.blog.http_ok)"
@@ -8823,30 +8824,26 @@ fi
 INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
 echo ""
-echo -e "${BOLD}${GREEN}"
-echo "  ╔══════════════════════════════════════════════════════╗"
+echo -e "  ${BOLD}${GREEN}$(t app.blog.summary_title_ready)${NC}"
 if [[ "$_blog_summary_state" == "pending" ]]; then
-  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_pending)"
+  _blog_summary_title="$(t app.blog.summary_title_pending)"
 else
-  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_ready)"
+  _blog_summary_title="$(t app.blog.summary_title_ready)"
 fi
-echo "  ╠══════════════════════════════════════════════════════╣"
+echo -e "  ${BOLD}${GREEN}${_blog_summary_title}${NC}"
 if [[ -n "$BLOG_DOMAIN" ]]; then
-echo -e "  ║  $(t app.blog.public_url)  ${CYAN}http://${BLOG_DOMAIN}${GREEN}"
+echo -e "  $(t app.blog.public_url): ${CYAN}http://${BLOG_DOMAIN}${NC}"
 fi
-echo -e "  ║  $(t app.blog.internal_url)  ${CYAN}http://${INTERNAL_IP}${GREEN}"
+echo -e "  $(t app.blog.internal_url): ${CYAN}http://${INTERNAL_IP}${NC}"
 if [[ "$ENABLE_CMS" == "true" ]]; then
-echo -e "  ║  $(t app.blog.cms_admin)  ${CYAN}http://${INTERNAL_IP}/admin/${GREEN}  ($(t app.blog.oauth_required))"
+echo -e "  $(t app.blog.cms_admin): ${CYAN}http://${INTERNAL_IP}/admin/${NC} ($(t app.blog.oauth_required))"
 fi
-echo "  ╠══════════════════════════════════════════════════════╣"
-echo -e "  ║  $(t app.blog.site_dir)  ${YELLOW}${SITE_DIR}${GREEN}"
-echo -e "  ║  $(t app.blog.posts_dir)  ${YELLOW}${SITE_DIR}/content/post/${GREEN}"
-echo -e "  ║  $(t app.blog.public_dir)  ${YELLOW}${NGINX_ROOT}${GREEN}"
+echo -e "  $(t app.blog.site_dir): ${YELLOW}${SITE_DIR}${NC}"
+echo -e "  $(t app.blog.posts_dir): ${YELLOW}${SITE_DIR}/content/post/${NC}"
+echo -e "  $(t app.blog.public_dir): ${YELLOW}${NGINX_ROOT}${NC}"
 if [[ "$ENABLE_CMS" == "true" ]]; then
-echo -e "  ║  $(t app.blog.cms_config)  ${YELLOW}${SITE_DIR}/static/admin/config.yml${GREEN}"
+echo -e "  $(t app.blog.cms_config): ${YELLOW}${SITE_DIR}/static/admin/config.yml${NC}"
 fi
-echo "  ╚══════════════════════════════════════════════════════╝"
-echo -e "${NC}"
 echo -e "  ${BOLD}$(t app.blog.workflow_title)${NC}"
 echo ""
 echo -e "  ${CYAN}# $(t app.blog.workflow_new_post)${NC}"

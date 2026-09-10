@@ -471,6 +471,9 @@ i18n_register_many \
   app.vaultwarden.summary.data \
   "Data dir" \
   "数据目录" \
+  app.vaultwarden.summary.web_vault \
+  "Web Vault" \
+  "Web Vault" \
   app.vaultwarden.summary.env \
   "Env file" \
   "环境配置" \

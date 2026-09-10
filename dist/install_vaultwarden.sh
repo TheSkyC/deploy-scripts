@@ -7717,6 +7717,9 @@ i18n_register_many \
   app.vaultwarden.summary.data \
   "Data dir" \
   "数据目录" \
+  app.vaultwarden.summary.web_vault \
+  "Web Vault" \
+  "Web Vault" \
   app.vaultwarden.summary.env \
   "Env file" \
   "环境配置" \
@@ -9437,7 +9440,7 @@ CRON
     warn "$(t app.vaultwarden.warn.debug)"
     local _health_state="pending"
   fi
-  local INTERNAL_IP PROTO INSTALLED_VER
+  local INTERNAL_IP PROTO INSTALLED_VER summary_title
   INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
   INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then PROTO="https"; else PROTO="http"; fi
@@ -9450,30 +9453,24 @@ CRON
     error "$(t app.vaultwarden.error.admin_token_hash)"
   fi
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔═══════════════════════════════════════════════════════════════╗"
   if [[ "$_health_state" == "pending" ]]; then
-    echo "  ║             $(t app.vaultwarden.summary.title_pending)            ║"
+    summary_title="$(t app.vaultwarden.summary.title_pending)"
   else
-    echo "  ║             $(t app.vaultwarden.summary.title_ready)            ║"
+    summary_title="$(t app.vaultwarden.summary.title_ready)"
   fi
-  echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.vaultwarden.summary.url)    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.admin)  ${CYAN}${PROTO}://${VW_DOMAIN}/admin${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.lan)    ${CYAN}http://${INTERNAL_IP}:${VW_PORT}${GREEN}"
-  echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.vaultwarden.summary.version)        ${YELLOW}${INSTALLED_VER}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.binary)      ${YELLOW}${VW_BIN}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.data)    ${YELLOW}${VW_DATA_DIR}${GREEN}"
-  echo -e "  ║  Web Vault   ${YELLOW}${VW_WEB_DIR}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.env)    ${YELLOW}${VW_ENV_FILE}${GREEN}  ($(t app.vaultwarden.summary.mode600))"
-  echo -e "  ║  $(t app.vaultwarden.summary.log)        ${YELLOW}${VW_LOG_FILE}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.backup)    ${YELLOW}${VW_BACKUP_DIR}${GREEN}"
-  echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning "$VW_ADMIN_TOKEN_FILE")${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.view_command) ${YELLOW}install_vaultwarden.sh token${GREEN}"
-  echo "  ╚═══════════════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.url): ${CYAN}${PROTO}://${VW_DOMAIN}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.admin): ${CYAN}${PROTO}://${VW_DOMAIN}/admin${NC}"
+  echo -e "  $(t app.vaultwarden.summary.lan): ${CYAN}http://${INTERNAL_IP}:${VW_PORT}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.version): ${YELLOW}${INSTALLED_VER}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.binary): ${YELLOW}${VW_BIN}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.data): ${YELLOW}${VW_DATA_DIR}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.web_vault): ${YELLOW}${VW_WEB_DIR}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.env): ${YELLOW}${VW_ENV_FILE}${NC} ($(t app.vaultwarden.summary.mode600))"
+  echo -e "  $(t app.vaultwarden.summary.log): ${YELLOW}${VW_LOG_FILE}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.backup): ${YELLOW}${VW_BACKUP_DIR}${NC}"
+  echo -e "  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning "$VW_ADMIN_TOKEN_FILE")${NC}"
+  echo -e "  $(t app.vaultwarden.summary.view_command) ${YELLOW}install_vaultwarden.sh token${NC}"
   echo -e "  ${BOLD}$(t app.vaultwarden.summary.first_steps)${NC}"
   echo ""
   echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step0)${NC}"

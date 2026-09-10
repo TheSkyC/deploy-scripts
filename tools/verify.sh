@@ -390,6 +390,7 @@ main() {
       check_no_color_output
       check_no_argument_menu
       check_menu_surfaces_supported_advanced_actions
+      check_install_summaries_avoid_fixed_width_boxes
       check_doctor_strict_returns_on_warnings
       check_manager_list
       check_manager_menu_shortcuts
@@ -626,6 +627,7 @@ main() {
       run_isolated_check check_nginx_main_config_edits_are_atomic
       run_isolated_check check_nginx_test_failures_report_diagnostics
       run_isolated_check check_no_chinese_comments
+      run_isolated_check check_install_summaries_avoid_fixed_width_boxes
       run_isolated_check check_no_fixed_tmp_downloads
       run_isolated_check check_no_flag_chained_error_handlers
       run_isolated_check check_no_hardcoded_chinese_impl
@@ -890,4 +892,3 @@ main() {
 }
 
 main "$@"
-

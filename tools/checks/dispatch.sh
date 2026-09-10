@@ -575,6 +575,13 @@ check_no_chinese_comments() {
   fi
 }
 
+check_install_summaries_avoid_fixed_width_boxes() {
+  if grep -R -nE '(echo|printf).*[╔╗╚╝╠╣║]' impl/*.sh; then
+    echo "Install summaries must not use fixed-width box drawing; it breaks with CJK text widths." >&2
+    return 1
+  fi
+}
+
 check_help_masks_sensitive_config_values() {
   local output
   output="$(DEPLOY_LANG=en "$BASH_BIN" -c '

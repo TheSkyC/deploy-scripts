@@ -456,7 +456,7 @@ check_blog_install_summary_matches_local_health() {
       in_health && /_blog_summary_state="pending"/ { saw_pending=1 }
       in_health && /app\.blog\.summary_title_pending/ { saw_pending_title=1 }
       in_health && /app\.blog\.summary_title_ready/ { saw_ready_title=1 }
-      in_health && /echo "  ╚══════════════════════════════════════════════════════╝"/ {
+      in_health && /app\.blog\.workflow_title/ {
         if (!(saw_state && saw_host_header && saw_pending && saw_pending_title && saw_ready_title)) {
           printf "%s Blog install summary must track local health state and probe the configured host locally\n", FILENAME > "/dev/stderr"
           exit 1

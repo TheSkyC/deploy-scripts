@@ -10661,6 +10661,9 @@ i18n_register_many \
   app.sub2api.summary.version \
   "Version" \
   "版本" \
+  app.sub2api.summary.setup_wizard \
+  "Setup Wizard" \
+  "Setup Wizard" \
   app.sub2api.summary.postgres_title \
   "PostgreSQL account (Setup Wizard -> Database)" \
   "PostgreSQL 账号（Setup Wizard → 数据库配置）" \
@@ -11813,6 +11816,9 @@ i18n_register_many \
   app.vaultwarden.summary.data \
   "Data dir" \
   "数据目录" \
+  app.vaultwarden.summary.web_vault \
+  "Web Vault" \
+  "Web Vault" \
   app.vaultwarden.summary.env \
   "Env file" \
   "环境配置" \
@@ -15820,38 +15826,32 @@ _print_install_summary() {
     next_step_two="$(t app.sub2api.summary.next2_ready)"
   fi
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔════════════════════════════════════════════════════════════════╗"
-  echo "  ║              ${summary_title}                            ║"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  Setup Wizard   ${CYAN}${access_url}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.version)           ${YELLOW}${version}${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${BOLD}$(t app.sub2api.summary.postgres_title)${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.host)         ${CYAN}localhost${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.port)         ${CYAN}5432${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.username)       ${CYAN}${PG_USER}${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.password)         ${YELLOW}$(t app.sub2api.summary.password_written "$CONF_FILE")${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.database)     ${CYAN}${PG_DB}${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.ssl_mode)     ${CYAN}$(t app.sub2api.summary.ssl_disable)${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${BOLD}$(t app.sub2api.summary.redis_title)${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.host)         ${CYAN}localhost${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.port)         ${CYAN}6379${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.password)         ${CYAN}$(t app.sub2api.summary.empty)${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.sub2api.summary.install_dir)       ${YELLOW}${INSTALL_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.data_dir)       ${YELLOW}${DATA_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.config_dir)       ${YELLOW}${CONFIG_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.log_dir)       ${YELLOW}${LOG_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.backup_dir)       ${YELLOW}${BACKUP_DIR}${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo "  ║  $(t app.sub2api.summary.next_steps)"
-  echo -e "  ║    1) $(t app.sub2api.summary.next1)"
-  echo -e "  ║    2) ${next_step_two}"
-  echo -e "  ║    3) $(t app.sub2api.summary.next3 "$CONF_FILE")"
-  echo "  ╚════════════════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
+  echo -e "  $(t app.sub2api.summary.setup_wizard): ${CYAN}${access_url}${NC}"
+  echo -e "  $(t app.sub2api.summary.version): ${YELLOW}${version}${NC}"
+  echo ""
+  echo -e "  ${BOLD}$(t app.sub2api.summary.postgres_title)${NC}"
+  echo -e "    $(t app.sub2api.summary.host): ${CYAN}localhost${NC}"
+  echo -e "    $(t app.sub2api.summary.port): ${CYAN}5432${NC}"
+  echo -e "    $(t app.sub2api.summary.username): ${CYAN}${PG_USER}${NC}"
+  echo -e "    $(t app.sub2api.summary.password): ${YELLOW}$(t app.sub2api.summary.password_written "$CONF_FILE")${NC}"
+  echo -e "    $(t app.sub2api.summary.database): ${CYAN}${PG_DB}${NC}"
+  echo -e "    $(t app.sub2api.summary.ssl_mode): ${CYAN}$(t app.sub2api.summary.ssl_disable)${NC}"
+  echo ""
+  echo -e "  ${BOLD}$(t app.sub2api.summary.redis_title)${NC}"
+  echo -e "    $(t app.sub2api.summary.host): ${CYAN}localhost${NC}"
+  echo -e "    $(t app.sub2api.summary.port): ${CYAN}6379${NC}"
+  echo -e "    $(t app.sub2api.summary.password): ${CYAN}$(t app.sub2api.summary.empty)${NC}"
+  echo ""
+  echo -e "  $(t app.sub2api.summary.install_dir): ${YELLOW}${INSTALL_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.data_dir): ${YELLOW}${DATA_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.config_dir): ${YELLOW}${CONFIG_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.log_dir): ${YELLOW}${LOG_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.backup_dir): ${YELLOW}${BACKUP_DIR}${NC}"
+  echo -e "  ${BOLD}$(t app.sub2api.summary.next_steps)${NC}"
+  echo -e "    1) $(t app.sub2api.summary.next1)"
+  echo -e "    2) ${next_step_two}"
+  echo -e "    3) $(t app.sub2api.summary.next3 "$CONF_FILE")"
   echo -e "  ${BOLD}$(t app.sub2api.summary.management)${NC}"
   echo -e "    ${CYAN}bash $0 status${NC}      - $(t app.sub2api.summary.cmd_status)"
   echo -e "    ${CYAN}bash $0 update${NC}      - $(t app.sub2api.summary.cmd_update)"
@@ -17835,7 +17835,7 @@ CRON
     warn "$(t app.vaultwarden.warn.debug)"
     local _health_state="pending"
   fi
-  local INTERNAL_IP PROTO INSTALLED_VER
+  local INTERNAL_IP PROTO INSTALLED_VER summary_title
   INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
   INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then PROTO="https"; else PROTO="http"; fi
@@ -17848,30 +17848,24 @@ CRON
     error "$(t app.vaultwarden.error.admin_token_hash)"
   fi
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔═══════════════════════════════════════════════════════════════╗"
   if [[ "$_health_state" == "pending" ]]; then
-    echo "  ║             $(t app.vaultwarden.summary.title_pending)            ║"
+    summary_title="$(t app.vaultwarden.summary.title_pending)"
   else
-    echo "  ║             $(t app.vaultwarden.summary.title_ready)            ║"
+    summary_title="$(t app.vaultwarden.summary.title_ready)"
   fi
-  echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.vaultwarden.summary.url)    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.admin)  ${CYAN}${PROTO}://${VW_DOMAIN}/admin${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.lan)    ${CYAN}http://${INTERNAL_IP}:${VW_PORT}${GREEN}"
-  echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.vaultwarden.summary.version)        ${YELLOW}${INSTALLED_VER}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.binary)      ${YELLOW}${VW_BIN}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.data)    ${YELLOW}${VW_DATA_DIR}${GREEN}"
-  echo -e "  ║  Web Vault   ${YELLOW}${VW_WEB_DIR}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.env)    ${YELLOW}${VW_ENV_FILE}${GREEN}  ($(t app.vaultwarden.summary.mode600))"
-  echo -e "  ║  $(t app.vaultwarden.summary.log)        ${YELLOW}${VW_LOG_FILE}${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.backup)    ${YELLOW}${VW_BACKUP_DIR}${GREEN}"
-  echo "  ╠═══════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning "$VW_ADMIN_TOKEN_FILE")${GREEN}"
-  echo -e "  ║  $(t app.vaultwarden.summary.view_command) ${YELLOW}install_vaultwarden.sh token${GREEN}"
-  echo "  ╚═══════════════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.url): ${CYAN}${PROTO}://${VW_DOMAIN}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.admin): ${CYAN}${PROTO}://${VW_DOMAIN}/admin${NC}"
+  echo -e "  $(t app.vaultwarden.summary.lan): ${CYAN}http://${INTERNAL_IP}:${VW_PORT}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.version): ${YELLOW}${INSTALLED_VER}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.binary): ${YELLOW}${VW_BIN}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.data): ${YELLOW}${VW_DATA_DIR}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.web_vault): ${YELLOW}${VW_WEB_DIR}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.env): ${YELLOW}${VW_ENV_FILE}${NC} ($(t app.vaultwarden.summary.mode600))"
+  echo -e "  $(t app.vaultwarden.summary.log): ${YELLOW}${VW_LOG_FILE}${NC}"
+  echo -e "  $(t app.vaultwarden.summary.backup): ${YELLOW}${VW_BACKUP_DIR}${NC}"
+  echo -e "  ${RED}${BOLD}$(t app.vaultwarden.summary.token_warning "$VW_ADMIN_TOKEN_FILE")${NC}"
+  echo -e "  $(t app.vaultwarden.summary.view_command) ${YELLOW}install_vaultwarden.sh token${NC}"
   echo -e "  ${BOLD}$(t app.vaultwarden.summary.first_steps)${NC}"
   echo ""
   echo -e "  ${CYAN}# $(t app.vaultwarden.summary.step0)${NC}"
@@ -20643,6 +20637,7 @@ fi
 app_save_config
 step "$(t app.blog.step_health)"
 local _blog_summary_state="ready"
+local _blog_summary_title
 HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
 if [[ "$HTTP_CODE" == "200" ]]; then
   success "$(t app.blog.http_ok)"
@@ -20653,30 +20648,26 @@ fi
 INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
 echo ""
-echo -e "${BOLD}${GREEN}"
-echo "  ╔══════════════════════════════════════════════════════╗"
+echo -e "  ${BOLD}${GREEN}$(t app.blog.summary_title_ready)${NC}"
 if [[ "$_blog_summary_state" == "pending" ]]; then
-  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_pending)"
+  _blog_summary_title="$(t app.blog.summary_title_pending)"
 else
-  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_ready)"
+  _blog_summary_title="$(t app.blog.summary_title_ready)"
 fi
-echo "  ╠══════════════════════════════════════════════════════╣"
+echo -e "  ${BOLD}${GREEN}${_blog_summary_title}${NC}"
 if [[ -n "$BLOG_DOMAIN" ]]; then
-echo -e "  ║  $(t app.blog.public_url)  ${CYAN}http://${BLOG_DOMAIN}${GREEN}"
+echo -e "  $(t app.blog.public_url): ${CYAN}http://${BLOG_DOMAIN}${NC}"
 fi
-echo -e "  ║  $(t app.blog.internal_url)  ${CYAN}http://${INTERNAL_IP}${GREEN}"
+echo -e "  $(t app.blog.internal_url): ${CYAN}http://${INTERNAL_IP}${NC}"
 if [[ "$ENABLE_CMS" == "true" ]]; then
-echo -e "  ║  $(t app.blog.cms_admin)  ${CYAN}http://${INTERNAL_IP}/admin/${GREEN}  ($(t app.blog.oauth_required))"
+echo -e "  $(t app.blog.cms_admin): ${CYAN}http://${INTERNAL_IP}/admin/${NC} ($(t app.blog.oauth_required))"
 fi
-echo "  ╠══════════════════════════════════════════════════════╣"
-echo -e "  ║  $(t app.blog.site_dir)  ${YELLOW}${SITE_DIR}${GREEN}"
-echo -e "  ║  $(t app.blog.posts_dir)  ${YELLOW}${SITE_DIR}/content/post/${GREEN}"
-echo -e "  ║  $(t app.blog.public_dir)  ${YELLOW}${NGINX_ROOT}${GREEN}"
+echo -e "  $(t app.blog.site_dir): ${YELLOW}${SITE_DIR}${NC}"
+echo -e "  $(t app.blog.posts_dir): ${YELLOW}${SITE_DIR}/content/post/${NC}"
+echo -e "  $(t app.blog.public_dir): ${YELLOW}${NGINX_ROOT}${NC}"
 if [[ "$ENABLE_CMS" == "true" ]]; then
-echo -e "  ║  $(t app.blog.cms_config)  ${YELLOW}${SITE_DIR}/static/admin/config.yml${GREEN}"
+echo -e "  $(t app.blog.cms_config): ${YELLOW}${SITE_DIR}/static/admin/config.yml${NC}"
 fi
-echo "  ╚══════════════════════════════════════════════════════╝"
-echo -e "${NC}"
 echo -e "  ${BOLD}$(t app.blog.workflow_title)${NC}"
 echo ""
 echo -e "  ${CYAN}# $(t app.blog.workflow_new_post)${NC}"
@@ -21556,32 +21547,27 @@ _health_check() {
 
 _print_summary() {
   local state="$1"
+  local summary_title
   local internal_ip
   internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   internal_ip="${internal_ip:-YOUR_SERVER_IP}"
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔══════════════════════════════════════════════════════╗"
   if [[ "$state" == "pending" ]]; then
-    printf "  ║               %s                     ║\n" "$(t app.tickflow.summary.title_pending)"
+    summary_title="$(t app.tickflow.summary.title_pending)"
   else
-    printf "  ║               %s                     ║\n" "$(t app.tickflow.summary.title_ready)"
+    summary_title="$(t app.tickflow.summary.title_ready)"
   fi
-  echo "  ╠══════════════════════════════════════════════════════╣"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
   if [[ -n "$TICKFLOW_DOMAIN" ]]; then
-    echo -e "  ║  $(t app.tickflow.summary.public)  ${CYAN}http://${TICKFLOW_DOMAIN}${GREEN}"
+    echo -e "  $(t app.tickflow.summary.public): ${CYAN}http://${TICKFLOW_DOMAIN}${NC}"
   fi
-  echo -e "  ║  $(t app.tickflow.summary.internal)  ${CYAN}http://${internal_ip}:${TICKFLOW_PORT}${GREEN}"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.tickflow.summary.repo)  ${YELLOW}${TICKFLOW_REPO}${GREEN}"
-  echo -e "  ║  $(t app.tickflow.summary.compose)  ${YELLOW}${TICKFLOW_INSTALL_DIR}${GREEN}"
-  echo -e "  ║  $(t app.tickflow.summary.data)  ${YELLOW}${TICKFLOW_DATA_DIR}${GREEN}"
-  echo -e "  ║  $(t app.tickflow.summary.env)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
-  echo "  ╠══════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.tickflow.summary.auth_file)  ${YELLOW}${TICKFLOW_ENV_FILE}${GREEN}"
-  echo -e "  ║  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${GREEN}"
-  echo "  ╚══════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+  echo -e "  $(t app.tickflow.summary.internal): ${CYAN}http://${internal_ip}:${TICKFLOW_PORT}${NC}"
+  echo -e "  $(t app.tickflow.summary.repo): ${YELLOW}${TICKFLOW_REPO}${NC}"
+  echo -e "  $(t app.tickflow.summary.compose): ${YELLOW}${TICKFLOW_INSTALL_DIR}${NC}"
+  echo -e "  $(t app.tickflow.summary.data): ${YELLOW}${TICKFLOW_DATA_DIR}${NC}"
+  echo -e "  $(t app.tickflow.summary.env): ${YELLOW}${TICKFLOW_ENV_FILE}${NC}"
+  echo -e "  $(t app.tickflow.summary.auth_file): ${YELLOW}${TICKFLOW_ENV_FILE}${NC}"
+  echo -e "  ${RED}${BOLD}$(t app.tickflow.summary.auth_warning "$TICKFLOW_ENV_FILE")${NC}"
   echo -e "  ${BOLD}$(t app.tickflow.summary.systemd)${NC}"
   echo ""
   echo -e "  ${CYAN}systemctl status ${TICKFLOW_SERVICE_NAME}${NC}      $(t app.tickflow.summary.status_cmd)"
