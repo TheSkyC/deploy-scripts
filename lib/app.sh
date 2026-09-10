@@ -737,7 +737,9 @@ app_configure_firewall() {
   local port="$1" app_prefix="$2" app_label="$3" enable_firewalld="${4:-false}"
   local FW_DONE=false FW_ERROR=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if ufw allow "${port}/tcp" comment "$app_label" > /dev/null; then
+    # ufw gained `comment` in 0.34. Older releases would reject the whole
+    # rule, so fall back to the equivalent rule without a comment.
+    if ufw allow "${port}/tcp" comment "$app_label" > /dev/null         || ufw allow "${port}/tcp" > /dev/null; then
       success "$(t "${app_prefix}.success.ufw_port" "$port")"
       FW_DONE=true
     else
@@ -825,7 +827,14 @@ app_doctor_config_diff() {
 }
 
 do_doctor() {
-  local failures=0 warnings=0
+  local failures=0 warnings=0 strict="${DEPLOY_DOCTOR_STRICT:-0}"
+  while (($#)); do
+    case "$1" in
+      --strict) strict=1 ;;
+      *) error "$(t common.invalid_choice "$1")" ;;
+    esac
+    shift
+  done
 
   doctor_ok() { success "$*"; }
   doctor_warn() { warnings=$((warnings + 1)); warn "$*"; }
@@ -927,6 +936,7 @@ do_doctor() {
   fi
   if [[ "$warnings" -gt 0 ]]; then
     doctor_warn "$(t doctor.done_warn "$failures" "$warnings")"
+    [[ "$strict" != 1 ]] || return 1
   else
     doctor_ok "$(t doctor.done_ok)"
   fi

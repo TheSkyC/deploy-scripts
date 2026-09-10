@@ -388,6 +388,8 @@ main() {
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
+      check_menu_surfaces_supported_advanced_actions
+      check_doctor_strict_returns_on_warnings
       check_manager_list
       check_manager_menu_shortcuts
       check_no_tty_menu_usage
@@ -598,6 +600,7 @@ main() {
       run_isolated_check check_download_validation_failures_cleanup
       run_isolated_check check_fail2ban_configs_are_atomic
       run_isolated_check check_firewall_success_paths_validate_command_results
+      run_isolated_check check_ufw_comment_has_fallback
       run_isolated_check check_framework_validator_errors_are_actionable
       run_isolated_check check_generated_backup_headers_are_shell_quoted
       run_isolated_check check_generated_backup_scripts_handle_missing_dirs

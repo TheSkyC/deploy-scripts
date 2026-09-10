@@ -44,6 +44,8 @@ check_gitea_config_is_managed_atomically() {
   for file in impl/install_gitea.sh; do
     grep -Fq 'atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}"' "$file" \
       && grep -Fq 'DB_TYPE = sqlite' "$file" \
+      && grep -Fq 'DISABLE_SSH = true' "$file" \
+      && grep -Fq 'DISABLE_REGISTRATION = true' "$file" \
       && grep -Fq 'error "$(t app.gitea.error.config_write "$config_file")"' "$file" \
       && grep -Fq 'ba_remove_file_or_error "$config_file" "GITEA_CONFIG_FILE"' "$file" \
       || {

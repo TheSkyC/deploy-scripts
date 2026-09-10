@@ -67,7 +67,7 @@ DB_TYPE = sqlite
 PATH = ${DATA_DIR}/gitea.db
 
 [service]
-DISABLE_REGISTRATION = false
+DISABLE_REGISTRATION = true
 
 [log]
 MODE = console

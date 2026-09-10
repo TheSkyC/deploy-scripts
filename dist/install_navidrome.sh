@@ -181,6 +181,9 @@ i18n_register doctor.config_diff_secret "Config drift: %s changed (value hidden)
 i18n_register doctor.config_diff_none "No configuration drift detected." "未检测到配置漂移。"
 i18n_register menu.backup_desc "create a manual backup" "创建手动备份"
 i18n_register menu.doctor_desc "run non-destructive diagnostics" "执行非破坏性诊断"
+i18n_register menu.verify_desc "verify the last backup or deployment" "验证最近备份或部署"
+i18n_register menu.token_desc "manage application token" "管理应用令牌"
+i18n_register menu.signups_desc "manage registration toggle" "管理注册开关"
 i18n_register menu.install_desc "full install or redeploy" "完整安装或重新部署"
 i18n_register menu.restore_desc "restore from a backup" "从备份恢复"
 i18n_register menu.status_desc "show service and runtime status" "查看服务和运行状态"
@@ -4644,7 +4647,9 @@ app_configure_firewall() {
   local port="$1" app_prefix="$2" app_label="$3" enable_firewalld="${4:-false}"
   local FW_DONE=false FW_ERROR=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if ufw allow "${port}/tcp" comment "$app_label" > /dev/null; then
+    # ufw gained `comment` in 0.34. Older releases would reject the whole
+    # rule, so fall back to the equivalent rule without a comment.
+    if ufw allow "${port}/tcp" comment "$app_label" > /dev/null         || ufw allow "${port}/tcp" > /dev/null; then
       success "$(t "${app_prefix}.success.ufw_port" "$port")"
       FW_DONE=true
     else
@@ -4732,7 +4737,14 @@ app_doctor_config_diff() {
 }
 
 do_doctor() {
-  local failures=0 warnings=0
+  local failures=0 warnings=0 strict="${DEPLOY_DOCTOR_STRICT:-0}"
+  while (($#)); do
+    case "$1" in
+      --strict) strict=1 ;;
+      *) error "$(t common.invalid_choice "$1")" ;;
+    esac
+    shift
+  done
 
   doctor_ok() { success "$*"; }
   doctor_warn() { warnings=$((warnings + 1)); warn "$*"; }
@@ -4834,6 +4846,7 @@ do_doctor() {
   fi
   if [[ "$warnings" -gt 0 ]]; then
     doctor_warn "$(t doctor.done_warn "$failures" "$warnings")"
+    [[ "$strict" != 1 ]] || return 1
   else
     doctor_ok "$(t doctor.done_ok)"
   fi
@@ -7040,6 +7053,19 @@ show_menu() {
   echo "  5) status     - $(t menu.status_desc)"
   echo "  6) doctor     - $(t menu.doctor_desc)"
   echo "  7) uninstall  - $(t menu.uninstall_desc)"
+  local menu_no=8
+  if declare -f do_verify >/dev/null 2>&1; then
+    echo "  ${menu_no}) verify       - $(t menu.verify_desc)"
+    menu_no=$((menu_no + 1))
+  fi
+  if declare -f do_token >/dev/null 2>&1; then
+    echo "  ${menu_no}) token        - $(t menu.token_desc)"
+    menu_no=$((menu_no + 1))
+  fi
+  if declare -f do_signups >/dev/null 2>&1; then
+    echo "  ${menu_no}) signups      - $(t menu.signups_desc)"
+    menu_no=$((menu_no + 1))
+  fi
   echo "  q) $(t common.quit)"
   echo
   prompt "$(t common.selection_prompt)"

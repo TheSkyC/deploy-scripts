@@ -631,3 +631,28 @@ check_status_framework_version_is_reported() {
     grep -Fq "\"version\":\"v9.8.7-test\"" <<< "$output"
   ' bash "$ROOT_DIR"
 }
+
+# Advanced actions must be discoverable where they exist, without pretending
+# that token/signups controls apply to every application.
+check_menu_surfaces_supported_advanced_actions() {
+  grep -Fq 'if declare -f do_verify >/dev/null 2>&1; then' lib/cli.sh \
+    && grep -Fq 'menu.verify_desc' lib/cli.sh \
+    && grep -Fq 'if declare -f do_token >/dev/null 2>&1; then' lib/cli.sh \
+    && grep -Fq 'menu.token_desc' lib/cli.sh \
+    && grep -Fq 'if declare -f do_signups >/dev/null 2>&1; then' lib/cli.sh \
+    && grep -Fq 'menu.signups_desc' lib/cli.sh || {
+      echo "interactive menu must expose verify/token/signups actions when implemented" >&2
+      return 1
+    }
+}
+
+# Cron and automation need to distinguish warnings from healthy runs without
+# parsing doctor output.
+check_doctor_strict_returns_on_warnings() {
+  grep -Fq 'strict="${DEPLOY_DOCTOR_STRICT:-0}"' lib/app.sh \
+    && grep -Fq -- '--strict' lib/app.sh \
+    && grep -Fq '[[ "$strict" != 1 ]] || return 1' lib/app.sh || {
+      echo "doctor must support --strict/DEPLOY_DOCTOR_STRICT for warning detection" >&2
+      return 1
+    }
+}

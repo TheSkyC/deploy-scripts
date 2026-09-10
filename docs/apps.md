@@ -45,7 +45,7 @@ App-specific defaults:
 | beszel | 8090 | Health: `/api/health`; admin key in `/etc/beszel.env` |
 | filebrowser | 8084 | Serves `FB_ROOT` (`/srv/filebrowser`); default admin `admin/admin` — change on first login |
 | frps | 7000 | Public TCP proxy; `BA_BIND_ADDR=0.0.0.0` by design. Auth token in `/etc/frps/frps.toml` |
-| gitea | 3000 | First admin: `gitea admin create-user --admin --config /etc/gitea/app.ini` |
+| gitea | 3000 | Registration is disabled by default; create the first admin: `sudo -u gitea gitea admin user create --admin --config /etc/gitea/app.ini` |
 | gotify | 8085 | Initial admin password (random) in `/etc/gotify.env` (`GOTIFY_DEFAULTUSER_PASS`) |
 | meilisearch | 7700 | Master key (random) in `/etc/meilisearch.env` (`MEILI_MASTER_KEY`) |
 | navidrome | 4533 | Music folder `MUSIC_DIR` (`/srv/music`) |
@@ -184,6 +184,7 @@ has drifted from the configured pin, while an unpinned install states that
 
 ## Security defaults (all apps)
 
+- Git-based applications follow their configured branch unless a full commit SHA is explicitly pinned; upstream force-pushes can change content.
 - Web apps bind `127.0.0.1` by default; publish through an HTTPS reverse
   proxy.
 - No firewall ports are opened automatically for the binary apps

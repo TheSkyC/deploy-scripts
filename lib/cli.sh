@@ -81,6 +81,19 @@ show_menu() {
   echo "  5) status     - $(t menu.status_desc)"
   echo "  6) doctor     - $(t menu.doctor_desc)"
   echo "  7) uninstall  - $(t menu.uninstall_desc)"
+  local menu_no=8
+  if declare -f do_verify >/dev/null 2>&1; then
+    echo "  ${menu_no}) verify       - $(t menu.verify_desc)"
+    menu_no=$((menu_no + 1))
+  fi
+  if declare -f do_token >/dev/null 2>&1; then
+    echo "  ${menu_no}) token        - $(t menu.token_desc)"
+    menu_no=$((menu_no + 1))
+  fi
+  if declare -f do_signups >/dev/null 2>&1; then
+    echo "  ${menu_no}) signups      - $(t menu.signups_desc)"
+    menu_no=$((menu_no + 1))
+  fi
   echo "  q) $(t common.quit)"
   echo
   prompt "$(t common.selection_prompt)"

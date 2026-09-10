@@ -413,7 +413,7 @@ check_firewall_success_paths_validate_command_results() {
   fi
   awk '
       /app_configure_firewall\(\)/ { in_block=1; saw_ufw_if=0; saw_firewalld_if=0; saw_iptables_if=0; saw_failure_warn=0; next }
-      in_block && /if ufw allow "\$\{port\}\/tcp" comment "\$app_label" > \/dev\/null; then/ { saw_ufw_if=1 }
+      in_block && /if ufw allow "\$\{port\}\/tcp" comment "\$app_label" > \/dev\/null/ { saw_ufw_if=1 }
       in_block && /if firewall-cmd --permanent --add-port="\$\{port\}\/tcp" >\/dev\/null 2>&1/ { saw_firewalld_if=1 }
       in_block && /if iptables -C INPUT -p tcp --dport "\$port" -j ACCEPT 2>\/dev\/null/ { saw_iptables_if=1 }
       in_block && /warn "\$\(t "\$\{app_prefix\}\.warn\.firewall_config_failed" "\$port"\)"/ { saw_failure_warn=1 }
@@ -687,3 +687,20 @@ check_user_deletion_paths_are_explicit() {
     ' impl/install_vaultwarden.sh
 }
 
+
+# Older ufw releases reject the entire `allow ... comment` rule, so the shared
+# helper must retain a compatible no-comment fallback.
+check_ufw_comment_has_fallback() {
+  awk '
+      /app_configure_firewall\(\)/ { in_fn=1; saw_comment=0; saw_fallback=0; next }
+      in_fn && /ufw allow "\$\{port\}\/tcp" comment "\$app_label"/ { saw_comment=1 }
+      in_fn && /\|\| ufw allow "\$\{port\}\/tcp" > \/dev\/null/ { saw_fallback=1 }
+      in_fn && /^}/ {
+        if (!(saw_comment && saw_fallback)) {
+          print "shared firewall helper must fall back when ufw does not support comments" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+  ' lib/app.sh
+}
