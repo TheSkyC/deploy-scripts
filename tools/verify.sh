@@ -334,6 +334,7 @@ main() {
       check_dist_is_up_to_date
       check_localized_dispatch
       check_doctor_dispatch
+      check_security_bind_keys_follow_registry
       check_security_audit_contract
       check_app_help_dispatch
       check_status_json_dispatch
@@ -849,6 +850,7 @@ main() {
       run_isolated_check check_self_update_interruption_restores_activation
       run_isolated_check check_self_update_signal_interruption
       run_isolated_check check_security_defaults_and_public_bind_guard
+      run_isolated_check check_security_bind_keys_follow_registry
       run_isolated_check check_security_audit_contract
       run_isolated_check check_target_groups_cover_all_checks
       echo "Guards verification passed"

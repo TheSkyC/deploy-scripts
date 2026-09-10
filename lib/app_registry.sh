@@ -25,6 +25,15 @@ DEPLOY_APP_SPECS=(
   "beszel|Beszel|apps/beszel.sh|impl/install_beszel.sh|backup,restore"
 )
 
+# Some handwritten apps have their own bind key; the shared binary lifecycle
+# uses BA_BIND_ADDR. Security doctor and future shared tooling should consume
+# this registry instead of adding hardcoded keys in each consumer.
+DEPLOY_APP_BIND_CONFIG_KEYS=(
+  BA_BIND_ADDR
+  SUB2API_BIND_ADDR
+  TICKFLOW_BIND_ADDR
+)
+
 DEPLOY_APP_IDS=()
 DEPLOY_APP_NAMES=()
 DEPLOY_APP_FILES=()

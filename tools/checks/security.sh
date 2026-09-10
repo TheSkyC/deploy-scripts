@@ -131,6 +131,22 @@ check_security_defaults_and_public_bind_guard() {
 }
 
 
+check_security_bind_keys_follow_registry() {
+  local key registry_keys found=0
+  registry_keys="$($BASH_BIN -c 'source lib/core.sh; printf "%s\n" "${DEPLOY_APP_BIND_CONFIG_KEYS[@]}"')"
+  while IFS= read -r key; do
+    [[ -n "$key" ]] || continue
+    found=0
+    while IFS= read -r registry_key; do
+      [[ "$registry_key" == "$key" ]] && found=1
+    done <<<"$registry_keys"
+    if (( found == 0 )); then
+      printf 'Implementation bind key %s must be added to DEPLOY_APP_BIND_CONFIG_KEYS.\n' "$key" >&2
+      return 1
+    fi
+  done < <(grep -hE '^[[:space:]]*[A-Z0-9_]+_BIND_ADDR=' impl/*.sh 2>/dev/null | sed -E 's/^[[:space:]]*([A-Z0-9_]+)_BIND_ADDR=.*/\1_BIND_ADDR/' | LC_ALL=C sort -u)
+}
+
 check_security_audit_contract() {
   local temp_root fixture_output json_file status
   temp_root="$(mktemp -d)"
