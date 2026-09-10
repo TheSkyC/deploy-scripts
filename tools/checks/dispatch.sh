@@ -574,3 +574,45 @@ check_no_chinese_comments() {
     return 1
   fi
 }
+
+check_help_masks_sensitive_config_values() {
+  local output
+  output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/lib/logging.sh"
+    source "$1/lib/cli.sh"
+    APP_ID=test
+    CONFIG_KEYS=(PORT API_TOKEN DB_PASSWORD)
+    PORT=8080
+    API_TOKEN=super-secret
+    DB_PASSWORD=another-secret
+    usage --help 2>&1
+  ' bash "$ROOT_DIR")"
+  [[ "$output" == *API_TOKEN* && "$output" == *DB_PASSWORD* && "$output" == *PORT* ]] || {
+    echo "$output" >&2
+    echo "Help output must mask credential-like config values." >&2
+    return 1
+  }
+  [[ "$output" != *super-secret* && "$output" != *another-secret* ]] || {
+    echo "Help output leaked a sensitive config value." >&2
+    return 1
+  }
+}
+
+check_uninstall_cancellations_return_nonzero() {
+  local file
+  for file in impl/install_sub2api.sh impl/install_tickflow.sh \
+              impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
+              impl/install_cyberstrikeai.sh; do
+    grep -Fq 'exit 2' "$file" || {
+      echo "$file: cancelled uninstall must exit nonzero" >&2
+      return 1
+    }
+    grep -Fq '${_c,,}" != y' "$file" && continue
+    grep -Fq '${confirm,,}" != y' "$file" || {
+      echo "$file: cancelled uninstall must accept lowercase y/yes" >&2
+      return 1
+    }
+  done
+}

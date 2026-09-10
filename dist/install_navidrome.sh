@@ -6861,10 +6861,22 @@ usage() {
     echo "" >&2
     t common.help_config_keys >&2
     for key in "${CONFIG_KEYS[@]}"; do
-      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+      printf '  %-24s %s\n' "$key" "$(app_print_config_value "$key")" >&2
     done
     echo "" >&2
     t common.help_env_hint >&2
+  fi
+}
+
+# Display a config value without exposing credential-like configuration in
+# help or dry-run output.  The key name is retained so operators can see which
+# variable is configured without learning its value.
+app_print_config_value() {
+  local key="$1"
+  if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
+    printf '%s\n' '***'
+  else
+    printf '%s\n' "${!key:-}"
   fi
 }
 
@@ -6901,7 +6913,7 @@ app_dry_run_list_config() {
   if declare -p CONFIG_KEYS >/dev/null 2>&1; then
     t common.dry_run_config >&2
     for key in "${CONFIG_KEYS[@]}"; do
-      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+      printf '  %-24s %s\n' "$key" "$(app_print_config_value "$key")" >&2
     done
   fi
 }

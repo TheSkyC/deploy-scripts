@@ -1107,7 +1107,7 @@ do_uninstall() {
     prompt "$(t app.cyberstrikeai.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 2; }
   local del_install
   if deploy_assume_yes; then
     if deploy_env_truthy DEPLOY_DELETE_INSTALL; then

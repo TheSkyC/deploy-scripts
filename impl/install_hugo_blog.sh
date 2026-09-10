@@ -1307,7 +1307,7 @@ do_uninstall() {
     prompt "$(t app.blog.uninstall.continue_prompt)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 2; }
   if deploy_assume_yes; then
     if deploy_env_truthy DEPLOY_DELETE_BACKUP; then
       delete_backups="yes"

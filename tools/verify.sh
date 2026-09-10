@@ -343,11 +343,13 @@ main() {
       check_port_conflict_strict_mode_aborts
       check_doctor_validates_saved_config
       check_doctor_config_diff_ignores_saved_quotes
+      check_help_masks_sensitive_config_values
       check_newapi_status_backup_projection
       check_newapi_asset_names_keep_version_prefix
       check_newapi_summary_warns_about_default_credentials
       check_sub2api_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
+      check_uninstall_cancellations_return_nonzero
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_uninstall_checks_file_removal_errors
       check_sub2api_uninstall_validates_binary_path_before_removal
@@ -452,6 +454,7 @@ main() {
       check_release_package_artifacts
       check_self_version_and_manifest_checks
       check_self_update_manifest_validation_preserves_lock_flag
+      check_self_update_keep_releases_accepts_all_nonzero_counts
       check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
       check_self_update_managed_rehearsal
@@ -797,11 +800,13 @@ main() {
       run_isolated_check check_backup_restore_data_dir_lifecycle
       run_isolated_check check_backup_manifest_field_skips_escaped_quotes
       run_isolated_check check_notification_fail_open_and_redaction
+      run_isolated_check check_notify_credentials_stay_out_of_argv
       run_isolated_check check_schedule_units_are_atomic_and_cleaned_up
       run_isolated_check check_schedule_retries_are_configurable
       run_isolated_check check_per_app_event_notifications
       run_isolated_check check_compose_shared_layer_and_tickflow_delegation
       run_isolated_check check_compose_lifecycle_and_health
+      run_isolated_check check_compose_health_supports_legacy_v1_tables
       run_isolated_check check_fleet_host_validation_and_isolation
       run_isolated_check check_migration_export_import_roundtrip
       run_isolated_check check_batch_target_selection_is_local_only
@@ -816,6 +821,7 @@ main() {
       run_isolated_check check_release_package_artifacts
       run_isolated_check check_self_version_and_manifest_checks
       run_isolated_check check_self_update_manifest_validation_preserves_lock_flag
+      run_isolated_check check_self_update_keep_releases_accepts_all_nonzero_counts
       run_isolated_check check_self_update_protects_checkout_and_standalone
       run_isolated_check check_self_update_dry_run_validation
       run_isolated_check check_self_update_managed_rehearsal

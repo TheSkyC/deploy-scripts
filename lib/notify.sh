@@ -71,16 +71,20 @@ notify_send() {
   case "${NOTIFY_BACKEND,,}" in
     ntfy)
       if [[ -n "$NOTIFY_TOKEN" ]]; then
-        args+=(-H "Authorization: Bearer ${NOTIFY_TOKEN}")
+        # Keep the bearer token out of argv, where other local users could
+        # read it while curl is running.
+        args+=(-H @<(printf 'Authorization: Bearer %s' "$NOTIFY_TOKEN"))
       fi
       args+=(-H "Title: ${title}" -H "Tags: warning" --data-binary "$body" \
         "${NOTIFY_URL%/}/${NOTIFY_TOPIC:-deploy-scripts}")
       ;;
     gotify)
       if [[ -n "$NOTIFY_TOKEN" ]]; then
-        args+=(-H "Authorization: Bearer ${NOTIFY_TOKEN}")
+        args+=(-H @<(printf 'Authorization: Bearer %s' "$NOTIFY_TOKEN"))
       elif [[ -n "$NOTIFY_USERNAME" && -n "$NOTIFY_PASSWORD" ]]; then
-        args+=(-u "${NOTIFY_USERNAME}:${NOTIFY_PASSWORD}")
+        # curl reads basic credentials from a config stream so the password
+        # never appears in the process list either.
+        args+=(-K @<(printf 'user = "%s:%s"\n' "$NOTIFY_USERNAME" "$NOTIFY_PASSWORD"))
       fi
       local gotify_payload
       gotify_payload="{\"title\":$(app_json_string "$title"),\"message\":$(app_json_string "$body"),\"priority\":5}"

@@ -1730,7 +1730,7 @@ do_uninstall() {
     prompt "$(t app.vaultwarden.prompt.continue)"
     read -r _c
   fi
-  [[ "$_c" != "YES" ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 2; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true

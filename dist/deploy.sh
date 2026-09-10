@@ -6883,7 +6883,7 @@ self_update_load_config() {
   [[ "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" =~ ^[0-9]+$ && "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" -gt 0 ]] || return 1
   [[ "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" =~ ^[1-9][0-9]*$ ]] || return 1
   [[ "$DEPLOY_SELF_UPDATE_MAX_ARTIFACT_BYTES" =~ ^[1-9][0-9]*$ ]] || return 1
-  [[ "$DEPLOY_SELF_UPDATE_KEEP_RELEASES" =~ ^[3-9][0-9]*$ ]] || return 1
+  [[ "$DEPLOY_SELF_UPDATE_KEEP_RELEASES" =~ ^([3-9]|[1-9][0-9]+)$ ]] || return 1
 }
 
 self_update_detect_mode() {
@@ -8225,16 +8225,20 @@ notify_send() {
   case "${NOTIFY_BACKEND,,}" in
     ntfy)
       if [[ -n "$NOTIFY_TOKEN" ]]; then
-        args+=(-H "Authorization: Bearer ${NOTIFY_TOKEN}")
+        # Keep the bearer token out of argv, where other local users could
+        # read it while curl is running.
+        args+=(-H @<(printf 'Authorization: Bearer %s' "$NOTIFY_TOKEN"))
       fi
       args+=(-H "Title: ${title}" -H "Tags: warning" --data-binary "$body" \
         "${NOTIFY_URL%/}/${NOTIFY_TOPIC:-deploy-scripts}")
       ;;
     gotify)
       if [[ -n "$NOTIFY_TOKEN" ]]; then
-        args+=(-H "Authorization: Bearer ${NOTIFY_TOKEN}")
+        args+=(-H @<(printf 'Authorization: Bearer %s' "$NOTIFY_TOKEN"))
       elif [[ -n "$NOTIFY_USERNAME" && -n "$NOTIFY_PASSWORD" ]]; then
-        args+=(-u "${NOTIFY_USERNAME}:${NOTIFY_PASSWORD}")
+        # curl reads basic credentials from a config stream so the password
+        # never appears in the process list either.
+        args+=(-K @<(printf 'user = "%s:%s"\n' "$NOTIFY_USERNAME" "$NOTIFY_PASSWORD"))
       fi
       local gotify_payload
       gotify_payload="{\"title\":$(app_json_string "$title"),\"message\":$(app_json_string "$body"),\"priority\":5}"
@@ -9262,10 +9266,22 @@ usage() {
     echo "" >&2
     t common.help_config_keys >&2
     for key in "${CONFIG_KEYS[@]}"; do
-      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+      printf '  %-24s %s\n' "$key" "$(app_print_config_value "$key")" >&2
     done
     echo "" >&2
     t common.help_env_hint >&2
+  fi
+}
+
+# Display a config value without exposing credential-like configuration in
+# help or dry-run output.  The key name is retained so operators can see which
+# variable is configured without learning its value.
+app_print_config_value() {
+  local key="$1"
+  if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
+    printf '%s\n' '***'
+  else
+    printf '%s\n' "${!key:-}"
   fi
 }
 
@@ -9302,7 +9318,7 @@ app_dry_run_list_config() {
   if declare -p CONFIG_KEYS >/dev/null 2>&1; then
     t common.dry_run_config >&2
     for key in "${CONFIG_KEYS[@]}"; do
-      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
+      printf '  %-24s %s\n' "$key" "$(app_print_config_value "$key")" >&2
     done
   fi
 }
@@ -16138,7 +16154,7 @@ do_uninstall() {
     prompt "$(t app.sub2api.prompt.continue)"
     read -r _c
   fi
-  [[ "$_c" != "YES" ]] && { info "$(t app.sub2api.info.cancelled)"; exit 0; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.sub2api.info.cancelled)"; exit 2; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true
@@ -18090,7 +18106,7 @@ do_uninstall() {
     prompt "$(t app.vaultwarden.prompt.continue)"
     read -r _c
   fi
-  [[ "$_c" != "YES" ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 2; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true
@@ -19414,7 +19430,7 @@ do_uninstall() {
     prompt "$(t app.cyberstrikeai.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 2; }
   local del_install
   if deploy_assume_yes; then
     if deploy_env_truthy DEPLOY_DELETE_INSTALL; then
@@ -20833,7 +20849,7 @@ do_uninstall() {
     prompt "$(t app.blog.uninstall.continue_prompt)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 2; }
   if deploy_assume_yes; then
     if deploy_env_truthy DEPLOY_DELETE_BACKUP; then
       delete_backups="yes"
@@ -21498,7 +21514,7 @@ do_uninstall() {
     prompt "$(t app.tickflow.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" != "YES" ]] && { info "$(t app.tickflow.info.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] && { info "$(t app.tickflow.info.cancelled)"; exit 2; }
   local DELETE_INSTALL=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_INSTALL && DELETE_INSTALL=true

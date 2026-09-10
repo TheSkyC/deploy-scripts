@@ -671,3 +671,20 @@ check_self_update_manifest_validation_preserves_lock_flag() {
     }
   ' lib/self_update.sh || return 1
 }
+
+# KEEP_RELEASES means three or more releases, with no upper bound.
+check_self_update_keep_releases_accepts_all_nonzero_counts() {
+  local value
+  for value in 3 9 10 29 100 30; do
+    [[ "$value" =~ ^([3-9]|[1-9][0-9]+)$ ]] || {
+      echo "KEEP_RELEASES unexpectedly rejected $value" >&2
+      return 1
+    }
+  done
+  for value in 0 1 2 03; do
+    if [[ "$value" =~ ^([3-9]|[1-9][0-9]+)$ ]]; then
+      echo "KEEP_RELEASES unexpectedly accepted $value" >&2
+      return 1
+    fi
+  done
+}

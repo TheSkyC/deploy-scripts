@@ -119,7 +119,7 @@ self_update_load_config() {
   [[ "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" =~ ^[0-9]+$ && "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" -gt 0 ]] || return 1
   [[ "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" =~ ^[1-9][0-9]*$ ]] || return 1
   [[ "$DEPLOY_SELF_UPDATE_MAX_ARTIFACT_BYTES" =~ ^[1-9][0-9]*$ ]] || return 1
-  [[ "$DEPLOY_SELF_UPDATE_KEEP_RELEASES" =~ ^[3-9][0-9]*$ ]] || return 1
+  [[ "$DEPLOY_SELF_UPDATE_KEEP_RELEASES" =~ ^([3-9]|[1-9][0-9]+)$ ]] || return 1
 }
 
 self_update_detect_mode() {
