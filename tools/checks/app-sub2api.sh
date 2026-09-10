@@ -1206,3 +1206,13 @@ SUB2APITEST
   grep -Fq 'app.sub2api.status.pin_set' apps/sub2api.sh
   grep -Fq 'app.sub2api.status.unpinned' apps/sub2api.sh
 }
+
+# Sub2API runs as its service account.  The caller-managed data restore must
+# explicitly normalize ownership or a successful restore becomes unwritable.
+check_sub2api_restore_sets_data_owner() {
+  grep -Fq 'backup_restore_data_dir "$DATA_DIR" "" "$data_archive" "${SERVICE_USER}:${SERVICE_USER}"' \
+    impl/install_sub2api.sh || {
+      echo "Sub2API restore must set the data owner to ${SERVICE_USER:-sub2api}:${SERVICE_USER:-sub2api}." >&2
+      return 1
+    }
+}
