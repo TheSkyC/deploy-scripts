@@ -401,6 +401,7 @@ main() {
       check_app_localized_descriptions
       check_framework_i18n_keys_are_consistent
       check_framework_i18n_format_pairs_are_consistent
+      check_i18n_registration_pairs_are_explicit
       echo "Dispatch verification passed"
       return 0
       ;;
@@ -607,6 +608,9 @@ main() {
       run_isolated_check check_firewall_success_paths_validate_command_results
       run_isolated_check check_ufw_comment_has_fallback
       run_isolated_check check_framework_validator_errors_are_actionable
+      run_isolated_check check_framework_i18n_keys_are_consistent
+      run_isolated_check check_framework_i18n_format_pairs_are_consistent
+      run_isolated_check check_i18n_registration_pairs_are_explicit
       run_isolated_check check_generated_backup_headers_are_shell_quoted
       run_isolated_check check_generated_backup_scripts_handle_missing_dirs
       run_isolated_check check_github_release_tag_behavior

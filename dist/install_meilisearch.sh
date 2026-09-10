@@ -27,9 +27,13 @@ declare -gA __DEPLOY_I18N_EN=()
 declare -gA __DEPLOY_I18N_ZH=()
 
 i18n_register() {
+  if [[ $# -ne 3 ]]; then
+    printf 'i18n_register requires key/en/zh arguments\n' >&2
+    return 1
+  fi
   local key="$1"
   local en="$2"
-  local zh="${3:-$2}"
+  local zh="$3"
   __DEPLOY_I18N_EN["$key"]="$en"
   __DEPLOY_I18N_ZH["$key"]="$zh"
 }

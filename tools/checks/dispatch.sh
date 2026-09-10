@@ -529,6 +529,62 @@ if failures:
 PY
 }
 
+check_i18n_registration_pairs_are_explicit() {
+  python3 - <<'PY'
+import glob
+import re
+import shlex
+import sys
+
+failures = 0
+seen = {}
+for path in sorted(glob.glob('lib/*.sh') + glob.glob('apps/*.sh') + glob.glob('impl/*.sh')):
+    start = 0
+    buf = ''
+    for line_number, raw in enumerate(open(path, encoding='utf-8'), 1):
+        if buf:
+            buf = buf + ' ' + raw.strip()
+        else:
+            start = line_number
+            buf = raw.rstrip()
+        if buf.rstrip().endswith('\\'):
+            buf = buf.rstrip()[:-1]
+            continue
+        line = buf
+        buf = ''
+        match = re.match(r'(i18n_register|i18n_register_many)\s+(.*)', line.strip())
+        if not match:
+            continue
+        kind, rest = match.groups()
+        try:
+            tokens = shlex.split(rest)
+        except ValueError as exc:
+            print('%s:%s: cannot parse i18n registration: %s' % (path, start, exc), file=sys.stderr)
+            failures += 1
+            continue
+        chunks = [tokens] if kind == 'i18n_register' else [
+            tokens[index:index + 3] for index in range(0, len(tokens), 3)
+        ]
+        if any(len(chunk) != 3 for chunk in chunks):
+            print('%s:%s: %s requires explicit key/en/zh triples' % (path, start, kind), file=sys.stderr)
+            failures += 1
+            continue
+        for key, en, zh in chunks:
+            if key in seen:
+                print('%s:%s: duplicate i18n key %s (first registered at %s)' % (
+                    path, start, key, seen[key]), file=sys.stderr)
+                failures += 1
+                continue
+            seen[key] = '%s:%s' % (path, start)
+            if not en or not zh:
+                print('%s:%s: i18n key %s must have non-empty en and zh text' % (path, start, key), file=sys.stderr)
+                failures += 1
+if failures:
+    print('i18n keys must be registered with explicit en/zh pairs exactly once.', file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 check_app_localized_descriptions() {
   expect_app_description cyberstrikeai en "Source build deployment with Go, Python, systemd, Nginx, and backups."
   expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"
