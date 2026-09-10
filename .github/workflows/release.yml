@@ -33,6 +33,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install ShellCheck
+        working-directory: ${{ runner.temp }}
         run: |
           wget -qO- "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
             | tar -xz
