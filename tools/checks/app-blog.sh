@@ -658,3 +658,53 @@ check_blog_publish_helper_is_atomic() {
       }
     ' impl/install_hugo_blog.sh
 }
+
+check_blog_publish_helpers_match_fs_sh() {
+  python3 - <<'PY'
+from pathlib import Path
+import sys
+
+def function_body(text, name, source):
+    lines = text.splitlines()
+    opener = name + '() {'
+    for start, line in enumerate(lines):
+        if line != opener:
+            continue
+        for end in range(start + 1, len(lines)):
+            if lines[end] == '}':
+                return '\n'.join(lines[start + 1:end]) + '\n'
+        break
+    raise SystemExit('%s: missing %s()' % (source, name))
+
+def normalize(body):
+    lines = []
+    for raw in body.splitlines():
+        line = raw.split('#', 1)[0].strip()
+        if line:
+            lines.append(line)
+    return '\n'.join(lines)
+
+fs_path = Path('lib/fs.sh')
+impl_path = Path('impl/install_hugo_blog.sh')
+fs_text = fs_path.read_text(encoding='utf-8')
+fs_is_safe = normalize(function_body(fs_text, 'is_safe_path', fs_path))
+fs_safe_rm = function_body(fs_text, 'safe_rm_dir', fs_path)
+fs_safe_rm = fs_safe_rm.replace('  local name="${2:-path}"\n', '')
+fs_safe_rm = fs_safe_rm.replace(
+    '  require_safe_path "$name" "$path"\n',
+    '  is_safe_path "$path" || return 1\n',
+)
+fs_safe_rm = normalize(fs_safe_rm)
+
+impl_text = impl_path.read_text(encoding='utf-8').replace(r'\$', '$')
+generated_is_safe = normalize(function_body(impl_text, 'is_safe_path', impl_path))
+generated_safe_rm = normalize(function_body(impl_text, 'safe_rm_dir', impl_path))
+
+if generated_is_safe != fs_is_safe:
+    print('Blog publish script is_safe_path drifts from lib/fs.sh.', file=sys.stderr)
+    sys.exit(1)
+if generated_safe_rm != fs_safe_rm:
+    print('Blog publish script safe_rm_dir drifts from lib/fs.sh.', file=sys.stderr)
+    sys.exit(1)
+PY
+}

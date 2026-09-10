@@ -250,7 +250,9 @@ is_safe_path() {
   local path="\${1:-}"
   [[ -n "\$path" ]] || return 1
   [[ "\$path" = /* ]] || return 1
-  while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
+  while [[ "\$path" != "/" && "\$path" == */ ]]; do
+    path="\${path%/}"
+  done
   case "\$path" in
     /|.|..|*'/../'*|*'/..'|*'/./'*|*'/.')
       return 1
@@ -270,7 +272,9 @@ is_safe_path() {
 }
 safe_rm_dir() {
   local path="\$1"
-  while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
+  while [[ "\$path" != "/" && "\$path" == */ ]]; do
+    path="\${path%/}"
+  done
   is_safe_path "\$path" || return 1
   [[ -e "\$path" || -L "\$path" ]] || return 0
   [[ -d "\$path" || -L "\$path" ]] || return 1

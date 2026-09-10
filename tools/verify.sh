@@ -375,6 +375,7 @@ main() {
       check_blog_status_backup_projection
       check_blog_uninstall_supports_noninteractive_mode
       check_blog_install_surfaces_default_nginx_site_removal_failures
+      check_blog_publish_helpers_match_fs_sh
       check_cyberstrikeai_status_backup_projection
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_checks_directory_removal_errors
@@ -541,6 +542,7 @@ main() {
       run_isolated_check check_blog_nginx_start_path_is_explicit
       run_isolated_check check_blog_publish_guidance_uses_staging_output
       run_isolated_check check_blog_publish_helper_is_atomic
+      run_isolated_check check_blog_publish_helpers_match_fs_sh
       run_isolated_check check_blog_restore_action
       run_isolated_check check_blog_site_files_are_atomic
       run_isolated_check check_blog_site_setup_failures_are_explicit
