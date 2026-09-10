@@ -8033,6 +8033,18 @@ DEPLOY_APP_NAMES=()
 DEPLOY_APP_FILES=()
 DEPLOY_APP_IMPL_FILES=()
 DEPLOY_APP_CAPABILITIES=()
+# Archive globs are part of the app contract so migration and per-app backup
+# code do not drift when an app keeps a historical prefix (for example new-api).
+declare -A DEPLOY_APP_ARCHIVE_GLOBS=(
+  [newapi]="new-api_*.tar.gz"
+  [sub2api]="sub2api_*.tar.gz"
+  [sub2api_db]="sub2api_db_*.sql.gz"
+  [vaultwarden]="vaultwarden_*.tar.gz"
+  [cyberstrikeai]="cyberstrike-ai_*.tar.gz"
+  [blog]="blog_*.tar.gz"
+  [tickflow]="tickflow-data-*.tar.gz"
+  [cpa-stack]="cpa-stack-*.tar.gz"
+)
 
 for deploy_app_spec in "${DEPLOY_APP_SPECS[@]}"; do
   IFS='|' read -r deploy_app_id deploy_app_name deploy_app_file deploy_app_impl_file deploy_app_caps <<< "$deploy_app_spec"
@@ -8115,6 +8127,16 @@ deploy_app_has_capability() {
     *,"$capability",*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+deploy_app_archive_globs_for() {
+  local app_id="$1" glob
+  if [[ -n "${DEPLOY_APP_ARCHIVE_GLOBS[$app_id]:-}" ]]; then
+    printf '%s\n' "${DEPLOY_APP_ARCHIVE_GLOBS[$app_id]}"
+  fi
+  if [[ -n "${DEPLOY_APP_ARCHIVE_GLOBS[${app_id}_db]:-}" ]]; then
+    printf '%s\n' "${DEPLOY_APP_ARCHIVE_GLOBS[${app_id}_db]}"
+  fi
 }
 
 deploy_app_index_for() {
@@ -8966,16 +8988,10 @@ migrate_backups_inventory() {
       if [[ -z "$dir" || ! -d "$dir" ]]; then
         exit 0
       fi
-      case "$app_id" in
-        blog) globs=('blog_*.tar.gz') ;;
-        tickflow) globs=('tickflow-data-*.tar.gz') ;;
-        cpa-stack) globs=('cpa-stack-*.tar.gz') ;;
-        cyberstrikeai) globs=('cyberstrike-ai_*.tar.gz') ;;
-        vaultwarden) globs=('vaultwarden_*.tar.gz') ;;
-        newapi) globs=('new-api_*.tar.gz') ;;
-        sub2api) globs=('sub2api_*.tar.gz' 'sub2api_db_*.sql.gz') ;;
-        *) globs=("${BA_ARCHIVE_PREFIX:-${app_id}}_*.tar.gz") ;;
-      esac
+      mapfile -t globs < <(deploy_app_archive_globs_for "$app_id")
+      if ((${#globs[@]} == 0)); then
+        globs=("${BA_ARCHIVE_PREFIX:-${app_id}}_*.tar.gz")
+      fi
       backup_verify_latest_json "$dir" "${globs[@]}" || true
     )"
     if [[ "$record" == "__MIGRATE_IMPL_SOURCE_FAILED__" ]]; then

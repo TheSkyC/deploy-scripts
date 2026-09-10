@@ -102,16 +102,10 @@ migrate_backups_inventory() {
       if [[ -z "$dir" || ! -d "$dir" ]]; then
         exit 0
       fi
-      case "$app_id" in
-        blog) globs=('blog_*.tar.gz') ;;
-        tickflow) globs=('tickflow-data-*.tar.gz') ;;
-        cpa-stack) globs=('cpa-stack-*.tar.gz') ;;
-        cyberstrikeai) globs=('cyberstrike-ai_*.tar.gz') ;;
-        vaultwarden) globs=('vaultwarden_*.tar.gz') ;;
-        newapi) globs=('new-api_*.tar.gz') ;;
-        sub2api) globs=('sub2api_*.tar.gz' 'sub2api_db_*.sql.gz') ;;
-        *) globs=("${BA_ARCHIVE_PREFIX:-${app_id}}_*.tar.gz") ;;
-      esac
+      mapfile -t globs < <(deploy_app_archive_globs_for "$app_id")
+      if ((${#globs[@]} == 0)); then
+        globs=("${BA_ARCHIVE_PREFIX:-${app_id}}_*.tar.gz")
+      fi
       backup_verify_latest_json "$dir" "${globs[@]}" || true
     )"
     if [[ "$record" == "__MIGRATE_IMPL_SOURCE_FAILED__" ]]; then

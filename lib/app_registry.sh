@@ -30,6 +30,18 @@ DEPLOY_APP_NAMES=()
 DEPLOY_APP_FILES=()
 DEPLOY_APP_IMPL_FILES=()
 DEPLOY_APP_CAPABILITIES=()
+# Archive globs are part of the app contract so migration and per-app backup
+# code do not drift when an app keeps a historical prefix (for example new-api).
+declare -A DEPLOY_APP_ARCHIVE_GLOBS=(
+  [newapi]="new-api_*.tar.gz"
+  [sub2api]="sub2api_*.tar.gz"
+  [sub2api_db]="sub2api_db_*.sql.gz"
+  [vaultwarden]="vaultwarden_*.tar.gz"
+  [cyberstrikeai]="cyberstrike-ai_*.tar.gz"
+  [blog]="blog_*.tar.gz"
+  [tickflow]="tickflow-data-*.tar.gz"
+  [cpa-stack]="cpa-stack-*.tar.gz"
+)
 
 for deploy_app_spec in "${DEPLOY_APP_SPECS[@]}"; do
   IFS='|' read -r deploy_app_id deploy_app_name deploy_app_file deploy_app_impl_file deploy_app_caps <<< "$deploy_app_spec"
@@ -112,6 +124,16 @@ deploy_app_has_capability() {
     *,"$capability",*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+deploy_app_archive_globs_for() {
+  local app_id="$1" glob
+  if [[ -n "${DEPLOY_APP_ARCHIVE_GLOBS[$app_id]:-}" ]]; then
+    printf '%s\n' "${DEPLOY_APP_ARCHIVE_GLOBS[$app_id]}"
+  fi
+  if [[ -n "${DEPLOY_APP_ARCHIVE_GLOBS[${app_id}_db]:-}" ]]; then
+    printf '%s\n' "${DEPLOY_APP_ARCHIVE_GLOBS[${app_id}_db]}"
+  fi
 }
 
 deploy_app_index_for() {
