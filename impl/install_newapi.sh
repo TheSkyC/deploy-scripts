@@ -46,14 +46,14 @@ CONFIG_KEYS=(
   BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
-# The binary asset name embeds the version (without a leading v) and the
-# architecture (arm64 asset uses the "arm64" suffix).
+# Upstream embeds the full version tag (including the leading v) in both
+# architecture-specific asset names.
 ba_asset_name() {
   local version="$1"
   if [[ "$BA_ARCH" == "amd64" ]]; then
-    printf 'new-api-%s\n' "${version#v}"
+    printf 'new-api-%s\n' "$version"
   else
-    printf 'new-api-arm64-%s\n' "${version#v}"
+    printf 'new-api-arm64-%s\n' "$version"
   fi
 }
 

@@ -78,9 +78,9 @@ cp "$WORK/ntfy.bin" "$WORK/www/ntfy-stage/ntfy"
 tar -czf "$WORK/www/binwiederhier/ntfy/releases/download/v2.27.0/ntfy_2.27.0_linux_amd64.tar.gz" \
   -C "$WORK/www/ntfy-stage" ntfy
 
-# Fake new-api bare binary asset: new-api-<ver> (amd64).
+# Fake new-api bare binary asset with the upstream version prefix.
 mkdir -p "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1"
-cp "$WORK/newapi.bin" "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1/new-api-0.6.1"
+cp "$WORK/newapi.bin" "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1/new-api-v0.6.1"
 
 # Fake Sub2API tarball plus the checksum file required by its install flow.
 mkdir -p "$WORK/www/Wei-Shaw/sub2api/releases/download/v0.1.0"

@@ -170,3 +170,24 @@ NEWAPITEST
   )"
   [[ "$output" == ok ]]
 }
+
+# Upstream release assets retain the v prefix.  This guard keeps the fake E2E
+# server and the URL helper aligned with the real GitHub release contract.
+check_newapi_asset_names_keep_version_prefix() {
+  local output
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_newapi.sh"
+    BA_ARCH=amd64 ba_asset_name v0.13.2
+    BA_ARCH=arm64 ba_asset_name v0.13.2
+  ' bash "$ROOT_DIR")"
+  [[ "$output" == $'new-api-v0.13.2\nnew-api-arm64-v0.13.2' ]] || {
+    echo "Unexpected New API asset names: ${output}" >&2
+    return 1
+  }
+  grep -Fq 'new-api-v0.6.1' tools/e2e-smoke.sh || {
+    echo "NewAPI E2E fixture must use the upstream v-prefixed asset name." >&2
+    return 1
+  }
+}
