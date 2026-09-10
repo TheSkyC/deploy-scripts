@@ -89,8 +89,10 @@ manager_status_json_field() {
 
 manager_status_collect() {
   local include_csv="${1:-}" exclude_csv="${2:-}" only_installed="${3:-0}"
-  local temp_dir app_id output error_file status parsed_ids status_file
+  local temp_dir app_id output error_file status parsed_ids status_file job_pid job_index max_parallel
   local -a ids=() json_files=() errors=() job_ids=() job_pids=() job_statuses=()
+  max_parallel="${DEPLOY_STATUS_CONCURRENCY:-5}"
+  [[ "$max_parallel" =~ ^[1-9][0-9]*$ ]] || max_parallel=5
   temp_dir="$(mktemp -d)" || return 1
   chmod 700 "$temp_dir" || { rm -rf "$temp_dir"; return 1; }
   set +e
@@ -110,6 +112,14 @@ manager_status_collect() {
       exit "$status"
     ) &
     job_pids+=("$!")
+    if ((${#job_pids[@]} >= max_parallel)); then
+      set +e
+      for job_pid in "${job_pids[@]}"; do
+        wait "$job_pid"; job_statuses+=("$?")
+      done
+      set -e
+      job_pids=()
+    fi
   done
   set +e
   for job_pid in "${job_pids[@]}"; do
