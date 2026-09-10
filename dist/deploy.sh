@@ -9235,21 +9235,36 @@ fleet_target_ssh_args() {
 # Run one remote command for one host; prints a single-line JSON record.
 fleet_run_host() {
   local alias="$1" target="$2" remote_script="$3"
-  local output record
+  local output record stderr_file ssh_stderr
+  if ! stderr_file="$(mktemp "${TMPDIR:-/tmp}/fleet-ssh-stderr.XXXXXX")"; then
+    printf '{"host":%s,"ok":false,"error":"ssh or remote command failed"}' \
+      "$(app_json_string "$alias")"
+    return 0
+  fi
   # Each SSH opt is a single token (no spaces), and fleet_target_ssh_args
   # emits space-separated "host [-p port]" pieces; expansion is deliberate.
   # shellcheck disable=SC2046,SC2048,SC2086
   output="$(timeout "${FLEET_TIMEOUT}" ssh ${FLEET_SSH_OPTS[*]} \
     $(fleet_target_ssh_args "$target") \
-    "bash -s" <<REMOTE 2>/dev/null
+    "bash -s" <<REMOTE 2>"$stderr_file"
 set -euo pipefail
 ${remote_script}
 REMOTE
   )" || {
+    if [[ -s "$stderr_file" ]]; then
+      ssh_stderr="$(operation_safe_summary "$(tr -d '\r' < "$stderr_file")" 512)"
+      [[ -z "$ssh_stderr" ]] || printf 'fleet: %s: %s\n' "$alias" "$ssh_stderr" >&2
+    fi
+    rm -f "$stderr_file"
     printf '{"host":%s,"ok":false,"error":"ssh or remote command failed"}' \
       "$(app_json_string "$alias")"
     return 0
   }
+  if [[ -s "$stderr_file" ]]; then
+    ssh_stderr="$(operation_safe_summary "$(tr -d '\r' < "$stderr_file")" 512)"
+    [[ -z "$ssh_stderr" ]] || printf 'fleet: %s: %s\n' "$alias" "$ssh_stderr" >&2
+  fi
+  rm -f "$stderr_file"
   # The remote side is this same framework; keep its last non-empty line.
   record="$(printf '%s\n' "$output" | tr -d '\r' | sed '/^[[:space:]]*$/d' | tail -n 1)"
   # A polluted or non-JSON remote line would corrupt the merged summary, so

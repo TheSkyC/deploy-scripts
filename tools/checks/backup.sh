@@ -2806,6 +2806,50 @@ STUB
 # bounded concurrency and per-host failure isolation, and the aggregated JSON
 # never carries credentials — the inventory format has no password field at
 # all, and targets are used only as ssh destinations.
+check_fleet_remote_stderr_diagnostics() {
+  awk '
+    /^fleet_run_host\(\)/ { in_r=1; saw_capture=0; saw_diagnostic=0; next }
+    in_r && /2>"\$stderr_file"/ { saw_capture=1 }
+    in_r && /operation_safe_summary/ { saw_diagnostic=1 }
+    in_r && /^}$/ {
+      if (!(saw_capture && saw_diagnostic)) {
+        print "fleet_run_host must capture and summarize SSH stderr diagnostics" > "/dev/stderr"
+        exit 1
+      }
+      in_r=0
+    }
+  ' lib/fleet.sh || return 1
+
+  local temp_root output status stderr
+  temp_root="$(mktemp -d)"
+  mkdir "$temp_root/bin"
+  cat > "$temp_root/bin/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+  cat > "$temp_root/bin/ssh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'alpha.example: Permission denied (publickey).' >&2
+exit 255
+EOF
+  chmod 755 "$temp_root/bin/timeout" "$temp_root/bin/ssh"
+  set +e
+  output="$(PATH="$temp_root/bin:$PATH" "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    FLEET_TIMEOUT=120
+    fleet_run_host alpha user@host "true"
+  ' 2>"$temp_root/stderr")"
+  status=$?
+  stderr="$(cat "$temp_root/stderr")"
+  set -e
+  rm -rf "$temp_root"
+  [[ "$status" -eq 0 ]] || return "$status"
+  [[ "$output" == '{"host":"alpha","ok":false,"error":"ssh or remote command failed"}' ]]
+  grep -Fq 'fleet: alpha: alpha.example: Permission denied (publickey).' <<<"$stderr"
+}
+
 check_fleet_host_validation_and_isolation() {
   awk '
     /^fleet_load_hosts\(\)/ { in_fn=1; saw_alias=0; saw_target=0; saw_trust=0; next }
