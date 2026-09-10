@@ -2243,11 +2243,23 @@ state_json_unescape() {
       u)
         hex="${value:i+1:4}"
         [[ "$hex" =~ ^[0-9a-fA-F]{4}$ ]] || return 1
-        [[ "${hex:0:2}" == 00 ]] || return 1
-        code=$((16#${hex:2:2}))
-        printf -v char '%b' "\\$(printf '%03o' "$code")"
+        code=$((16#$hex))
+        if (( code >= 0xd800 && code <= 0xdbff )); then
+          i=$((i + 4))
+          next_escape="${value:i+1:6}"
+          [[ "$next_escape" == "\\u"* ]] || return 1
+          low_hex="${next_escape:2:4}"
+          [[ "$low_hex" =~ ^[0-9a-fA-F]{4}$ ]] || return 1
+          low_code=$((16#$low_hex))
+          (( low_code >= 0xdc00 && low_code <= 0xdfff )) || return 1
+          code=$((0x10000 + ((code - 0xd800) << 10) + (low_code - 0xdc00)))
+          i=$((i + 6))
+        elif (( code >= 0xdc00 && code <= 0xdfff )) || (( code == 0 )); then
+          return 1
+        fi
+        printf -v char '%b' "\\U$(printf '%08x' "$code")"
         result+="$char"
-        i=$((i + 4))
+        (( code >= 0xd800 && code <= 0xdbff )) || i=$((i + 4))
         ;;
       *) return 1 ;;
     esac

@@ -408,6 +408,7 @@ main() {
       check_state_all_registered_apps_enumerated
       check_state_target_selection
       check_state_scalar_parser_and_severity
+      check_state_json_unicode_escapes
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
       check_state_binary_backup_adapter
@@ -772,6 +773,7 @@ main() {
       run_isolated_check check_state_all_registered_apps_enumerated
       run_isolated_check check_state_target_selection
       run_isolated_check check_state_scalar_parser_and_severity
+      run_isolated_check check_state_json_unicode_escapes
       run_isolated_check check_state_operation_error_code_projection
       run_isolated_check check_state_backup_extension_contract
       run_isolated_check check_state_binary_backup_adapter

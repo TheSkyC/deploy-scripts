@@ -110,6 +110,26 @@ BASH
   [[ "$output" == ok ]]
 }
 
+check_state_json_unicode_escapes() {
+  local output
+  output="$($BASH_BIN <<'BASH'
+set -euo pipefail
+source lib/core.sh
+[[ "$(state_json_field '{"value":"\u4e2d"}' value)" == "中" ]]
+[[ "$(state_json_field '{"value":"a\u00e9b"}' value)" == "aéb" ]]
+[[ "$(state_json_field '{"value":"line\u000abreak"}' value)" == $'line\nbreak' ]]
+emoji=$(state_json_field '{"value":"\ud83d\ude00"}' value)
+[[ "$(printf '%s' "$emoji" | od -An -tx1 | tr -d ' \n')" == "f09f9880" ]]
+if state_json_field '{"value":"\ud800"}' value >/dev/null 2>&1; then exit 1; fi
+if state_json_field '{"value":"\ud800\ud800"}' value >/dev/null 2>&1; then exit 1; fi
+if state_json_field '{"value":"\udc00"}' value >/dev/null 2>&1; then exit 1; fi
+if state_json_field '{"value":"\u0000"}' value >/dev/null 2>&1; then exit 1; fi
+printf ok
+BASH
+  )"
+  [[ "$output" == ok ]]
+}
+
 check_state_operation_error_code_projection() {
   local temp_root output json_file
   temp_root="$(mktemp -d)"
