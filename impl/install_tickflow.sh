@@ -752,7 +752,8 @@ do_restore() {
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
   chown -R root:root "$TICKFLOW_INSTALL_DIR/data" 2>/dev/null || true
-  rm -rf "$aside_dir"
+  # Keep the aside copy until a successful start (or rollback) has happened;
+  # deleting it first would make a failed service impossible to roll back.
   if systemctl start "$TICKFLOW_SERVICE_NAME"; then
     wait_for_service "$TICKFLOW_SERVICE_NAME" 20 || true
   fi
@@ -778,10 +779,12 @@ do_restore() {
     fi
     if systemctl start "$TICKFLOW_SERVICE_NAME" \
       && systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME"; then
+      rm -rf "$aside_dir"
       success "$(t backup.restore.restored "$(basename "$archive")")"
       return 0
     fi
     error "$(t binary_app.error.update_failed "$(systemctl is-active "$TICKFLOW_SERVICE_NAME" 2>/dev/null || echo unknown)")"
   fi
+  rm -rf "$aside_dir"
   success "$(t backup.restore.restored "$(basename "$archive")")"
 }

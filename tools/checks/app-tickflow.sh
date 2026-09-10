@@ -559,3 +559,25 @@ check_tickflow_git_commit_version_contract() {
   grep -Fq 'app.tickflow.status.pin_ok' apps/tickflow.sh
   grep -Fq 'app.tickflow.status.pin_floating' apps/tickflow.sh
 }
+
+# TickFlow's caller-managed restore must retain the aside copy until the
+# service has either started successfully or the old files have been restored.
+check_tickflow_restore_keeps_aside_for_rollback() {
+  awk '
+      /do_restore\(\) \{/ { in_fn=1; next }
+      in_fn && /chown -R root:root "\$TICKFLOW_INSTALL_DIR\/data"/ { saw_chown=1; next }
+      saw_chown && /rm -rf "\$aside_dir"/ && !saw_start && !saw_rollback {
+        print FILENAME ": aside directory deleted before service start and rollback" > "/dev/stderr"
+        bad=1
+      }
+      saw_chown && /if systemctl start "\$TICKFLOW_SERVICE_NAME"/ { saw_start=1; next }
+      saw_chown && /rolled_back=true/ { saw_rollback=1; next }
+      END {
+        if (!bad && !(saw_start && saw_rollback)) {
+          print FILENAME ": TickFlow restore lifecycle must cover start and rollback before cleanup" > "/dev/stderr"
+          exit 1
+        }
+        exit bad
+      }
+    ' impl/install_tickflow.sh
+}
