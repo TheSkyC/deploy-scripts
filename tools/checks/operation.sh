@@ -387,6 +387,28 @@ PY
   return "$status"
 }
 
+check_operation_stream_drain_timeout() {
+  local output
+  output="$($BASH_BIN <<'OPTEST'
+set -u
+source lib/operation.sh
+start=$SECONDS
+( sleep 30 ) & pid=$!
+status=0
+operation_wait_output_stream_reader "$pid" 1 || status=$?
+elapsed=$((SECONDS - start))
+[[ "$status" -eq 124 && "$elapsed" -lt 5 ]] || exit 10
+! kill -0 "$pid" 2>/dev/null || exit 11
+start=$SECONDS
+( : ) & pid=$!
+operation_wait_output_stream_reader "$pid" 5 || exit 12
+(( SECONDS - start < 5 )) || exit 13
+printf ok
+OPTEST
+  )"
+  [[ "$output" == ok ]]
+}
+
 check_operation_signal_interruption() {
   local temp_root signal status expected marker
   temp_root="$(mktemp -d)"

@@ -15,6 +15,10 @@ DEPLOY_OPERATION_LOGROTATE_FILES="${DEPLOY_OPERATION_LOGROTATE_FILES:-20}"
 DEPLOY_OPERATION_STATE_DIR="${DEPLOY_OPERATION_ROOT}/state"
 DEPLOY_OPERATION_HISTORY_DIR="${DEPLOY_OPERATION_ROOT}/history"
 DEPLOY_OPERATION_HISTORY_FILE="${DEPLOY_OPERATION_HISTORY_DIR}/operations.jsonl"
+# A daemon launched by an action can inherit the action's FIFO write ends and
+# keep readers alive after the action exits. Drain briefly, then stop readers
+# so operation cleanup remains bounded.
+DEPLOY_OPERATION_STREAM_DRAIN_SECONDS="${DEPLOY_OPERATION_STREAM_DRAIN_SECONDS:-5}"
 
 operation_is_valid_app_id() { [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; }
 operation_is_valid_scope() { case "${1:-}" in app|manager|self_update) return 0;; *) return 1;; esac; }
@@ -110,11 +114,26 @@ operation_stream_error() {
   operation_log_stream "$log_path" >&2
 }
 
-# Close the operation output capture. finish mode (default) waits for the
-# stream readers to drain and exit after the wrapped action closed its output;
+# Close the operation output capture. finish mode (default) waits briefly for
+# the stream readers to drain after the wrapped action closed its output;
 # discard mode first stops the readers so an interrupted operation cannot block
 # on them. Both paths then close the saved descriptors and remove the capture
 # directory.
+operation_wait_output_stream_reader() {
+  local pid="$1" timeout="${2:-5}" start=$SECONDS
+  [[ -n "$pid" ]] || return 0
+  [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( SECONDS - start >= timeout )); then
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 0.1
+  done
+  wait "$pid" 2>/dev/null || true
+}
+
 operation_close_output_streams() {
   local mode="${1:-finish}"
   local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
@@ -123,8 +142,8 @@ operation_close_output_streams() {
     [[ -z "$stdout_pid" ]] || kill "$stdout_pid" 2>/dev/null || true
     [[ -z "$stderr_pid" ]] || kill "$stderr_pid" 2>/dev/null || true
   fi
-  [[ -z "$stdout_pid" ]] || wait "$stdout_pid" 2>/dev/null || true
-  [[ -z "$stderr_pid" ]] || wait "$stderr_pid" 2>/dev/null || true
+  [[ -z "$stdout_pid" ]] || operation_wait_output_stream_reader "$stdout_pid" "${DEPLOY_OPERATION_STREAM_DRAIN_SECONDS:-5}"
+  [[ -z "$stderr_pid" ]] || operation_wait_output_stream_reader "$stderr_pid" "${DEPLOY_OPERATION_STREAM_DRAIN_SECONDS:-5}"
   [[ -z "$saved_stdout_fd" ]] || eval "exec ${saved_stdout_fd}>&-" || true
   [[ -z "$saved_stderr_fd" ]] || eval "exec ${saved_stderr_fd}>&-" || true
   rm -rf -- "$output_dir"

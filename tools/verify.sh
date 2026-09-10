@@ -433,6 +433,7 @@ main() {
       check_app_action_operation_wrapping
       check_operation_failure_traps
       check_operation_signal_interruption
+      check_operation_stream_drain_timeout
       check_backup_all_dry_run
       check_backup_all_executes_serially_and_records_manager_operation
       check_batch_target_selection_is_local_only
@@ -794,6 +795,7 @@ main() {
       run_isolated_check check_app_action_operation_wrapping
       run_isolated_check check_operation_failure_traps
       run_isolated_check check_operation_signal_interruption
+      run_isolated_check check_operation_stream_drain_timeout
       run_isolated_check check_backup_all_dry_run
       run_isolated_check check_backup_all_executes_serially_and_records_manager_operation
       run_isolated_check check_backup_finalize_archive_helper
