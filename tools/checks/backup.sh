@@ -2479,8 +2479,9 @@ check_schedule_units_are_atomic_and_cleaned_up() {
     mkdir -p "$tmp/root"
     printf "#!/bin/bash\n" > "$tmp/root/deploy.sh"
 
-    # Enable: runner + cron file must exist.
-    schedule_main schedule --enable --mode check-only --at "03:10"
+    # Enable: runner + cron file must exist.  A leading option must take the
+    # default config branch even when the schedule subcommand is omitted.
+    schedule_main --enable --mode check-only --at "03:10"
     [[ -x "$DEPLOY_SCHEDULE_RUNNER" ]] || { echo NO_RUNNER; exit 61; }
     [[ -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] || { echo NO_CRON; exit 62; }
     grep -q "^10 3 \* \* \* root " "$DEPLOY_SCHEDULE_CRON_FILE" || { echo BAD_CRON_SPEC; cat "$DEPLOY_SCHEDULE_CRON_FILE" >&2; exit 63; }

@@ -8632,7 +8632,14 @@ schedule_main() {
   # further argument) enables/edits the schedule. `deploy.sh schedule status`
   # reaches the status branch by passing "status" as the first argument.
   local subcommand="${1:-schedule}"
-  shift || true
+  # A leading option belongs to the default config branch.  Without this
+  # adjustment, `schedule_main --enable` would consume the option as a
+  # subcommand token and then discard it before the option parser runs.
+  if [[ "${subcommand}" == -h || "${subcommand}" == --help || "${subcommand}" == --* ]]; then
+    subcommand=schedule
+  else
+    shift || true
+  fi
   case "${subcommand,,}" in
     -h|--help)
       t schedule.usage "$0"
