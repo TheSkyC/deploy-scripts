@@ -49,7 +49,8 @@ migrate_stage_tree() {
 # new machine knows which backups to replicate before restoring.
 migrate_backups_inventory() {
   local stage="$1"
-  local out first=1 app_id impl_file bundled_impl_file backup_dir glob record
+  local out first=1 app_id impl_file bundled_impl_file backup_dir record
+  local -a globs=()
   out="{\"schema_version\":1,\"apps\":["
   for app_id in "${DEPLOY_APP_IDS[@]}"; do
     bundled_impl_file=""
@@ -102,16 +103,16 @@ migrate_backups_inventory() {
         exit 0
       fi
       case "$app_id" in
-        blog) glob="blog_*.tar.gz" ;;
-        tickflow) glob="tickflow-data-*.tar.gz" ;;
-        cpa-stack) glob="cpa-stack-*.tar.gz" ;;
-        cyberstrikeai) glob="cyberstrike-ai_*.tar.gz" ;;
-        vaultwarden) glob="vaultwarden_*.tar.gz" ;;
-        newapi) glob="new-api_*.tar.gz" ;;
-        sub2api) glob="sub2api_*.tar.gz sub2api_db_*.sql.gz" ;;
-        *) glob="${APP_ID}_*.tar.gz" ;;
+        blog) globs=('blog_*.tar.gz') ;;
+        tickflow) globs=('tickflow-data-*.tar.gz') ;;
+        cpa-stack) globs=('cpa-stack-*.tar.gz') ;;
+        cyberstrikeai) globs=('cyberstrike-ai_*.tar.gz') ;;
+        vaultwarden) globs=('vaultwarden_*.tar.gz') ;;
+        newapi) globs=('new-api_*.tar.gz') ;;
+        sub2api) globs=('sub2api_*.tar.gz' 'sub2api_db_*.sql.gz') ;;
+        *) globs=("${BA_ARCHIVE_PREFIX:-${app_id}}_*.tar.gz") ;;
       esac
-      backup_verify_latest_json "$dir" $glob || true
+      backup_verify_latest_json "$dir" "${globs[@]}" || true
     )"
     if [[ "$record" == "__MIGRATE_IMPL_SOURCE_FAILED__" ]]; then
       record=""

@@ -37,6 +37,6 @@ deployment characteristics:
 
 ## Verification
 
-`bash tools/verify.sh all` runs the full guard suite (~330 checks), including
+`bash tools/verify.sh all` runs the full guard suite (over 430 checks), including
 structural checks for atomic writes, path guards, and config trust gates. CI
 runs it on every push.

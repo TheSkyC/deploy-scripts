@@ -591,7 +591,7 @@ do_install() {
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
   fi
-  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \
     sqlite3 argon2 openssl fail2ban \
@@ -1393,7 +1393,7 @@ do_update() {
       if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
         success "$(t app.vaultwarden.success.rollback "$OLD_VER")"
         local _backup_kept
-        _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f | sort -r | head -1 || t app.vaultwarden.status.not_installed)
+        _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d" " -f2-)
         error "$(t app.vaultwarden.error.update_rolled_back "$OLD_VER" "$_backup_kept")"
       else
         error "$(t app.vaultwarden.error.rollback_start_failed)"

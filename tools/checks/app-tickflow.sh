@@ -234,8 +234,8 @@ check_tickflow_dependency_failures_are_reported() {
       /step "\$\(t app\.tickflow\.step\.deps\)"/ { in_deps=1; saw_update_if=0; saw_update_warn=0; saw_plugin_if=0; saw_fallback_if=0; saw_install_error=0; next }
       in_deps && /if ! apt-get update -qq; then/ { saw_update_if=1 }
       in_deps && /warn "\$\(t app\.tickflow\.warn\.apt_update\)"/ { saw_update_warn=1 }
-      in_deps && /if ! apt-get install -y -qq git curl ca-certificates docker\.io docker-compose-plugin; then/ { saw_plugin_if=1 }
-      in_deps && /if ! apt-get install -y -qq git curl ca-certificates docker\.io docker-compose; then/ { saw_fallback_if=1 }
+      in_deps && /if ! apt-get install -y -qq( --no-install-recommends)? git curl ca-certificates docker\.io docker-compose-plugin; then/ { saw_plugin_if=1 }
+      in_deps && /if ! apt-get install -y -qq( --no-install-recommends)? git curl ca-certificates docker\.io docker-compose; then/ { saw_fallback_if=1 }
       in_deps && /error "\$\(t app\.tickflow\.error\.deps_install\)"/ { saw_install_error=1 }
       in_deps && /systemctl enable --now docker/ {
         if (!(saw_update_if && saw_update_warn && saw_plugin_if && saw_fallback_if && saw_install_error)) {

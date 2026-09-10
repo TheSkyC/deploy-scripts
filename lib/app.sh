@@ -790,6 +790,11 @@ app_doctor_config_diff() {
   for key in "${CONFIG_KEYS[@]}"; do
     saved="$(grep -E "^${key}=" "$conf_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
     [[ -n "$saved" ]] || continue
+    # Config values are stored quoted but loaded unquoted; compare the same
+    # normalized representation, otherwise every non-empty key looks drifted.
+    if [[ "$saved" =~ ^\"(.*)\"$ ]]; then
+      saved="${BASH_REMATCH[1]}"
+    fi
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
       if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then

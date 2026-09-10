@@ -93,7 +93,7 @@ check_operation_logrotate_policy() {
   fi
   if ! grep -Fqx "${temp_root}/var/log/deploy-scripts/*/*.log {" "$policy_path" \
     || ! grep -Fqx "${temp_root}/var/log/deploy-scripts/*.jsonl {" "$policy_path" \
-    || ! grep -Fqx "${DEPLOY_OPERATION_ROOT}/history/*.jsonl {" "$policy_path" \
+    || ! grep -Fqx "${temp_root}/var/lib/deploy-scripts/history/*.jsonl {" "$policy_path" \
     || ! grep -Fqx '    daily' "$policy_path" \
     || ! grep -Fqx '    rotate 20' "$policy_path" \
     || ! grep -Fqx '    maxage 30' "$policy_path" \

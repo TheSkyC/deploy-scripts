@@ -371,7 +371,7 @@ check_vaultwarden_apt_update_failures_are_reported() {
       /step "\$\(t app\.vaultwarden\.step\.deps\)"/ { in_block=1; saw_update_if=0; saw_warn=0; next }
       in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then/ { saw_update_if=1 }
       in_block && /warn "\$\(t app\.vaultwarden\.warn\.apt_update\)"/ { saw_warn=1 }
-      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \\/ { saw_install_if=1 }
+      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq( --no-install-recommends)? \\/ { saw_install_if=1 }
       in_block && /error "\$\(t app\.vaultwarden\.error\.deps_install\)"/ { saw_install_error=1 }
       in_block && /success "\$\(t app\.vaultwarden\.success\.deps\)"/ {
         if (!(saw_warn_key && saw_guidance && saw_install_key && saw_install_guidance && saw_update_if && saw_warn && saw_install_if && saw_install_error)) {

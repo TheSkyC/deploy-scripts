@@ -30,7 +30,7 @@ Common keys (defaults in parentheses):
 | `LOG_DIR` | Logs |
 | `SERVICE_NAME` / `SERVICE_USER` | systemd unit / OS user |
 | `GITHUB_REPO` | Upstream repository |
-| `BACKUP_DIR` / `BACKUP_KEEP_DAYS` | Backups (default 30 days) |
+| `BACKUP_DIR` / `BACKUP_KEEP_DAYS` | Backups (default 30 days; retention uses `find -mtime +N`, so files may be kept about one extra day) |
 | `BA_BIND_ADDR` | Listen address, `127.0.0.1` by default (reverse-proxy friendly). Set `0.0.0.0` only when the app is meant to be public; the install summary warns about plain-HTTP exposure |
 | `BA_VERSION` | Pin an exact GitHub release tag (e.g. `v1.2.3`). Unset = latest. `update` upgrades to the pinned tag when set |
 | `BA_SHA256_ASSET_TEMPLATE` | Optional upstream checksum asset published next to the release (supports `ARCH`, e.g. `checksums.txt`); when set, downloads are verified against it and a mismatch aborts the install/update |

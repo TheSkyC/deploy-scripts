@@ -4698,6 +4698,11 @@ app_doctor_config_diff() {
   for key in "${CONFIG_KEYS[@]}"; do
     saved="$(grep -E "^${key}=" "$conf_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
     [[ -n "$saved" ]] || continue
+    # Config values are stored quoted but loaded unquoted; compare the same
+    # normalized representation, otherwise every non-empty key looks drifted.
+    if [[ "$saved" =~ ^\"(.*)\"$ ]]; then
+      saved="${BASH_REMATCH[1]}"
+    fi
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
       if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
@@ -5966,7 +5971,7 @@ ba_configure_tls() {
   [[ -n "${DOMAIN:-}" ]] || error "$(t binary_app.error.tls_requires_domain "$APP_NAME")"
   app_validate_email "CERTBOT_EMAIL" "${CERTBOT_EMAIL:-}"
   step "$(t binary_app.step.tls_deps)"
-  if ! apt-get install -y -qq nginx certbot python3-certbot-nginx; then
+  if ! apt-get install -y -qq --no-install-recommends nginx certbot python3-certbot-nginx; then
     error "$(t binary_app.error.tls_deps)"
   fi
   success "$(t binary_app.success.tls_deps)"
@@ -6155,7 +6160,7 @@ bapp_install() {
     apt_deps="${apt_deps} ${BA_APT_PACKAGES}"
   fi
   # shellcheck disable=SC2086
-  if ! apt-get install -y -qq $apt_deps; then
+  if ! apt-get install -y -qq --no-install-recommends $apt_deps; then
     error "$(t binary_app.error.deps_install)"
   fi
   success "$(t binary_app.success.deps)"
@@ -8845,7 +8850,8 @@ migrate_stage_tree() {
 # new machine knows which backups to replicate before restoring.
 migrate_backups_inventory() {
   local stage="$1"
-  local out first=1 app_id impl_file bundled_impl_file backup_dir glob record
+  local out first=1 app_id impl_file bundled_impl_file backup_dir record
+  local -a globs=()
   out="{\"schema_version\":1,\"apps\":["
   for app_id in "${DEPLOY_APP_IDS[@]}"; do
     bundled_impl_file=""
@@ -8898,16 +8904,16 @@ migrate_backups_inventory() {
         exit 0
       fi
       case "$app_id" in
-        blog) glob="blog_*.tar.gz" ;;
-        tickflow) glob="tickflow-data-*.tar.gz" ;;
-        cpa-stack) glob="cpa-stack-*.tar.gz" ;;
-        cyberstrikeai) glob="cyberstrike-ai_*.tar.gz" ;;
-        vaultwarden) glob="vaultwarden_*.tar.gz" ;;
-        newapi) glob="new-api_*.tar.gz" ;;
-        sub2api) glob="sub2api_*.tar.gz sub2api_db_*.sql.gz" ;;
-        *) glob="${APP_ID}_*.tar.gz" ;;
+        blog) globs=('blog_*.tar.gz') ;;
+        tickflow) globs=('tickflow-data-*.tar.gz') ;;
+        cpa-stack) globs=('cpa-stack-*.tar.gz') ;;
+        cyberstrikeai) globs=('cyberstrike-ai_*.tar.gz') ;;
+        vaultwarden) globs=('vaultwarden_*.tar.gz') ;;
+        newapi) globs=('new-api_*.tar.gz') ;;
+        sub2api) globs=('sub2api_*.tar.gz' 'sub2api_db_*.sql.gz') ;;
+        *) globs=("${BA_ARCHIVE_PREFIX:-${app_id}}_*.tar.gz") ;;
       esac
-      backup_verify_latest_json "$dir" $glob || true
+      backup_verify_latest_json "$dir" "${globs[@]}" || true
     )"
     if [[ "$record" == "__MIGRATE_IMPL_SOURCE_FAILED__" ]]; then
       record=""
@@ -14967,7 +14973,7 @@ _install_base_deps() {
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
       curl ca-certificates gnupg lsb-release; then
       error "$(t app.sub2api.error.base_deps_install)"
     fi
@@ -15036,7 +15042,7 @@ EOF
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.postgres_apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends postgresql-15 postgresql-client-15; then
       error "$(t app.sub2api.error.postgres_apt_install)"
     fi
     if ! systemctl enable postgresql 2>/dev/null; then
@@ -15130,7 +15136,7 @@ EOF
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.redis_apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends redis; then
       error "$(t app.sub2api.error.redis_apt_install)"
     fi
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
@@ -15226,7 +15232,7 @@ _install_nginx() {
   else
     info "$(t app.sub2api.info.install_nginx)"
     if [[ "$PKG_MANAGER" == "apt" ]]; then
-      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y nginx; then
+      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx; then
         error "$(t app.sub2api.error.nginx_install)"
       fi
     elif [[ "$PKG_MANAGER" == "dnf" ]]; then
@@ -17024,7 +17030,7 @@ do_install() {
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
   fi
-  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \
     sqlite3 argon2 openssl fail2ban \
@@ -17826,7 +17832,7 @@ do_update() {
       if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
         success "$(t app.vaultwarden.success.rollback "$OLD_VER")"
         local _backup_kept
-        _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f | sort -r | head -1 || t app.vaultwarden.status.not_installed)
+        _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d" " -f2-)
         error "$(t app.vaultwarden.error.update_rolled_back "$OLD_VER" "$_backup_kept")"
       else
         error "$(t app.vaultwarden.error.rollback_start_failed)"
@@ -18593,14 +18599,14 @@ apt_install_base() {
   if ! apt-get update -qq; then
     error "$(t app.cyberstrikeai.error.apt_update)"
   fi
-  if ! apt-get install -y -qq \
+  if ! apt-get install -y -qq --no-install-recommends \
     ca-certificates curl git build-essential \
     python3 python3-venv python3-pip \
     sqlite3 tar gzip openssl lsof; then
     error "$(t app.cyberstrikeai.error.deps_install)"
   fi
   if _bool_true "$ENABLE_NGINX"; then
-    if ! apt-get install -y -qq nginx; then
+    if ! apt-get install -y -qq --no-install-recommends nginx; then
       error "$(t app.cyberstrikeai.error.nginx_deps_install)"
     fi
   fi
@@ -18625,7 +18631,7 @@ install_go_if_needed() {
     return 0
   fi
   step "$(t app.cyberstrikeai.step.install_go)"
-  if ! apt-get install -y -qq golang-go; then
+  if ! apt-get install -y -qq --no-install-recommends golang-go; then
     warn "$(t app.cyberstrikeai.warn.go_repo_install_failed)"
   fi
   if command -v go >/dev/null 2>&1; then
@@ -20028,7 +20034,7 @@ step "$(t app.blog.step_install_deps)"
 if ! apt-get update -qq; then
   error "$(t app.blog.error.apt_update)"
 fi
-if ! apt-get install -y -qq curl wget git nginx ca-certificates; then
+if ! apt-get install -y -qq --no-install-recommends curl wget git nginx ca-certificates; then
   error "$(t app.blog.error.deps_install)"
 fi
 success "$(t app.blog.deps_installed)"
@@ -21395,8 +21401,8 @@ do_install() {
   if ! apt-get update -qq; then
     warn "$(t app.tickflow.warn.apt_update)"
   fi
-  if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose-plugin; then
-    if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose; then
+  if ! apt-get install -y -qq --no-install-recommends git curl ca-certificates docker.io docker-compose-plugin; then
+    if ! apt-get install -y -qq --no-install-recommends git curl ca-certificates docker.io docker-compose; then
       error "$(t app.tickflow.error.deps_install)"
     fi
   fi
@@ -22588,7 +22594,7 @@ cpa_stack_configure_https() {
 cpa_stack_install_dependencies() {
   step "$(t app.cpa_stack.step.dependencies)"
   apt-get update -qq || warn "apt-get update failed; package installation may fail."
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     curl ca-certificates nginx certbot python3-certbot-nginx openssl \
     || error "$(t app.cpa_stack.error.deps)"
 }

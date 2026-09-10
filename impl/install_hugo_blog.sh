@@ -428,7 +428,7 @@ step "$(t app.blog.step_install_deps)"
 if ! apt-get update -qq; then
   error "$(t app.blog.error.apt_update)"
 fi
-if ! apt-get install -y -qq curl wget git nginx ca-certificates; then
+if ! apt-get install -y -qq --no-install-recommends curl wget git nginx ca-certificates; then
   error "$(t app.blog.error.deps_install)"
 fi
 success "$(t app.blog.deps_installed)"

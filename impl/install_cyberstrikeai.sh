@@ -212,14 +212,14 @@ apt_install_base() {
   if ! apt-get update -qq; then
     error "$(t app.cyberstrikeai.error.apt_update)"
   fi
-  if ! apt-get install -y -qq \
+  if ! apt-get install -y -qq --no-install-recommends \
     ca-certificates curl git build-essential \
     python3 python3-venv python3-pip \
     sqlite3 tar gzip openssl lsof; then
     error "$(t app.cyberstrikeai.error.deps_install)"
   fi
   if _bool_true "$ENABLE_NGINX"; then
-    if ! apt-get install -y -qq nginx; then
+    if ! apt-get install -y -qq --no-install-recommends nginx; then
       error "$(t app.cyberstrikeai.error.nginx_deps_install)"
     fi
   fi
@@ -244,7 +244,7 @@ install_go_if_needed() {
     return 0
   fi
   step "$(t app.cyberstrikeai.step.install_go)"
-  if ! apt-get install -y -qq golang-go; then
+  if ! apt-get install -y -qq --no-install-recommends golang-go; then
     warn "$(t app.cyberstrikeai.warn.go_repo_install_failed)"
   fi
   if command -v go >/dev/null 2>&1; then

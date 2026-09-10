@@ -4697,6 +4697,11 @@ app_doctor_config_diff() {
   for key in "${CONFIG_KEYS[@]}"; do
     saved="$(grep -E "^${key}=" "$conf_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
     [[ -n "$saved" ]] || continue
+    # Config values are stored quoted but loaded unquoted; compare the same
+    # normalized representation, otherwise every non-empty key looks drifted.
+    if [[ "$saved" =~ ^\"(.*)\"$ ]]; then
+      saved="${BASH_REMATCH[1]}"
+    fi
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
       if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
@@ -5965,7 +5970,7 @@ ba_configure_tls() {
   [[ -n "${DOMAIN:-}" ]] || error "$(t binary_app.error.tls_requires_domain "$APP_NAME")"
   app_validate_email "CERTBOT_EMAIL" "${CERTBOT_EMAIL:-}"
   step "$(t binary_app.step.tls_deps)"
-  if ! apt-get install -y -qq nginx certbot python3-certbot-nginx; then
+  if ! apt-get install -y -qq --no-install-recommends nginx certbot python3-certbot-nginx; then
     error "$(t binary_app.error.tls_deps)"
   fi
   success "$(t binary_app.success.tls_deps)"
@@ -6154,7 +6159,7 @@ bapp_install() {
     apt_deps="${apt_deps} ${BA_APT_PACKAGES}"
   fi
   # shellcheck disable=SC2086
-  if ! apt-get install -y -qq $apt_deps; then
+  if ! apt-get install -y -qq --no-install-recommends $apt_deps; then
     error "$(t binary_app.error.deps_install)"
   fi
   success "$(t binary_app.success.deps)"
@@ -8214,7 +8219,7 @@ cpa_stack_configure_https() {
 cpa_stack_install_dependencies() {
   step "$(t app.cpa_stack.step.dependencies)"
   apt-get update -qq || warn "apt-get update failed; package installation may fail."
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     curl ca-certificates nginx certbot python3-certbot-nginx openssl \
     || error "$(t app.cpa_stack.error.deps)"
 }

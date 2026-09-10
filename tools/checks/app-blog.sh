@@ -194,7 +194,7 @@ check_blog_restore_action() {
 }
 
 check_blog_dependency_failures_are_reported() {
-  if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq curl wget git nginx ca-certificates$' \
+  if grep -R -nE '^[[:space:]]*apt-get update -qq$|^[[:space:]]*apt-get install -y -qq( --no-install-recommends)? curl wget git nginx ca-certificates$' \
       impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog dependency installation must use explicit conditionals with actionable errors." >&2
     return 1
@@ -215,7 +215,7 @@ check_blog_dependency_failures_are_reported() {
       /step "\$\(t app\.blog\.step_install_deps\)"/ { in_block=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; next }
       in_block && /if ! apt-get update -qq; then/ { saw_update_if=1 }
       in_block && /error "\$\(t app\.blog\.error\.apt_update\)"/ { saw_update_error=1 }
-      in_block && /if ! apt-get install -y -qq curl wget git nginx ca-certificates; then/ { saw_install_if=1 }
+      in_block && /if ! apt-get install -y -qq( --no-install-recommends)? curl wget git nginx ca-certificates; then/ { saw_install_if=1 }
       in_block && /error "\$\(t app\.blog\.error\.deps_install\)"/ { saw_install_error=1 }
       in_block && /success "\$\(t app\.blog\.deps_installed\)"/ {
         if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error)) {

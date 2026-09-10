@@ -363,7 +363,7 @@ _install_base_deps() {
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
       curl ca-certificates gnupg lsb-release; then
       error "$(t app.sub2api.error.base_deps_install)"
     fi
@@ -432,7 +432,7 @@ EOF
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.postgres_apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends postgresql-15 postgresql-client-15; then
       error "$(t app.sub2api.error.postgres_apt_install)"
     fi
     if ! systemctl enable postgresql 2>/dev/null; then
@@ -526,7 +526,7 @@ EOF
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.redis_apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends redis; then
       error "$(t app.sub2api.error.redis_apt_install)"
     fi
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
@@ -622,7 +622,7 @@ _install_nginx() {
   else
     info "$(t app.sub2api.info.install_nginx)"
     if [[ "$PKG_MANAGER" == "apt" ]]; then
-      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y nginx; then
+      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx; then
         error "$(t app.sub2api.error.nginx_install)"
       fi
     elif [[ "$PKG_MANAGER" == "dnf" ]]; then

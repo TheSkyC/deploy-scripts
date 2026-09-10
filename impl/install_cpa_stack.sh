@@ -835,7 +835,7 @@ cpa_stack_configure_https() {
 cpa_stack_install_dependencies() {
   step "$(t app.cpa_stack.step.dependencies)"
   apt-get update -qq || warn "apt-get update failed; package installation may fail."
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     curl ca-certificates nginx certbot python3-certbot-nginx openssl \
     || error "$(t app.cpa_stack.error.deps)"
 }

@@ -264,7 +264,7 @@ check_sub2api_apt_failures_are_reported() {
       /_install_base_deps\(\)/ { in_base=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; next }
       in_base && /if ! apt-get update -qq; then/ { saw_update_if=1 }
       in_base && /error "\$\(t app\.sub2api\.error\.apt_update\)"/ { saw_update_error=1 }
-      in_base && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \\/ { saw_install_if=1 }
+      in_base && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq( --no-install-recommends)? \\/ { saw_install_if=1 }
       in_base && /error "\$\(t app\.sub2api\.error\.base_deps_install\)"/ { saw_install_error=1 }
       in_base && /success "\$\(t app\.sub2api\.success\.base_deps\)"/ {
         if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error)) {
@@ -279,7 +279,7 @@ check_sub2api_apt_failures_are_reported() {
       in_redis_func && /if \[\[ "\$PKG_MANAGER" == "apt" \]\]; then/ { in_redis=1; in_redis_func=0; next }
       in_pg && /if ! apt-get update -qq; then/ { saw_pg_update_if=1 }
       in_pg && /error "\$\(t app\.sub2api\.error\.postgres_apt_update\)"/ { saw_pg_update_error=1 }
-      in_pg && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then/ { saw_pg_install_if=1 }
+      in_pg && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y( --no-install-recommends)? postgresql-15 postgresql-client-15; then/ { saw_pg_install_if=1 }
       in_pg && /error "\$\(t app\.sub2api\.error\.postgres_apt_install\)"/ { saw_pg_install_error=1 }
       in_pg && /if ! systemctl enable postgresql 2>\/dev\/null; then/ {
         if (!(saw_pg_update_if && saw_pg_update_error && saw_pg_install_if && saw_pg_install_error)) {
@@ -290,7 +290,7 @@ check_sub2api_apt_failures_are_reported() {
       }
       in_redis && /if ! apt-get update -qq; then/ { saw_redis_update_if=1 }
       in_redis && /error "\$\(t app\.sub2api\.error\.redis_apt_update\)"/ { saw_redis_update_error=1 }
-      in_redis && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then/ { saw_redis_install_if=1 }
+      in_redis && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y( --no-install-recommends)? redis; then/ { saw_redis_install_if=1 }
       in_redis && /error "\$\(t app\.sub2api\.error\.redis_apt_install\)"/ { saw_redis_install_error=1 }
       in_redis && /_ensure_redis_running \|\| error "\$\(t app\.sub2api\.error\.redis_start\)"/ {
         if (!(saw_redis_update_if && saw_redis_update_error && saw_redis_install_if && saw_redis_install_error)) {
@@ -733,7 +733,7 @@ check_sub2api_nginx_install_starts_service_explicitly() {
   fi
   awk '
       /app\.sub2api\.error\.nginx_install/ { saw_install_key=1 }
-      /apt-get install -y nginx/ { saw_apt_guidance=1 }
+      /apt-get install -y( --no-install-recommends)? nginx/ { saw_apt_guidance=1 }
       /dnf install -y nginx/ { saw_dnf_guidance=1 }
       /yum install -y nginx/ { saw_yum_guidance=1 }
       /_ensure_nginx_running\(\)/ { saw_helper=1 }
@@ -741,7 +741,7 @@ check_sub2api_nginx_install_starts_service_explicitly() {
       /if ! systemctl start nginx 2>\/dev\/null; then/ { saw_start_if=1 }
       /if ! systemctl is-active --quiet nginx 2>\/dev\/null; then/ { saw_active_if=1 }
       /_install_nginx\(\)/ { in_block=1; saw_ensure=0; saw_success=0; next }
-      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y nginx; then/ { saw_apt_if=1 }
+      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y( --no-install-recommends)? nginx; then/ { saw_apt_if=1 }
       in_block && /dnf install -y nginx \|\| error "\$\(t app\.sub2api\.error\.nginx_install\)"/ { saw_dnf_if=1 }
       in_block && /yum install -y nginx \|\| error "\$\(t app\.sub2api\.error\.nginx_install\)"/ { saw_yum_if=1 }
       in_block && /error "\$\(t app\.sub2api\.error\.nginx_install\)"/ { saw_install_error=1 }
