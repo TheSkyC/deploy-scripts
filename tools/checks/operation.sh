@@ -78,7 +78,8 @@ check_operation_logrotate_policy() {
   local temp_root policy_path
   temp_root="$(mktemp -d)"
   policy_path="${temp_root}/etc/logrotate.d/deploy-scripts"
-  if ! DEPLOY_OPERATION_LOG_ROOT="${temp_root}/var/log/deploy-scripts" \
+  if ! DEPLOY_OPERATION_ROOT="${temp_root}/var/lib/deploy-scripts" \
+    DEPLOY_OPERATION_LOG_ROOT="${temp_root}/var/log/deploy-scripts" \
     DEPLOY_OPERATION_LOGROTATE_FILE="$policy_path" \
     DEPLOY_OPERATION_LOGROTATE_DAYS=30 \
     DEPLOY_OPERATION_LOGROTATE_FILES=20 \
@@ -91,6 +92,8 @@ check_operation_logrotate_policy() {
     return 1
   fi
   if ! grep -Fqx "${temp_root}/var/log/deploy-scripts/*/*.log {" "$policy_path" \
+    || ! grep -Fqx "${temp_root}/var/log/deploy-scripts/*.jsonl {" "$policy_path" \
+    || ! grep -Fqx "${DEPLOY_OPERATION_ROOT}/history/*.jsonl {" "$policy_path" \
     || ! grep -Fqx '    daily' "$policy_path" \
     || ! grep -Fqx '    rotate 20' "$policy_path" \
     || ! grep -Fqx '    maxage 30' "$policy_path" \

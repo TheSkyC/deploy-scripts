@@ -1312,6 +1312,26 @@ ${log_root}/*/*.log {
     notifempty
     create 0640 root root
 }
+${log_root}/*.jsonl {
+    daily
+    rotate ${files}
+    maxage ${days}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+${DEPLOY_OPERATION_ROOT}/history/*.jsonl {
+    daily
+    rotate ${files}
+    maxage ${days}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
 LOGROTATE
   then
     return 1
