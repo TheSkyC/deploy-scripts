@@ -7794,8 +7794,8 @@ i18n_register_many \
   "[important]" \
   "[重要]" \
   app.vaultwarden.summary.token_cleanup \
-  "The Admin Token file (%s) is root-only; remove it after saving the token to your password manager: install_vaultwarden.sh token delete" \
-  "Admin Token 文件（%s）仅 root 可读；保存到密码管理器后请删除：install_vaultwarden.sh token delete" \
+  "The Admin Token file (%s) is root-only; remove it after saving the token to your password manager: %s" \
+  "Admin Token 文件（%s）仅 root 可读；保存到密码管理器后请删除：%s" \
   app.vaultwarden.step.update \
   "Update Vaultwarden binary and Web Vault" \
   "更新 Vaultwarden 二进制与 Web Vault" \
@@ -7920,17 +7920,17 @@ i18n_register_many \
   "Backup created: %s" \
   "备份已创建：%s" \
   app.vaultwarden.warn.backup_failed_continue \
-  "Backup failed; temporary file removed. Continuing. Inspect /opt/vaultwarden-backups/backup.log or run /usr/local/bin/vaultwarden-backup manually before proceeding further." \
-  "备份失败，临时文件已清理，继续执行。请检查 /opt/vaultwarden-backups/backup.log，或先手动执行 /usr/local/bin/vaultwarden-backup 再继续后续操作。" \
+  "Backup failed; temporary file removed. Continuing. Inspect %s or run %s manually before proceeding further." \
+  "备份失败，临时文件已清理，继续执行。请检查 %s，或先手动执行 %s 再继续后续操作。" \
   app.vaultwarden.warn.integrity_failed \
   "Backup created, but integrity metadata could not be written for %s; verify will report the archive as unverified." \
   "备份已创建，但完整性元数据写入失败：%s；verify 将把该归档报告为未验证。" \
   app.vaultwarden.error.manual_backup_failed \
-  "Manual backup did not complete successfully. Inspect /opt/vaultwarden-backups/backup.log, review the existing backups above, and retry after fixing the archive or filesystem issue." \
-  "手动备份未成功完成。请检查 /opt/vaultwarden-backups/backup.log，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
+  "Manual backup did not complete successfully. Inspect %s, review the existing backups above, and retry after fixing the archive or filesystem issue." \
+  "手动备份未成功完成。请检查 %s，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
   app.vaultwarden.error.backup_script \
-  "Backup script write failed: /usr/local/bin/vaultwarden-backup" \
-  "备份脚本写入失败：/usr/local/bin/vaultwarden-backup" \
+  "Backup script write failed: %s" \
+  "备份脚本写入失败：%s" \
   app.vaultwarden.step.manual_backup \
   "Manual Vaultwarden backup" \
   "手动备份 Vaultwarden" \
@@ -8175,8 +8175,8 @@ i18n_register_many \
   "The change was written, but restarting the vaultwarden service failed. Run: systemctl restart vaultwarden" \
   "修改已写入，但重启 vaultwarden 服务失败。请执行：systemctl restart vaultwarden" \
   app.vaultwarden.success.admin_token_rotated \
-  "Admin Token rotated. The new token is stored at %s (mode 600, root-only). View it with: install_vaultwarden.sh token" \
-  "Admin Token 已轮换。新 Token 已保存至 %s（权限 600，仅 root 可读）。查看命令：install_vaultwarden.sh token" \
+  "Admin Token rotated. The new token is stored at %s (mode 600, root-only). View it with: %s" \
+  "Admin Token 已轮换。新 Token 已保存至 %s（权限 600，仅 root 可读）。查看命令：%s" \
   app.vaultwarden.step.token_rotate \
   "Rotate Admin Token" \
   "轮换 Admin Token" \
@@ -8184,8 +8184,8 @@ i18n_register_many \
   "Admin Token (file: %s):" \
   "Admin Token（文件：%s）：" \
   app.vaultwarden.warn.token_after_view \
-  "Save this token to your password manager, then delete the file: install_vaultwarden.sh token delete" \
-  "请将此 Token 保存到密码管理器，然后删除文件：install_vaultwarden.sh token delete" \
+  "Save this token to your password manager, then delete the file: %s" \
+  "请将此 Token 保存到密码管理器，然后删除文件：%s" \
   app.vaultwarden.success.token_deleted \
   "Admin Token file deleted." \
   "Admin Token 文件已删除。" \
@@ -8193,11 +8193,11 @@ i18n_register_many \
   "Admin Token file does not exist; nothing to delete." \
   "Admin Token 文件不存在，无需删除。" \
   app.vaultwarden.error.token_missing \
-  "Admin Token file not found: %s. Reinstall or use: install_vaultwarden.sh token rotate" \
-  "Admin Token 文件不存在：%s。请重新安装或使用：install_vaultwarden.sh token rotate" \
+  "Admin Token file not found: %s. Reinstall or use: %s" \
+  "Admin Token 文件不存在：%s。请重新安装或使用：%s" \
   app.vaultwarden.error.token_bad_action \
-  "Unknown token subcommand: %s. Usage: install_vaultwarden.sh token [view|rotate|delete]" \
-  "未知的 token 子命令：%s。用法：install_vaultwarden.sh token [view|rotate|delete]" \
+  "Unknown token subcommand: %s. Usage: %s [view|rotate|delete]" \
+  "未知的 token 子命令：%s。用法：%s [view|rotate|delete]" \
   app.vaultwarden.step.signups_on \
   "Enable public registration" \
   "开启公开注册" \
@@ -8211,8 +8211,8 @@ i18n_register_many \
   "Public registration is now disabled." \
   "公开注册现已关闭。" \
   app.vaultwarden.warn.signups_off_after \
-  "Disable it again as soon as your account is created: install_vaultwarden.sh signups off" \
-  "创建完账号后请立即关闭：install_vaultwarden.sh signups off" \
+  "Disable it again as soon as your account is created: %s" \
+  "创建完账号后请立即关闭：%s" \
   app.vaultwarden.info.signups_status_on \
   "SIGNUPS_ALLOWED=true (public registration is ENABLED)." \
   "SIGNUPS_ALLOWED=true（公开注册已开启）。" \
@@ -8220,8 +8220,8 @@ i18n_register_many \
   "SIGNUPS_ALLOWED=false (public registration is disabled)." \
   "SIGNUPS_ALLOWED=false（公开注册已关闭）。" \
   app.vaultwarden.error.signups_bad_action \
-  "Unknown signups subcommand: %s. Usage: install_vaultwarden.sh signups [on|off|status]" \
-  "未知的 signups 子命令：%s。用法：install_vaultwarden.sh signups [on|off|status]"
+  "Unknown signups subcommand: %s. Usage: %s [on|off|status]" \
+  "未知的 signups 子命令：%s。用法：%s [on|off|status]"
 
 APP_DESCRIPTION="$(t app.vaultwarden.description)"
 APP_IMPL_SCRIPT="impl/install_vaultwarden.sh"
@@ -8414,22 +8414,23 @@ _rotate_admin_token() {
     systemctl restart vaultwarden 2>/dev/null \
       || error "$(t app.vaultwarden.error.rotate_restart)"
   fi
-  success "$(t app.vaultwarden.success.admin_token_rotated "$VW_ADMIN_TOKEN_FILE")"
+  success "$(t app.vaultwarden.success.admin_token_rotated "$VW_ADMIN_TOKEN_FILE" "install_vaultwarden.sh token")"
 }
 do_token() {
   show_banner
   require_root "token"
   app_load_config _VW_DERIVE_PATHS
   local _action="${1:-view}"
+  local _vw_command="install_vaultwarden.sh token"
   case "${_action,,}" in
     view|show)
       if [[ ! -f "$VW_ADMIN_TOKEN_FILE" ]]; then
-        error "$(t app.vaultwarden.error.token_missing "$VW_ADMIN_TOKEN_FILE")"
+        error "$(t app.vaultwarden.error.token_missing "$VW_ADMIN_TOKEN_FILE" "${_vw_command} rotate")"
       fi
       info "$(t app.vaultwarden.info.token_view "$VW_ADMIN_TOKEN_FILE")"
       cat "$VW_ADMIN_TOKEN_FILE"
       echo ""
-      warn "$(t app.vaultwarden.warn.token_after_view)"
+      warn "$(t app.vaultwarden.warn.token_after_view "${_vw_command} delete")"
       ;;
     rotate|new)
       acquire_lock
@@ -8445,7 +8446,7 @@ do_token() {
       fi
       ;;
     *)
-      error "$(t app.vaultwarden.error.token_bad_action "$_action")"
+      error "$(t app.vaultwarden.error.token_bad_action "$_action" "$_vw_command")"
       ;;
   esac
 }
@@ -8455,6 +8456,7 @@ do_signups() {
   show_banner
   require_root "signups"
   app_load_config _VW_DERIVE_PATHS
+  local _vw_command="install_vaultwarden.sh signups"
   [[ -f "$VW_ENV_FILE" ]] || error "$(t app.vaultwarden.error.env_file_missing "$VW_ENV_FILE")"
   local _mode="${1:-status}"
   case "${_mode,,}" in
@@ -8464,7 +8466,7 @@ do_signups() {
       systemctl restart vaultwarden 2>/dev/null \
         || error "$(t app.vaultwarden.error.rotate_restart)"
       success "$(t app.vaultwarden.success.signups_on)"
-      warn "$(t app.vaultwarden.warn.signups_off_after)"
+      warn "$(t app.vaultwarden.warn.signups_off_after "${_vw_command} off")"
       ;;
     off|disable|false)
       step "$(t app.vaultwarden.step.signups_off)"
@@ -8481,7 +8483,7 @@ do_signups() {
       fi
       ;;
     *)
-      error "$(t app.vaultwarden.error.signups_bad_action "$_mode")"
+      error "$(t app.vaultwarden.error.signups_bad_action "$_mode" "$_vw_command")"
       ;;
   esac
 }
@@ -9497,7 +9499,7 @@ CRON
   echo -e "     systemctl restart vaultwarden         # $(t app.vaultwarden.summary.cmd_restart)"
   echo -e "     vaultwarden-backup                    # $(t app.vaultwarden.summary.cmd_backup)"
   echo ""
-  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup "$VW_ADMIN_TOKEN_FILE")"
+  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup "$VW_ADMIN_TOKEN_FILE" "install_vaultwarden.sh token delete")"
   echo ""
 }
 do_update() {
@@ -9738,12 +9740,13 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
 fi
 BKSH_REST
   } | atomic_write_file "$backup_script" 750 root:root; then
-    error "$(t app.vaultwarden.error.backup_script)"
+    error "$(t app.vaultwarden.error.backup_script "$backup_script")"
   fi
 }
 _backup_silent() {
   local label="${1:-manual}"
   local backup_log="${VW_BACKUP_DIR}/backup.log"
+  local backup_script="/usr/local/bin/vaultwarden-backup"
   _log_backup_helper() {
     [[ -d "$VW_BACKUP_DIR" ]] || return 1
     printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
@@ -9786,7 +9789,7 @@ _backup_silent() {
     fi
   else
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
-    warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+    warn "$(t app.vaultwarden.warn.backup_failed_continue "$backup_log" "$backup_script")"
     return 1
   fi
 }
@@ -9796,6 +9799,7 @@ do_backup() {
   app_load_config _VW_DERIVE_PATHS
   acquire_lock
   step "$(t app.vaultwarden.step.manual_backup)"
+  local backup_log="${VW_BACKUP_DIR}/backup.log"
   [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
   local _backup_failed=0
   if ! _backup_silent "manual"; then
@@ -9826,7 +9830,7 @@ do_backup() {
   _total_size=$(du -sh "${VW_BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "0")
   info "$(t app.vaultwarden.info.backup_total "$_total" "$_total_size")"
   if [[ "$_backup_failed" -ne 0 ]]; then
-    error "$(t app.vaultwarden.error.manual_backup_failed)"
+    error "$(t app.vaultwarden.error.manual_backup_failed "$backup_log")"
   fi
 }
 do_status() {

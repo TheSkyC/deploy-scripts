@@ -181,22 +181,23 @@ _rotate_admin_token() {
     systemctl restart vaultwarden 2>/dev/null \
       || error "$(t app.vaultwarden.error.rotate_restart)"
   fi
-  success "$(t app.vaultwarden.success.admin_token_rotated "$VW_ADMIN_TOKEN_FILE")"
+  success "$(t app.vaultwarden.success.admin_token_rotated "$VW_ADMIN_TOKEN_FILE" "install_vaultwarden.sh token")"
 }
 do_token() {
   show_banner
   require_root "token"
   app_load_config _VW_DERIVE_PATHS
   local _action="${1:-view}"
+  local _vw_command="install_vaultwarden.sh token"
   case "${_action,,}" in
     view|show)
       if [[ ! -f "$VW_ADMIN_TOKEN_FILE" ]]; then
-        error "$(t app.vaultwarden.error.token_missing "$VW_ADMIN_TOKEN_FILE")"
+        error "$(t app.vaultwarden.error.token_missing "$VW_ADMIN_TOKEN_FILE" "${_vw_command} rotate")"
       fi
       info "$(t app.vaultwarden.info.token_view "$VW_ADMIN_TOKEN_FILE")"
       cat "$VW_ADMIN_TOKEN_FILE"
       echo ""
-      warn "$(t app.vaultwarden.warn.token_after_view)"
+      warn "$(t app.vaultwarden.warn.token_after_view "${_vw_command} delete")"
       ;;
     rotate|new)
       acquire_lock
@@ -212,7 +213,7 @@ do_token() {
       fi
       ;;
     *)
-      error "$(t app.vaultwarden.error.token_bad_action "$_action")"
+      error "$(t app.vaultwarden.error.token_bad_action "$_action" "$_vw_command")"
       ;;
   esac
 }
@@ -222,6 +223,7 @@ do_signups() {
   show_banner
   require_root "signups"
   app_load_config _VW_DERIVE_PATHS
+  local _vw_command="install_vaultwarden.sh signups"
   [[ -f "$VW_ENV_FILE" ]] || error "$(t app.vaultwarden.error.env_file_missing "$VW_ENV_FILE")"
   local _mode="${1:-status}"
   case "${_mode,,}" in
@@ -231,7 +233,7 @@ do_signups() {
       systemctl restart vaultwarden 2>/dev/null \
         || error "$(t app.vaultwarden.error.rotate_restart)"
       success "$(t app.vaultwarden.success.signups_on)"
-      warn "$(t app.vaultwarden.warn.signups_off_after)"
+      warn "$(t app.vaultwarden.warn.signups_off_after "${_vw_command} off")"
       ;;
     off|disable|false)
       step "$(t app.vaultwarden.step.signups_off)"
@@ -248,7 +250,7 @@ do_signups() {
       fi
       ;;
     *)
-      error "$(t app.vaultwarden.error.signups_bad_action "$_mode")"
+      error "$(t app.vaultwarden.error.signups_bad_action "$_mode" "$_vw_command")"
       ;;
   esac
 }
@@ -1264,7 +1266,7 @@ CRON
   echo -e "     systemctl restart vaultwarden         # $(t app.vaultwarden.summary.cmd_restart)"
   echo -e "     vaultwarden-backup                    # $(t app.vaultwarden.summary.cmd_backup)"
   echo ""
-  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup "$VW_ADMIN_TOKEN_FILE")"
+  echo -e "  ${YELLOW}${BOLD}$(t app.vaultwarden.summary.important)${NC} $(t app.vaultwarden.summary.token_cleanup "$VW_ADMIN_TOKEN_FILE" "install_vaultwarden.sh token delete")"
   echo ""
 }
 do_update() {
@@ -1505,12 +1507,13 @@ if [[ "${KEEP_DAYS}" -gt 0 ]]; then
 fi
 BKSH_REST
   } | atomic_write_file "$backup_script" 750 root:root; then
-    error "$(t app.vaultwarden.error.backup_script)"
+    error "$(t app.vaultwarden.error.backup_script "$backup_script")"
   fi
 }
 _backup_silent() {
   local label="${1:-manual}"
   local backup_log="${VW_BACKUP_DIR}/backup.log"
+  local backup_script="/usr/local/bin/vaultwarden-backup"
   _log_backup_helper() {
     [[ -d "$VW_BACKUP_DIR" ]] || return 1
     printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
@@ -1553,7 +1556,7 @@ _backup_silent() {
     fi
   else
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
-    warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+    warn "$(t app.vaultwarden.warn.backup_failed_continue "$backup_log" "$backup_script")"
     return 1
   fi
 }
@@ -1563,6 +1566,7 @@ do_backup() {
   app_load_config _VW_DERIVE_PATHS
   acquire_lock
   step "$(t app.vaultwarden.step.manual_backup)"
+  local backup_log="${VW_BACKUP_DIR}/backup.log"
   [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
   local _backup_failed=0
   if ! _backup_silent "manual"; then
@@ -1593,7 +1597,7 @@ do_backup() {
   _total_size=$(du -sh "${VW_BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "0")
   info "$(t app.vaultwarden.info.backup_total "$_total" "$_total_size")"
   if [[ "$_backup_failed" -ne 0 ]]; then
-    error "$(t app.vaultwarden.error.manual_backup_failed)"
+    error "$(t app.vaultwarden.error.manual_backup_failed "$backup_log")"
   fi
 }
 do_status() {
