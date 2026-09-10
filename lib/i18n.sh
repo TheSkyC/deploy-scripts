@@ -68,6 +68,7 @@ i18n_register notify.warn.untrusted_config "Notification config failed the trust
 i18n_register notify.warn.no_backend "Notification backend is not set to ntfy or gotify; notification skipped." "通知后端不是 ntfy 或 gotify，已跳过通知。"
 i18n_register notify.warn.no_url "Notification URL is empty; notification skipped." "通知服务地址为空，已跳过通知。"
 i18n_register notify.warn.curl_missing "curl is not available; notification skipped." "curl 不可用，已跳过通知。"
+i18n_register app.warn.curl_missing "curl is not available; health probe returned 000 for %s." "curl 不可用，%s 的健康探测返回 000。"
 i18n_register notify.warn.disabled "Notifications are disabled; test skipped." "通知已禁用，测试已跳过。"
 i18n_register notify.info.sent "Notification sent." "通知已发送。"
 i18n_register notify.warn.send_failed "Notification delivery failed (HTTP %s); continuing." "通知发送失败（HTTP %s），继续主流程。"

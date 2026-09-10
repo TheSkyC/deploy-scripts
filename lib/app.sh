@@ -239,9 +239,14 @@ app_http_status_code() {
     set --
   fi
   [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
-  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+  if [[ -z "$url" ]]; then
     printf '000\n'
-    return 0
+    return 1
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "$(t app.warn.curl_missing "$url")"
+    printf '000\n'
+    return 1
   fi
   curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
     || printf '000\n'

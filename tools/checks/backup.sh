@@ -3131,3 +3131,36 @@ app app Exited 8080"
     echo ok
   ' | grep -q ok
 }
+
+# Restore asides are removed only after success.  A second restore in the
+# same second must not collide with an in-flight aside directory.
+check_backup_restore_aside_uses_random_suffix() {
+  local fn
+  fn="$(mktemp)"
+  sed -n '/^backup_restore_data_dir()/,/^}/p' lib/backup.sh >"$fn"
+  if ! grep -Fq 'staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)_$RANDOM"' "$fn"; then
+    echo "backup_restore_data_dir must append a random suffix to restore asides" >&2
+    rm -f "$fn"
+    return 1
+  fi
+  rm -f "$fn"
+}
+
+# mktemp -d creates staging directories, so uninstall cleanup must not filter
+# them with -type f and leave interrupted installations behind forever.
+check_binary_app_uninstall_removes_stage_directories() {
+  local fn
+  fn="$(mktemp)"
+  sed -n '/^bapp_uninstall()/,/^}/p' lib/binary_app.sh >"$fn" 2>/dev/null
+  if [[ ! -s "$fn" ]]; then
+    echo "Could not locate the shared binary app uninstall function" >&2
+    rm -f "$fn"
+    return 1
+  fi
+  if grep -q '\.stage\.' "$fn" && grep -A3 -B3 '\.stage\.' "$fn" | grep -q -- '-type f'; then
+    echo "binary app uninstall must clean staging directories as well as files" >&2
+    rm -f "$fn"
+    return 1
+  fi
+  rm -f "$fn"
+}

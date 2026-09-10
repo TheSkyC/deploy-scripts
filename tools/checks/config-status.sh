@@ -846,3 +846,30 @@ STUB
   fi
   rm -rf "$tmp_dir"
 }
+
+# curl is a declared dependency, but if the runtime path is damaged the probe
+# must surface the failure instead of silently reporting a zero exit.
+check_app_http_probe_warns_missing_curl() {
+  local output status
+  set +e
+  output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    PATH=/nonexistent
+    app_http_status_code "http://127.0.0.1:8080/health"
+  ' _ "$ROOT_DIR" 2>&1)"
+  status=$?
+  set -e
+  [[ "$status" -ne 0 ]] || {
+    echo "HTTP probe must fail when curl is missing" >&2
+    return 1
+  }
+  grep -Fq 'curl is not available; health probe returned 000 for http://127.0.0.1:8080/health.' <<<"$output" || {
+    echo "Missing-curl health probe did not emit an explicit warning" >&2
+    return 1
+  }
+  grep -Fq '000' <<<"$output" || {
+    echo "Missing-curl health probe did not retain the 000 status marker" >&2
+    return 1
+  }
+}

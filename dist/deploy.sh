@@ -83,6 +83,7 @@ i18n_register notify.warn.untrusted_config "Notification config failed the trust
 i18n_register notify.warn.no_backend "Notification backend is not set to ntfy or gotify; notification skipped." "通知后端不是 ntfy 或 gotify，已跳过通知。"
 i18n_register notify.warn.no_url "Notification URL is empty; notification skipped." "通知服务地址为空，已跳过通知。"
 i18n_register notify.warn.curl_missing "curl is not available; notification skipped." "curl 不可用，已跳过通知。"
+i18n_register app.warn.curl_missing "curl is not available; health probe returned 000 for %s." "curl 不可用，%s 的健康探测返回 000。"
 i18n_register notify.warn.disabled "Notifications are disabled; test skipped." "通知已禁用，测试已跳过。"
 i18n_register notify.info.sent "Notification sent." "通知已发送。"
 i18n_register notify.warn.send_failed "Notification delivery failed (HTTP %s); continuing." "通知发送失败（HTTP %s），继续主流程。"
@@ -2053,7 +2054,7 @@ backup_restore_data_dir() {
   local data_parent data_base staged_aside restored=false
   data_parent="$(dirname "$data_dir")"
   data_base="$(basename "$data_dir")"
-  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)"
+  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)_$RANDOM"
   if ! mv "$data_dir" "$staged_aside"; then
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
@@ -4146,9 +4147,14 @@ app_http_status_code() {
     set --
   fi
   [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
-  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+  if [[ -z "$url" ]]; then
     printf '000\n'
-    return 0
+    return 1
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "$(t app.warn.curl_missing "$url")"
+    printf '000\n'
+    return 1
   fi
   curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
     || printf '000\n'
@@ -6557,12 +6563,12 @@ bapp_uninstall() {
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local cleanup_path
   while IFS= read -r -d '' cleanup_path; do
-    if ! rm -f "$cleanup_path"; then
+    if ! rm -rf "$cleanup_path"; then
       warn "$(t binary_app.warn.cleanup_old_failed "$cleanup_path")"
     fi
   done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "${BA_BIN_NAME}.bak.*" \
            -o -name ".${BA_BIN_NAME}.tmp.*" -o -name ".${BA_BIN_NAME}.stage.*" \) \
-           -type f -print0 2>/dev/null)
+           -print0 2>/dev/null)
   success "$(t binary_app.success.removed_binary)"
   ba_remove_file_or_error "/etc/logrotate.d/${SERVICE_NAME}" "LOGROTATE_FILE"
   # Clean up the optional TLS reverse proxy (nginx site + certbot renewal)

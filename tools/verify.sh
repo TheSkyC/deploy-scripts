@@ -487,6 +487,7 @@ main() {
       run_isolated_check check_api_status_directory_sizes_are_nonfatal
       run_isolated_check check_app_json_string_escapes_controls
       run_isolated_check check_app_http_status_code_helper
+      run_isolated_check check_app_http_probe_warns_missing_curl
       run_isolated_check check_app_install_executable_file_helper
       run_isolated_check check_app_prune_update_backups_behavior
       run_isolated_check check_atomic_copy_file_strict_helper
@@ -803,6 +804,8 @@ main() {
       run_isolated_check check_backup_validate_gzip_archive
       run_isolated_check check_backup_restore_directory_lifecycle
       run_isolated_check check_backup_restore_data_dir_lifecycle
+      run_isolated_check check_backup_restore_aside_uses_random_suffix
+      run_isolated_check check_binary_app_uninstall_removes_stage_directories
       run_isolated_check check_backup_manifest_field_skips_escaped_quotes
       run_isolated_check check_notification_fail_open_and_redaction
       run_isolated_check check_notify_credentials_stay_out_of_argv

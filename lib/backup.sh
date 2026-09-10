@@ -434,7 +434,7 @@ backup_restore_data_dir() {
   local data_parent data_base staged_aside restored=false
   data_parent="$(dirname "$data_dir")"
   data_base="$(basename "$data_dir")"
-  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)"
+  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)_$RANDOM"
   if ! mv "$data_dir" "$staged_aside"; then
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true

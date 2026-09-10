@@ -1741,12 +1741,12 @@ bapp_uninstall() {
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local cleanup_path
   while IFS= read -r -d '' cleanup_path; do
-    if ! rm -f "$cleanup_path"; then
+    if ! rm -rf "$cleanup_path"; then
       warn "$(t binary_app.warn.cleanup_old_failed "$cleanup_path")"
     fi
   done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "${BA_BIN_NAME}.bak.*" \
            -o -name ".${BA_BIN_NAME}.tmp.*" -o -name ".${BA_BIN_NAME}.stage.*" \) \
-           -type f -print0 2>/dev/null)
+           -print0 2>/dev/null)
   success "$(t binary_app.success.removed_binary)"
   ba_remove_file_or_error "/etc/logrotate.d/${SERVICE_NAME}" "LOGROTATE_FILE"
   # Clean up the optional TLS reverse proxy (nginx site + certbot renewal)
