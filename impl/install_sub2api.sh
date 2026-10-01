@@ -962,9 +962,11 @@ _backup_silent() {
     warn "$(t app.sub2api.warn.backup_dir_unwritable "$BACKUP_DIR")"
     return 1
   fi
+  # One timestamp for the whole run so db and conf artifacts share it.
+  local backup_ts; backup_ts="$(date +%Y%m%d_%H%M%S)"
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive
-    pg_archive="${BACKUP_DIR}/sub2api_db_${label}_$(date +%Y%m%d_%H%M%S).sql.gz"
+    pg_archive="${BACKUP_DIR}/sub2api_db_${label}_${backup_ts}.sql.gz"
     if backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr "${PG_DSN}"; then
       if ! backup_finalize_archive "$pg_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
         warn "$(t app.sub2api.warn.backup_integrity "$pg_archive")"
@@ -982,7 +984,7 @@ _backup_silent() {
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
     local conf_archive
-    conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_$(date +%Y%m%d_%H%M%S).tar.gz"
+    conf_archive="${BACKUP_DIR}/sub2api_conf_${label}_${backup_ts}.tar.gz"
     if backup_create_tar_archive "$conf_archive" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
       if ! backup_finalize_archive "$conf_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
@@ -1333,9 +1335,12 @@ do_backup() {
   if ! mkdir -p "$BACKUP_DIR"; then
     error "$(t app.sub2api.error.backup_dir_create "$BACKUP_DIR")"
   fi
+  # One timestamp for the whole run so the db/conf/data artifacts share it and
+  # restore can pick a matching set instead of mixing runs.
+  local backup_ts; backup_ts="$(date +%Y%m%d_%H%M%S)"
   if [[ -n "${PG_DSN:-}" ]]; then
     if command -v pg_dump &>/dev/null; then
-      local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_$(date +%Y%m%d_%H%M%S).sql.gz"
+      local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_${backup_ts}.sql.gz"
       info "$(t app.sub2api.info.pg_dump)"
       if backup_create_gzip_archive "$PG_ARCHIVE" pg_dump "${PG_DSN}"; then
         if ! backup_finalize_archive "$PG_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
@@ -1353,7 +1358,7 @@ do_backup() {
     warn "$(t app.sub2api.warn.pg_dsn_missing)"
   fi
   if [[ -d "$CONFIG_DIR" ]]; then
-    local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local CONF_ARCHIVE; CONF_ARCHIVE="${BACKUP_DIR}/sub2api_conf_${backup_ts}.tar.gz"
     if backup_create_tar_archive "$CONF_ARCHIVE" \
         -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")"; then
         if ! backup_finalize_archive "$CONF_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
@@ -1368,7 +1373,7 @@ do_backup() {
     warn "$(t app.sub2api.warn.config_missing "$CONFIG_DIR")"
   fi
   if [[ -d "$DATA_DIR" ]]; then
-    local DATA_ARCHIVE; DATA_ARCHIVE="${BACKUP_DIR}/sub2api_data_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local DATA_ARCHIVE; DATA_ARCHIVE="${BACKUP_DIR}/sub2api_data_${backup_ts}.tar.gz"
     if backup_create_tar_archive "$DATA_ARCHIVE" \
         --exclude="*.log" --exclude="*.log.*" \
         -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"; then
@@ -1751,7 +1756,7 @@ do_restore() {
   require_safe_path "DATA_DIR" "$DATA_DIR"
   require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   [[ -d "$BACKUP_DIR" ]] || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
-  local data_archive conf_archive="" db_archive=""
+  local data_archive conf_archive="" db_archive="" run_ts
   data_archive="${SUB2API_RESTORE_ARCHIVE:-}"
   if [[ -n "$data_archive" ]]; then
     [[ "$data_archive" == "$BACKUP_DIR"/sub2api_data_*.tar.gz && -f "$data_archive" ]] \
@@ -1759,10 +1764,22 @@ do_restore() {
   else
     data_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_data_*.tar.gz' || true)"
   fi
-  conf_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_conf_*.tar.gz' || true)"
-  db_archive="$(backup_latest_archive "$BACKUP_DIR" 'sub2api_db_*.sql.gz' || true)"
   [[ -n "$data_archive" ]] \
     || error "$(t backup.restore.no_backups "$BACKUP_DIR")"
+  # Take the config/database artifacts from the SAME run as the data archive so
+  # a partially completed backup cannot pair new files with an old database.
+  run_ts="$(basename "$data_archive")"
+  run_ts="${run_ts#sub2api_data_}"
+  run_ts="${run_ts%.tar.gz}"
+  if [[ -f "${BACKUP_DIR}/sub2api_conf_${run_ts}.tar.gz" ]]; then
+    conf_archive="${BACKUP_DIR}/sub2api_conf_${run_ts}.tar.gz"
+  fi
+  if [[ -f "${BACKUP_DIR}/sub2api_db_${run_ts}.sql.gz" ]]; then
+    db_archive="${BACKUP_DIR}/sub2api_db_${run_ts}.sql.gz"
+  fi
+  if [[ -z "$db_archive" ]] && compgen -G "${BACKUP_DIR}/sub2api_db_*.sql.gz" >/dev/null 2>&1; then
+    warn "$(t app.sub2api.warn.restore_no_matching_db "$run_ts")"
+  fi
 
   if ! backup_validate_archive_members "$data_archive"; then
     error "$(t backup.restore.invalid_archive "$data_archive")"
@@ -1777,6 +1794,26 @@ do_restore() {
 
   systemctl stop "$SERVICE_NAME" \
     || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
+
+  # ── database first: psql cannot be rolled back atomically, so restore it
+  # before swapping the data/config directories. A failure here leaves the
+  # directories untouched, so the caller only has to restart the service.
+  if [[ -n "$db_archive" ]]; then
+    if command -v psql >/dev/null 2>&1 && [[ -n "${PG_DSN:-}" ]]; then
+      if ! gunzip -c "$db_archive" | psql "$PG_DSN" -v ON_ERROR_STOP=1 >&2; then
+        if ! systemctl start "$SERVICE_NAME"; then
+          error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+        fi
+        error "$(t app.sub2api.error.database_restore_failed "$db_archive")"
+      fi
+    else
+      if ! systemctl start "$SERVICE_NAME"; then
+        error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+      fi
+      error "$(t app.sub2api.error.database_restore_unavailable "$db_archive")"
+    fi
+  fi
+
   # ── data directory: atomic swap with aside copy. The empty service argument
   # tells the shared helper that this caller owns the service lifecycle.
   if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
@@ -1791,25 +1828,6 @@ do_restore() {
     if ! backup_restore_directory "$CONFIG_DIR" "$conf_archive"; then
       systemctl start "$SERVICE_NAME" || true
       error "$(t backup.restore.invalid_archive "$conf_archive")"
-    fi
-  fi
-
-  # ── database: a matching dump must restore successfully. This cannot be
-  # rolled back atomically like the directories above, so stop before claiming
-  # success, restart the service for diagnostics, and report a hard failure.
-  if [[ -n "$db_archive" ]]; then
-    if command -v psql >/dev/null 2>&1 && [[ -n "${PG_DSN:-}" ]]; then
-      if ! gunzip -c "$db_archive" | psql "$PG_DSN" -v ON_ERROR_STOP=1 >&2; then
-        if ! systemctl start "$SERVICE_NAME"; then
-          error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-        fi
-        error "$(t app.sub2api.error.database_restore_failed "$db_archive")"
-      fi
-    else
-      if ! systemctl start "$SERVICE_NAME"; then
-        error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-      fi
-      error "$(t app.sub2api.error.database_restore_unavailable "$db_archive")"
     fi
   fi
 

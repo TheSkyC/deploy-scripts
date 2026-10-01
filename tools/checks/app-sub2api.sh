@@ -530,8 +530,9 @@ check_sub2api_database_restore_fails_closed() {
 }
 
 # Exercise the restore boundary with a real tar/gzip archive and a failing psql
-# stub: the database error must produce a non-zero action after data restore and
-# a service restart, rather than falling through to a success message.
+# stub: the database is restored before the data/config directories, so a psql
+# failure must leave the directories untouched, restart the service, and report
+# a non-zero action instead of falling through to a success message.
 check_sub2api_database_restore_failure_is_nonzero() {
   local output
   output="$($BASH_BIN -c '
@@ -576,11 +577,37 @@ PSQL
     [[ "$status" -ne 0 ]] || exit 11
     grep -Fxq "stop testsvc" "$tmp/systemctl.log" || exit 12
     grep -Fxq "start testsvc" "$tmp/systemctl.log" || exit 13
-    [[ "$(cat "$DATA_DIR/restored.txt")" == restored ]] || exit 14
+    [[ ! -e "$DATA_DIR/restored.txt" && -e "$DATA_DIR/old.txt" ]] || exit 14
     grep -Fqx "postgresql://example.invalid/sub2api -v ON_ERROR_STOP=1" "$PSQL_ARGS_LOG" || exit 15
     echo ok
   ')"
   [[ "$output" == ok ]]
+}
+
+# A restore must not mix artifacts from different runs, and each backup run must
+# stamp its db/conf/data artifacts with one shared timestamp.
+check_sub2api_restore_uses_matching_backup_run() {
+  grep -Fq 'run_ts="${run_ts#sub2api_data_}"' impl/install_sub2api.sh \
+    && grep -Fq 'conf_archive="${BACKUP_DIR}/sub2api_conf_${run_ts}.tar.gz"' impl/install_sub2api.sh \
+    && grep -Fq 'db_archive="${BACKUP_DIR}/sub2api_db_${run_ts}.sql.gz"' impl/install_sub2api.sh \
+    || {
+      echo "Sub2API restore must select config/database artifacts from the same run as the data archive." >&2
+      return 1
+    }
+  awk '
+      /^do_backup\(\) \{/ { in_fn=1; ts=0; db=0; conf=0; data=0; next }
+      in_fn && /backup_ts=.*date/ { ts=1 }
+      in_fn && /sub2api_db_\$\{backup_ts\}\.sql\.gz/ { db=1 }
+      in_fn && /sub2api_conf_\$\{backup_ts\}\.tar\.gz/ { conf=1 }
+      in_fn && /sub2api_data_\$\{backup_ts\}\.tar\.gz/ { data=1 }
+      in_fn && /^}$/ {
+        if (!(ts && db && conf && data)) {
+          print "Sub2API do_backup must stamp db/conf/data with one shared run timestamp" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+    ' impl/install_sub2api.sh
 }
 
 check_sub2api_summary_does_not_print_pg_password() {

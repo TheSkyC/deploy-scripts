@@ -609,6 +609,9 @@ i18n_register_many \
   app.sub2api.warn.backup_dir_unwritable \
   "Backup directory could not be created (%s); backup outputs were skipped." \
   "无法创建备份目录（%s），已跳过备份输出。" \
+  app.sub2api.warn.restore_no_matching_db \
+  "No database dump from the same backup run (%s) was found; the database will not be restored." \
+  "未找到与同一次备份（%s）匹配的数据库转储，将不恢复数据库。" \
   app.sub2api.step.download_update \
   "Download new version (%s -> %s)" \
   "下载新版本（%s → %s）" \
