@@ -146,7 +146,6 @@ state_json_field() {
   esac
 }
 
-state_json_object_field() { state_json_field "$1" "$2"; }
 state_object_field() { state_json_field "$1" "$2"; }
 
 state_operation_record() {

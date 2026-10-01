@@ -2217,7 +2217,6 @@ state_json_field() {
   esac
 }
 
-state_json_object_field() { state_json_field "$1" "$2"; }
 state_object_field() { state_json_field "$1" "$2"; }
 
 state_operation_record() {
@@ -3070,7 +3069,8 @@ manager_history_main() {
 
 # ----- lib/manager_doctor.sh -----
 
-MANAGER_DOCTOR_USAGE="Usage: deploy.sh doctor-all [--json] [--only-installed] [--include id,id,...] [--exclude id,id,...]"
+MANAGER_DOCTOR_USAGE="Usage: deploy.sh doctor-all [--json] [--only-installed] [--include id,id,...] [--exclude id,id,...]
+  (--only-installed is accepted for CLI compatibility but is always implied: doctor-all only checks installed apps)"
 
 manager_doctor_print_usage() { echo "$MANAGER_DOCTOR_USAGE" >&2; }
 
@@ -3092,8 +3092,9 @@ manager_doctor_main() {
     return $?
   fi
   json="$MANAGER_ARG_JSON"
-  # doctor-all checks installed apps by default; --only-installed is an
-  # explicit no-op kept for compatibility (it cannot be turned off).
+  # doctor-all always checks installed apps; --only-installed is accepted for
+  # CLI compatibility (callers pass it generically) and is documented as
+  # implied rather than silently ignored. It cannot be turned off.
   only_installed=1
   include_csv="$MANAGER_ARG_INCLUDE"
   exclude_csv="$MANAGER_ARG_EXCLUDE"
