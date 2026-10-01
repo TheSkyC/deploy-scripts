@@ -1175,10 +1175,11 @@ check_vaultwarden_webvault_archives_are_validated() {
           saw_nonfatal=0
           saw_cleanup_if=0
           saw_cleanup_warn=0
+          saw_checksum=0
           next
         }
         in_helper && /^}/ {
-          if (!(saw_empty && saw_small && saw_magic && saw_nonfatal && saw_cleanup_if && saw_cleanup_warn)) {
+          if (!(saw_empty && saw_small && saw_magic && saw_nonfatal && saw_cleanup_if && saw_cleanup_warn && saw_checksum)) {
             printf "%s must validate downloaded Web Vault archives before extraction\n", FILENAME > "/dev/stderr"
             exit 1
           }
@@ -1187,6 +1188,7 @@ check_vaultwarden_webvault_archives_are_validated() {
         in_helper && /\[\[ ! -s "\$archive" \]\]/ { saw_empty=1 }
         in_helper && /\[\[ "\$size" -lt 65536 \]\]/ { saw_small=1 }
         in_helper && /"\$magic" != "1f8b"/ { saw_magic=1 }
+        in_helper && /WEB_VAULT_SHA256/ { saw_checksum=1 }
         in_helper && /local mode="\$\{2:-fatal\}"/ { saw_nonfatal=1 }
         in_helper && /if ! rm -f "\$archive"; then/ { saw_cleanup_if=1 }
         in_helper && /warn "\$\(t app\.vaultwarden\.warn\.web_vault_archive_cleanup_failed "\$archive"\)"/ { saw_cleanup_warn=1 }

@@ -369,6 +369,25 @@ _verify_web_vault_archive() {
     warn "$(t app.vaultwarden.error.web_vault_archive_format "${magic:-read failed}")"
     return 1
   fi
+  # Optional independent digest: the web-vault tarball is served to browsers, so
+  # an operator who pins WEB_VAULT_SHA256 gets a real integrity check instead of
+  # only the gzip-magic heuristic above.
+  local expected_sha="${WEB_VAULT_SHA256:-}" actual_sha
+  if [[ -n "$expected_sha" ]]; then
+    [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
+      || error "$(t error.sha256_invalid "WEB_VAULT_SHA256" "$expected_sha")"
+    actual_sha="$(backup_sha256_file "$archive" || true)"
+    if [[ "${actual_sha,,}" != "${expected_sha,,}" ]]; then
+      if ! rm -f "$archive"; then
+        warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+      fi
+      if [[ "$mode" == "fatal" ]]; then
+        error "$(t app.vaultwarden.error.web_vault_checksum)"
+      fi
+      warn "$(t app.vaultwarden.error.web_vault_checksum)"
+      return 1
+    fi
+  fi
 }
 extract_binary() {
   local workdir="$1"

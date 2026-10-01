@@ -4762,6 +4762,9 @@ i18n_register_many \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
+  binary_app.error.checksum_mismatch \
+  "Downloaded asset failed the pinned SHA-256 check: %s" \
+  "下载的资产未通过固定的 SHA-256 校验：%s" \
   binary_app.warn.tmp_cleanup_failed \
   "Failed to remove temporary file: %s." \
   "清理临时文件失败：%s。" \
@@ -5381,12 +5384,28 @@ ba_download_urls() {
   printf 'https://github.com/%s/releases/download/%s/%s\n' "$GITHUB_REPO" "$version" "$asset"
 }
 
+# Verify a downloaded asset against an optional pinned digest. An app that pins
+# BA_VERSION can set BA_ASSET_SHA256 to bind the asset to an independent digest;
+# unset means no digest is available and the download is accepted (the ELF
+# magic and size checks still run afterwards).
+bapp_verify_asset_checksum() {
+  local file="$1" expected="${BA_ASSET_SHA256:-}" actual
+  [[ -n "$expected" ]] || return 0
+  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || error "$(t error.sha256_invalid "BA_ASSET_SHA256" "$expected")"
+  actual="$(backup_sha256_file "$file")" || return 1
+  [[ "${actual,,}" == "${expected,,}" ]]
+}
+
 # Download the first reachable URL for the given version into $1.
 ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
     if curl -fL --progress-bar -o "$target" "$url"; then
+      if ! bapp_verify_asset_checksum "$target"; then
+        rm -f "$target" 2>/dev/null || true
+        error "$(t binary_app.error.checksum_mismatch "$url")"
+      fi
       return 0
     fi
     rm -f "$target" 2>/dev/null || true

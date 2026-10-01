@@ -459,6 +459,21 @@ check_binary_app_pre_backup_hook_is_best_effort() {
   done
 }
 
+check_binary_app_download_supports_pinned_checksum() {
+  local file
+  # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
+  for file in lib/binary_app.sh; do
+    grep -Fq 'bapp_verify_asset_checksum() {' "$file" \
+      && grep -Fq 'BA_ASSET_SHA256' "$file" \
+      && grep -Fq 'bapp_verify_asset_checksum "$target"' "$file" \
+      && grep -Fq 'binary_app.error.checksum_mismatch' "$file" \
+      || {
+        echo "$file must verify an optional BA_ASSET_SHA256 after downloading a release asset." >&2
+        return 1
+      }
+  done
+}
+
 check_binary_app_health_results_are_surfaced() {
   local file
   # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.

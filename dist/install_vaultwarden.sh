@@ -4762,6 +4762,9 @@ i18n_register_many \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
+  binary_app.error.checksum_mismatch \
+  "Downloaded asset failed the pinned SHA-256 check: %s" \
+  "下载的资产未通过固定的 SHA-256 校验：%s" \
   binary_app.warn.tmp_cleanup_failed \
   "Failed to remove temporary file: %s." \
   "清理临时文件失败：%s。" \
@@ -5381,12 +5384,28 @@ ba_download_urls() {
   printf 'https://github.com/%s/releases/download/%s/%s\n' "$GITHUB_REPO" "$version" "$asset"
 }
 
+# Verify a downloaded asset against an optional pinned digest. An app that pins
+# BA_VERSION can set BA_ASSET_SHA256 to bind the asset to an independent digest;
+# unset means no digest is available and the download is accepted (the ELF
+# magic and size checks still run afterwards).
+bapp_verify_asset_checksum() {
+  local file="$1" expected="${BA_ASSET_SHA256:-}" actual
+  [[ -n "$expected" ]] || return 0
+  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || error "$(t error.sha256_invalid "BA_ASSET_SHA256" "$expected")"
+  actual="$(backup_sha256_file "$file")" || return 1
+  [[ "${actual,,}" == "${expected,,}" ]]
+}
+
 # Download the first reachable URL for the given version into $1.
 ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
     if curl -fL --progress-bar -o "$target" "$url"; then
+      if ! bapp_verify_asset_checksum "$target"; then
+        rm -f "$target" 2>/dev/null || true
+        error "$(t binary_app.error.checksum_mismatch "$url")"
+      fi
       return 0
     fi
     rm -f "$target" 2>/dev/null || true
@@ -6764,6 +6783,9 @@ i18n_register_many \
   app.vaultwarden.error.web_vault_archive_format \
   "Downloaded Web Vault archive is not gzip data (magic: %s); check whether the request was redirected or intercepted." \
   "下载的 Web Vault 归档不是 gzip 数据（magic: %s），请检查请求是否被重定向或拦截。" \
+  app.vaultwarden.error.web_vault_checksum \
+  "Downloaded Web Vault archive failed the pinned SHA-256 check (WEB_VAULT_SHA256)." \
+  "下载的 Web Vault 归档未通过固定的 SHA-256 校验（WEB_VAULT_SHA256）。" \
   app.vaultwarden.warn.web_vault_archive_cleanup_failed \
   "Failed to remove temporary Web Vault archive %s. Remove it manually after this command finishes." \
   "删除临时 Web Vault 归档 %s 失败。请在本次命令结束后手动清理。" \
@@ -8034,6 +8056,25 @@ _verify_web_vault_archive() {
     fi
     warn "$(t app.vaultwarden.error.web_vault_archive_format "${magic:-read failed}")"
     return 1
+  fi
+  # Optional independent digest: the web-vault tarball is served to browsers, so
+  # an operator who pins WEB_VAULT_SHA256 gets a real integrity check instead of
+  # only the gzip-magic heuristic above.
+  local expected_sha="${WEB_VAULT_SHA256:-}" actual_sha
+  if [[ -n "$expected_sha" ]]; then
+    [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
+      || error "$(t error.sha256_invalid "WEB_VAULT_SHA256" "$expected_sha")"
+    actual_sha="$(backup_sha256_file "$archive" || true)"
+    if [[ "${actual_sha,,}" != "${expected_sha,,}" ]]; then
+      if ! rm -f "$archive"; then
+        warn "$(t app.vaultwarden.warn.web_vault_archive_cleanup_failed "$archive")"
+      fi
+      if [[ "$mode" == "fatal" ]]; then
+        error "$(t app.vaultwarden.error.web_vault_checksum)"
+      fi
+      warn "$(t app.vaultwarden.error.web_vault_checksum)"
+      return 1
+    fi
   fi
 }
 extract_binary() {
