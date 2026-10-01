@@ -213,7 +213,7 @@ RUN apt-get update -qq \
 DOCKERFILE
 
 echo "=== e2e-smoke: binary_app lifecycle (ntfy install/backup/verify) ==="
-docker run --rm \
+docker run --rm --network none \
   -v "$ROOT_MOUNT:/repo:ro" \
   -v "$STUB_MOUNT:/stub:ro" \
   -v "$WWW_MOUNT:/www:ro" \
@@ -257,7 +257,7 @@ echo "BINARY_APP_SMOKE_OK"
 ' || exit 1
 
 echo "=== e2e-smoke: newapi migrated lifecycle (env file + cron backup) ==="
-docker run --rm \
+docker run --rm --network none \
   -v "$ROOT_MOUNT:/repo:ro" \
   -v "$STUB_MOUNT:/stub:ro" \
   -v "$WWW_MOUNT:/www:ro" \
@@ -397,7 +397,7 @@ assert components["redis"]["update_state"] == "not_checked"
 echo "SUB2API_REAL_DEPENDENCIES_SMOKE_OK"
 SUB2API_E2E
 chmod +x "$WORK/sub2api-real-dependencies.sh"
-docker run --rm \
+docker run --rm --network none \
   -v "$ROOT_MOUNT:/repo:ro" \
   -v "$STUB_MOUNT:/stub:ro" \
   -v "$WWW_MOUNT:/www:ro" \
@@ -475,7 +475,7 @@ updates_skipped="$(grep -c "skipping download" "$LOG")"
 echo "CPA_STACK_PINNED_SMOKE_OK"
 CPA_E2E
 chmod +x "$WORK/cpa-stack-pinned.sh"
-docker run --rm \
+docker run --rm --network none \
   -v "$ROOT_MOUNT:/repo:ro" \
   -v "$STUB_MOUNT:/stub:ro" \
   -v "$WWW_MOUNT:/www:ro" \
@@ -483,7 +483,7 @@ docker run --rm \
   deploy-e2e-smoke bash /fixture-work/cpa-stack-pinned.sh || exit 1
 
 echo "=== e2e-smoke: compose path (tickflow config + compose delegation) ==="
-docker run --rm \
+docker run --rm --network none \
   -v "$ROOT_MOUNT:/repo:ro" \
   -v "$STUB_MOUNT:/stub:ro" \
   -v "$WWW_MOUNT:/www:ro" \
