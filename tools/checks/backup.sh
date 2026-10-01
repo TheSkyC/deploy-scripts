@@ -1768,12 +1768,12 @@ check_runtime_backup_finalizes_integrity_metadata() {
     }
   ' impl/install_vaultwarden.sh || return 1
   awk '
-    /do_backup\(\)/ { in_fn=1; saw_finalize=0; saw_warn=0; next }
+    /cpa_stack_create_backup\(\)/ { in_fn=1; saw_finalize=0; saw_warn=0; next }
     in_fn && /backup_finalize_archive "\$archive" cpa-stack/ { saw_finalize=1 }
     in_fn && /warn\.integrity_failed/ { saw_warn=1 }
     in_fn && /^}/ {
       if (!(saw_finalize && saw_warn)) {
-        print "cpa-stack do_backup must finalize integrity metadata and warn on failure" > "/dev/stderr"
+        print "cpa-stack backup must finalize integrity metadata and warn on failure" > "/dev/stderr"
         exit 1
       }
       in_fn=0
