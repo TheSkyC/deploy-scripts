@@ -429,9 +429,16 @@ EOF
     success "$(t app.sub2api.success.postgres15)"
   elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
     info "$(t app.sub2api.info.postgres_rpm_source)"
-    local el_ver
+    local el_ver pgdg_arch
     el_ver=$(rpm -E '%{rhel}' 2>/dev/null || echo "8")
-    local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm"
+    # PGDG names the amd64 repo path x86_64 (not the Go/asset "amd64") and the
+    # arm64 path aarch64; using BIN_ARCH here built a nonexistent EL-8-arm64 URL.
+    case "$ARCH" in
+      x86_64) pgdg_arch="x86_64" ;;
+      aarch64) pgdg_arch="aarch64" ;;
+      *) pgdg_arch="$BIN_ARCH" ;;
+    esac
+    local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${pgdg_arch}/pgdg-redhat-repo-latest.noarch.rpm"
     local pg_data_version="/var/lib/pgsql/15/data/PG_VERSION"
     if [[ "$PKG_MANAGER" == "dnf" ]]; then
       dnf install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
@@ -570,7 +577,7 @@ _setup_postgres() {
     fi
   fi
   if [[ -z "${PG_PASS:-}" ]]; then
-    PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24; true)
+    PG_PASS=$(openssl rand -base64 32 | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 24; true)
     info "$(t app.sub2api.info.pg_password_generated)"
   else
     info "$(t app.sub2api.info.pg_password_reused)"

@@ -14500,9 +14500,16 @@ EOF
     success "$(t app.sub2api.success.postgres15)"
   elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
     info "$(t app.sub2api.info.postgres_rpm_source)"
-    local el_ver
+    local el_ver pgdg_arch
     el_ver=$(rpm -E '%{rhel}' 2>/dev/null || echo "8")
-    local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm"
+    # PGDG names the amd64 repo path x86_64 (not the Go/asset "amd64") and the
+    # arm64 path aarch64; using BIN_ARCH here built a nonexistent EL-8-arm64 URL.
+    case "$ARCH" in
+      x86_64) pgdg_arch="x86_64" ;;
+      aarch64) pgdg_arch="aarch64" ;;
+      *) pgdg_arch="$BIN_ARCH" ;;
+    esac
+    local pgdg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el_ver}-${pgdg_arch}/pgdg-redhat-repo-latest.noarch.rpm"
     local pg_data_version="/var/lib/pgsql/15/data/PG_VERSION"
     if [[ "$PKG_MANAGER" == "dnf" ]]; then
       dnf install -y "$pgdg_rpm" || error "$(t app.sub2api.error.postgres_repo)"
@@ -14641,7 +14648,7 @@ _setup_postgres() {
     fi
   fi
   if [[ -z "${PG_PASS:-}" ]]; then
-    PG_PASS=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24; true)
+    PG_PASS=$(openssl rand -base64 32 | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 24; true)
     info "$(t app.sub2api.info.pg_password_generated)"
   else
     info "$(t app.sub2api.info.pg_password_reused)"
@@ -17168,7 +17175,7 @@ do_update() {
   info "$(t app.vaultwarden.info.current_version "$OLD_VER")"
   info "$(t app.vaultwarden.info.pre_update_backup)"
   if ! _backup_silent "pre-update"; then
-    :
+    warn "$(t binary_app.warn.pre_backup_failed)"
   fi
   local _pre_update_svc_state
   _pre_update_svc_state=$(systemctl is-active vaultwarden 2>/dev/null || echo "inactive")
@@ -20154,7 +20161,9 @@ do_backup() {
   if [[ "$_keep_days" -gt 0 ]]; then
     local old_backup
     while IFS= read -r -d '' old_backup; do
-      if rm -f "$old_backup"; then
+      # Remove the integrity sidecars with the archive so no orphaned
+      # .sha256/.manifest.json files are left behind.
+      if backup_remove_archive_with_metadata "$old_backup"; then
         info "$(t app.blog.backup.cleaned "$old_backup")"
       else
         warn "$(t app.blog.backup.clean_failed "$old_backup")"
@@ -22652,8 +22661,8 @@ ba_write_config() {
     key="$(grep -E '^MEILI_MASTER_KEY=' "$env_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
   fi
   if [[ -z "$key" ]]; then
-    key="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
-    [[ -n "$key" ]] || key="meilisearch-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
+    key="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
+    [[ -n "$key" ]] || key="meilisearch-$(date +%s)-$(LC_ALL=C tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
   if ! atomic_write_file "$env_file" 600 root:root <<EOF
 MEILI_ENV=production
@@ -22741,7 +22750,7 @@ BA_BIN_NAME="alist"
 BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
 BA_FIREWALL=0
-BA_BIND_ADDR="127.0.0.1"
+BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Alist file listing service"
 BA_SERVICE_ARGS="server --data ${DATA_DIR}"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
@@ -23152,8 +23161,8 @@ ba_write_config() {
     fi
   fi
   if [[ -z "$token" ]]; then
-    token="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true)"
-    [[ -n "$token" ]] || token="frps-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
+    token="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true)"
+    [[ -n "$token" ]] || token="frps-$(date +%s)-$(LC_ALL=C tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
   if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
 bindAddr = "${BA_BIND_ADDR}"
@@ -23285,7 +23294,7 @@ ba_write_config() {
   local config_dir="/etc/gitea"
   local config_file="${config_dir}/app.ini"
   local server_name="${DOMAIN:-localhost}"
-  if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
+  if ! atomic_write_file "$config_file" 0640 "root:${SERVICE_USER}" <<EOF
 RUN_USER = ${SERVICE_USER}
 RUN_MODE = prod
 

@@ -8512,7 +8512,9 @@ do_backup() {
   if [[ "$_keep_days" -gt 0 ]]; then
     local old_backup
     while IFS= read -r -d '' old_backup; do
-      if rm -f "$old_backup"; then
+      # Remove the integrity sidecars with the archive so no orphaned
+      # .sha256/.manifest.json files are left behind.
+      if backup_remove_archive_with_metadata "$old_backup"; then
         info "$(t app.blog.backup.cleaned "$old_backup")"
       else
         warn "$(t app.blog.backup.clean_failed "$old_backup")"

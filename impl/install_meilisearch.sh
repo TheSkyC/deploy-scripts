@@ -47,8 +47,8 @@ ba_write_config() {
     key="$(grep -E '^MEILI_MASTER_KEY=' "$env_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
   fi
   if [[ -z "$key" ]]; then
-    key="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
-    [[ -n "$key" ]] || key="meilisearch-$(date +%s)-$(tr -dc '0-9' </dev/urandom | head -c 8)"
+    key="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)"
+    [[ -n "$key" ]] || key="meilisearch-$(date +%s)-$(LC_ALL=C tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
   if ! atomic_write_file "$env_file" 600 root:root <<EOF
 MEILI_ENV=production
