@@ -144,7 +144,29 @@ EOF
     grep -Fxq "AUTH_PASSWORD=newpass123" "$TICKFLOW_ENV_FILE"
     grep -Fxq "BACKEND_EXTRAS=alpha,beta" "$TICKFLOW_ENV_FILE"
     grep -Fxq "DATA_DIR=./data" "$TICKFLOW_ENV_FILE"
+
+    # The compose build arg must carry the configured value, not an undefined
+    # variable that always expands to empty.
+    TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/compose.yml"
+    TICKFLOW_BIND_ADDR="127.0.0.1"
+    _write_compose_file
+    grep -Fq "BACKEND_EXTRAS: alpha,beta" "$TICKFLOW_COMPOSE_FILE"
+    ! grep -Eq "BACKEND_EXTRAS:[[:space:]]*$" "$TICKFLOW_COMPOSE_FILE"
   '
+}
+
+# do_backup always stores data/, .env, and tiers.yaml, so restore must reject an
+# archive that is missing any of them. The previous check compared the "false"
+# sentinels as non-empty strings, which made the guard impossible to trip.
+check_tickflow_restore_requires_all_members() {
+  grep -Fq 'if [[ "$found_data" != true || "$found_env" != true || "$found_tiers" != true ]]; then' impl/install_tickflow.sh || {
+    echo "TickFlow restore must reject an archive missing data, .env, or tiers.yaml" >&2
+    return 1
+  }
+  if grep -Fq 'if ! [[ "$found_data" || "$found_env" || "$found_tiers" ]]; then' impl/install_tickflow.sh; then
+    echo "TickFlow restore member check must not rely on non-empty string truthiness" >&2
+    return 1
+  fi
 }
 
 check_tickflow_paths_are_guarded() {

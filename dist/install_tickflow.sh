@@ -7322,7 +7322,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
+        BACKEND_EXTRAS: ${TICKFLOW_BACKEND_EXTRAS:-}
     container_name: TickFlow_Stock_Panel
     ports:
       - "${TICKFLOW_BIND_ADDR:-127.0.0.1}:${TICKFLOW_PORT}:3018"
@@ -7728,7 +7728,7 @@ do_restore() {
       tiers.yaml) found_tiers=true ;;
     esac
   done <<< "$member_list"
-  if ! [[ "$found_data" || "$found_env" || "$found_tiers" ]]; then
+  if [[ "$found_data" != true || "$found_env" != true || "$found_tiers" != true ]]; then
     error "$(t backup.restore.invalid_archive "$(basename "$archive")")"
   fi
   info "$(t backup.restore.using "$archive")"
