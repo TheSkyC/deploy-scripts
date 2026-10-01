@@ -2550,18 +2550,27 @@ STUB
 # success/failure derived from the action status.
 check_per_app_event_notifications() {
   awk '
-    /^operation_run_app_action\(\)/ { in_fn=1; saw_send=0; saw_status=0; saw_case=0; next }
+    /^operation_notify_outcome\(\)/ { in_fn=1; saw_send=0; saw_status=0; saw_case=0; next }
     in_fn && /notify_send/ { saw_send=1 }
-    in_fn && /\[\[ \$status -eq 0 \]\]/ { saw_status=1 }
+    in_fn && /\[\[ "\$status" -eq 0 \]\]/ { saw_status=1 }
     in_fn && /install\|update\|backup\|restore\|uninstall/ { saw_case=1 }
     in_fn && /^}$/ {
       if (!(saw_send && saw_status && saw_case)) {
-        print "operation_run_app_action must notify per-app outcomes with status-derived verdict" > "/dev/stderr"
+        print "operation_notify_outcome must notify per-app outcomes with status-derived verdict" > "/dev/stderr"
         exit 1
       }
       in_fn=0
     }
   ' lib/operation.sh || return 1
+
+  # Both the normal path and the errexit EXIT trap must report the outcome, so a
+  # failing action (which exits through the trap) still emits FAILED.
+  local call_sites
+  call_sites="$(grep -Fc 'operation_notify_outcome "$action" "$status"' lib/operation.sh || true)"
+  if [[ "${call_sites:-0}" -lt 2 ]]; then
+    echo "operation_run_app_action and operation_action_exit_trap must both report outcomes" >&2
+    return 1
+  fi
 
   # Behavioral: a stubbed action whose function name is provided must route
   # the notification through notify_send (stubbed to capture), once for a
@@ -2599,6 +2608,40 @@ check_per_app_event_notifications() {
     [[ -f "$tmp/notifications" ]] || { echo NO_NOTIFICATIONS; exit 93; }
     grep -q "testapp backup succeeded" "$tmp/notifications" || { echo NO_SUCCESS_NOTE; cat "$tmp/notifications" >&2; exit 94; }
     grep -q "testapp backup FAILED" "$tmp/notifications" || { echo NO_FAIL_NOTE; exit 95; }
+    echo ok
+  ' | grep -q ok || return 1
+
+  # Behavioral (errexit): the real EXIT trap must report FAILED when the action
+  # aborts under errexit, because the post-action code is never reached. The
+  # prior regression was exactly this path being silent.
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
+    set -euo pipefail
+    cd "$DEPLOY_TEST_ROOT"
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export DEPLOY_OPERATION_ROOT="$tmp/state"
+    export DEPLOY_OPERATION_LOG_ROOT="$tmp/log"
+    export DEPLOY_NOTIFY_SUPPRESS=""
+    APP_ID=testapp
+    APP_NAME="Test App"
+    notify_send() { printf "%s|%s\n" "$1" "$2" >> "$tmp/notifications"; }
+    operation_start() { export OPERATION_LOG_PATH="$tmp/log"; OPERATION_ACTIVE=1; OPERATION_ACTION="${3:-}"; return 0; }
+    operation_step_start() { return 0; }
+    operation_step_finish() { return 0; }
+    operation_finish() { return 0; }
+    operation_is_valid_action() { return 0; }
+    operation_restore_signal_traps() { :; }
+    operation_finish_output_streams() { :; }
+    operation_discard_output_streams() { :; }
+    do_bad() { return 42; }
+    trap - EXIT
+    set +e
+    ( set -e; operation_run_app_action backup do_bad >/dev/null 2>&1 )
+    rc=$?
+    set -e
+    [[ $rc -eq 42 ]] || { echo TRAP_RC_WRONG_$rc; exit 96; }
+    grep -q "testapp backup FAILED" "$tmp/notifications" || { echo TRAP_NO_FAIL_NOTE; exit 97; }
     echo ok
   ' | grep -q ok
 }

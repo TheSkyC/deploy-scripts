@@ -1367,6 +1367,27 @@ operation_start() {
 operation_step_start() { local name="$1" now updated; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$name" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 1; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; awk -F '\t' -v name="$name" '$1 != name { print }' "$OPERATION_STEPS_FILE" > "$updated" || return 1; printf '%s\trunning\t%s\t\n' "$name" "$now" >> "$updated"; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_step_finish() { local name="$1" state="${2:-succeeded}" now updated found=0 step_name step_state started_at finished_at; [[ "${OPERATION_ACTIVE:-0}" == 1 ]] || return 1; case "$state" in succeeded|failed|skipped) ;; *) return 2;; esac; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; while IFS=$'\t' read -r step_name step_state started_at finished_at; do [[ -n "$step_name" ]] || continue; if [[ "$step_name" == "$name" ]]; then printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$started_at" "$now" >> "$updated"; found=1; else printf '%s\t%s\t%s\t%s\n' "$step_name" "$step_state" "$started_at" "$finished_at" >> "$updated"; fi; done < "$OPERATION_STEPS_FILE"; [[ "$found" -eq 1 ]] || { rm -f "$updated"; return 1; }; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_finish() { local exit_code="${1:-1}" state="${2:-}" summary="${3:-}"; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$exit_code" =~ ^[0-9]+$ ]] || return 1; [[ -n "$state" ]] || { [[ "$exit_code" -eq 0 ]] && state=succeeded || state=failed; }; case "$state" in succeeded|failed|cancelled|interrupted|rolled_back|rollback_failed) ;; *) return 2;; esac; OPERATION_STATE="$state"; OPERATION_EXIT_CODE="$exit_code"; OPERATION_FINISHED_AT="$(operation_timestamp)"; OPERATION_ERROR_SUMMARY="$(operation_safe_summary "$summary")"; operation_write_record || return 1; operation_append_history || return 1; rm -f "$OPERATION_STEPS_FILE"; operation_reset; }
+# Emit the per-app outcome notification (fail-open, redacted, never changes the
+# result). Called from both the normal success path and the EXIT trap: a failed
+# action terminates through errexit and never reaches the post-action code, so
+# the trap has to report FAILED or the operator never gets an alert. When the
+# notification library is not loaded (isolated/embedded use) the hook is
+# skipped silently.
+operation_notify_outcome() {
+  local action="${1:-}" status="${2:-0}" outcome
+  [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]] || return 0
+  case "$action" in
+    install|update|backup|restore|uninstall) ;;
+    *) return 0 ;;
+  esac
+  declare -F notify_send >/dev/null 2>&1 || return 0
+  if [[ "$status" -eq 0 ]]; then outcome=succeeded; else outcome=FAILED; fi
+  notify_send \
+    "deploy-scripts: ${APP_ID:-app} ${action} ${outcome}" \
+    "${APP_ID:-app} ${action} on $(hostname 2>/dev/null || echo localhost) finished with status ${status}." \
+    || true
+}
+
 operation_action_exit_trap() {
   local status="$?" action="${OPERATION_ACTION:-unknown}" previous_trap="${OPERATION_PREVIOUS_EXIT_TRAP:-}"
   if [[ -n "${OPERATION_SAVED_STDOUT_FD:-}" ]]; then
@@ -1394,6 +1415,7 @@ operation_action_exit_trap() {
     else
       operation_finish "$status" "" "${action} exited with status ${status}" || true
     fi
+    operation_notify_outcome "$action" "$status" || true
   fi
   operation_invoke_exit_trap "$status" "$previous_trap"
 }
@@ -1479,19 +1501,10 @@ operation_run_app_action() {
     operation_step_finish execute failed || true
     operation_finish "$status" "" "${action} exited with status ${status}" || true
   fi
-  # Per-app outcome notification (install/update/backup/restore/uninstall):
-  # fail-open via notify_send, redacted, never changes the result. When the
-  # notification library is not loaded (isolated/embedded use), the hook is
-  # skipped silently — a missing notifier must not fail the action.
-  if [[ -z "${DEPLOY_NOTIFY_SUPPRESS:-}" ]] && declare -F notify_send >/dev/null 2>&1; then
-    case "$action" in
-      install|update|backup|restore|uninstall)
-        notify_send \
-          "deploy-scripts: ${APP_ID:-app} ${action} $( [[ $status -eq 0 ]] && echo succeeded || echo FAILED )" \
-          "${APP_ID:-app} ${action} on $(hostname 2>/dev/null || echo localhost) finished with status ${status}."
-        ;;
-    esac
-  fi
+  # Normal (non-errexit) path: the EXIT trap was restored above, so report the
+  # outcome here. The errexit failure path never reaches this point and is
+  # covered by operation_action_exit_trap instead.
+  operation_notify_outcome "$action" "$status" || true
   return "$status"
 }
 
