@@ -433,6 +433,7 @@ main() {
       run_isolated_check check_shell_syntax
       build_verified_release
       run_isolated_check check_dist_is_up_to_date
+      run_isolated_check check_dist_covers_registry
       run_isolated_check check_api_ports_are_validated
       run_isolated_check check_api_status_directory_sizes_are_nonfatal
       run_isolated_check check_app_json_string_escapes_controls
@@ -778,6 +779,7 @@ main() {
       run_isolated_check check_security_defaults_and_public_bind_guard
       run_isolated_check check_security_audit_contract
       run_isolated_check check_target_groups_cover_all_checks
+      run_isolated_check check_feature_proofs
       echo "Guards verification passed"
       return 0
       ;;

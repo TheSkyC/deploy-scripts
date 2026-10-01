@@ -205,6 +205,32 @@ check_dist_is_up_to_date() {
     git diff --stat -- dist/ >&2
     return 1
   fi
+  # git diff does not report untracked paths, so a brand-new app's release
+  # script could be missing while the rebuilt dist still diffs clean.
+  local untracked
+  untracked="$(git ls-files --others --exclude-standard -- dist/)"
+  if [[ -n "$untracked" ]]; then
+    echo "dist/ contains untracked release scripts; regenerate and commit them:" >&2
+    printf '%s\n' "$untracked" >&2
+    return 1
+  fi
+}
+
+# Every registered app must ship a tracked generated release script, so adding
+# an app to the registry without committing its dist/ artifact fails the build
+# instead of shipping an incomplete release.
+check_dist_covers_registry() {
+  # shellcheck source=../../lib/app_registry.sh
+  source "$ROOT_DIR/lib/app_registry.sh"
+  local app_id name
+  while IFS= read -r app_id; do
+    [[ -n "$app_id" ]] || continue
+    name="$(deploy_app_script_name_for "$app_id")"
+    if ! git ls-files --error-unmatch "dist/${name}" >/dev/null 2>&1; then
+      echo "dist/${name} is missing or untracked for registered app '${app_id}'" >&2
+      return 1
+    fi
+  done < <(deploy_app_ids)
 }
 
 check_versioned_pre_commit_checks_release_artifacts() {

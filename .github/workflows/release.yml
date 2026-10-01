@@ -26,6 +26,7 @@ jobs:
   release:
     name: Verify, package, and publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout tagged commit
         uses: actions/checkout@v7
@@ -52,6 +53,9 @@ jobs:
 
       - name: Run release verification
         run: bash tools/verify.sh release
+
+      - name: Run shellcheck static analysis
+        run: bash tools/verify.sh shellcheck
 
       - name: Build verified release package
         env:

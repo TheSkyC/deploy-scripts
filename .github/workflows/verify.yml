@@ -2,11 +2,20 @@ name: Verify
 
 on:
   push:
+    # Restrict branch pushes to the trunk so a branch push plus its PR do not
+    # run the whole matrix twice.
+    branches:
+      - master
   pull_request:
   schedule:
     # Nightly full-suite run catches drift that only shows up over time
     # (stale dist, runner toolchain changes) without slowing push/PR feedback.
     - cron: '17 3 * * *'
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR runs are cancelled; branch/master runs are never cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Pinned so CI matches the shellcheck version used for local development
@@ -23,15 +32,17 @@ defaults:
 jobs:
   # Static and per-surface verification targets run in parallel so failures
   # surface faster. The union of these targets covers every check_* function
-  # that `all` runs (enforced by check_target_groups_cover_all_checks).
+  # that `all` runs (enforced by check_target_groups_cover_all_checks); the
+  # feature proofs run inside the guards target.
   verify:
     if: github.event_name != 'schedule'
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        target: [syntax, release, dispatch, guards]
+        target: [syntax, release, dispatch, guards, state, operation, update, self-update]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -42,6 +53,7 @@ jobs:
   shellcheck:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -61,6 +73,7 @@ jobs:
   nightly-all:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -80,6 +93,7 @@ jobs:
   # exercised end to end on every push without touching a real host.
   e2e-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

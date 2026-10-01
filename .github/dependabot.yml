@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # GitHub Actions are referenced by major tag (e.g. actions/checkout@v7) so a
+  # floating tag cannot change silently. Dependabot proposes pinned bumps.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
