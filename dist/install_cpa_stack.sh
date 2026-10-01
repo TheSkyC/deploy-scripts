@@ -7484,7 +7484,7 @@ cpa_stack_write_cpa_config() {
   fi
   [[ -n "$CPA_MANAGEMENT_KEY" ]] || CPA_MANAGEMENT_KEY="$(cpa_stack_random_key 'cpa_')"
   [[ -n "$CPA_API_KEY" ]] || CPA_API_KEY="$(cpa_stack_random_key 'sk-')"
-  if ! cat <<EOF | atomic_write_file "$CPA_CONFIG_FILE" 0660 "root:${CPA_SERVICE_USER}"
+  if ! cat <<EOF | atomic_write_file "$CPA_CONFIG_FILE" 0640 "root:${CPA_SERVICE_USER}"
 host: "127.0.0.1"
 port: 8317
 
@@ -7797,8 +7797,22 @@ cpa_stack_verify_health() {
   return 1
 }
 
+# Remove expired archives together with their integrity sidecars/manifests, and
+# normalize BACKUP_KEEP_DAYS the same way the shared helper does.
 cpa_stack_prune_backups() {
-  find "$CPA_STACK_BACKUP_DIR" -maxdepth 1 -type f -name 'cpa-stack-*.tar.gz' -mtime "+${BACKUP_KEEP_DAYS}" -delete 2>/dev/null || true
+  local archive
+  while IFS= read -r -d '' archive; do
+    backup_remove_archive_with_metadata "$archive" || true
+  done < <(backup_list_expired_archives "$CPA_STACK_BACKUP_DIR" "$BACKUP_KEEP_DAYS" 'cpa-stack-*.tar.gz')
+}
+
+# Keep a few pre-update binary snapshots; previously every snapshot stayed
+# behind forever.
+cpa_stack_prune_update_binaries() {
+  local dir
+  for dir in "$(dirname "$CPA_BIN")" "$(dirname "$CPAMP_BIN")"; do
+    find "$dir" -maxdepth 1 -type f -name '*.preupdate.*' -mtime +3 -delete 2>/dev/null || true
+  done
 }
 
 do_install() {
@@ -7842,18 +7856,47 @@ do_update() {
   [[ -f "$CPA_CONFIG_FILE" ]] || error "$(t app.cpa_stack.warn.config_missing "$CPA_CONFIG_FILE")"
   cpa_stack_install_dependencies
   cpa_stack_prepare_runtime
-  cpa_stack_stop_components
-  if cpa_stack_component_includes cpa; then
-    cpa_stack_install_release cpa
+  # Safety net: a pre-update backup plus on-disk binary snapshots, so a failed
+  # swap can restore both data and executables.
+  step "$(t app.cpa_stack.step.backup)"
+  if ! ( cpa_stack_create_backup ); then
+    warn "$(t binary_app.warn.pre_backup_failed)"
   fi
-  if cpa_stack_component_includes cpamp; then
-    cpa_stack_install_release cpamp
+  local cpa_version_before="${INSTALLED_CPA_VERSION:-}"
+  local cpamp_version_before="${INSTALLED_CPAMP_VERSION:-}"
+  local cpa_bin_backup="" cpamp_bin_backup=""
+  if [[ -x "$CPA_BIN" ]]; then
+    cpa_bin_backup="${CPA_BIN}.preupdate.$(date +%Y%m%d_%H%M%S)"
+    atomic_copy_file "$CPA_BIN" "$cpa_bin_backup" \
+      || error "$(t app.cpa_stack.error.binary_backup "$CPA_BIN")"
   fi
-  cpa_stack_write_services
+  if [[ -x "$CPAMP_BIN" ]]; then
+    cpamp_bin_backup="${CPAMP_BIN}.preupdate.$(date +%Y%m%d_%H%M%S)"
+    atomic_copy_file "$CPAMP_BIN" "$cpamp_bin_backup" \
+      || error "$(t app.cpa_stack.error.binary_backup "$CPAMP_BIN")"
+  fi
+  # Swap the binaries and restart inside a subshell: install_release and
+  # write_services abort with `error`, and the subshell turns that abort into a
+  # status the updater can roll back from instead of leaving the stack stopped
+  # on a broken binary.
+  if ! (
+      cpa_stack_stop_components
+      if cpa_stack_component_includes cpa; then cpa_stack_install_release cpa; fi
+      if cpa_stack_component_includes cpamp; then cpa_stack_install_release cpamp; fi
+      cpa_stack_write_services
+    ); then
+    warn "$(t binary_app.warn.update_start_failed "$APP_NAME")"
+    cpa_stack_rollback_update "$cpa_bin_backup" "$cpamp_bin_backup"
+    INSTALLED_CPA_VERSION="$cpa_version_before"
+    INSTALLED_CPAMP_VERSION="$cpamp_version_before"
+    app_save_config
+    error "$(t binary_app.error.update_failed "$APP_NAME")"
+  fi
   cpa_stack_write_nginx_http
   cpa_stack_configure_https
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
+  cpa_stack_prune_update_binaries
   success "$(t app.cpa_stack.success.updated)"
 }
 
@@ -7879,12 +7922,13 @@ do_cert() {
   fi
 }
 
-do_backup() {
-  cpa_stack_show_banner
-  cpa_stack_preflight backup
-  acquire_lock
+# Create one consistent stack backup and record it in CPA_STACK_LAST_BACKUP.
+# Shared by do_backup and the pre-update safety backup; callers own the
+# banner/preflight/lock and decide whether a failure is fatal. CPAMP is
+# stopped for the snapshot because its data directory holds usage.sqlite,
+# its WAL/SHM files, and data.key.
+cpa_stack_create_backup() {
   require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
-  step "$(t app.cpa_stack.step.backup)"
   mkdir -p "$CPA_STACK_BACKUP_DIR" || error "$(t app.cpa_stack.error.backup "$CPA_STACK_BACKUP_DIR")"
   local timestamp archive cpamp_was_active=false
   timestamp="$(date +%Y%m%d_%H%M%S)"
@@ -7893,7 +7937,6 @@ do_backup() {
   if $cpamp_was_active; then
     systemctl stop "$CPAMP_SERVICE_NAME" || error "$(t app.cpa_stack.error.service "$CPAMP_SERVICE_NAME")"
   fi
-  # CPAMP data directory includes usage.sqlite, its WAL/SHM files, and data.key.
   local -a backup_paths=()
   for candidate in \
       etc/cpa-stack \
@@ -7922,8 +7965,34 @@ do_backup() {
       "cpa:${INSTALLED_CPA_VERSION:-} cpamp:${INSTALLED_CPAMP_VERSION:-}"; then
     warn "$(t app.cpa_stack.warn.integrity_failed "$archive")"
   fi
+  CPA_STACK_LAST_BACKUP="$archive"
   cpa_stack_prune_backups
-  success "$(t app.cpa_stack.success.backup "$archive")"
+}
+
+do_backup() {
+  cpa_stack_show_banner
+  cpa_stack_preflight backup
+  acquire_lock
+  step "$(t app.cpa_stack.step.backup)"
+  cpa_stack_create_backup
+  success "$(t app.cpa_stack.success.backup "$CPA_STACK_LAST_BACKUP")"
+}
+
+# Restore the pre-update binaries after a failed swap and bring the stack back
+# up. Every step is best-effort: the caller reports the rollback verdict.
+cpa_stack_rollback_update() {
+  local cpa_backup="$1" cpamp_backup="$2"
+  systemctl stop "$CPAMP_SERVICE_NAME" >/dev/null 2>&1 || true
+  systemctl stop "$CPA_SERVICE_NAME" >/dev/null 2>&1 || true
+  if [[ -n "$cpa_backup" && -f "$cpa_backup" ]]; then
+    ( cpa_stack_install_binary "$cpa_backup" "$CPA_BIN" "${CPA_SERVICE_USER}:${CPA_SERVICE_USER}" ) || true
+  fi
+  if [[ -n "$cpamp_backup" && -f "$cpamp_backup" ]]; then
+    ( cpa_stack_install_binary "$cpamp_backup" "$CPAMP_BIN" "${CPAMP_SERVICE_USER}:${CPAMP_SERVICE_USER}" ) || true
+  fi
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl start "$CPA_SERVICE_NAME" >/dev/null 2>&1 || true
+  systemctl start "$CPAMP_SERVICE_NAME" >/dev/null 2>&1 || true
 }
 
 do_status() {
@@ -8105,6 +8174,10 @@ do_restore() {
     archive="$(backup_latest_archive "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$CPA_STACK_BACKUP_DIR")"
   fi
+  # Verify the sha256/manifest before mutating any live path.
+  if ! backup_verify_archive "$archive"; then
+    error "$(t backup.verify.failed "$(basename "$archive")")"
+  fi
   local member_list member found=false
   if ! member_list="$(tar -tzf "$archive" 2>/dev/null)"; then
     error "$(t backup.restore.invalid_archive "$archive")"
@@ -8150,8 +8223,28 @@ do_restore() {
     systemctl start "$CPAMP_SERVICE_NAME" || true
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
+  if ! systemctl start "$CPAMP_SERVICE_NAME"; then
+    warn "$(t backup.restore.start_failed_rollback)"
+    systemctl stop "$CPAMP_SERVICE_NAME" >/dev/null 2>&1 || true
+    local rolled_back=false
+    for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
+        var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
+      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
+        rm -rf "/${target:?}"
+        mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" && rolled_back=true
+      fi
+    done
+    if [[ "$rolled_back" == true ]] \
+        && systemctl start "$CPAMP_SERVICE_NAME" \
+        && systemctl is-active --quiet "$CPAMP_SERVICE_NAME"; then
+      rm -rf "$aside_dir"
+      success "$(t backup.restore.rollback_done)"
+      return 0
+    fi
+    # Keep the aside copy for manual recovery instead of deleting it.
+    warn "$(t backup.restore.rollback_failed "$aside_dir")"
+    error "$(t binary_app.error.install_start_failed "$CPAMP_SERVICE_NAME" "$CPAMP_SERVICE_NAME")"
+  fi
   rm -rf "$aside_dir"
-  systemctl start "$CPAMP_SERVICE_NAME" \
-    || error "$(t binary_app.error.install_start_failed "$CPAMP_SERVICE_NAME" "$CPAMP_SERVICE_NAME")"
   success "$(t backup.restore.restored "$(basename "$archive")")"
 }

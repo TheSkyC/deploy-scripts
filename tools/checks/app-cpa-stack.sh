@@ -287,3 +287,35 @@ check_cpa_stack_e2e_pinned_fixture() {
       return 1
     }
 }
+
+# A failed update must not leave the stack stopped on a broken binary, and a
+# restore must verify integrity and roll back before discarding the aside copy.
+check_cpa_stack_update_and_restore_are_recoverable() {
+  awk '
+      /^do_update\(\) \{/ { in_fn=1; saw_backup=0; saw_snapshot=0; saw_rollback=0; saw_subshell=0; next }
+      in_fn && /cpa_stack_create_backup/ { saw_backup=1 }
+      in_fn && /preupdate/ { saw_snapshot=1 }
+      in_fn && /cpa_stack_rollback_update/ { saw_rollback=1 }
+      in_fn && /if ! \(/ { saw_subshell=1 }
+      in_fn && /^}$/ {
+        if (!(saw_backup && saw_snapshot && saw_rollback && saw_subshell)) {
+          print "CPA Stack update must take a pre-update backup, snapshot binaries, and roll back on failure" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+    ' impl/install_cpa_stack.sh || return 1
+
+  awk '
+      /^do_restore\(\) \{/ { in_fn=1; saw_verify=0; saw_rollback=0; next }
+      in_fn && /backup_verify_archive/ { saw_verify=1 }
+      in_fn && /backup\.restore\.rollback_done/ { saw_rollback=1 }
+      in_fn && /^}$/ {
+        if (!(saw_verify && saw_rollback)) {
+          print "CPA Stack restore must verify the archive and roll back before discarding the aside copy" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+    ' impl/install_cpa_stack.sh
+}
