@@ -1046,3 +1046,76 @@ check_cyberstrikeai_git_commit_version_contract() {
   grep -Fq 'app.cyberstrikeai.status.pin_ok' apps/cyberstrikeai.sh
   grep -Fq 'app.cyberstrikeai.status.pin_floating' apps/cyberstrikeai.sh
 }
+
+# The generated cron backup must produce a self-contained, restorable archive:
+# do_restore replaces the whole INSTALL_DIR, so the built binary and the python
+# venv must be inside the archive, while disposable state (.git/logs/tmp) must
+# not be. This runs the real generated script against a fake install tree.
+check_cyberstrikeai_backup_archive_is_self_contained() {
+  local output
+  output="$($BASH_BIN <<'CYBERTEST'
+set -euo pipefail
+source lib/core.sh
+source apps/cyberstrikeai.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source impl/install_cyberstrikeai.sh >/dev/null 2>&1
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+INSTALL_DIR="$tmp_dir/opt/cyberstrike-ai"
+CONFIG_FILE="$INSTALL_DIR/config.yaml"
+BACKUP_DIR="$tmp_dir/backups"
+BACKUP_KEEP_DAYS=7
+SERVICE_NAME=cyber-test
+LOG_DIR="$INSTALL_DIR/logs"
+BACKUP_SCRIPT="$tmp_dir/bin/cyberstrikeai-backup"
+CRON_FILE="$tmp_dir/cron/cyberstrikeai-backup"
+script="$tmp_dir/generated-backup"
+
+t() { printf '%s' "$1"; }
+error() { printf 'error\n' >&2; return 1; }
+atomic_write_file() {
+  local target="$1"
+  case "$target" in
+    "$BACKUP_SCRIPT") cat > "$script" ;;
+    "$CRON_FILE") cat > /dev/null ;;
+    *) cat > /dev/null; return 1 ;;
+  esac
+}
+
+write_backup_script >/dev/null 2>&1
+bash -n "$script"
+
+mkdir -p "$INSTALL_DIR/.git" "$INSTALL_DIR/venv/bin" "$INSTALL_DIR/logs" \
+  "$INSTALL_DIR/tmp" "$INSTALL_DIR/data" "$INSTALL_DIR/cmd/server"
+echo git > "$INSTALL_DIR/.git/config"
+echo py > "$INSTALL_DIR/venv/bin/python"
+printf 'ELF' > "$INSTALL_DIR/cyberstrike-ai"
+echo log > "$INSTALL_DIR/logs/app.log"
+echo scratch > "$INSTALL_DIR/tmp/scratch"
+echo db > "$INSTALL_DIR/data/a.db"
+echo src > "$INSTALL_DIR/cmd/server/main.go"
+echo cfg > "$CONFIG_FILE"
+
+bash "$script" >/dev/null 2>&1
+
+archive="$(find "$BACKUP_DIR" -maxdepth 1 -name 'cyberstrike-ai_*.tar.gz' | head -n1)"
+[[ -n "$archive" && -s "$archive" ]] || { printf 'no non-empty archive produced\n' >&2; exit 1; }
+members="$(tar -tzf "$archive")"
+printf '%s\n' "$members" | grep -qx 'cyberstrike-ai/cyberstrike-ai' || { printf 'archive is missing the built binary\n' >&2; exit 1; }
+printf '%s\n' "$members" | grep -q '^cyberstrike-ai/venv/bin/python$' || { printf 'archive is missing the python venv\n' >&2; exit 1; }
+printf '%s\n' "$members" | grep -qx 'cyberstrike-ai/data/a.db' || { printf 'archive is missing data\n' >&2; exit 1; }
+printf '%s\n' "$members" | grep -qx 'cyberstrike-ai/config.yaml' || { printf 'archive is missing config\n' >&2; exit 1; }
+if printf '%s\n' "$members" | grep -q '\.git'; then printf 'archive must not contain .git\n' >&2; exit 1; fi
+if printf '%s\n' "$members" | grep -q '^cyberstrike-ai/logs/'; then printf 'archive must not contain logs\n' >&2; exit 1; fi
+if printf '%s\n' "$members" | grep -q '^cyberstrike-ai/tmp/'; then printf 'archive must not contain tmp\n' >&2; exit 1; fi
+[[ -f "$archive.sha256" ]] || { printf 'archive is missing its sha256 sidecar\n' >&2; exit 1; }
+printf ok
+CYBERTEST
+  )"
+  [[ "$output" == ok ]] || {
+    echo "CyberStrikeAI generated backup must produce a self-contained restorable archive (binary+venv in, .git/logs/tmp out)" >&2
+    [[ -z "$output" ]] || echo "$output" >&2
+    return 1
+  }
+}

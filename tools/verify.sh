@@ -505,6 +505,7 @@ main() {
       run_isolated_check check_cyberstrikeai_backups_are_atomic
       run_isolated_check check_cyberstrikeai_backup_script_is_published_atomically
       run_isolated_check check_cyberstrikeai_backup_script_publish_contract
+      run_isolated_check check_cyberstrikeai_backup_archive_is_self_contained
       run_isolated_check check_cyberstrikeai_booleans_are_validated
       run_isolated_check check_cyberstrikeai_mirrors_are_opt_in
       run_isolated_check check_cyberstrikeai_build_temp_cleanup

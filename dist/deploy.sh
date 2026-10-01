@@ -18522,6 +18522,7 @@ MSG_REMOVE_FAILED="${msg_remove_failed}"
 _log() { echo "\$(date '+%F %T') \$*" >> "\$LOG_FILE"; }
 BACKUP_HEAD
     backup_standalone_manifest_fragment cyberstrikeai
+    backup_standalone_publish_fragment
     cat <<BACKUP_TAIL
 
 if ! mkdir -p "\$BACKUP_DIR"; then
@@ -18549,12 +18550,15 @@ ts=\$(date +%Y%m%d_%H%M%S)
 archive="\$BACKUP_DIR/cyberstrike-ai_\${ts}.tar.gz"
 tmp="\${archive}.tmp"
 
+# The archive must stay self-contained: restore replaces the whole
+# INSTALL_DIR, so the built binary and the Python venv have to be included or
+# the restored service cannot start. Only disposable/derived state is
+# excluded: the git metadata, the logs/tmp work dirs, and stray temp files.
 if tar -czf "\$tmp" \
   --exclude=".git" \
-  --exclude="venv" \
-  --exclude="cyberstrike-ai" \
+  --exclude="logs" \
+  --exclude="tmp" \
   --exclude="*.tmp" \
-  --exclude="logs/*.log" \
   -C "\$(dirname "\$INSTALL_DIR")" "\$(basename "\$INSTALL_DIR")"; then
   if ! _publish_backup_artifact "\$tmp" "\$archive"; then
     exit 1
