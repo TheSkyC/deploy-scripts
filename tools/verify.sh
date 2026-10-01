@@ -408,6 +408,7 @@ main() {
       ;;
     self-update)
       check_release_package_artifacts
+      check_package_release_rejects_dirty_or_stale_tree
       check_self_version_and_manifest_checks
       check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
@@ -416,6 +417,7 @@ main() {
       check_self_update_rejects_archive_listing_failure
       check_self_update_interruption_restores_activation
       check_self_update_signal_interruption
+      check_self_update_rejects_mismatched_artifact
       check_self_update_smoke_json_interpreter_is_optional
       echo "Self-update foundation verification passed"
       return 0

@@ -654,6 +654,79 @@ PY
   return "$status"
 }
 
+# The artifact integrity gate must fail closed: a manifest whose size or
+# SHA-256 does not match the downloaded archive must abort before activation.
+check_self_update_rejects_mismatched_artifact() {
+  DEPLOY_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" -c '
+    set -euo pipefail
+    cd "$DEPLOY_TEST_ROOT"
+    source lib/core.sh
+    tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
+    stage="$tmp/stage/deploy-scripts-v9.9.9"; mkdir -p "$stage/lib"
+    printf "#!/usr/bin/env bash\n" > "$stage/deploy.sh"
+    printf "#!/usr/bin/env bash\n" > "$stage/lib/core.sh"
+    printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"version\":\"v9.9.9\",\"build_commit\":\"0123456789012345678901234567890123456789\",\"built_at\":\"1970-01-01T00:00:00Z\"}" > "$stage/RELEASE.json"
+    tar -C "$tmp/stage" -czf "$tmp/artifact.tar.gz" deploy-scripts-v9.9.9
+    good_size="$(wc -c < "$tmp/artifact.tar.gz" | tr -d "[:space:]")"
+    good_sha="$(sha256sum "$tmp/artifact.tar.gz" | awk "{print \$1}")"
+    self_update_fetch_file() {
+      mkdir -p "$(dirname "$2")"
+      case "$1" in
+        */manifest.json) cp "$tmp/manifest.json" "$2" ;;
+        */deploy-scripts-v9.9.9.tar.gz) cp "$tmp/artifact.tar.gz" "$2" ;;
+        *) return 1 ;;
+      esac
+    }
+    SELF_UPDATE_CHECK_MANIFEST_URL="https://updates.invalid/manifest.json"
+    SELF_UPDATE_MANIFEST_URL="https://updates.invalid/deploy-scripts-v9.9.9.tar.gz"
+    DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES=1048576
+    DEPLOY_SELF_UPDATE_MAX_ARTIFACT_BYTES=10485760
+    unset SELF_UPDATE_VERSION || true
+    write_manifest() {
+      printf "%s\n" "{\"schema_version\":1,\"project\":\"deploy-scripts\",\"channel\":\"stable\",\"version\":\"v9.9.9\",\"artifacts\":{\"source\":{\"name\":\"deploy-scripts-v9.9.9.tar.gz\",\"url\":\"https://updates.invalid/deploy-scripts-v9.9.9.tar.gz\",\"sha256\":\"$1\",\"size_bytes\":$2}}}" > "$tmp/manifest.json"
+    }
+    write_manifest "$good_sha" "$(( good_size + 1 ))"
+    if self_update_prepare_candidate "$tmp/work-a" 2>/dev/null; then
+      printf "prepare_candidate accepted a size mismatch\n" >&2; exit 1
+    fi
+    [[ "$SELF_UPDATE_MANIFEST_ERROR" == "artifact size does not match manifest" ]] || { printf "wrong size error: %s\n" "$SELF_UPDATE_MANIFEST_ERROR" >&2; exit 1; }
+    write_manifest "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" "$good_size"
+    if self_update_prepare_candidate "$tmp/work-b" 2>/dev/null; then
+      printf "prepare_candidate accepted a SHA-256 mismatch\n" >&2; exit 1
+    fi
+    [[ "$SELF_UPDATE_MANIFEST_ERROR" == "artifact SHA-256 does not match manifest" ]] || { printf "wrong sha error: %s\n" "$SELF_UPDATE_MANIFEST_ERROR" >&2; exit 1; }
+  '
+}
+
+# package-release must refuse a dirty worktree without --allow-dirty and a
+# stale dist/ even with it. Exercised in a throwaway git worktree so the real
+# checkout is never modified.
+check_package_release_rejects_dirty_or_stale_tree() {
+  local worktree failed=0
+  worktree="$(mktemp -d)"
+  rmdir "$worktree" 2>/dev/null || true
+  if ! git worktree add --detach "$worktree" HEAD >/dev/null 2>&1; then
+    echo "skip: git worktree unavailable" >&2
+    return 0
+  fi
+  printf '\n' >> "$worktree/README.md"
+  if ( cd "$worktree" && SOURCE_DATE_EPOCH=0 bash tools/package-release.sh \
+        --output-dir "$worktree/out-dirty" --download-base-url 'https://example.invalid/v9.9.9' v9.9.9 >/dev/null 2>&1 ); then
+    echo "package-release accepted a dirty worktree without --allow-dirty" >&2
+    failed=1
+  fi
+  git -C "$worktree" checkout -- README.md >/dev/null 2>&1 || true
+  printf '\n' >> "$worktree/dist/install_ntfy.sh"
+  if ( cd "$worktree" && SOURCE_DATE_EPOCH=0 bash tools/package-release.sh --allow-dirty \
+        --output-dir "$worktree/out-stale" --download-base-url 'https://example.invalid/v9.9.9' v9.9.9 >/dev/null 2>&1 ); then
+    echo "package-release accepted a stale dist/ even with --allow-dirty" >&2
+    failed=1
+  fi
+  git worktree remove --force "$worktree" >/dev/null 2>&1 || rm -rf "$worktree"
+  git worktree prune >/dev/null 2>&1 || true
+  [[ "$failed" -eq 0 ]]
+}
+
 # The smoke check must not hard-require `python`: Debian/Ubuntu ship python3 and
 # minimal hosts may carry neither, so a missing interpreter has to degrade to a
 # warning instead of rolling back a healthy release.
