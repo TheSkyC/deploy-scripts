@@ -653,8 +653,8 @@ i18n_register_many \
   "Blog restore complete." \
   "Blog 恢复完成。" \
   app.blog.uninstall.warning \
-  "This removes Blog files, Nginx site config, and the publish helper. Nginx itself is kept." \
-  "这会删除 Blog 文件、Nginx 站点配置和发布辅助脚本，但保留 Nginx 本身。" \
+  "This removes the Blog Nginx site config and the publish helper; authored site content is only removed when you confirm it. Nginx itself is kept." \
+  "这会删除 Blog 的 Nginx 站点配置和发布辅助脚本；站点内容仅在确认后删除。Nginx 本身保留。" \
   app.blog.uninstall.continue_prompt \
   "Type YES to continue:" \
   "请输入 YES 继续：" \
@@ -664,6 +664,12 @@ i18n_register_many \
   app.blog.uninstall.delete_backups_prompt \
   "Delete backup directory %s too? [y/N]:" \
   "是否同时删除备份目录 %s？[y/N]：" \
+  app.blog.uninstall.delete_data_prompt \
+  "Delete authored site content (site source, published root, nginx root) under %s too? [y/N]:" \
+  "是否同时删除 %s 下的站点内容（站点源、发布目录、Nginx 根目录）？[y/N]：" \
+  app.blog.uninstall.kept_data \
+  "Site content kept: %s" \
+  "站点内容已保留：%s" \
   app.blog.uninstall.removed_file \
   "Removed file: %s" \
   "已删除文件：%s" \

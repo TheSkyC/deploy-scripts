@@ -603,8 +603,20 @@ self_update_interrupted_cleanup() {
   return 0
 }
 
+# Resolve a JSON-capable interpreter for the smoke check. Debian/Ubuntu ship
+# python3, not python, and minimal hosts may carry neither; the smoke check
+# must never fail a healthy release just because JSON validation is
+# unavailable. Prints the interpreter to use, or nothing when none exists.
+self_update_json_interpreter() {
+  if command -v python3 >/dev/null 2>&1; then
+    printf 'python3'
+  elif command -v python >/dev/null 2>&1; then
+    printf 'python'
+  fi
+}
+
 self_update_smoke_check() {
-  local release_root="$1" output_dir status command_output
+  local release_root="$1" output_dir status command_output json_interpreter
   output_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-scripts-smoke.XXXXXX")" || return 1
   chmod 700 "$output_dir" || { rm -rf "$output_dir"; return 1; }
   command_output="${output_dir}/list.out"
@@ -616,7 +628,11 @@ self_update_smoke_check() {
     rm -rf "$output_dir"
     return 1
   fi
-  if ! python - "${output_dir}/version.out" <<'PY'
+  json_interpreter="$(self_update_json_interpreter)"
+  if [[ -z "$json_interpreter" ]]; then
+    printf 'self-update: warning: python3/python not found; skipping JSON smoke validation\n' >&2
+  fi
+  if [[ -n "$json_interpreter" ]] && ! "$json_interpreter" - "${output_dir}/version.out" <<'PY'
 import json
 import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
@@ -632,14 +648,19 @@ PY
     rm -rf "$output_dir"
     return 1
   fi
-  python - "${output_dir}/status.out" <<'PY'
+  status=0
+  if [[ -n "$json_interpreter" ]]; then
+    if ! "$json_interpreter" - "${output_dir}/status.out" <<'PY'
 import json
 import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     payload = json.load(handle)
 assert payload.get("schema_version") == 1
 PY
-  status=$?
+    then
+      status=1
+    fi
+  fi
   rm -rf "$output_dir"
   return "$status"
 }

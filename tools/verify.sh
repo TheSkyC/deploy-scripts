@@ -416,6 +416,7 @@ main() {
       check_self_update_rejects_archive_listing_failure
       check_self_update_interruption_restores_activation
       check_self_update_signal_interruption
+      check_self_update_smoke_json_interpreter_is_optional
       echo "Self-update foundation verification passed"
       return 0
       ;;

@@ -32,9 +32,13 @@ check_blog_uninstall_supports_noninteractive_mode() {
       /delete_backups="yes"/ { saw_backup_yes=1 }
       /delete_backups="no"/ { saw_backup_no=1 }
       /prompt "\$\(t app\.blog\.uninstall\.delete_backups_prompt "\$BLOG_BACKUP_DIR"\)"/ { saw_backup_prompt=1 }
+      /if deploy_env_truthy DEPLOY_DELETE_DATA; then/ { saw_data_env=1 }
+      /delete_data="yes"/ { saw_data_yes=1 }
+      /delete_data="no"/ { saw_data_no=1 }
+      /prompt "\$\(t app\.blog\.uninstall\.delete_data_prompt "\$SITE_DIR"\)"/ { saw_data_prompt=1 }
       END {
-        if (!(saw_continue_prompt && saw_continue && saw_yes && saw_backup_env && saw_backup_yes && saw_backup_no && saw_backup_prompt)) {
-          printf "%s Blog uninstall must support DEPLOY_ASSUME_YES while requiring DEPLOY_DELETE_BACKUP for backup deletion\n", FILENAME > "/dev/stderr"
+        if (!(saw_continue_prompt && saw_continue && saw_yes && saw_backup_env && saw_backup_yes && saw_backup_no && saw_backup_prompt && saw_data_env && saw_data_yes && saw_data_no && saw_data_prompt)) {
+          printf "%s Blog uninstall must support DEPLOY_ASSUME_YES while requiring DEPLOY_DELETE_BACKUP for backups and DEPLOY_DELETE_DATA for authored site content\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }

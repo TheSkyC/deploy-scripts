@@ -6997,8 +6997,20 @@ self_update_interrupted_cleanup() {
   return 0
 }
 
+# Resolve a JSON-capable interpreter for the smoke check. Debian/Ubuntu ship
+# python3, not python, and minimal hosts may carry neither; the smoke check
+# must never fail a healthy release just because JSON validation is
+# unavailable. Prints the interpreter to use, or nothing when none exists.
+self_update_json_interpreter() {
+  if command -v python3 >/dev/null 2>&1; then
+    printf 'python3'
+  elif command -v python >/dev/null 2>&1; then
+    printf 'python'
+  fi
+}
+
 self_update_smoke_check() {
-  local release_root="$1" output_dir status command_output
+  local release_root="$1" output_dir status command_output json_interpreter
   output_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-scripts-smoke.XXXXXX")" || return 1
   chmod 700 "$output_dir" || { rm -rf "$output_dir"; return 1; }
   command_output="${output_dir}/list.out"
@@ -7010,7 +7022,11 @@ self_update_smoke_check() {
     rm -rf "$output_dir"
     return 1
   fi
-  if ! python - "${output_dir}/version.out" <<'PY'
+  json_interpreter="$(self_update_json_interpreter)"
+  if [[ -z "$json_interpreter" ]]; then
+    printf 'self-update: warning: python3/python not found; skipping JSON smoke validation\n' >&2
+  fi
+  if [[ -n "$json_interpreter" ]] && ! "$json_interpreter" - "${output_dir}/version.out" <<'PY'
 import json
 import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
@@ -7026,14 +7042,19 @@ PY
     rm -rf "$output_dir"
     return 1
   fi
-  python - "${output_dir}/status.out" <<'PY'
+  status=0
+  if [[ -n "$json_interpreter" ]]; then
+    if ! "$json_interpreter" - "${output_dir}/status.out" <<'PY'
 import json
 import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     payload = json.load(handle)
 assert payload.get("schema_version") == 1
 PY
-  status=$?
+    then
+      status=1
+    fi
+  fi
   rm -rf "$output_dir"
   return "$status"
 }
@@ -12791,8 +12812,8 @@ i18n_register_many \
   "Blog restore complete." \
   "Blog 恢复完成。" \
   app.blog.uninstall.warning \
-  "This removes Blog files, Nginx site config, and the publish helper. Nginx itself is kept." \
-  "这会删除 Blog 文件、Nginx 站点配置和发布辅助脚本，但保留 Nginx 本身。" \
+  "This removes the Blog Nginx site config and the publish helper; authored site content is only removed when you confirm it. Nginx itself is kept." \
+  "这会删除 Blog 的 Nginx 站点配置和发布辅助脚本；站点内容仅在确认后删除。Nginx 本身保留。" \
   app.blog.uninstall.continue_prompt \
   "Type YES to continue:" \
   "请输入 YES 继续：" \
@@ -12802,6 +12823,12 @@ i18n_register_many \
   app.blog.uninstall.delete_backups_prompt \
   "Delete backup directory %s too? [y/N]:" \
   "是否同时删除备份目录 %s？[y/N]：" \
+  app.blog.uninstall.delete_data_prompt \
+  "Delete authored site content (site source, published root, nginx root) under %s too? [y/N]:" \
+  "是否同时删除 %s 下的站点内容（站点源、发布目录、Nginx 根目录）？[y/N]：" \
+  app.blog.uninstall.kept_data \
+  "Site content kept: %s" \
+  "站点内容已保留：%s" \
   app.blog.uninstall.removed_file \
   "Removed file: %s" \
   "已删除文件：%s" \
@@ -20309,7 +20336,7 @@ do_uninstall() {
   require_safe_path "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"
 
   warn "$(t app.blog.uninstall.warning)"
-  local confirm delete_backups
+  local confirm delete_backups delete_data
   if deploy_assume_yes; then
     confirm="YES"
   else
@@ -20327,14 +20354,31 @@ do_uninstall() {
     prompt "$(t app.blog.uninstall.delete_backups_prompt "$BLOG_BACKUP_DIR")"
     read -r delete_backups
   fi
+  # Authored site content is never destroyed without an explicit opt-in: an
+  # automated `uninstall` with DEPLOY_ASSUME_YES must not delete the user's
+  # site source, published root, or nginx root unless DEPLOY_DELETE_DATA is set.
+  if deploy_assume_yes; then
+    if deploy_env_truthy DEPLOY_DELETE_DATA; then
+      delete_data="yes"
+    else
+      delete_data="no"
+    fi
+  else
+    prompt "$(t app.blog.uninstall.delete_data_prompt "$SITE_DIR")"
+    read -r delete_data
+  fi
 
   _blog_remove_file /etc/nginx/sites-enabled/blog
   _blog_remove_file /etc/nginx/sites-available/blog
   app_nginx_default_site_restore
   _blog_remove_file /usr/local/bin/blog-publish
-  _blog_remove_dir "PUBLIC_DIR" "$PUBLIC_DIR"
-  _blog_remove_dir "NGINX_ROOT" "$NGINX_ROOT"
-  _blog_remove_dir "SITE_DIR" "$SITE_DIR"
+  if [[ "${delete_data,,}" == "y" || "${delete_data,,}" == "yes" ]]; then
+    _blog_remove_dir "PUBLIC_DIR" "$PUBLIC_DIR"
+    _blog_remove_dir "NGINX_ROOT" "$NGINX_ROOT"
+    _blog_remove_dir "SITE_DIR" "$SITE_DIR"
+  else
+    info "$(t app.blog.uninstall.kept_data "$SITE_DIR")"
+  fi
 
   if [[ "${delete_backups,,}" == "y" || "${delete_backups,,}" == "yes" ]]; then
     _blog_remove_dir "BLOG_BACKUP_DIR" "$BLOG_BACKUP_DIR"

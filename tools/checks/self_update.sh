@@ -653,3 +653,36 @@ PY
   rm -rf "$temp_root"
   return "$status"
 }
+
+# The smoke check must not hard-require `python`: Debian/Ubuntu ship python3 and
+# minimal hosts may carry neither, so a missing interpreter has to degrade to a
+# warning instead of rolling back a healthy release.
+check_self_update_smoke_json_interpreter_is_optional() {
+  grep -Fq 'command -v python3' lib/self_update.sh || {
+    echo "self-update smoke check must resolve python3 before python" >&2
+    return 1
+  }
+  if grep -Eq '(^|[[:space:]])python[[:space:]]+-[[:space:]]' lib/self_update.sh; then
+    echo "self-update smoke check must not invoke a bare 'python' binary" >&2
+    return 1
+  fi
+  grep -Fq '[[ -n "$json_interpreter" ]]' lib/self_update.sh || {
+    echo "self-update smoke check must gate JSON validation on the resolved interpreter" >&2
+    return 1
+  }
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    fake_python3="$(mktemp -d)"
+    fake_python="$(mktemp -d)"
+    empty_bin="$(mktemp -d)"
+    trap '"'"'rm -rf "$fake_python3" "$fake_python" "$empty_bin"'"'"' EXIT
+    printf "#!/bin/sh\n" > "$fake_python3/python3"; chmod +x "$fake_python3/python3"
+    printf "#!/bin/sh\n" > "$fake_python/python"; chmod +x "$fake_python/python"
+    # python3 wins when both exist; python is the fallback; neither degrades.
+    [[ "$(PATH="$fake_python3:$fake_python" self_update_json_interpreter)" == python3 ]]
+    [[ "$(PATH="$fake_python" self_update_json_interpreter)" == python ]]
+    [[ -z "$(PATH="$empty_bin" self_update_json_interpreter)" ]]
+  '
+}
