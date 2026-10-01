@@ -75,7 +75,7 @@ i18n_register_many \
   app.cpa_stack.error.backup \
   "Backup failed: %s." \
   "备份失败：%s。" \
-  app.cpa_stack.error.uninstall_cancelled \
+  app.cpa_stack.info.uninstall_cancelled \
   "Uninstall cancelled." \
   "已取消卸载。" \
   app.cpa_stack.warn.config_preserved \

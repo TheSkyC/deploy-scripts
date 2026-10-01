@@ -33,10 +33,13 @@ deployment characteristics:
   staged then renamed, never written in place.
 - Locking: per-app (fd 9), manager batch (fd 8), and self-update (fd 7) locks
   prevent concurrent mutations.
-- Downloads: GitHub archives and toolchains are checksum-verified before use.
+- Downloads: release archives and toolchains are checksum-verified where a
+  published digest exists; binary-app downloads accept an optional pinned
+  SHA-256 (`BA_ASSET_SHA256`) and always pass ELF/size sanity checks.
 
 ## Verification
 
-`bash tools/verify.sh all` runs the full guard suite (~330 checks), including
-structural checks for atomic writes, path guards, and config trust gates. CI
-runs it on every push.
+`bash tools/verify.sh all` runs the full guard suite (several hundred checks),
+including structural checks for atomic writes, path guards, and config trust
+gates. CI runs the per-target verification matrix on every push and pull
+request and the full `all` suite nightly.

@@ -13,7 +13,7 @@ DEPLOY_APP_SPECS=(
   "cyberstrikeai|CyberStrikeAI|apps/cyberstrikeai.sh|impl/install_cyberstrikeai.sh|backup,restore"
   "blog|Hugo Blog|apps/blog.sh|impl/install_hugo_blog.sh|backup,restore"
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh|backup,restore"
-  "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh|backup,restore"
+  "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh|backup,restore,cert"
   "ntfy|ntfy|apps/ntfy.sh|impl/install_ntfy.sh|backup,restore"
   "meilisearch|Meilisearch|apps/meilisearch.sh|impl/install_meilisearch.sh|backup,restore"
   "alist|Alist|apps/alist.sh|impl/install_alist.sh|backup,restore"

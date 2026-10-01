@@ -7556,7 +7556,7 @@ DEPLOY_APP_SPECS=(
   "cyberstrikeai|CyberStrikeAI|apps/cyberstrikeai.sh|impl/install_cyberstrikeai.sh|backup,restore"
   "blog|Hugo Blog|apps/blog.sh|impl/install_hugo_blog.sh|backup,restore"
   "tickflow|TickFlow Stock Panel|apps/tickflow.sh|impl/install_tickflow.sh|backup,restore"
-  "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh|backup,restore"
+  "cpa-stack|CLIProxyAPI + CPA Manager Plus|apps/cpa_stack.sh|impl/install_cpa_stack.sh|backup,restore,cert"
   "ntfy|ntfy|apps/ntfy.sh|impl/install_ntfy.sh|backup,restore"
   "meilisearch|Meilisearch|apps/meilisearch.sh|impl/install_meilisearch.sh|backup,restore"
   "alist|Alist|apps/alist.sh|impl/install_alist.sh|backup,restore"
@@ -8676,20 +8676,18 @@ fleet_main() {
   remote_script="cd ${FLEET_REMOTE_DIR} 2>/dev/null && bash deploy.sh ${action} --json 2>/dev/null || echo '{\"state\":\"failed\"}'"
   # Run with bounded concurrency; each host writes its JSON record to its
   # own temp file, and failures are isolated per host.
-  local tmp_root alias target entry pid
+  local tmp_root alias target entry pid out_file
   tmp_root="$(mktemp -d)"
-  local -a pids=() running=()
+  local -a pids=()
   for entry in "${FLEET_HOSTS[@]}"; do
     alias="${entry%%|*}"
     target="${entry#*|}"
     out_file="$tmp_root/${alias}.json"
     ( fleet_run_host "$alias" "$target" "$remote_script" > "$out_file" ) &
     pids+=($!)
-    running+=("$alias")
     if (( ${#pids[@]} >= FLEET_CONCURRENCY )); then
       wait "${pids[0]}" 2>/dev/null || true
       pids=("${pids[@]:1}")
-      running=("${running[@]:1}")
     fi
   done
   for pid in "${pids[@]}"; do
@@ -13321,7 +13319,7 @@ i18n_register_many \
   app.cpa_stack.error.backup \
   "Backup failed: %s." \
   "备份失败：%s。" \
-  app.cpa_stack.error.uninstall_cancelled \
+  app.cpa_stack.info.uninstall_cancelled \
   "Uninstall cancelled." \
   "已取消卸载。" \
   app.cpa_stack.warn.config_preserved \
@@ -22416,7 +22414,11 @@ do_uninstall() {
     prompt "$(t app.cpa_stack.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || error "$(t app.cpa_stack.error.uninstall_cancelled)"
+  # Cancelling is not a failure: exit 0 like every other app's uninstall.
+  if [[ "$confirm" != "YES" ]]; then
+    info "$(t app.cpa_stack.info.uninstall_cancelled)"
+    exit 0
+  fi
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && delete_data=true
   else

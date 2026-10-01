@@ -288,7 +288,7 @@ green.
 1. Create `apps/myapp.sh` with metadata and localized messages.
 2. Create `impl/install_myapp.sh` with `do_install` and any supported lifecycle functions.
 3. Create `bin/install_myapp.sh` and a top-level `install_myapp.sh` wrapper following the existing pattern (wrapper/bin symmetry is enforced by `check_root_wrappers_match_bin_loaders` in the `guards` target).
-4. Add the app to `tools/build-release.sh`.
+4. Add the app to `lib/app_registry.sh` (`DEPLOY_APP_SPECS`); the release build iterates that registry, so `dist/` gains the new script after a rebuild.
 5. Add verification coverage when the app has special dispatch or localization behavior: define new `check_*` functions in a `tools/checks/` module (e.g., `tools/checks/app-myapp.sh`) and register each one in a target arm (`dispatch` or `guards`); the `all` target picks up `check_*` functions automatically, and `check_target_groups_cover_all_checks` fails if a check is missing from a target arm.
 6. Run verification:
 
@@ -349,9 +349,13 @@ bash tools/verify.sh guards
 bash tools/verify.sh prove   # behavioral feature proofs (backup/restore, notify, schedule, migrate, compose, fleet)
 ```
 
-The parallel CI jobs run `syntax`, `shellcheck`, `release`, `dispatch`, and
-`guards`; the union of those targets covers every check that `all` runs.
-A nightly scheduled job runs the full `all` suite end-to-end.
+The CI `verify` matrix runs `syntax`, `release`, `dispatch`, `guards`, `state`,
+`operation`, `update`, and `self-update` on every push and pull request, plus a
+separate `shellcheck` job; the union of those targets covers every check that
+`all` runs. The behavioral feature proofs run inside the `guards` target (and
+standalone via `bash tools/verify.sh prove`). A nightly scheduled job runs the
+full `all` suite end-to-end, and an `e2e-smoke` job runs the container install
+matrix.
 `bash tools/verify.sh` (no target) still runs the full suite. The `all`
 target runs independent checks concurrently (up to `PARALLEL_JOBS`, which
 defaults to the CPU count); set `PARALLEL_JOBS=1` for a serial run.

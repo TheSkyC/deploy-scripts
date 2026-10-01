@@ -46,8 +46,15 @@ to confirm the setup.
 `all` rebuilds `dist/` deterministically, so a change to `lib/`, `apps/`, or an
 `impl/` script requires committing the regenerated release scripts too. New
 `check_*` functions belong in a `tools/checks/` module and must be registered in
-a target arm (for example `guards`) and in the `all` list;
+a target arm (for example `guards`); the `all` target auto-enumerates them and
 `check_target_groups_cover_all_checks` fails otherwise.
+
+## Platform assumptions
+
+The scripts target Debian/Ubuntu with GNU coreutils and GNU tar. They rely on
+GNU-only options such as `find -printf`/`-delete`, `date -d`, `stat -c`, and
+`readlink -f`, plus `/proc` and `/dev/tcp`; BSD/macOS hosts are not supported.
+Use Git Bash on Windows for local Bash work.
 
 ## Commit messages
 

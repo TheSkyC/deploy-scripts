@@ -131,20 +131,18 @@ fleet_main() {
   remote_script="cd ${FLEET_REMOTE_DIR} 2>/dev/null && bash deploy.sh ${action} --json 2>/dev/null || echo '{\"state\":\"failed\"}'"
   # Run with bounded concurrency; each host writes its JSON record to its
   # own temp file, and failures are isolated per host.
-  local tmp_root alias target entry pid
+  local tmp_root alias target entry pid out_file
   tmp_root="$(mktemp -d)"
-  local -a pids=() running=()
+  local -a pids=()
   for entry in "${FLEET_HOSTS[@]}"; do
     alias="${entry%%|*}"
     target="${entry#*|}"
     out_file="$tmp_root/${alias}.json"
     ( fleet_run_host "$alias" "$target" "$remote_script" > "$out_file" ) &
     pids+=($!)
-    running+=("$alias")
     if (( ${#pids[@]} >= FLEET_CONCURRENCY )); then
       wait "${pids[0]}" 2>/dev/null || true
       pids=("${pids[@]:1}")
-      running=("${running[@]:1}")
     fi
   done
   for pid in "${pids[@]}"; do
