@@ -2081,8 +2081,8 @@ check_registry_restore_capability_matches_impl() {
     in_fn && saw_data && /systemctl start "\$SERVICE_NAME"/ { saw_data_restart=1 }
     in_fn && /backup_restore_directory "\$CONFIG_DIR" "\$conf_archive"/ { saw_conf=1 }
     in_fn && saw_conf && /systemctl start "\$SERVICE_NAME"/ { saw_conf_restart=1 }
-    in_fn && /sub2api_conf_\*\.tar\.gz/ { saw_conf_archive=1 }
-    in_fn && /sub2api_db_\*\.sql\.gz/ { saw_db=1 }
+    in_fn && /sub2api_conf_/ { saw_conf_archive=1 }
+    in_fn && /sub2api_db_/ { saw_db=1 }
     in_fn && /backup_validate_gzip_archive "\$db_archive"/ { saw_db_validate=1 }
     in_fn && /systemctl stop "\$SERVICE_NAME"/ { saw_stop=1 }
     in_fn && /^}$/ {

@@ -606,13 +606,19 @@ self_update_interrupted_cleanup() {
 # Resolve a JSON-capable interpreter for the smoke check. Debian/Ubuntu ship
 # python3, not python, and minimal hosts may carry neither; the smoke check
 # must never fail a healthy release just because JSON validation is
-# unavailable. Prints the interpreter to use, or nothing when none exists.
+# unavailable. The interpreter must actually run — a `python3` shim that only
+# exists on PATH (for example the Windows Store alias) is rejected. Prints the
+# interpreter to use, or nothing when none works.
 self_update_json_interpreter() {
-  if command -v python3 >/dev/null 2>&1; then
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import json' >/dev/null 2>&1; then
     printf 'python3'
-  elif command -v python >/dev/null 2>&1; then
-    printf 'python'
+    return 0
   fi
+  if command -v python >/dev/null 2>&1 && python -c 'import json' >/dev/null 2>&1; then
+    printf 'python'
+    return 0
+  fi
+  return 0
 }
 
 self_update_smoke_check() {
