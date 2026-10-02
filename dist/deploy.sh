@@ -23257,7 +23257,10 @@ ba_write_config() {
     token="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true)"
     [[ -n "$token" ]] || token="frps-$(date +%s)-$(LC_ALL=C tr -dc '0-9' </dev/urandom | head -c 8)"
   fi
-  if ! atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}" <<EOF
+  # Mode 0640: the frps service account must read the file (it holds the
+  # shared auth.token) but must not be able to rewrite its own credential or
+  # listener configuration.
+  if ! atomic_write_file "$config_file" 0640 "root:${SERVICE_USER}" <<EOF
 bindAddr = "${BA_BIND_ADDR}"
 bindPort = ${PORT}
 auth.token = "${token}"

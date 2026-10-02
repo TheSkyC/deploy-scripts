@@ -42,7 +42,7 @@ check_frps_config_is_managed_atomically() {
   local file
   # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.
   for file in impl/install_frps.sh; do
-    grep -Fq 'atomic_write_file "$config_file" 0660 "root:${SERVICE_USER}"' "$file" \
+    grep -Fq 'atomic_write_file "$config_file" 0640 "root:${SERVICE_USER}"' "$file" \
       && grep -Fq 'auth.token' "$file" \
       && grep -Fq 'error "$(t app.frps.error.config_write "$config_file")"' "$file" \
       && grep -Fq 'ba_remove_file_or_error "$config_file" "FRPS_CONFIG_FILE"' "$file" \
