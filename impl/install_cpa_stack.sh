@@ -356,11 +356,11 @@ cpa_stack_download_verified_archive() {
   archive_url="https://github.com/${repository}/releases/download/${tag}/${asset}"
   checksum_file="${destination}.checksums"
 
-  if ! curl -fL --retry 2 --connect-timeout 10 --max-time 180 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$destination" "$archive_url"; then
+  if ! curl -fL --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 10 --max-time 180 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$destination" "$archive_url"; then
     rm -f "$destination" "$checksum_file"
     error "$(t app.cpa_stack.error.download "$asset")"
   fi
-  if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$checksum_file" "$checksum_url"; then
+  if ! curl -fsSL --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 10 --max-time 30 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$checksum_file" "$checksum_url"; then
     rm -f "$destination" "$checksum_file"
     error "$(t app.cpa_stack.error.download "checksums.txt")"
   fi

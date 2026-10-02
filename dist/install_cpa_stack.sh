@@ -5402,7 +5402,9 @@ ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    if curl -fL --progress-bar -o "$target" "$url"; then
+    # Pin the transport to HTTPS, including redirects, so a compromised or
+    # MITM'd redirect cannot downgrade a release download to cleartext.
+    if curl -fL --proto '=https' --proto-redir '=https' --progress-bar -o "$target" "$url"; then
       if ! bapp_verify_asset_checksum "$target"; then
         rm -f "$target" 2>/dev/null || true
         error "$(t binary_app.error.checksum_mismatch "$url")"
@@ -7345,11 +7347,11 @@ cpa_stack_download_verified_archive() {
   archive_url="https://github.com/${repository}/releases/download/${tag}/${asset}"
   checksum_file="${destination}.checksums"
 
-  if ! curl -fL --retry 2 --connect-timeout 10 --max-time 180 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$destination" "$archive_url"; then
+  if ! curl -fL --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 10 --max-time 180 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$destination" "$archive_url"; then
     rm -f "$destination" "$checksum_file"
     error "$(t app.cpa_stack.error.download "$asset")"
   fi
-  if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$checksum_file" "$checksum_url"; then
+  if ! curl -fsSL --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 10 --max-time 30 -H 'User-Agent: deploy-scripts-cpa-stack' -o "$checksum_file" "$checksum_url"; then
     rm -f "$destination" "$checksum_file"
     error "$(t app.cpa_stack.error.download "checksums.txt")"
   fi

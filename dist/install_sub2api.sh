@@ -5402,7 +5402,9 @@ ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    if curl -fL --progress-bar -o "$target" "$url"; then
+    # Pin the transport to HTTPS, including redirects, so a compromised or
+    # MITM'd redirect cannot downgrade a release download to cleartext.
+    if curl -fL --proto '=https' --proto-redir '=https' --progress-bar -o "$target" "$url"; then
       if ! bapp_verify_asset_checksum "$target"; then
         rm -f "$target" 2>/dev/null || true
         error "$(t binary_app.error.checksum_mismatch "$url")"
@@ -7947,7 +7949,7 @@ verify_checksum() {
     fi
     error "$(t app.sub2api.error.checksum_temp)"
   fi
-  if ! curl -fsSL --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
+  if ! curl -fsSL --proto '=https' --proto-redir '=https' --max-time 15 -o "$tmp_sum" "$checksum_url" 2>/dev/null; then
     rm -f "$tmp_sum"
     if ! rm -f "$archive"; then
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
@@ -8859,7 +8861,7 @@ do_install() {
   if ! TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz"); then
     error "$(t app.sub2api.error.download_failed "$GITHUB_REPO")"
   fi
-  if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
+  if ! curl -fL --proto '=https' --proto-redir '=https' --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
     if ! rm -f "$TMP_ARCHIVE"; then
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$TMP_ARCHIVE")"
     fi
@@ -8995,7 +8997,7 @@ do_update() {
   if ! TMP_ARCHIVE=$(mktemp "${INSTALL_DIR}/sub2api-release.XXXXXX.tar.gz"); then
     error "$(t app.sub2api.error.update_download)"
   fi
-  if ! curl -fL --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
+  if ! curl -fL --proto '=https' --proto-redir '=https' --progress-bar -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"; then
     if ! rm -f "$TMP_ARCHIVE"; then
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$TMP_ARCHIVE")"
     fi

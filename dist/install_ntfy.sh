@@ -5402,7 +5402,9 @@ ba_download_release() {
   local version="$1" target="$2" url
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    if curl -fL --progress-bar -o "$target" "$url"; then
+    # Pin the transport to HTTPS, including redirects, so a compromised or
+    # MITM'd redirect cannot downgrade a release download to cleartext.
+    if curl -fL --proto '=https' --proto-redir '=https' --progress-bar -o "$target" "$url"; then
       if ! bapp_verify_asset_checksum "$target"; then
         rm -f "$target" 2>/dev/null || true
         error "$(t binary_app.error.checksum_mismatch "$url")"
