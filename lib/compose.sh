@@ -50,11 +50,13 @@ compose_validate_project() {
   [[ "$project_file" == "$work_dir/"* ]] || return 1
 }
 
-# Echo an argv-ready compose invocation prefix given the working directory
-# and project file. Example: "docker compose --project-directory /opt/app -f /opt/app/compose.yml"
+# Print an argv-ready compose invocation prefix, one argument per line so
+# callers can `mapfile -t` it. A single `%q`-escaped string previously had to
+# survive `read -r -a`, which does not unescape `\ ` and so split a project
+# path containing spaces into the wrong tokens.
 compose_base_args() {
   local work_dir="$1" project_file="$2"
-  printf -- '--project-directory %q -f %q' "$work_dir" "$project_file"
+  printf '%s\n' "--project-directory" "$work_dir" "-f" "$project_file"
 }
 
 # Run one compose operation against the project, streaming output to stderr.
@@ -69,7 +71,7 @@ compose_run() {
   compose_cmd="$(compose_command)"
   [[ -n "$compose_cmd" ]] || error "$(t compose.error.runtime_missing)"
   local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
   $compose_cmd "${base_args[@]}" "$@" >&2
 }
@@ -84,7 +86,7 @@ compose_try() {
   [[ -n "$compose_cmd" ]] || return 1
   compose_validate_project "$work_dir" "$project_file" || return 1
   local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
   out="$($compose_cmd "${base_args[@]}" "$@" 2>&1)" || {
     printf '%s\n' "$out" >&2
@@ -118,7 +120,7 @@ compose_health() {
   [[ -n "$compose_cmd" ]] || return 1
   compose_validate_project "$work_dir" "$project_file" || return 1
   local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
   out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || return 1
   # Case-insensitive state scan: running/healthy pass; exited, dead, or

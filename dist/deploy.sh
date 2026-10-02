@@ -2841,8 +2841,10 @@ manager_status_collect() {
       errors+=("${app_id}:${status}:$(operation_safe_summary "$(tr '\n' ' ' < "$error_file" 2>/dev/null)")")
     fi
   done
-  printf '%s\n' "${json_files[@]}" >"${temp_dir}/files"
-  printf '%s\n' "${errors[@]}" >"${temp_dir}/errors"
+  # `+` guards keep an empty array from tripping `set -u` on bash < 4.4;
+  # printf with no arguments still emits the single blank line the readers skip.
+  printf '%s\n' ${json_files[@]+"${json_files[@]}"} >"${temp_dir}/files"
+  printf '%s\n' ${errors[@]+"${errors[@]}"} >"${temp_dir}/errors"
   MANAGER_STATUS_REGISTERED_COUNT="${#DEPLOY_APP_IDS[@]}"
   MANAGER_STATUS_SELECTED_COUNT="${#ids[@]}"
   MANAGER_STATUS_TEMP_DIR="$temp_dir"
@@ -6348,11 +6350,13 @@ compose_validate_project() {
   [[ "$project_file" == "$work_dir/"* ]] || return 1
 }
 
-# Echo an argv-ready compose invocation prefix given the working directory
-# and project file. Example: "docker compose --project-directory /opt/app -f /opt/app/compose.yml"
+# Print an argv-ready compose invocation prefix, one argument per line so
+# callers can `mapfile -t` it. A single `%q`-escaped string previously had to
+# survive `read -r -a`, which does not unescape `\ ` and so split a project
+# path containing spaces into the wrong tokens.
 compose_base_args() {
   local work_dir="$1" project_file="$2"
-  printf -- '--project-directory %q -f %q' "$work_dir" "$project_file"
+  printf '%s\n' "--project-directory" "$work_dir" "-f" "$project_file"
 }
 
 # Run one compose operation against the project, streaming output to stderr.
@@ -6367,7 +6371,7 @@ compose_run() {
   compose_cmd="$(compose_command)"
   [[ -n "$compose_cmd" ]] || error "$(t compose.error.runtime_missing)"
   local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
   $compose_cmd "${base_args[@]}" "$@" >&2
 }
@@ -6382,7 +6386,7 @@ compose_try() {
   [[ -n "$compose_cmd" ]] || return 1
   compose_validate_project "$work_dir" "$project_file" || return 1
   local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
   out="$($compose_cmd "${base_args[@]}" "$@" 2>&1)" || {
     printf '%s\n' "$out" >&2
@@ -6416,7 +6420,7 @@ compose_health() {
   [[ -n "$compose_cmd" ]] || return 1
   compose_validate_project "$work_dir" "$project_file" || return 1
   local -a base_args
-  read -r -a base_args <<< "$(compose_base_args "$work_dir" "$project_file")"
+  mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
   out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || return 1
   # Case-insensitive state scan: running/healthy pass; exited, dead, or
@@ -8412,11 +8416,13 @@ migrate_stage_tree() {
     cp "$SCHEDULE_CONF_FILE" "$stage/etc/deploy-schedule.conf"
     staged_any=true
   fi
-  for f in $(migrate_conf_files); do
+  # Migrate each config through a line-oriented reader so a filename with
+  # whitespace or glob characters is copied verbatim instead of word-split.
+  while IFS= read -r f; do
     conf_name="$(basename "$f")"
     cp "$f" "$stage/etc/$conf_name"
     staged_any=true
-  done
+  done < <(migrate_conf_files)
   [[ "$staged_any" == "true" ]] || return 1
 }
 

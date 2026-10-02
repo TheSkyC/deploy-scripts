@@ -102,8 +102,10 @@ manager_status_collect() {
       errors+=("${app_id}:${status}:$(operation_safe_summary "$(tr '\n' ' ' < "$error_file" 2>/dev/null)")")
     fi
   done
-  printf '%s\n' "${json_files[@]}" >"${temp_dir}/files"
-  printf '%s\n' "${errors[@]}" >"${temp_dir}/errors"
+  # `+` guards keep an empty array from tripping `set -u` on bash < 4.4;
+  # printf with no arguments still emits the single blank line the readers skip.
+  printf '%s\n' ${json_files[@]+"${json_files[@]}"} >"${temp_dir}/files"
+  printf '%s\n' ${errors[@]+"${errors[@]}"} >"${temp_dir}/errors"
   MANAGER_STATUS_REGISTERED_COUNT="${#DEPLOY_APP_IDS[@]}"
   MANAGER_STATUS_SELECTED_COUNT="${#ids[@]}"
   MANAGER_STATUS_TEMP_DIR="$temp_dir"

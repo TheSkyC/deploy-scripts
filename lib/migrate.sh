@@ -37,11 +37,13 @@ migrate_stage_tree() {
     cp "$SCHEDULE_CONF_FILE" "$stage/etc/deploy-schedule.conf"
     staged_any=true
   fi
-  for f in $(migrate_conf_files); do
+  # Migrate each config through a line-oriented reader so a filename with
+  # whitespace or glob characters is copied verbatim instead of word-split.
+  while IFS= read -r f; do
     conf_name="$(basename "$f")"
     cp "$f" "$stage/etc/$conf_name"
     staged_any=true
-  done
+  done < <(migrate_conf_files)
   [[ "$staged_any" == "true" ]] || return 1
 }
 
