@@ -6539,16 +6539,34 @@ show_banner() {
   [[ -n "${APP_DESCRIPTION:-}" ]] && echo -e "${APP_DESCRIPTION}\n"
 }
 
+# True when a config key names a credential. `--help` and `--dry-run` list
+# every CONFIG_KEYS value for operator convenience; credential-looking values
+# (passwords, tokens, keys, DSNs) must not be echoed into terminal scrollback
+# or support transcripts. Over-matching only hides an extra harmless value.
+deploy_config_value_is_secret() {
+  [[ "${1:-}" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN) ]]
+}
+
+# Print "KEY value" for each CONFIG_KEYS entry on stderr, masking secrets.
+deploy_print_config_values() {
+  local key value
+  for key in "${CONFIG_KEYS[@]}"; do
+    if deploy_config_value_is_secret "$key"; then
+      value="[REDACTED]"
+    else
+      value="${!key:-}"
+    fi
+    printf '  %-24s %s\n' "$key" "$value" >&2
+  done
+}
+
 usage() {
   echo "$(t common.usage "$0")" >&2
   echo "      $(t common.no_argument_menu)" >&2
   if [[ "${1:-}" == "--help" ]] && declare -p CONFIG_KEYS >/dev/null 2>&1; then
-    local key
     echo "" >&2
     echo "$(t common.help_config_keys)" >&2
-    for key in "${CONFIG_KEYS[@]}"; do
-      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
-    done
+    deploy_print_config_values
     echo "" >&2
     echo "$(t common.help_env_hint)" >&2
   fi
@@ -6583,12 +6601,9 @@ app_dry_run_guard() {
 
 app_dry_run_list_config() {
   [[ "${DEPLOY_DRY_RUN_SHOW_CONFIG:-0}" == "1" ]] || return 0
-  local key
   if declare -p CONFIG_KEYS >/dev/null 2>&1; then
     echo "$(t common.dry_run_config)" >&2
-    for key in "${CONFIG_KEYS[@]}"; do
-      printf '  %-24s %s\n' "$key" "${!key:-}" >&2
-    done
+    deploy_print_config_values
   fi
 }
 
