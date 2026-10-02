@@ -102,8 +102,13 @@ schedule_run_main() {
     if bash "$DEPLOY_ROOT_DIR/deploy.sh" "$batch_cmd" \
         ${include_args[@]+"${include_args[@]}"}; then
       return 0
+    else
+      # Capture the batch status in the else branch: after `fi`, `$?` would be
+      # the status of the whole `if` compound (always 0 for a false condition
+      # with no else), so a failed batch used to be retried and reported as
+      # success.
+      status=$?
     fi
-    status=$?
     attempt=$((attempt + 1))
     if (( attempt < max_attempts )); then
       warn "$(t schedule.warn.retry "$status" "$attempt" "$max_attempts")"

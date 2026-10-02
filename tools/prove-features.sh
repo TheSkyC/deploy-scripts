@@ -117,6 +117,12 @@ bash -c '
   schedule_main status | grep -q enabled= || exit 1
   schedule_main unschedule >/dev/null 2>&1
   [[ ! -e "$DEPLOY_SCHEDULE_CRON_FILE" ]] || exit 1
+  # A failing batch must surface a non-zero status (with retries disabled so
+  # the assertion is deterministic).
+  printf "#!/bin/bash\nexit 7\n" > "$tmp/root/deploy.sh"
+  printf "SCHEDULE_ENABLED=\"true\"\nSCHEDULE_MODE=\"update-all\"\nSCHEDULE_RETRIES=\"0\"\n" > "$SCHEDULE_CONF_FILE"
+  chmod 600 "$SCHEDULE_CONF_FILE"
+  if schedule_run_main >/dev/null 2>&1; then exit 1; fi
   echo OK
 '
 
