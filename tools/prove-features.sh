@@ -3,7 +3,12 @@
 # P1 notification/schedule/migration, and P2 compose/fleet implementations
 # with stub backends, so the checklist features have executable evidence
 # beyond static guards. Run: bash tools/prove-features.sh
-set -uo pipefail
+#
+# set -e is deliberate: each proof runs in its own `bash -c` subshell, whose
+# exit status must abort the suite. Without it the script's exit code would be
+# that of the final echo, so a broken proof would pass every caller (including
+# check_feature_proofs) silently.
+set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR" || exit 1
