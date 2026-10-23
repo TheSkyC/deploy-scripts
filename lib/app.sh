@@ -218,7 +218,7 @@ app_validate_db_identifier() {
 # before the URL and are intended only for application-controlled probes.
 # Usage: app_http_status_code URL [timeout_seconds] [curl_option ...]
 app_http_status_code() {
-  local url="${1:-}" timeout="${2:-5}"
+  local url="${1:-}" timeout="${2:-5}" code
   if [[ $# -ge 2 ]]; then
     shift 2
   else
@@ -229,8 +229,12 @@ app_http_status_code() {
     printf '000\n'
     return 0
   fi
-  curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
-    || printf '000\n'
+  # curl's write-out still emits "000" when the transfer fails, so appending a
+  # second fallback would produce "000000". Normalize the complete result once
+  # and keep the helper's three-digit contract for every caller.
+  code="$(curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null || true)"
+  [[ "$code" =~ ^[0-9]{3}$ ]] || code=000
+  printf '%s\n' "$code"
 }
 
 # Echo the standard deployment config path for the current app. With

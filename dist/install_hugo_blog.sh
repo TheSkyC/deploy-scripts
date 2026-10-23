@@ -2309,7 +2309,8 @@ state_health_json() {
     case "$(state_json_field "$output" state 2>/dev/null || true)" in healthy|degraded|unhealthy|not_checked|unsupported|unknown) printf '%s' "$output" ;; *) printf '{"state":"unknown","checked_at":null,"probe_type":null,"url":null,"http_code":null,"message":"health probe returned invalid state"}' ;; esac
   elif [[ -n "${BA_HEALTH_URL:-}" ]] && command -v curl >/dev/null 2>&1 && { [[ "$DEPLOY_STATUS_NO_NETWORK" != 1 ]] || state_health_url_is_local "$BA_HEALTH_URL"; }; then
     checked="$(state_now)"
-    code="$(curl -sS -L --max-time "${DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS:-5}" -o /dev/null -w '%{http_code}' "$BA_HEALTH_URL" 2>/dev/null || printf 000)"
+    code="$(app_http_status_code "$BA_HEALTH_URL" \
+      "${DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS:-5}" -L)"
     if [[ "$code" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]; then
       printf '{"state":"healthy","checked_at":%s,"probe_type":"http","url":%s,"http_code":%s,"message":null}' "$(app_json_string "$checked")" "$(app_json_string "$BA_HEALTH_URL")" "$code"
     else
@@ -3976,7 +3977,7 @@ app_validate_db_identifier() {
 # before the URL and are intended only for application-controlled probes.
 # Usage: app_http_status_code URL [timeout_seconds] [curl_option ...]
 app_http_status_code() {
-  local url="${1:-}" timeout="${2:-5}"
+  local url="${1:-}" timeout="${2:-5}" code
   if [[ $# -ge 2 ]]; then
     shift 2
   else
@@ -3987,8 +3988,12 @@ app_http_status_code() {
     printf '000\n'
     return 0
   fi
-  curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null \
-    || printf '000\n'
+  # curl's write-out still emits "000" when the transfer fails, so appending a
+  # second fallback would produce "000000". Normalize the complete result once
+  # and keep the helper's three-digit contract for every caller.
+  code="$(curl -o /dev/null -s -w '%{http_code}' --max-time "$timeout" "$@" "$url" 2>/dev/null || true)"
+  [[ "$code" =~ ^[0-9]{3}$ ]] || code=000
+  printf '%s\n' "$code"
 }
 
 # Echo the standard deployment config path for the current app. With
@@ -8296,7 +8301,8 @@ fi
 app_save_config
 step "$(t app.blog.step_health)"
 local _blog_summary_state="ready"
-HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
+HTTP_CODE="$(app_http_status_code "http://127.0.0.1/" 5 \
+  -H "Host: ${BLOG_DOMAIN:-localhost}")"
 if [[ "$HTTP_CODE" == "200" ]]; then
   success "$(t app.blog.http_ok)"
 else
@@ -8424,8 +8430,8 @@ do_status() {
 
   if command -v curl >/dev/null 2>&1; then
     local http_code
-    http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || true)
-    http_code="${http_code:-000}"
+    http_code="$(app_http_status_code "http://127.0.0.1/" 5 \
+      -H "Host: ${BLOG_DOMAIN:-localhost}")"
     printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_response "$http_code" "${BLOG_DOMAIN:-localhost}")"
   else
     printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_skip)"
@@ -8467,7 +8473,8 @@ do_update() {
 
   step "$(t app.blog.step_health)"
   local http_code
-  http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || echo "000")
+  http_code="$(app_http_status_code "http://127.0.0.1/" 5 \
+    -H "Host: ${BLOG_DOMAIN:-localhost}")"
   if [[ "$http_code" == "200" ]]; then
     success "$(t app.blog.http_ok)"
   else

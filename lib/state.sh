@@ -238,7 +238,8 @@ state_health_json() {
     case "$(state_json_field "$output" state 2>/dev/null || true)" in healthy|degraded|unhealthy|not_checked|unsupported|unknown) printf '%s' "$output" ;; *) printf '{"state":"unknown","checked_at":null,"probe_type":null,"url":null,"http_code":null,"message":"health probe returned invalid state"}' ;; esac
   elif [[ -n "${BA_HEALTH_URL:-}" ]] && command -v curl >/dev/null 2>&1 && { [[ "$DEPLOY_STATUS_NO_NETWORK" != 1 ]] || state_health_url_is_local "$BA_HEALTH_URL"; }; then
     checked="$(state_now)"
-    code="$(curl -sS -L --max-time "${DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS:-5}" -o /dev/null -w '%{http_code}' "$BA_HEALTH_URL" 2>/dev/null || printf 000)"
+    code="$(app_http_status_code "$BA_HEALTH_URL" \
+      "${DEPLOY_STATUS_HEALTH_TIMEOUT_SECONDS:-5}" -L)"
     if [[ "$code" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]; then
       printf '{"state":"healthy","checked_at":%s,"probe_type":"http","url":%s,"http_code":%s,"message":null}' "$(app_json_string "$checked")" "$(app_json_string "$BA_HEALTH_URL")" "$code"
     else

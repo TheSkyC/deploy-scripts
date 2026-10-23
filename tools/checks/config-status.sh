@@ -71,7 +71,7 @@ STUB
   output="$("$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
-    curl() { return 1; }
+    curl() { printf "000"; return 28; }
     app_http_status_code "http://127.0.0.1:8080/health"
   ')" || {
     rm -rf "$tmp_dir"
@@ -177,11 +177,17 @@ check_atomic_write_command_file_helper() {
 
 check_custom_app_http_health_probes_use_shared_helper() {
   local file
-  for file in lib/binary_app.sh impl/install_sub2api.sh impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh; do
+  for file in lib/binary_app.sh lib/state.sh impl/install_sub2api.sh \
+      impl/install_vaultwarden.sh impl/install_cyberstrikeai.sh \
+      impl/install_tickflow.sh impl/install_cpa_stack.sh impl/install_hugo_blog.sh; do
     grep -Fq 'app_http_status_code' "$file" || {
       echo "${file} must use the shared HTTP status probe helper." >&2
       return 1
     }
+    if grep -Fq '%{http_code}' "$file"; then
+      echo "${file} must not bypass the shared HTTP status probe helper." >&2
+      return 1
+    fi
   done
 }
 

@@ -848,7 +848,8 @@ fi
 app_save_config
 step "$(t app.blog.step_health)"
 local _blog_summary_state="ready"
-HTTP_CODE=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" || echo "000")
+HTTP_CODE="$(app_http_status_code "http://127.0.0.1/" 5 \
+  -H "Host: ${BLOG_DOMAIN:-localhost}")"
 if [[ "$HTTP_CODE" == "200" ]]; then
   success "$(t app.blog.http_ok)"
 else
@@ -976,8 +977,8 @@ do_status() {
 
   if command -v curl >/dev/null 2>&1; then
     local http_code
-    http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || true)
-    http_code="${http_code:-000}"
+    http_code="$(app_http_status_code "http://127.0.0.1/" 5 \
+      -H "Host: ${BLOG_DOMAIN:-localhost}")"
     printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_response "$http_code" "${BLOG_DOMAIN:-localhost}")"
   else
     printf '  %s: %s\n' "$(t app.blog.status.local_health)" "$(t app.blog.status.local_skip)"
@@ -1019,7 +1020,8 @@ do_update() {
 
   step "$(t app.blog.step_health)"
   local http_code
-  http_code=$(curl -H "Host: ${BLOG_DOMAIN:-localhost}" -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1/" 2>/dev/null || echo "000")
+  http_code="$(app_http_status_code "http://127.0.0.1/" 5 \
+    -H "Host: ${BLOG_DOMAIN:-localhost}")"
   if [[ "$http_code" == "200" ]]; then
     success "$(t app.blog.http_ok)"
   else

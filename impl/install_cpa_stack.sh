@@ -819,7 +819,7 @@ cpa_stack_stop_components() {
 cpa_stack_verify_health() {
   local name="$1" url="$2" code
   command -v curl >/dev/null 2>&1 || return 0
-  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "$url" 2>/dev/null || echo 000)"
+  code="$(app_http_status_code "$url" 8)"
   if [[ "$code" =~ ^2 ]]; then
     success "$(t app.cpa_stack.success.health "$name" "$code")"
     return 0

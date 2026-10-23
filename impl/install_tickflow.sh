@@ -366,7 +366,7 @@ _print_status_path() {
 
 _health_check() {
   local code elapsed=0
-  until code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000) \
+  until code="$(app_http_status_code "http://127.0.0.1:${TICKFLOW_PORT}/" 5)" \
       && [[ "$code" =~ ^(200|301|302)$ ]]; do
     sleep 1
     elapsed=$((elapsed + 1))
@@ -582,7 +582,7 @@ do_status() {
   echo -e "\n${BOLD}[$(t app.tickflow.status.http_health)]${NC}"
   if command -v curl >/dev/null 2>&1; then
     local http_code
-    http_code=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 "http://127.0.0.1:${TICKFLOW_PORT}/" 2>/dev/null || echo 000)
+    http_code="$(app_http_status_code "http://127.0.0.1:${TICKFLOW_PORT}/" 5)"
     if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.local_response "$http_code")"
     else
