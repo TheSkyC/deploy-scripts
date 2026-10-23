@@ -2155,8 +2155,9 @@ check_backup_restore_directory_lifecycle() {
   [[ "$output" == ok ]]
 }
 
-# Behavioral lifecycle test for backup_restore_data_dir, run with a stubbed
-# systemctl: (1) clean restore replaces the data and the service restarts,
+# Behavioral lifecycle test for backup_restore_data_dir, run with stubbed
+# systemctl/chown: (1) clean restore replaces the data, reapplies the requested
+# owner, and the service restarts,
 # (2) a corrupted archive is refused before any change, (3) an archive with
 # absolute members is refused, (4) a service that cannot start on restored
 # data triggers a full rollback to the previous payload.
@@ -2184,9 +2185,16 @@ esac
 exit 0
 STUB
     chmod +x "$tmp/bin/systemctl"
+    cat > "$tmp/bin/chown" <<'"'"'STUB'"'"'
+#!/bin/bash
+printf "%s\n" "$@" >> "$CHOWN_LOG"
+exit 0
+STUB
+    chmod +x "$tmp/bin/chown"
     export PATH="$tmp/bin:$PATH"
     export RESTART_STATE_FILE="$tmp/mode"
     export SYSTEMCTL_LOG="$tmp/systemctl.log"
+    export CHOWN_LOG="$tmp/chown.log"
     DATA_DIR="$tmp/data"
     SERVICE_NAME=testsvc
 
@@ -2199,8 +2207,9 @@ STUB
     backup_write_sha256 "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null
     echo normal > "$tmp/mode"
     backup_restore_data_dir "$DATA_DIR" testsvc \
-      "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null 2>&1
+      "$tmp/backups/app_manual_20260101_000000.tar.gz" appuser:appgroup >/dev/null 2>&1
     grep -q newdata "$DATA_DIR/newfile.txt" || exit 11
+    grep -Fxq appuser:appgroup "$CHOWN_LOG" || exit 12
 
     # Case 2: corruption refused before any change.
     printf X | dd of="$tmp/backups/app_manual_20260101_000000.tar.gz" bs=1 seek=0 conv=notrunc status=none

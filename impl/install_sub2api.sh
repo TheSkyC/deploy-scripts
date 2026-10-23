@@ -1818,7 +1818,8 @@ do_restore() {
 
   # ── data directory: atomic swap with aside copy. The empty service argument
   # tells the shared helper that this caller owns the service lifecycle.
-  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive"; then
+  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive" \
+      "${SERVICE_USER}:${SERVICE_USER}"; then
     systemctl start "$SERVICE_NAME" || true
     error "$(t backup.restore.invalid_archive "$data_archive")"
   fi

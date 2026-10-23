@@ -402,7 +402,8 @@ backup_restore_directory() {
 }
 
 # Restore one archive over a service's data directory, with full rollback.
-# Arguments: $1 data dir  $2 optional systemd unit name  $3 archive path.
+# Arguments: $1 data dir  $2 optional systemd unit name  $3 archive path
+#            $4 optional owner[:group] for the restored tree.
 # Caller must already have: required root, taken the app lock, selected a
 # path-confined archive. Verifies the checksum before touching anything and
 # rejects unsafe tar members. When a service name is supplied, this helper
@@ -410,7 +411,7 @@ backup_restore_directory() {
 # empty service name is for multi-artifact restores whose caller already owns
 # the service lifecycle (for example, Sub2API's data/config/database stages).
 backup_restore_data_dir() {
-  local data_dir="$1" service_name="$2" archive="$3"
+  local data_dir="$1" service_name="$2" archive="$3" owner="${4:-}"
   if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
     if [[ -n "$service_name" ]]; then
       error "$(t backup.verify.failed "$(basename "$archive")")"
@@ -460,6 +461,13 @@ backup_restore_data_dir() {
     fi
   fi
   [[ -z "$extract_dir" ]] || rm -rf "$extract_dir"
+  # Restore ownership explicitly when the caller names the service account.
+  # Tar extraction normally preserves ownership, but imported backups can carry
+  # foreign numeric IDs. Never leave application data root-owned: services such
+  # as Vaultwarden and the shared binary apps must be able to write their data.
+  if [[ "$restored" == "true" && -n "$owner" ]] && ! chown -R "$owner" "$data_dir"; then
+    restored=false
+  fi
   if [[ "$restored" != "true" ]]; then
     rm -rf "$data_dir"
     mv "$staged_aside" "$data_dir"
@@ -469,7 +477,6 @@ backup_restore_data_dir() {
     fi
     return 1
   fi
-  chown -R root:root "$data_dir" 2>/dev/null || true
   if [[ -z "$service_name" ]]; then
     rm -rf "$staged_aside"
     success "$(t backup.restore.restored "$(basename "$archive")")"
