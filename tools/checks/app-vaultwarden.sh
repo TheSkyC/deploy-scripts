@@ -621,6 +621,22 @@ check_vaultwarden_env_file_is_atomic() {
     ' impl/install_vaultwarden.sh
 }
 
+check_vaultwarden_restore_env_copy_failure_is_fatal() {
+  awk '
+    /^_vw_restore_env_file\(\)/ { in_fn=1; saw_copy_if=0; saw_cleanup=0; saw_restart=0; next }
+    in_fn && /if ! cp "\$VW_ENV_FILE" "\$env_prev"; then/ { saw_copy_if=1 }
+    in_fn && /rm -f "\$env_staged" "\$env_prev"/ { saw_cleanup=1 }
+    in_fn && /systemctl start vaultwarden \|\| true/ { saw_restart=1 }
+    in_fn && /^}/ {
+      if (!(saw_copy_if && saw_cleanup && saw_restart)) {
+        print "Vaultwarden restore must fail closed and restart the service when backing up the current env file fails" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_vaultwarden.sh
+}
+
 check_vaultwarden_binary_installs_are_atomic() {
   if grep -R -n 'install -m 755 -o root -g root .* "$VW_BIN"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden binary installs must stage to a temporary file before replacing VW_BIN." >&2

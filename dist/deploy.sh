@@ -17889,7 +17889,12 @@ _vw_restore_env_file() {
       error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
       return 1
     fi
-    cp "$VW_ENV_FILE" "$env_prev"
+    if ! cp "$VW_ENV_FILE" "$env_prev"; then
+      rm -f "$env_staged" "$env_prev"
+      systemctl start vaultwarden || true
+      error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
+      return 1
+    fi
   fi
   if ! atomic_copy_file_strict "$env_staged" "$VW_ENV_FILE" 600 root:root;then
     rm -f "$env_staged" "$env_prev"
