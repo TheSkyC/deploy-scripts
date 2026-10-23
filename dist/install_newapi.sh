@@ -2795,23 +2795,27 @@ manager_status_collect_app_json() {
   ( manager_load_app "$app_id"; app_status_collect_json ) >"$output_file" 2>"$error_file" &
   pid=$!
   timeout_seconds="${DEPLOY_STATUS_TIMEOUT_SECONDS:-8}"
-  if [[ "$timeout_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk "BEGIN { exit !($timeout_seconds > 0) }"; then
-    # `date` is relatively expensive on Git Bash/Windows. Calling it from the
-    # polling loop used to add enough process churn to make healthy collectors
-    # miss the timeout window. Bash's monotonic SECONDS variable avoids that
-    # overhead while retaining the existing integer-second contract.
-    local start_seconds=$SECONDS timeout_limit="${timeout_seconds%.*}"
-    (( timeout_limit > 0 )) || timeout_limit=1
-    while kill -0 "$pid" 2>/dev/null; do
-      if (( SECONDS - start_seconds >= timeout_limit )); then
-        kill "$pid" 2>/dev/null || true
-        wait "$pid" 2>/dev/null || true
-        printf 'status collection timed out after %ss' "$timeout_seconds" >>"$error_file"
-        return 124
-      fi
-      sleep 0.1
-    done
+  if [[ ! "$timeout_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+      || ! awk "BEGIN { exit !($timeout_seconds > 0) }"; then
+    # Invalid configuration must not disable the timeout entirely: a wedged
+    # collector would otherwise hang status-all/backup-all/update-all forever.
+    timeout_seconds=8
   fi
+  # `date` is relatively expensive on Git Bash/Windows. Calling it from the
+  # polling loop used to add enough process churn to make healthy collectors
+  # miss the timeout window. Bash's monotonic SECONDS variable avoids that
+  # overhead while retaining the existing integer-second contract.
+  local start_seconds=$SECONDS timeout_limit="${timeout_seconds%.*}"
+  (( timeout_limit > 0 )) || timeout_limit=1
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( SECONDS - start_seconds >= timeout_limit )); then
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      printf 'status collection timed out after %ss' "$timeout_seconds" >>"$error_file"
+      return 124
+    fi
+    sleep 0.1
+  done
   if wait "$pid"; then
     status=0
   else

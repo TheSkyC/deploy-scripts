@@ -588,6 +588,7 @@ main() {
       run_isolated_check check_silent_backup_tar_diagnostics_use_stderr
       run_isolated_check check_status_commands_allow_non_root
       run_isolated_check check_status_port_matches_are_bounded
+      run_isolated_check check_status_collector_timeout_config
       run_isolated_check check_sub2api_apt_failures_are_reported
       run_isolated_check check_sub2api_backup_script_is_published_atomically
       run_isolated_check check_sub2api_backup_script_publish_contract

@@ -229,6 +229,23 @@ check_state_status_matrix() {
   [[ "$output" == *'"state":"not_checked"'* ]]
   [[ "$output" == *'"update_state":"unknown"'* ]]
 }
+
+check_status_collector_timeout_config() {
+  awk '
+    /^manager_status_collect_app_json\(\)/ { in_fn=1; saw_fallback=0; saw_loop=0; next }
+    in_fn && /Invalid configuration must not disable the timeout/ { saw_fallback=1 }
+    in_fn && /timeout_seconds=8/ { saw_fallback=1 }
+    in_fn && /while kill -0 "\$pid"/ { saw_loop=1 }
+    in_fn && /^}/ {
+      if (!(saw_fallback && saw_loop)) {
+        print "status collection must fall back to a bounded timeout for invalid configuration" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' lib/manager_status.sh
+}
+
 check_state_load_failure_isolation() {
   local temp_root output status json_file
   temp_root="$(mktemp -d)"
