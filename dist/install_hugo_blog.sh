@@ -830,7 +830,8 @@ github_latest_release_tag_checked() {
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
-  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  curl_args=(-fsSL --proto '=https' --proto-redir '=https' \
+    --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
   [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
@@ -7585,7 +7586,8 @@ _blog_install_hugo_package() {
     release_url="https://api.github.com/repos/gohugoio/hugo/releases/latest"
   fi
   info "$(t app.blog.query_hugo)"
-  hugo_json="$(curl -fsSL --max-time 15 "$release_url")" \
+  hugo_json="$(curl -fsSL --proto '=https' --proto-redir '=https' \
+    --max-time 15 "$release_url")" \
     || error "$(t app.blog.error.github_api)"
   hugo_ver="$(json_tag_name "$hugo_json" --strip-v)"
   [[ -n "$hugo_ver" ]] || error "$(t app.blog.error.hugo_version)"
@@ -7619,7 +7621,7 @@ _blog_install_hugo_package() {
   if ! hugo_deb="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
     error "$(t app.blog.error.hugo_download)"
   fi
-  if ! wget -q --show-progress -O "$hugo_deb" "$deb_url"; then
+  if ! wget --https-only -q --show-progress -O "$hugo_deb" "$deb_url"; then
     if ! rm -f "$hugo_deb"; then
       warn "$(t app.blog.warn.hugo_cleanup_failed "$hugo_deb")"
     fi

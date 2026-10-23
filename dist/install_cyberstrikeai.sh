@@ -830,7 +830,8 @@ github_latest_release_tag_checked() {
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
-  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  curl_args=(-fsSL --proto '=https' --proto-redir '=https' \
+    --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
   [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
@@ -7571,7 +7572,8 @@ install_go_if_needed() {
     aarch64|arm64) go_arch="arm64" ;;
     *) error "$(t app.cyberstrikeai.error.go_arch "$arch")" ;;
   esac
-  latest_json=$(curl -fsSL --max-time 20 "https://go.dev/dl/?mode=json" 2>/dev/null) \
+  latest_json=$(curl -fsSL --proto '=https' --proto-redir '=https' \
+    --max-time 20 "https://go.dev/dl/?mode=json" 2>/dev/null) \
     || error "$(t app.cyberstrikeai.error.go_query)"
   version=$(printf '%s\n' "$latest_json" | grep -oE '"version"[[:space:]]*:[[:space:]]*"go[0-9]+\.[0-9]+(\.[0-9]+)?"' | head -1 | sed 's/.*"\(go[^"]*\)".*/\1/' || true)
   [[ -n "$version" ]] || error "$(t app.cyberstrikeai.error.go_parse)"
@@ -7582,7 +7584,8 @@ install_go_if_needed() {
     error "$(t app.cyberstrikeai.error.go_query)"
   fi
   info "$(t app.cyberstrikeai.info.download "$url")"
-  if ! curl -fL --retry 3 --connect-timeout 15 -o "$tmp" "$url"; then
+  if ! curl -fL --proto '=https' --proto-redir '=https' \
+    --retry 3 --connect-timeout 15 -o "$tmp" "$url"; then
     rm -f "$tmp"
     error "$(t app.cyberstrikeai.error.go_query)"
   fi

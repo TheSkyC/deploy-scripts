@@ -830,7 +830,8 @@ github_latest_release_tag_checked() {
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
-  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  curl_args=(-fsSL --proto '=https' --proto-redir '=https' \
+    --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
   [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
@@ -8163,7 +8164,8 @@ _install_postgres() {
     local pg_keyring
     pg_keyring="${pg_keyring_dir}/apt.postgresql.org.asc"
     if ! atomic_write_command_file "$pg_keyring" 644 root:root \
-        curl -fsSL --max-time 30 "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
+        curl -fsSL --proto '=https' --proto-redir '=https' \
+          --max-time 30 "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
       error "$(t app.sub2api.error.postgres_key)"
     fi
     local codename
@@ -8239,7 +8241,8 @@ _ensure_redis_running() {
   return 1
 }
 _sub2api_redis_keyring_content() {
-  curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
+  curl -fsSL --proto '=https' --proto-redir '=https' \
+    --max-time 30 "https://packages.redis.io/gpg" \
     | gpg --batch --yes --dearmor -o -
 }
 

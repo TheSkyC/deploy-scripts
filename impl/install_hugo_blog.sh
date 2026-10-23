@@ -132,7 +132,8 @@ _blog_install_hugo_package() {
     release_url="https://api.github.com/repos/gohugoio/hugo/releases/latest"
   fi
   info "$(t app.blog.query_hugo)"
-  hugo_json="$(curl -fsSL --max-time 15 "$release_url")" \
+  hugo_json="$(curl -fsSL --proto '=https' --proto-redir '=https' \
+    --max-time 15 "$release_url")" \
     || error "$(t app.blog.error.github_api)"
   hugo_ver="$(json_tag_name "$hugo_json" --strip-v)"
   [[ -n "$hugo_ver" ]] || error "$(t app.blog.error.hugo_version)"
@@ -166,7 +167,7 @@ _blog_install_hugo_package() {
   if ! hugo_deb="$(mktemp /tmp/hugo.XXXXXX.deb)"; then
     error "$(t app.blog.error.hugo_download)"
   fi
-  if ! wget -q --show-progress -O "$hugo_deb" "$deb_url"; then
+  if ! wget --https-only -q --show-progress -O "$hugo_deb" "$deb_url"; then
     if ! rm -f "$hugo_deb"; then
       warn "$(t app.blog.warn.hugo_cleanup_failed "$hugo_deb")"
     fi

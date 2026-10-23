@@ -248,7 +248,7 @@ check_blog_hugo_install_failures_are_actionable() {
   awk '
       /if ! hugo_deb="\$\(mktemp \/tmp\/hugo\.XXXXXX\.deb\)"; then/ { saw_tmp_if=1 }
       /error "\$\(t app\.blog\.error\.hugo_download\)"/ { saw_tmp_error=1 }
-      /if ! wget -q --show-progress -O "\$hugo_deb" "\$deb_url"; then/ { in_download_fail=1; saw_download_cleanup_if=0; saw_download_warn=0; next }
+      /if ! wget --https-only -q --show-progress -O "\$hugo_deb" "\$deb_url"; then/ { in_download_fail=1; saw_download_cleanup_if=0; saw_download_warn=0; next }
       in_download_fail && /if ! rm -f "\$hugo_deb"; then/ { saw_download_cleanup_if=1 }
       in_download_fail && /warn "\$\(t app\.blog\.warn\.hugo_cleanup_failed "\$hugo_deb"\)"/ { saw_download_warn=1 }
       in_download_fail && /error "\$\(t app\.blog\.error\.hugo_download\)"/ {

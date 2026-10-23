@@ -330,7 +330,8 @@ cpa_stack_cpamp_asset_name() {
 cpa_stack_release_json() {
   local repository="$1" tag="${2:-}" endpoint="releases/latest"
   [[ -n "$tag" ]] && endpoint="releases/tags/${tag}"
-  curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 \
+  curl -fsSL --proto '=https' --proto-redir '=https' \
+    --retry 2 --connect-timeout 10 --max-time 30 \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: deploy-scripts-cpa-stack' \
     "https://api.github.com/repos/${repository}/${endpoint}"

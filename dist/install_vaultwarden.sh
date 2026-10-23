@@ -830,7 +830,8 @@ github_latest_release_tag_checked() {
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
-  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  curl_args=(-fsSL --proto '=https' --proto-redir '=https' \
+    --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
   [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
@@ -8037,7 +8038,7 @@ get_installed_version() {
 }
 get_latest_webvault_ver() {
   local json tag
-  json=$(curl -fsSL --max-time 15 \
+  json=$(curl -fsSL --proto '=https' --proto-redir '=https' --max-time 15 \
     "https://api.github.com/repos/dani-garcia/bw_web_builds/releases/latest" 2>/dev/null) || true
   [[ -z "$json" ]] && { echo ""; return; }
   tag="$(json_tag_name "$json" --strip-v)"
@@ -8108,7 +8109,8 @@ extract_binary() {
   local workdir="$1"
   local platform="$2"
   info "$(t app.vaultwarden.info.download_extract_tool)"
-  curl -fsSL --max-time 30 -o "${workdir}/docker-image-extract" "$EXTRACT_TOOL_URL" \
+  curl -fsSL --proto '=https' --proto-redir '=https' --max-time 30 \
+    -o "${workdir}/docker-image-extract" "$EXTRACT_TOOL_URL" \
     || error "$(t app.vaultwarden.error.extract_tool_download)"
   [[ -s "${workdir}/docker-image-extract" ]] || error "$(t app.vaultwarden.error.extract_tool_empty)"
   head -1 "${workdir}/docker-image-extract" | grep -q '^#!' \
@@ -8406,7 +8408,7 @@ do_install() {
     info "$(t app.vaultwarden.info.web_vault_version "$_wv_ver")"
     local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_wv_ver}/bw_web_v${_wv_ver}.tar.gz"
     info "$(t app.vaultwarden.info.download "$WV_URL")"
-    wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
+    wget --https-only -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL" \
       || error "$(t app.vaultwarden.error.web_vault_download)"
     _verify_web_vault_archive "${WORK_DIR}/web-vault.tar.gz"
     local _wv_extract_root="${WORK_DIR}/web-vault-extract"
@@ -9066,7 +9068,7 @@ do_update() {
     _fetched_wv_ver=$(get_latest_webvault_ver)
     if [[ -n "$_fetched_wv_ver" ]]; then
       local WV_URL="https://github.com/dani-garcia/bw_web_builds/releases/download/v${_fetched_wv_ver}/bw_web_v${_fetched_wv_ver}.tar.gz"
-      if wget -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
+      if wget --https-only -q --show-progress -O "${WORK_DIR}/web-vault.tar.gz" "$WV_URL"; then
         if _verify_web_vault_archive "${WORK_DIR}/web-vault.tar.gz" nonfatal; then
           local _wv_extract_root="${WORK_DIR}/web-vault-extract"
           if ! mkdir -p "$_wv_extract_root"; then

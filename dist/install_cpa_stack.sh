@@ -830,7 +830,8 @@ github_latest_release_tag_checked() {
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
-  curl_args=(-fsSL --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
+  curl_args=(-fsSL --proto '=https' --proto-redir '=https' \
+    --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
   [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
   tag="$(json_tag_name "$json")"
@@ -7345,7 +7346,8 @@ cpa_stack_cpamp_asset_name() {
 cpa_stack_release_json() {
   local repository="$1" tag="${2:-}" endpoint="releases/latest"
   [[ -n "$tag" ]] && endpoint="releases/tags/${tag}"
-  curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 \
+  curl -fsSL --proto '=https' --proto-redir '=https' \
+    --retry 2 --connect-timeout 10 --max-time 30 \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: deploy-scripts-cpa-stack' \
     "https://api.github.com/repos/${repository}/${endpoint}"

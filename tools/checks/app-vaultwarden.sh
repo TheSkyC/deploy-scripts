@@ -1192,7 +1192,7 @@ check_vaultwarden_webvault_archives_are_validated() {
         in_helper && /local mode="\$\{2:-fatal\}"/ { saw_nonfatal=1 }
         in_helper && /if ! rm -f "\$archive"; then/ { saw_cleanup_if=1 }
         in_helper && /warn "\$\(t app\.vaultwarden\.warn\.web_vault_archive_cleanup_failed "\$archive"\)"/ { saw_cleanup_warn=1 }
-        /wget -q --show-progress -O "\$\{WORK_DIR\}\/web-vault\.tar\.gz" "\$WV_URL"/ { saw_download=1; next }
+        /wget --https-only -q --show-progress -O "\$\{WORK_DIR\}\/web-vault\.tar\.gz" "\$WV_URL"/ { saw_download=1; next }
         saw_download && /^[[:space:]]*_verify_web_vault_archive "\$\{WORK_DIR\}\/web-vault\.tar\.gz"$/ { saw_install_verify=1; saw_download=0 }
         saw_download && /^[[:space:]]*if _verify_web_vault_archive "\$\{WORK_DIR\}\/web-vault\.tar\.gz" nonfatal; then/ { saw_update_verify=1; saw_download=0 }
         END {

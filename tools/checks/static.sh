@@ -49,6 +49,41 @@ check_shellcheck() {
   return "$status"
 }
 
+# Remote application inputs must not be fetched over plain HTTP, including via
+# an HTTPS-to-HTTP redirect. Local service probes use app_http_status_code and
+# are deliberately excluded from this scan.
+check_remote_fetches_are_https_only() {
+  local file line
+  for file in impl/install_cpa_stack.sh impl/install_vaultwarden.sh \
+      impl/install_hugo_blog.sh impl/install_cyberstrikeai.sh \
+      impl/install_sub2api.sh; do
+    while IFS= read -r line; do
+      case "$line" in
+        *"--proto '=https'"*"--proto-redir '=https'"*) ;;
+        *)
+          printf '%s has an unpinned remote curl fetch: %s\n' "$file" "$line" >&2
+          return 1
+          ;;
+      esac
+    done < <(grep -E 'curl .*-(fsSL|fL)' "$file" || true)
+    while IFS= read -r line; do
+      case "$line" in
+        *--https-only*) ;;
+        *)
+          printf '%s has an unpinned remote wget fetch: %s\n' "$file" "$line" >&2
+          return 1
+          ;;
+      esac
+    done < <(grep -E 'wget .* -O ' "$file" || true)
+  done
+
+  grep -Fq -- "curl_args=(-fsSL --proto '=https' --proto-redir '=https'" \
+    lib/network.sh || {
+    echo "GitHub release metadata lookups must pin curl to HTTPS." >&2
+    return 1
+  }
+}
+
 check_release_syntax() {
   local file
   while IFS= read -r file; do

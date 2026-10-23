@@ -400,7 +400,8 @@ _install_postgres() {
     local pg_keyring
     pg_keyring="${pg_keyring_dir}/apt.postgresql.org.asc"
     if ! atomic_write_command_file "$pg_keyring" 644 root:root \
-        curl -fsSL --max-time 30 "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
+        curl -fsSL --proto '=https' --proto-redir '=https' \
+          --max-time 30 "https://www.postgresql.org/media/keys/ACCC4CF8.asc"; then
       error "$(t app.sub2api.error.postgres_key)"
     fi
     local codename
@@ -476,7 +477,8 @@ _ensure_redis_running() {
   return 1
 }
 _sub2api_redis_keyring_content() {
-  curl -fsSL --max-time 30 "https://packages.redis.io/gpg" \
+  curl -fsSL --proto '=https' --proto-redir '=https' \
+    --max-time 30 "https://packages.redis.io/gpg" \
     | gpg --batch --yes --dearmor -o -
 }
 
