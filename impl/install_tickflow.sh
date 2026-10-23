@@ -748,32 +748,26 @@ do_restore() {
   if systemctl start "$TICKFLOW_SERVICE_NAME"; then
     wait_for_service "$TICKFLOW_SERVICE_NAME" 20 || true
   fi
-  if ! systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME"; then
+  if ! systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" || ! _health_check; then
     warn "$(t backup.restore.start_failed_rollback)"
-    if systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then
-      for target in data tiers.yaml .env; do
-        rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"
-      done
-      local rolled_back=false
-      for target in data tiers.yaml .env; do
-        if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
-          mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" && rolled_back=true
-        fi
-      done
-      if [[ "$rolled_back" == "true" ]]; then
-        success "$(t backup.restore.rollback_done)"
-      else
-        warn "$(t backup.restore.rollback_failed "$aside_dir")"
+    systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null || true
+    local rollback_ok=true
+    for target in data tiers.yaml .env; do
+      rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}" || rollback_ok=false
+      if [[ -e "${aside_dir}/${target}.restore.${stamp}" || -L "${aside_dir}/${target}.restore.${stamp}" ]]; then
+        mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" \
+          || rollback_ok=false
       fi
+    done
+    if [[ "$rollback_ok" == "true" ]]; then
+      rm -rf "$aside_dir"
+      success "$(t backup.restore.rollback_done)"
     else
       warn "$(t backup.restore.rollback_failed "$aside_dir")"
     fi
-    if systemctl start "$TICKFLOW_SERVICE_NAME" \
-      && systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME"; then
-      success "$(t backup.restore.restored "$(basename "$archive")")"
-      return 0
-    fi
-    error "$(t binary_app.error.update_failed "$(systemctl is-active "$TICKFLOW_SERVICE_NAME" 2>/dev/null || echo unknown)")"
+    systemctl start "$TICKFLOW_SERVICE_NAME" 2>/dev/null || true
+    error "$(t app.tickflow.error.restore_failed)"
   fi
+  rm -rf "$aside_dir"
   success "$(t backup.restore.restored "$(basename "$archive")")"
 }

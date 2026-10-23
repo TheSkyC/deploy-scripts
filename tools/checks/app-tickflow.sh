@@ -169,6 +169,25 @@ check_tickflow_restore_requires_all_members() {
   fi
 }
 
+# A failed post-restore health check must roll back from the staged copies before
+# they are deleted. Keep this ordering assertion close to the member validation
+# so future restore edits cannot silently reintroduce the data-loss path.
+check_tickflow_restore_keeps_rollback_until_healthy() {
+  awk '
+      /do_restore\(\)/ { in_restore=1; next }
+      in_restore && /_health_check/ { health_line=NR }
+      in_restore && /rm -rf "\$aside_dir"/ { cleanup_line=NR }
+      in_restore && /app\.tickflow\.error\.restore_failed/ { failure_line=NR }
+      in_restore && /^}/ {
+        if (!(health_line && cleanup_line && failure_line && health_line < cleanup_line)) {
+          printf "%s TickFlow restore must verify health before deleting the rollback snapshot\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_restore=0
+      }
+    ' impl/install_tickflow.sh
+}
+
 check_tickflow_paths_are_guarded() {
   awk '
       /_clone_or_update_repo\(\)/ { in_clone=1; saw_clone_guard=0; saw_non_repo_error=0; next }

@@ -632,6 +632,7 @@ main() {
       run_isolated_check check_tickflow_manual_backup_is_explicit
       run_isolated_check check_tickflow_paths_are_guarded
       run_isolated_check check_tickflow_restore_requires_all_members
+      run_isolated_check check_tickflow_restore_keeps_rollback_until_healthy
       run_isolated_check check_tickflow_preflight_defers_docker_runtime_checks
       run_isolated_check check_tickflow_service_start_failures_show_diagnostics
       run_isolated_check check_tickflow_status_is_structured
