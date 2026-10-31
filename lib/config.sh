@@ -19,6 +19,9 @@ trim_conf_token() {
 config_file_is_safe() {
   local conf_file="$1"
   [[ -f "$conf_file" ]] || return 0
+  # stat follows symlinks, so a link could be retargeted between validation
+  # and load. Refuse links outright, matching the version-cache trust gate.
+  [[ ! -L "$conf_file" ]] || error "$(t error.config_symlink "$conf_file")"
 
   if command -v stat >/dev/null 2>&1; then
     local owner mode
