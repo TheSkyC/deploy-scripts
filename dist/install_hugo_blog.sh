@@ -1950,7 +1950,10 @@ backup_restore_directory() {
   fi
   if ! extract_dir="$(mktemp -d "${target_parent}/.${target_base}.restore.XXXXXX")"; then
     if [[ "$had_target" == true ]]; then
-      mv "${aside_dir}/${target_base}" "$target_dir" 2>/dev/null || true
+      if ! mv "${aside_dir}/${target_base}" "$target_dir" 2>/dev/null; then
+        warn "$(t backup.restore.rollback_failed "$aside_dir")"
+        return 1
+      fi
     fi
     rm -rf "$aside_dir"
     return 1
@@ -1968,9 +1971,15 @@ backup_restore_directory() {
   fi
   [[ -z "$extract_dir" ]] || rm -rf "$extract_dir"
   if [[ "$restored" != true ]]; then
-    rm -rf "$target_dir"
+    if ! rm -rf "$target_dir"; then
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+      return 1
+    fi
     if [[ "$had_target" == true ]]; then
-      mv "${aside_dir}/${target_base}" "$target_dir" 2>/dev/null || true
+      if ! mv "${aside_dir}/${target_base}" "$target_dir" 2>/dev/null; then
+        warn "$(t backup.restore.rollback_failed "$aside_dir")"
+        return 1
+      fi
     fi
     rm -rf "$aside_dir"
     return 1
@@ -2006,11 +2015,15 @@ backup_restore_data_dir() {
   if [[ -n "$service_name" ]]; then
     systemctl stop "$service_name" || error "$(t backup.restore.stop_failed "$service_name")"
   fi
-  local data_parent data_base staged_aside restored=false
+  local data_parent data_base aside_dir staged_aside restored=false
   data_parent="$(dirname "$data_dir")"
   data_base="$(basename "$data_dir")"
-  staged_aside="${data_dir}.restore.$(date +%Y%m%d%H%M%S)"
+  # A timestamp-only aside path is not collision safe: a leftover directory
+  # from a previous failed restore would make mv move the data *inside* it.
+  aside_dir="$(mktemp -d "${data_parent}/.${data_base}.restore-aside.XXXXXX")" || return 1
+  staged_aside="${aside_dir}/${data_base}"
   if ! mv "$data_dir" "$staged_aside"; then
+    rm -rf "$aside_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
       error "$(t backup.restore.invalid_archive "$archive")"
@@ -2018,7 +2031,11 @@ backup_restore_data_dir() {
     return 1
   fi
   if ! extract_dir=$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX"); then
-    mv "$staged_aside" "$data_dir"
+    if ! mv "$staged_aside" "$data_dir"; then
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+      return 1
+    fi
+    rm -rf "$aside_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
       error "$(t backup.restore.invalid_archive "$archive")"
@@ -2046,8 +2063,15 @@ backup_restore_data_dir() {
     restored=false
   fi
   if [[ "$restored" != "true" ]]; then
-    rm -rf "$data_dir"
-    mv "$staged_aside" "$data_dir"
+    if ! rm -rf "$data_dir"; then
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+      return 1
+    fi
+    if ! mv "$staged_aside" "$data_dir"; then
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+      return 1
+    fi
+    rm -rf "$aside_dir"
     if [[ -n "$service_name" ]]; then
       systemctl start "$service_name" || true
       error "$(t backup.restore.invalid_archive "$archive")"
@@ -2055,7 +2079,7 @@ backup_restore_data_dir() {
     return 1
   fi
   if [[ -z "$service_name" ]]; then
-    rm -rf "$staged_aside"
+    rm -rf "$aside_dir"
     success "$(t backup.restore.restored "$(basename "$archive")")"
     return 0
   fi
@@ -2065,17 +2089,21 @@ backup_restore_data_dir() {
   if ! systemctl is-active --quiet "$service_name"; then
     warn "$(t backup.restore.start_failed_rollback)"
     systemctl stop "$service_name" 2>/dev/null || true
-    rm -rf "$data_dir"
+    if ! rm -rf "$data_dir"; then
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+      error "$(t binary_app.error.update_failed "$(systemctl is-active "$service_name" 2>/dev/null || echo unknown)")"
+    fi
     if mv "$staged_aside" "$data_dir"; then
       success "$(t backup.restore.rollback_done)"
+      rm -rf "$aside_dir"
     else
-      warn "$(t backup.restore.rollback_failed "$staged_aside")"
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
     fi
     systemctl start "$service_name" \
       || error "$(t binary_app.error.install_start_failed "$service_name" "$service_name")"
     error "$(t binary_app.error.update_failed "$(systemctl is-active "$service_name" 2>/dev/null || echo unknown)")"
   fi
-  rm -rf "$staged_aside"
+  rm -rf "$aside_dir"
   success "$(t backup.restore.restored "$(basename "$archive")")"
 }
 
@@ -8725,7 +8753,7 @@ _blog_archive_paths_are_safe() {
 
 _blog_restore_dir_from_backup() {
   local source_dir="$1" target_name="$2" target_path="$3"
-  local target_parent target_base restore_tmp restore_bak
+  local target_parent target_base restore_tmp restore_bak_dir restore_bak
   require_safe_path "$target_name" "$target_path"
   target_parent="$(dirname "$target_path")"
   target_base="$(basename "$target_path")"
@@ -8735,25 +8763,35 @@ _blog_restore_dir_from_backup() {
   if ! restore_tmp=$(mktemp -d "${target_parent}/.${target_base}.restore.XXXXXX"); then
     error "$(t app.blog.restore.error_target "$target_path")"
   fi
-  restore_bak="${target_path}.restore.$(date +%Y%m%d%H%M%S)"
-  if ! cp -a "${source_dir}/." "$restore_tmp/"; then
+  # A timestamp-only backup path could already exist and make mv nest the
+  # original tree inside it, deleting the real data on success.
+  if ! restore_bak_dir=$(mktemp -d "${target_parent}/.${target_base}.restore-aside.XXXXXX"); then
     rm -rf "$restore_tmp"
+    error "$(t app.blog.restore.error_target "$target_path")"
+  fi
+  restore_bak="${restore_bak_dir}/${target_base}"
+  if ! cp -a "${source_dir}/." "$restore_tmp/"; then
+    rm -rf "$restore_tmp" "$restore_bak_dir"
     error "$(t app.blog.restore.error_target "$target_path")"
   fi
   if [[ -e "$target_path" || -L "$target_path" ]]; then
     if ! mv "$target_path" "$restore_bak"; then
-      rm -rf "$restore_tmp"
+      rm -rf "$restore_tmp" "$restore_bak_dir"
       error "$(t app.blog.restore.error_target "$target_path")"
     fi
   fi
   if mv "$restore_tmp" "$target_path"; then
-    rm -rf "$restore_bak"
+    rm -rf "$restore_bak_dir"
     success "$(t app.blog.restore.restored_dir "$target_path")"
   else
     rm -rf "$restore_tmp"
     if [[ -e "$restore_bak" || -L "$restore_bak" ]]; then
-      mv "$restore_bak" "$target_path" 2>/dev/null || true
+      if ! mv "$restore_bak" "$target_path" 2>/dev/null; then
+        warn "$(t backup.restore.rollback_failed "$restore_bak_dir")"
+        error "$(t app.blog.restore.error_target "$target_path")"
+      fi
     fi
+    rm -rf "$restore_bak_dir"
     error "$(t app.blog.restore.error_target "$target_path")"
   fi
 }

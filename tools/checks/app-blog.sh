@@ -471,6 +471,33 @@ check_blog_install_summary_matches_local_health() {
     ' impl/install_hugo_blog.sh
 }
 
+# Restore must never pair a timestamp-only aside path with an unchecked mv:
+# if the path already exists, mv nests the original tree inside it and a later
+# cleanup deletes the real data. The aside directory must be collision safe and
+# kept for manual recovery when the rollback move fails.
+check_blog_restore_aside_is_collision_safe() {
+  grep -Fq 'restore_bak_dir=$(mktemp -d "${target_parent}/.${target_base}.restore-aside.XXXXXX")' \
+    impl/install_hugo_blog.sh || {
+    echo "Blog restore must create its rollback directory with mktemp." >&2
+    return 1
+  }
+  grep -Fq 'warn "$(t backup.restore.rollback_failed "$restore_bak_dir")"' \
+    impl/install_hugo_blog.sh || {
+    echo "Blog restore must warn and keep the aside directory when rollback fails." >&2
+    return 1
+  }
+  if grep -Fq 'restore_bak="${target_path}.restore.$(date +%Y%m%d%H%M%S)"' \
+      impl/install_hugo_blog.sh; then
+    echo "Blog restore must not use a timestamp-only rollback path." >&2
+    return 1
+  fi
+  if grep -Fq 'mv "$restore_bak" "$target_path" 2>/dev/null || true' \
+      impl/install_hugo_blog.sh; then
+    echo "Blog restore rollback failures must not be ignored." >&2
+    return 1
+  fi
+}
+
 check_blog_static_deploy_swaps_tree() {
   if grep -R -n '^[[:space:]]*cp -a "\${PUBLIC_DIR}/\." "\$NGINX_ROOT/"' impl/install_hugo_blog.sh 2>/dev/null; then
     echo "Blog static deployment must not copy directly into the live Nginx root." >&2

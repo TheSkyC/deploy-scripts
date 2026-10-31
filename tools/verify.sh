@@ -522,6 +522,7 @@ main() {
       run_isolated_check check_blog_publish_guidance_uses_staging_output
       run_isolated_check check_blog_publish_helper_is_atomic
       run_isolated_check check_blog_restore_action
+      run_isolated_check check_blog_restore_aside_is_collision_safe
       run_isolated_check check_blog_site_files_are_atomic
       run_isolated_check check_blog_site_setup_failures_are_explicit
       run_isolated_check check_blog_static_deploy_failures_are_actionable
@@ -683,6 +684,7 @@ main() {
       run_isolated_check check_tickflow_paths_are_guarded
       run_isolated_check check_tickflow_restore_requires_all_members
       run_isolated_check check_tickflow_restore_keeps_rollback_until_healthy
+      run_isolated_check check_tickflow_restore_preserves_failed_rollback
       run_isolated_check check_tickflow_preflight_defers_docker_runtime_checks
       run_isolated_check check_tickflow_service_start_failures_show_diagnostics
       run_isolated_check check_tickflow_status_is_structured

@@ -1248,14 +1248,19 @@ do_restore() {
   done
   tar -xzf "$archive" -C / >&2 || extract_ok=false
   if [[ "$extract_ok" != "true" ]]; then
+    local restore_ok=true
     for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
         var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
       if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
-        rm -rf "/${target:?}"
-        mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" 2>/dev/null || true
+        rm -rf "/${target:?}" || restore_ok=false
+        mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" || restore_ok=false
       fi
     done
-    rm -rf "$aside_dir"
+    if [[ "$restore_ok" == true ]]; then
+      rm -rf "$aside_dir"
+    else
+      warn "$(t backup.restore.rollback_failed "$aside_dir")"
+    fi
     systemctl start "$CPAMP_SERVICE_NAME" || true
     error "$(t backup.restore.invalid_archive "$archive")"
   fi

@@ -318,4 +318,18 @@ check_cpa_stack_update_and_restore_are_recoverable() {
         in_fn=0
       }
     ' impl/install_cpa_stack.sh
+  grep -Fq 'local restore_ok=true' impl/install_cpa_stack.sh || {
+    echo "CPA Stack restore must track whether the extract-failure rollback completed." >&2
+    return 1
+  }
+  grep -Fq 'warn "$(t backup.restore.rollback_failed "$aside_dir")"' \
+    impl/install_cpa_stack.sh || {
+    echo "CPA Stack restore must warn and keep the aside directory when rollback fails." >&2
+    return 1
+  }
+  if grep -Fq 'mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" 2>/dev/null || true' \
+      impl/install_cpa_stack.sh; then
+    echo "CPA Stack restore rollback failures must not be ignored." >&2
+    return 1
+  fi
 }

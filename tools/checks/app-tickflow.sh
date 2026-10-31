@@ -188,6 +188,26 @@ check_tickflow_restore_keeps_rollback_until_healthy() {
     ' impl/install_tickflow.sh
 }
 
+# Extract failures must restore every staged target before deleting the aside
+# directory. A failed mv with || true followed by unconditional cleanup loses
+# the operator's only copy of the previous data.
+check_tickflow_restore_preserves_failed_rollback() {
+  grep -Fq 'local restore_ok=true' impl/install_tickflow.sh || {
+    echo "TickFlow restore must track whether the extract-failure rollback completed." >&2
+    return 1
+  }
+  grep -Fq 'warn "$(t backup.restore.rollback_failed "$aside_dir")"' \
+    impl/install_tickflow.sh || {
+    echo "TickFlow restore must warn and keep the aside directory when rollback fails." >&2
+    return 1
+  }
+  if grep -Fq 'mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" 2>/dev/null || true' \
+      impl/install_tickflow.sh; then
+    echo "TickFlow restore rollback failures must not be ignored." >&2
+    return 1
+  fi
+}
+
 check_tickflow_paths_are_guarded() {
   awk '
       /_clone_or_update_repo\(\)/ { in_clone=1; saw_clone_guard=0; saw_non_repo_error=0; next }

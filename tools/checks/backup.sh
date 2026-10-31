@@ -2150,6 +2150,25 @@ check_backup_restore_directory_lifecycle() {
     fi
     [[ "$(cat "$tmp/config/settings.yml")" == restored ]]
     [[ -z "$(find "$tmp" -maxdepth 2 -name ".config.restore*" -print -quit)" ]]
+
+    # A failed rollback move must keep the aside copy for manual recovery.
+    rm -f "$tmp/backups/config.tar.gz" "$tmp/backups/config.tar.gz.sha256"
+    mkdir -p "$tmp/stage2/config"
+    printf newer > "$tmp/stage2/config/settings.yml"
+    tar -czf "$tmp/backups/config.tar.gz" -C "$tmp/stage2" config
+    backup_write_sha256 "$tmp/backups/config.tar.gz" >/dev/null
+    printf current > "$tmp/config/settings.yml"
+    mv() {
+      if [[ "$2" == "$tmp/config" ]]; then return 1; fi
+      command mv "$@"
+    }
+    if backup_restore_directory "$tmp/config" "$tmp/backups/config.tar.gz" >/dev/null 2>&1; then
+      exit 41
+    fi
+    unset -f mv
+    aside="$(find "$tmp" -maxdepth 1 -type d -name ".config.restore-aside.*" -print -quit)"
+    [[ -n "$aside" ]] || exit 42
+    [[ "$(cat "$aside/config/settings.yml")" == current ]] || exit 43
     echo ok
   ')"
   [[ "$output" == ok ]]
@@ -2201,6 +2220,9 @@ STUB
     # Case 1: clean restore.
     mkdir -p "$DATA_DIR"
     printf original > "$DATA_DIR/file.txt"
+    decoy="${DATA_DIR}.restore.$(date +%Y%m%d%H%M%S)"
+    mkdir -p "$decoy"
+    printf sentinel > "$decoy/sentinel"
     mkdir -p "$tmp/stage/data"
     printf newdata > "$tmp/stage/data/newfile.txt"
     tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" -C "$tmp/stage" data
@@ -2210,6 +2232,8 @@ STUB
       "$tmp/backups/app_manual_20260101_000000.tar.gz" appuser:appgroup >/dev/null 2>&1
     grep -q newdata "$DATA_DIR/newfile.txt" || exit 11
     grep -Fxq appuser:appgroup "$CHOWN_LOG" || exit 12
+    [[ -f "$decoy/sentinel" ]] || exit 13
+    rm -rf "$decoy"
 
     # Case 2: corruption refused before any change.
     printf X | dd of="$tmp/backups/app_manual_20260101_000000.tar.gz" bs=1 seek=0 conv=notrunc status=none
@@ -2249,6 +2273,25 @@ STUB
       "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null 2>&1
     grep -q caller-managed "$DATA_DIR/f.txt" || exit 51
     [[ ! -s "$SYSTEMCTL_LOG" ]] || exit 52
+
+    # Case 6: a failed rollback move must keep the previous data in the aside
+    # directory instead of deleting it.
+    rm -f "$tmp/backups"/*.tar.gz "$tmp/backups"/*.sha256
+    mkdir -p "$tmp/keep-stage/data"
+    printf keepme > "$tmp/keep-stage/data/keep.txt"
+    tar -czf "$tmp/backups/app_manual_20260101_000000.tar.gz" -C "$tmp/keep-stage" data
+    backup_write_sha256 "$tmp/backups/app_manual_20260101_000000.tar.gz" >/dev/null
+    echo never_start > "$tmp/mode"
+    mv() {
+      if [[ "$1" == *"/.data.restore-aside."*"/data" && "$2" == "$DATA_DIR" ]]; then return 1; fi
+      command mv "$@"
+    }
+    if ( backup_restore_data_dir "$DATA_DIR" testsvc \
+        "$tmp/backups/app_manual_20260101_000000.tar.gz" ) >/dev/null 2>&1; then exit 61; fi
+    unset -f mv
+    aside="$(find "$tmp" -maxdepth 1 -type d -name ".data.restore-aside.*" -print -quit)"
+    [[ -n "$aside" ]] || exit 62
+    grep -rq caller-managed "$aside" || exit 63
     echo ok
   ')"
   [[ "$output" == ok ]]
