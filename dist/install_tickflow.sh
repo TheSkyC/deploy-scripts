@@ -7972,7 +7972,6 @@ do_restore() {
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
   chown -R root:root "$TICKFLOW_INSTALL_DIR/data" 2>/dev/null || true
-  rm -rf "$aside_dir"
   if systemctl start "$TICKFLOW_SERVICE_NAME"; then
     wait_for_service "$TICKFLOW_SERVICE_NAME" 20 || true
   fi

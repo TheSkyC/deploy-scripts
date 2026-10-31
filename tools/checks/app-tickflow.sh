@@ -170,17 +170,21 @@ check_tickflow_restore_requires_all_members() {
 }
 
 # A failed post-restore health check must roll back from the staged copies before
-# they are deleted. Keep this ordering assertion close to the member validation
-# so future restore edits cannot silently reintroduce the data-loss path.
+# they are deleted. Only top-level cleanup counts here: the failure branches also
+# clean their own staging directories before exiting, but the main success path
+# must retain the snapshot until the service passes its health probe.
 check_tickflow_restore_keeps_rollback_until_healthy() {
   awk '
       /do_restore\(\)/ { in_restore=1; next }
       in_restore && /_health_check/ { health_line=NR }
-      in_restore && /rm -rf "\$aside_dir"/ { cleanup_line=NR }
+      in_restore && /^  rm -rf "\$aside_dir"/ {
+        cleanup_line=NR
+        if (!health_line) premature_cleanup=1
+      }
       in_restore && /app\.tickflow\.error\.restore_failed/ { failure_line=NR }
       in_restore && /^}/ {
-        if (!(health_line && cleanup_line && failure_line && health_line < cleanup_line)) {
-          printf "%s TickFlow restore must verify health before deleting the rollback snapshot\n", FILENAME > "/dev/stderr"
+        if (!(health_line && cleanup_line && failure_line && health_line < cleanup_line && !premature_cleanup)) {
+          printf "%s TickFlow restore must keep the rollback snapshot until after the post-restore health probe\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_restore=0
