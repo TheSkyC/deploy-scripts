@@ -6,6 +6,34 @@ BASH_BIN="${BASH_BIN:-bash}"
 
 cd "$ROOT_DIR"
 
+# Localization-independent harness: most check modules assert English output
+# from bash -c snippets that do not set DEPLOY_LANG themselves. Default the
+# harness language to English so a non-English desktop locale cannot make
+# those assertions fail, while checks that exercise translations keep passing
+# DEPLOY_LANG explicitly (an assignment overrides this export).
+export DEPLOY_LANG="${DEPLOY_LANG:-en}"
+
+# Check modules and the self-update smoke check validate JSON payloads with a
+# Python interpreter. Linux distributions commonly ship only python3, while
+# the suite historically calls the unversioned `python` command, so resolve
+# the interpreter once here and expose it as `python` on PATH when needed.
+PYTHON_SHIM_DIR=""
+python_shim_cleanup() {
+  [[ -n "$PYTHON_SHIM_DIR" ]] && rm -rf -- "$PYTHON_SHIM_DIR"
+  return 0
+}
+if ! command -v python >/dev/null 2>&1; then
+  resolved_python="$(command -v python3 || true)"
+  if [[ -z "$resolved_python" ]]; then
+    echo "verify: python3 or python is required to run the verification suite" >&2
+    exit 1
+  fi
+  PYTHON_SHIM_DIR="$(mktemp -d "${TMPDIR:-/tmp}/deploy-scripts-verify-python.XXXXXX")"
+  ln -s "$resolved_python" "$PYTHON_SHIM_DIR/python"
+  export PATH="${PYTHON_SHIM_DIR}:${PATH}"
+  trap 'python_shim_cleanup' EXIT
+fi
+
 # Check definitions are split into per-area modules under tools/checks/;
 # each module defines only check_* functions and is sourced before main().
 source tools/checks/app-blog.sh
@@ -78,7 +106,10 @@ run_checks_parallel() {
   fi
   tmp_dir="$(mktemp -d)"
   # Remove the temp dir on any exit path (including Ctrl-C) so interrupted
-  # runs do not leak per-check logs.
+  # runs do not leak per-check logs. Chain the caller's EXIT trap (for
+  # example the Python PATH shim cleanup) instead of replacing it.
+  local previous_exit_trap
+  previous_exit_trap="$(trap -p EXIT)"
   trap 'rm -rf "$tmp_dir"' EXIT
   while [[ "$i" -lt "${#queue[@]}" ]]; do
     pids=()
@@ -106,7 +137,11 @@ run_checks_parallel() {
     done
   done
   rm -rf "$tmp_dir"
-  trap - EXIT
+  if [[ -n "$previous_exit_trap" ]]; then
+    eval "$previous_exit_trap"
+  else
+    trap - EXIT
+  fi
   return "$status"
 }
 
