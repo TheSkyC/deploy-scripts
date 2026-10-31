@@ -670,6 +670,28 @@ do_verify() {
   app_verify_latest_backup "$backup_dir" 'tickflow-data-*.tar.gz'
 }
 
+# Restore targets moved into the aside directory. remove_targets also deletes
+# newly extracted paths that had no previous copy (extract/health failures);
+# staging failures pass false so untouched targets remain in place.
+_tickflow_restore_aside_targets() {
+  local aside_dir="$1" stamp="$2" remove_targets="$3" target rollback_ok=true
+  for target in data tiers.yaml .env; do
+    if [[ -e "${aside_dir}/${target}.restore.${stamp}" \
+        || -L "${aside_dir}/${target}.restore.${stamp}" ]]; then
+      if ! rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"; then
+        rollback_ok=false
+        continue
+      fi
+      mv "${aside_dir}/${target}.restore.${stamp}" \
+        "${TICKFLOW_INSTALL_DIR}/${target}" || rollback_ok=false
+    elif [[ "$remove_targets" == true ]] \
+        && ! rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}"; then
+      rollback_ok=false
+    fi
+  done
+  [[ "$rollback_ok" == true ]]
+}
+
 do_restore() {
   show_banner
   require_root "restore"
@@ -725,23 +747,24 @@ do_restore() {
     error "$(t backup.restore.invalid_archive "$archive")"
   fi
   for target in data tiers.yaml .env; do
-    if [[ -e "${TICKFLOW_INSTALL_DIR}/${target}" ]]; then
-      mv "${TICKFLOW_INSTALL_DIR}/${target}" "${aside_dir}/${target}.restore.${stamp}" \
-        || { rm -rf "$aside_dir"; systemctl start "$TICKFLOW_SERVICE_NAME" || true; error "$(t backup.restore.invalid_archive "$archive")"; }
+    if [[ -e "${TICKFLOW_INSTALL_DIR}/${target}" \
+        || -L "${TICKFLOW_INSTALL_DIR}/${target}" ]]; then
+      if ! mv "${TICKFLOW_INSTALL_DIR}/${target}" \
+          "${aside_dir}/${target}.restore.${stamp}"; then
+        if _tickflow_restore_aside_targets "$aside_dir" "$stamp" false; then
+          rm -rf "$aside_dir"
+        else
+          warn "$(t backup.restore.rollback_failed "$aside_dir")"
+        fi
+        systemctl start "$TICKFLOW_SERVICE_NAME" || true
+        error "$(t backup.restore.invalid_archive "$archive")"
+      fi
     fi
   done
   local extract_ok=true
   tar -xzf "$archive" -C "$TICKFLOW_INSTALL_DIR" >&2 || extract_ok=false
   if [[ "$extract_ok" != "true" ]]; then
-    local restore_ok=true
-    for target in data tiers.yaml .env; do
-      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
-        rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}" || restore_ok=false
-        mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" \
-          || restore_ok=false
-      fi
-    done
-    if [[ "$restore_ok" == "true" ]]; then
+    if _tickflow_restore_aside_targets "$aside_dir" "$stamp" true; then
       rm -rf "$aside_dir"
     else
       warn "$(t backup.restore.rollback_failed "$aside_dir")"
@@ -758,15 +781,7 @@ do_restore() {
     if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
       warn "$(t app.tickflow.warn.restore_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
     fi
-    local rollback_ok=true
-    for target in data tiers.yaml .env; do
-      rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}" || rollback_ok=false
-      if [[ -e "${aside_dir}/${target}.restore.${stamp}" || -L "${aside_dir}/${target}.restore.${stamp}" ]]; then
-        mv "${aside_dir}/${target}.restore.${stamp}" "${TICKFLOW_INSTALL_DIR}/${target}" \
-          || rollback_ok=false
-      fi
-    done
-    if [[ "$rollback_ok" == "true" ]]; then
+    if _tickflow_restore_aside_targets "$aside_dir" "$stamp" true; then
       rm -rf "$aside_dir"
       success "$(t backup.restore.rollback_done)"
     else
