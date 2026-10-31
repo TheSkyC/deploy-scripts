@@ -53,8 +53,15 @@ github_latest_release_tag_checked() {
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
   curl_args=(-fsSL --proto '=https' --proto-redir '=https' \
     --max-time "$timeout_seconds" -H 'Accept: application/vnd.github+json')
-  [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+  # Keep the token out of /proc/*/cmdline: curl's @file header syntax reads
+  # the secret from a process-substitution fd instead of exposing it in argv.
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    json="$(curl "${curl_args[@]}" \
+      -H @<(printf 'Authorization: Bearer %s' "$GITHUB_TOKEN") \
+      "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+  else
+    json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+  fi
   tag="$(json_tag_name "$json")"
   [[ "${tag:-}" =~ ^v?[0-9] ]] || return 2
   printf '%s\n' "$tag"

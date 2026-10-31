@@ -259,6 +259,15 @@ check_github_release_tag_behavior() {
     curl() { printf "%s\n" '"'"'{"tag_name":"v1.2.3","name":"v1.2.3"}'"'"'; }
     tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
     [[ "$tag" == "v1.2.3" ]] || { echo "expected v1.2.3, got: ${tag}" >&2; exit 1; }
+    GITHUB_TOKEN=supersecret-token
+    seen_args=""
+    curl() { seen_args="$*"; printf "%s\n" '"'"'{"tag_name":"v1.2.3"}'"'"'; }
+    tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
+    [[ "$tag" == "v1.2.3" ]] || { echo "expected token-auth tag v1.2.3, got: ${tag}" >&2; exit 1; }
+    case "$seen_args" in
+      *supersecret-token*) echo "GITHUB_TOKEN leaked into curl argv" >&2; exit 1 ;;
+    esac
+    unset GITHUB_TOKEN
     curl() { printf "%s\n" '"'"'{"tag_name":"not-a-version"}'"'"'; }
     tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
     [[ -z "$tag" ]] || { echo "expected empty tag for non-version, got: ${tag}" >&2; exit 1; }
