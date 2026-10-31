@@ -172,6 +172,27 @@ check_manager_menu_shortcuts() {
   ')"
   [[ "$output" == *"s) 全部应用状态"* && "$output" == *"p) 仅查看异常"* && "$output" == *"u) 检查应用更新"* && "$output" == *"f) 检查中控更新"* ]]
 }
+
+check_no_tty_menu_usage() {
+  local output status script
+  for script in deploy.sh dist/deploy.sh; do
+    set +e
+    output="$("$BASH_BIN" "$script" </dev/null 2>&1)"
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || { echo "$script without a TTY should exit nonzero" >&2; return 1; }
+    [[ "$output" == *"Usage: sudo bash"* ]] || { echo "$script without a TTY should print usage" >&2; return 1; }
+  done
+  for script in install_newapi.sh dist/install_newapi.sh; do
+    set +e
+    output="$("$BASH_BIN" "$script" </dev/null 2>&1)"
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || { echo "$script without a TTY should exit nonzero" >&2; return 1; }
+    [[ "$output" == *"Usage: sudo bash"* ]] || { echo "$script without a TTY should print usage" >&2; return 1; }
+  done
+}
+
 check_manager_list() {
   expect_manager_list_output deploy.sh
   expect_manager_list_output deploy.sh " list "

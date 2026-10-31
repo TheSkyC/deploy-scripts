@@ -9045,7 +9045,12 @@ show_menu() {
   echo
   prompt "$(t common.selection_prompt)"
   local choice
-  read -r choice
+  if ! read -r choice; then
+    # stdin reached EOF (scripted/non-TTY invocation); show usage rather than
+    # failing inside the interactive read under errexit.
+    usage
+    return 1
+  fi
   dispatch_action "$choice"
 }
 
@@ -9483,7 +9488,10 @@ show_manager_menu() {
 
   prompt "$(t manager.selection_prompt)"
   local choice app_id status
-  read -r choice
+  if ! read -r choice; then
+    manager_usage
+    return 1
+  fi
   case "${choice,,}" in
     s|status-all) manager_status_main status-all; return ;;
     p|problems) manager_status_main problems; return ;;
