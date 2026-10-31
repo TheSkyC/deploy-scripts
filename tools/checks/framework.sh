@@ -120,3 +120,35 @@ check_root_wrappers_match_bin_loaders() {
   [[ "$missing" -eq 0 ]] || return 1
 }
 
+check_acquire_lock_preserves_file_and_waits() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    lock_dir="$(mktemp -d)"
+    trap '\''rm -rf "$lock_dir"'\'' EXIT
+    lock_file="${lock_dir}/app.lock"
+    printf "holder-annotation" > "$lock_file"
+
+    acquire_lock "$lock_file" 2>/dev/null
+    [[ "$(cat "$lock_file")" == "holder-annotation" ]] \
+      || { echo "acquire_lock truncated the lock file" >&2; exit 1; }
+    release_lock
+
+    {
+      exec 3>"$lock_file"
+      flock -x 3
+      sleep 0.4
+      flock -u 3
+    } &
+    hold_pid=$!
+    if ( acquire_lock "$lock_file" ) >/dev/null 2>&1; then
+      echo "acquire_lock succeeded while the lock was held" >&2
+      exit 1
+    fi
+
+    DEPLOY_LOCK_WAIT_SECONDS=10 acquire_lock "$lock_file" 2>/dev/null
+    release_lock
+    wait "$hold_pid"
+  ' _ "$ROOT_DIR"
+}
+

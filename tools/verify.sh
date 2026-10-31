@@ -507,6 +507,7 @@ main() {
       run_isolated_check check_binary_app_download_supports_pinned_checksum
       run_isolated_check check_binary_app_health_results_are_surfaced
       run_isolated_check check_binary_app_unpinned_version_notice
+      run_isolated_check check_acquire_lock_preserves_file_and_waits
       run_isolated_check check_blog_config_persistence
       run_isolated_check check_blog_hugo_version_contract
       run_isolated_check check_blog_dependency_failures_are_reported
