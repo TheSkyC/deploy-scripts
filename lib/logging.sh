@@ -8,7 +8,11 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == "dumb" ]]; then
+# Colors are for interactive terminals only; pipes, log files, and CI
+# captures stay escape-free. NO_COLOR/TERM=dumb always win, and
+# DEPLOY_FORCE_COLOR=1 explicitly enables colors for non-TTY captures.
+if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == "dumb" ]] \
+    || { [[ ! -t 2 ]] && [[ "${DEPLOY_FORCE_COLOR:-0}" != "1" ]]; }; then
   RED=''
   GREEN=''
   YELLOW=''

@@ -152,3 +152,21 @@ check_acquire_lock_preserves_file_and_waits() {
   ' _ "$ROOT_DIR"
 }
 
+check_logging_colors_are_tty_gated() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    color_code() {
+      NO_COLOR="${NO_COLOR-}" TERM="${TERM_VALUE:-xterm}" DEPLOY_FORCE_COLOR="${DEPLOY_FORCE_COLOR:-0}" \
+        "$1" -c '\''source "$1/lib/logging.sh"; printf "%s" "$RED"'\'' _ "$2" 2>/dev/null
+    }
+    root="$1"
+    [[ -z "$(color_code bash "$root")" ]] \
+      || { echo "colors leaked into non-TTY output" >&2; exit 1; }
+    [[ -n "$(DEPLOY_FORCE_COLOR=1 color_code bash "$root")" ]] \
+      || { echo "DEPLOY_FORCE_COLOR=1 did not re-enable colors" >&2; exit 1; }
+    [[ -z "$(NO_COLOR=1 DEPLOY_FORCE_COLOR=1 color_code bash "$root")" ]] \
+      || { echo "NO_COLOR did not override DEPLOY_FORCE_COLOR" >&2; exit 1; }
+    [[ -z "$(TERM_VALUE=dumb DEPLOY_FORCE_COLOR=1 color_code bash "$root")" ]] \
+      || { echo "TERM=dumb did not override DEPLOY_FORCE_COLOR" >&2; exit 1; }
+  ' _ "$ROOT_DIR"
+}
