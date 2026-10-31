@@ -1187,6 +1187,25 @@ do_verify() {
   app_verify_latest_backup "$CPA_STACK_BACKUP_DIR" 'cpa-stack-*.tar.gz'
 }
 
+# Restore every target previously moved into the restore-aside directory.
+# Remove any partial/current target first so mv cannot nest the old copy inside
+# it when extraction or an earlier move failed partway through.
+_cpa_stack_restore_aside_targets() {
+  local aside_dir="$1" stamp="$2" target rollback_ok=true
+  for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
+      var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
+    [[ -e "${aside_dir}/${target}.restore.${stamp}" \
+      || -L "${aside_dir}/${target}.restore.${stamp}" ]] || continue
+    if ! rm -rf "/${target:?}"; then
+      rollback_ok=false
+      continue
+    fi
+    mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" \
+      || rollback_ok=false
+  done
+  [[ "$rollback_ok" == true ]]
+}
+
 # Restore the five root-relative paths captured by do_backup. The archive is
 # a tar -C / of etc/cpa-stack, etc/cli-proxy-api, opt/cpa-manager-plus/
 # config.json, var/lib/cpa-manager-plus, and var/lib/cli-proxy-api, so
@@ -1241,22 +1260,23 @@ do_restore() {
   fi
   for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
       var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
-    if [[ -e "/${target}" ]]; then
-      mkdir -p "${aside_dir}/$(dirname "$target")"
-      mv "/${target}" "${aside_dir}/${target}.restore.${stamp}" && had_aside=true
+    if [[ -e "/${target}" || -L "/${target}" ]]; then
+      if ! mkdir -p "${aside_dir}/$(dirname "$target")" \
+          || ! mv "/${target}" "${aside_dir}/${target}.restore.${stamp}"; then
+        if _cpa_stack_restore_aside_targets "$aside_dir" "$stamp"; then
+          rm -rf "$aside_dir"
+        else
+          warn "$(t backup.restore.rollback_failed "$aside_dir")"
+        fi
+        systemctl start "$CPAMP_SERVICE_NAME" || true
+        error "$(t backup.restore.invalid_archive "$archive")"
+      fi
+      had_aside=true
     fi
   done
   tar -xzf "$archive" -C / >&2 || extract_ok=false
   if [[ "$extract_ok" != "true" ]]; then
-    local restore_ok=true
-    for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
-        var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
-      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
-        rm -rf "/${target:?}" || restore_ok=false
-        mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" || restore_ok=false
-      fi
-    done
-    if [[ "$restore_ok" == true ]]; then
+    if _cpa_stack_restore_aside_targets "$aside_dir" "$stamp"; then
       rm -rf "$aside_dir"
     else
       warn "$(t backup.restore.rollback_failed "$aside_dir")"
@@ -1267,15 +1287,8 @@ do_restore() {
   if ! systemctl start "$CPAMP_SERVICE_NAME"; then
     warn "$(t backup.restore.start_failed_rollback)"
     systemctl stop "$CPAMP_SERVICE_NAME" >/dev/null 2>&1 || true
-    local rolled_back=false
-    for target in etc/cpa-stack etc/cli-proxy-api opt/cpa-manager-plus/config.json \
-        var/lib/cpa-manager-plus var/lib/cli-proxy-api; do
-      if [[ -e "${aside_dir}/${target}.restore.${stamp}" ]]; then
-        rm -rf "/${target:?}"
-        mv "${aside_dir}/${target}.restore.${stamp}" "/${target}" && rolled_back=true
-      fi
-    done
-    if [[ "$rolled_back" == true ]] \
+    if [[ "$had_aside" == true ]] \
+        && _cpa_stack_restore_aside_targets "$aside_dir" "$stamp" \
         && systemctl start "$CPAMP_SERVICE_NAME" \
         && systemctl is-active --quiet "$CPAMP_SERVICE_NAME"; then
       rm -rf "$aside_dir"

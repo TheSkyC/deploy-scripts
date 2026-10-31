@@ -318,8 +318,20 @@ check_cpa_stack_update_and_restore_are_recoverable() {
         in_fn=0
       }
     ' impl/install_cpa_stack.sh
-  grep -Fq 'local restore_ok=true' impl/install_cpa_stack.sh || {
-    echo "CPA Stack restore must track whether the extract-failure rollback completed." >&2
+  grep -Fq 'if ! mkdir -p "${aside_dir}/$(dirname "$target")"' impl/install_cpa_stack.sh \
+    && grep -Fq '_cpa_stack_restore_aside_targets "$aside_dir" "$stamp"' \
+      impl/install_cpa_stack.sh || {
+    echo "CPA Stack restore must fail fast and roll back staged targets when an aside move fails." >&2
+    return 1
+  }
+  if grep -Fq 'mv "/${target}" "${aside_dir}/${target}.restore.${stamp}" && had_aside=true' \
+      impl/install_cpa_stack.sh; then
+    echo "CPA Stack restore must not ignore failures while moving live targets into the aside directory." >&2
+    return 1
+  fi
+  grep -Fq 'if _cpa_stack_restore_aside_targets "$aside_dir" "$stamp"; then' \
+    impl/install_cpa_stack.sh || {
+    echo "CPA Stack restore must use the shared aside rollback helper after extraction." >&2
     return 1
   }
   grep -Fq 'warn "$(t backup.restore.rollback_failed "$aside_dir")"' \
