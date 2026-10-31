@@ -160,11 +160,18 @@ check_acquire_lock_preserves_file_and_waits() {
 }
 
 check_logging_colors_are_tty_gated() {
-  "$BASH_BIN" -c '
+  env -u NO_COLOR "$BASH_BIN" -c '
     set -euo pipefail
     color_code() {
-      NO_COLOR="${NO_COLOR-}" TERM="${TERM_VALUE:-xterm}" DEPLOY_FORCE_COLOR="${DEPLOY_FORCE_COLOR:-0}" \
-        "$1" -c '\''source "$1/lib/logging.sh"; printf "%s" "$RED"'\'' _ "$2" 2>/dev/null
+      if [[ -n "${NO_COLOR:-}" ]]; then
+        NO_COLOR="$NO_COLOR" TERM="${TERM_VALUE:-xterm}" \
+          DEPLOY_FORCE_COLOR="${DEPLOY_FORCE_COLOR:-0}" \
+          "$1" -c '\''source "$1/lib/logging.sh"; printf "%s" "$RED"'\'' _ "$2" 2>/dev/null
+      else
+        env -u NO_COLOR TERM="${TERM_VALUE:-xterm}" \
+          DEPLOY_FORCE_COLOR="${DEPLOY_FORCE_COLOR:-0}" \
+          "$1" -c '\''source "$1/lib/logging.sh"; printf "%s" "$RED"'\'' _ "$2" 2>/dev/null
+      fi
     }
     root="$1"
     [[ -z "$(color_code bash "$root")" ]] \
