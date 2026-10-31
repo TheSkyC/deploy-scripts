@@ -357,6 +357,14 @@ check_unsafe_config_loads_fail_closed() {
     echo "Unable to create a symlink for config trust-gate verification." >&2
     return 1
   fi
+  # Git Bash on Windows without symlink privileges silently copies the file
+  # instead of linking it. The behavior under test is unobservable there, so
+  # skip it while Linux CI continues to exercise the real trust gate.
+  if [[ ! -L "$symlink" ]]; then
+    rm -rf "$tmp_dir"
+    echo "symlinks are not supported on this filesystem; skipping config symlink behavior check"
+    return 0
+  fi
   cat > "${tmp_dir}/stat" <<'STUB'
 #!/usr/bin/env bash
 case "${2:-}" in

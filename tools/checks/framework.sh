@@ -121,6 +121,13 @@ check_root_wrappers_match_bin_loaders() {
 }
 
 check_acquire_lock_preserves_file_and_waits() {
+  # Git Bash on Windows does not ship util-linux flock. The lock behavior
+  # cannot be exercised there, but skipping keeps the rest of the guards
+  # target usable on supported development hosts; Linux CI still runs it.
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "flock not found; skipping lock behavior check (install util-linux to enable)"
+    return 0
+  fi
   "$BASH_BIN" -c '
     set -euo pipefail
     source "$1/lib/core.sh"
