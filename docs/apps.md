@@ -95,7 +95,12 @@ has drifted from the configured pin, while an unpinned install states that
 - **Bind**: `SUB2API_BIND_ADDR` defaults to `127.0.0.1` (nginx is the public
   entry point). `SUB2API_TZ` replaces the old hardcoded `Asia/Shanghai`
   (empty = server local time).
-- Restore: `install_sub2api.sh restore` loads the DB dump via `psql`.
+- Restore: `install_sub2api.sh restore` stages the data/config archives
+  before stopping the service, snapshots the live database, and replays the
+  matching DB dump through `psql` in a single transaction. Data, config, and
+  database changes share one rollback path; a failed startup or health check
+  restores the previous artifacts and preserves recovery copies when rollback
+  itself cannot complete.
 - Release pin: set `SUB2API_VERSION` to an upstream tag (`vX.Y.Z`) to make
   install/update an immutable target. Pinned installs skip the GitHub-latest
   lookup, pinned `update` skips re-downloading when the recorded version
