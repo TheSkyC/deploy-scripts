@@ -282,9 +282,15 @@ i18n_register_many \
   app.vaultwarden.error.restore_env_start_failed \
   "Restored env file but service %s failed to start; env file rolled back." \
   "恢复环境配置后服务 %s 启动失败，已回滚环境配置。" \
+  app.vaultwarden.error.restore_transaction_start_failed \
+  "Restored data and environment but service %s failed to start; previous files were restored." \
+  "数据与环境配置已恢复，但服务 %s 启动失败；已回滚到原文件。" \
   app.vaultwarden.warn.restore_env_rollback_failed \
   "Env file rollback FAILED; previous config remains at: %s" \
   "环境配置回滚失败，原配置保留在：%s" \
+  app.vaultwarden.warn.restore_staging_cleanup_failed \
+  "Temporary restore data could not be removed: %s" \
+  "无法删除临时恢复数据：%s" \
   app.vaultwarden.step.systemd \
   "Step 7  Create systemd service" \
   "Step 7  创建 systemd 服务" \

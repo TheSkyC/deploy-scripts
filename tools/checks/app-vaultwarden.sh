@@ -623,13 +623,35 @@ check_vaultwarden_env_file_is_atomic() {
 
 check_vaultwarden_restore_env_copy_failure_is_fatal() {
   awk '
-    /^_vw_restore_env_file\(\)/ { in_fn=1; saw_copy_if=0; saw_cleanup=0; saw_restart=0; next }
-    in_fn && /if ! cp "\$VW_ENV_FILE" "\$env_prev"; then/ { saw_copy_if=1 }
-    in_fn && /rm -f "\$env_staged" "\$env_prev"/ { saw_cleanup=1 }
-    in_fn && /systemctl start vaultwarden \|\| true/ { saw_restart=1 }
+    /^_vw_restore_archive\(\)/ { in_fn=1; saw_extract=0; saw_env_prev=0; saw_rollback=0; health_line=0; cleanup_line=0; next }
+    in_fn && /_vw_extract_restore_env_file "\$archive"/ { saw_extract=1 }
+    in_fn && /if ! env_prev=.*mktemp ".*VW_ENV_FILE.*prev/ { saw_env_prev=1 }
+    in_fn && /_vw_restore_rollback "\$aside_dir" "\$data_base" "\$had_data"/ { saw_rollback=1 }
+    in_fn && /if ! systemctl is-active --quiet vaultwarden; then/ { health_line=NR }
+    in_fn && /if ! rm -rf "\$aside_dir"; then/ { cleanup_line=NR }
     in_fn && /^}/ {
-      if (!(saw_copy_if && saw_cleanup && saw_restart)) {
-        print "Vaultwarden restore must fail closed and restart the service when backing up the current env file fails" > "/dev/stderr"
+      if (!(saw_extract && saw_env_prev && saw_rollback && health_line && cleanup_line && health_line < cleanup_line)) {
+        print "Vaultwarden restore must stage data and env, verify service health, and roll both artifacts back on failure" > "/dev/stderr"
+        exit 1
+      }
+      in_fn=0
+    }
+  ' impl/install_vaultwarden.sh
+  grep -Fq '_vw_restore_archive "$archive"' impl/install_vaultwarden.sh \
+    && ! grep -Fq '_vw_restore_env_file "$archive"' impl/install_vaultwarden.sh \
+    && ! grep -Fq 'backup_restore_data_dir "$VW_DATA_DIR"' impl/install_vaultwarden.sh || {
+    echo "Vaultwarden restore must use the transactional data+env restore path." >&2
+    return 1
+  }
+  awk '
+    /^_vw_restore_rollback\(\)/ { in_fn=1; saw_stop=0; saw_data=0; saw_env=0; saw_start=0; next }
+    in_fn && /if ! systemctl stop vaultwarden/ { saw_stop=1 }
+    in_fn && /mv .*aside_dir.*data_base.*VW_DATA_DIR/ { saw_data=1 }
+    in_fn && /atomic_copy_file_strict "\$env_prev" "\$VW_ENV_FILE" 600 root:root/ { saw_env=1 }
+    in_fn && /systemctl start vaultwarden 2>\/dev\/null/ { saw_start=1 }
+    in_fn && /^}/ {
+      if (!(saw_stop && saw_data && saw_env && saw_start)) {
+        print "Vaultwarden restore rollback must stop, restore data and env, then restart the service" > "/dev/stderr"
         exit 1
       }
       in_fn=0

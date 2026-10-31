@@ -7177,9 +7177,15 @@ i18n_register_many \
   app.vaultwarden.error.restore_env_start_failed \
   "Restored env file but service %s failed to start; env file rolled back." \
   "恢复环境配置后服务 %s 启动失败，已回滚环境配置。" \
+  app.vaultwarden.error.restore_transaction_start_failed \
+  "Restored data and environment but service %s failed to start; previous files were restored." \
+  "数据与环境配置已恢复，但服务 %s 启动失败；已回滚到原文件。" \
   app.vaultwarden.warn.restore_env_rollback_failed \
   "Env file rollback FAILED; previous config remains at: %s" \
   "环境配置回滚失败，原配置保留在：%s" \
+  app.vaultwarden.warn.restore_staging_cleanup_failed \
+  "Temporary restore data could not be removed: %s" \
+  "无法删除临时恢复数据：%s" \
   app.vaultwarden.step.systemd \
   "Step 7  Create systemd service" \
   "Step 7  创建 systemd 服务" \
@@ -9736,83 +9742,186 @@ do_verify() {
   app_verify_latest_backup "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz'
 }
 
-_vw_restore_env_file() {
-  local archive="$1" env_member env_staged="" env_prev=""
+# Extract the optional env-file member into a private staging path. Older
+# archives predate env inclusion, so an absent member is valid and leaves the
+# caller's current env file untouched.
+_vw_extract_restore_env_file() {
+  local archive="$1" env_member members staged
+  VW_RESTORE_ENV_STAGED=""
   env_member="${VW_ENV_FILE#/}"
-  [[ -n "$archive" && -f "$archive" ]] || return 1
-  # Older backups were created before the env file became an archive member;
-  # they still restore data-only, so absent member is not an error.
-
-  if ! tar -tzf "$archive" 2>/dev/null | grep -Fxq -- "$env_member"; then
+  if ! members="$(tar -tzf "$archive" 2>/dev/null)"; then
+    return 1
+  fi
+  if ! grep -Fxq -- "$env_member" <<< "$members"; then
     return 0
   fi
-  if ! env_staged="$(mktemp "${VW_ENV_FILE}.restore.XXXXXX")"; then
+  if ! staged="$(mktemp "${VW_ENV_FILE}.restore.XXXXXX")"; then
     return 1
   fi
-  if ! tar -xzOf "$archive" "$env_member" > "$env_staged"; then
-    rm -f "$env_staged"
+  if ! tar -xzOf "$archive" "$env_member" > "$staged" \
+      || ! chmod 600 "$staged" \
+      || ! chown root:root "$staged"; then
+    rm -f "$staged"
     return 1
   fi
-  chmod 600 "$env_staged" 2>/dev/null || {
-    rm -f "$env_staged"
-    return 1
-  }
-  chown root:root "$env_staged" 2>/dev/null || {
-    rm -f "$env_staged"
-    return 1
-  }
-  if ! systemctl stop vaultwarden; then
-    rm -f "$env_staged"
-    error "$(t app.vaultwarden.error.restore_env_stop_failed vaultwarden)"
+  VW_RESTORE_ENV_STAGED="$staged"
+}
+
+_vw_cleanup_restore_staging() {
+  local extract_dir="${1:-}"
+  if [[ -n "$extract_dir" ]] && ! rm -rf "$extract_dir"; then
+    warn "$(t app.vaultwarden.warn.restore_staging_cleanup_failed "$extract_dir")"
+  fi
+  if [[ -n "${VW_RESTORE_ENV_STAGED:-}" ]]; then
+    rm -f "$VW_RESTORE_ENV_STAGED" 2>/dev/null || true
+    VW_RESTORE_ENV_STAGED=""
+  fi
+}
+
+# Roll back the data directory and, when it was replaced, the env file. Keep
+# the aside directory and previous env file when any rollback step fails so an
+# operator can recover them manually.
+_vw_restore_rollback() {
+  local aside_dir="$1" data_base="$2" had_data="$3" env_prev="$4" env_replaced="$5"
+  local rollback_ok=true
+  if ! systemctl stop vaultwarden >/dev/null 2>&1; then
+    warn "$(t backup.restore.rollback_failed "$aside_dir")"
     return 1
   fi
-  if [[ -f "$VW_ENV_FILE" ]]; then
-    if ! env_prev="$(mktemp "${VW_ENV_FILE}.prev.XXXXXX")"; then
-      rm -f "$env_staged"
-      systemctl start vaultwarden || true
-      error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
-      return 1
+  if ! rm -rf "$VW_DATA_DIR"; then
+    rollback_ok=false
+  elif [[ "$had_data" == true ]] \
+      && ! mv "${aside_dir}/${data_base}" "$VW_DATA_DIR"; then
+    rollback_ok=false
+  fi
+  if [[ "$env_replaced" == true ]]; then
+    if [[ -n "$env_prev" ]]; then
+      if atomic_copy_file_strict "$env_prev" "$VW_ENV_FILE" 600 root:root; then
+        rm -f "$env_prev"
+      else
+        warn "$(t app.vaultwarden.warn.restore_env_rollback_failed "$env_prev")"
+        rollback_ok=false
+      fi
+    elif ! rm -f "$VW_ENV_FILE"; then
+      rollback_ok=false
     fi
-    if ! cp "$VW_ENV_FILE" "$env_prev"; then
-      rm -f "$env_staged" "$env_prev"
-      systemctl start vaultwarden || true
-      error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
-      return 1
-    fi
   fi
-  if ! atomic_copy_file_strict "$env_staged" "$VW_ENV_FILE" 600 root:root;then
-    rm -f "$env_staged" "$env_prev"
-    systemctl start vaultwarden || true
+  if [[ "$rollback_ok" == true ]]; then
+    rm -rf "$aside_dir"
+    success "$(t backup.restore.rollback_done)"
+  else
+    warn "$(t backup.restore.rollback_failed "$aside_dir")"
+  fi
+  if ! systemctl start vaultwarden 2>/dev/null; then
+    warn "$(t binary_app.warn.rollback_start_failed vaultwarden)"
+  fi
+  [[ "$rollback_ok" == true ]]
+}
+
+_vw_restore_archive() {
+  local archive="$1"
+  local data_parent data_base extract_dir="" payload="" env_prev=""
+  local aside_dir="" had_data=false env_replaced=false members
+  data_parent="$(dirname "$VW_DATA_DIR")"
+  data_base="$(basename "$VW_DATA_DIR")"
+  if ! mkdir -p "$data_parent"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! extract_dir="$(mktemp -d "${data_parent}/.${data_base}.restore.XXXXXX")"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! tar -xzf "$archive" -C "$extract_dir" >&2; then
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! members="$(tar -tzf "$archive" 2>/dev/null)"; then
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if [[ -d "${extract_dir}/${data_base}" ]]; then
+    payload="${extract_dir}/${data_base}"
+  elif [[ -e "${extract_dir}/${data_base}" || -L "${extract_dir}/${data_base}" ]]; then
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.invalid_archive "$archive")"
+  elif [[ -n "$members" ]] \
+      && ! grep -Fxq -- "${VW_ENV_FILE#/}" <<< "$members" \
+      && [[ -n "$(find "$extract_dir" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+    # Legacy data-only archives can store the payload without its directory.
+    payload="$extract_dir"
+  else
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if ! _vw_extract_restore_env_file "$archive"; then
+    _vw_cleanup_restore_staging "$extract_dir"
     error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
-    return 1
   fi
-  rm -f "$env_staged"
-  if ! systemctl start vaultwarden;then
-    if [[ -n "$env_prev" ]]; then
-      if ! atomic_copy_file_strict "$env_prev" "$VW_ENV_FILE" 600 root:root;then
-        warn "$(t app.vaultwarden.warn.restore_env_rollback_failed "$env_prev")"
-      fi
-    else
-      rm -f "$VW_ENV_FILE"
+
+  if ! systemctl stop vaultwarden; then
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.stop_failed vaultwarden)"
+  fi
+  if ! aside_dir="$(mktemp -d "${data_parent}/.${data_base}.restore-aside.XXXXXX")"; then
+    systemctl start vaultwarden || true
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  if [[ -e "$VW_DATA_DIR" || -L "$VW_DATA_DIR" ]]; then
+    had_data=true
+    if ! mv "$VW_DATA_DIR" "${aside_dir}/${data_base}"; then
+      rm -rf "$aside_dir"
+      systemctl start vaultwarden || true
+      _vw_cleanup_restore_staging "$extract_dir"
+      error "$(t backup.restore.invalid_archive "$archive")"
     fi
-    systemctl start vaultwarden 2>/dev/null || true
-    error "$(t app.vaultwarden.error.restore_env_start_failed vaultwarden)"
-    return 1
   fi
-  wait_for_service vaultwarden 20 || true
-  if ! systemctl is-active --quiet vaultwarden;then
-    if [[ -n "$env_prev" ]]; then
-      if ! atomic_copy_file_strict "$env_prev" "$VW_ENV_FILE" 600 root:root;then
-        warn "$(t app.vaultwarden.warn.restore_env_rollback_failed "$env_prev")"
+  if ! mv "$payload" "$VW_DATA_DIR"; then
+    _vw_restore_rollback "$aside_dir" "$data_base" "$had_data" "" false || true
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  [[ "$payload" == "$extract_dir" ]] && extract_dir=""
+  if ! chown -R "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR"; then
+    _vw_restore_rollback "$aside_dir" "$data_base" "$had_data" "" false || true
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t app.vaultwarden.error.dir_owner "${VW_USER}:${VW_GROUP}" "$VW_DATA_DIR")"
+  fi
+  if [[ -n "${VW_RESTORE_ENV_STAGED:-}" ]]; then
+    if [[ -e "$VW_ENV_FILE" || -L "$VW_ENV_FILE" ]]; then
+      if ! env_prev="$(mktemp "${VW_ENV_FILE}.prev.XXXXXX")" \
+          || ! cp -p "$VW_ENV_FILE" "$env_prev"; then
+        rm -f "$env_prev"
+        env_prev=""
+        _vw_restore_rollback "$aside_dir" "$data_base" "$had_data" "" false || true
+        _vw_cleanup_restore_staging "$extract_dir"
+        error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
       fi
-    else
-      rm -f "$VW_ENV_FILE"
     fi
-    systemctl start vaultwarden 2>/dev/null || true
-    error "$(t app.vaultwarden.error.restore_env_start_failed vaultwarden)"
-    return 1
+    if ! atomic_copy_file_strict "$VW_RESTORE_ENV_STAGED" \
+        "$VW_ENV_FILE" 600 root:root; then
+      _vw_restore_rollback "$aside_dir" "$data_base" "$had_data" "" false || true
+      rm -f "$env_prev"
+      _vw_cleanup_restore_staging "$extract_dir"
+      error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
+    fi
+    env_replaced=true
   fi
-  rm -f "$env_prev"
+
+  if systemctl start vaultwarden; then
+    wait_for_service vaultwarden 20 || true
+  fi
+  if ! systemctl is-active --quiet vaultwarden; then
+    _vw_restore_rollback "$aside_dir" "$data_base" "$had_data" \
+      "$env_prev" "$env_replaced" || true
+    _vw_cleanup_restore_staging "$extract_dir"
+    error "$(t app.vaultwarden.error.restore_transaction_start_failed vaultwarden)"
+  fi
+  if ! rm -rf "$aside_dir"; then
+    warn "$(t app.vaultwarden.warn.restore_staging_cleanup_failed "$aside_dir")"
+  fi
+  _vw_cleanup_restore_staging "$extract_dir"
+  rm -f "$env_prev" 2>/dev/null || true
+  success "$(t backup.restore.restored "$(basename "$archive")")"
 }
 
 do_restore() {
@@ -9833,12 +9942,13 @@ do_restore() {
     archive="$(backup_latest_archive "$VW_BACKUP_DIR" 'vaultwarden_*.tar.gz' || true)"
     [[ -n "$archive" ]] || error "$(t backup.restore.no_backups "$VW_BACKUP_DIR")"
   fi
-  # The cron script archives DATA_BASE plus (when present) the absolute env
-  # file path, so accept both layouts via the shared payload resolution.
-  backup_restore_data_dir "$VW_DATA_DIR" "vaultwarden" "$archive" \
-    "${VW_USER}:${VW_GROUP}"
-  # Backup snapshots also carry VW_ENV_FILE when present, but the shared
-  # data-dir helper only replaces DATA_DIR, so restore the env file separately
-  # under the service lifecycle to avoid silently discarding secrets on restore.
-  _vw_restore_env_file "$archive" || error "$(t app.vaultwarden.error.restore_env_file "$VW_ENV_FILE")"
+  if [[ -f "${archive}.sha256" ]] && ! backup_verify_archive "$archive"; then
+    error "$(t backup.verify.failed "$(basename "$archive")")"
+  fi
+  if ! backup_validate_archive_members "$archive"; then
+    error "$(t backup.restore.invalid_archive "$archive")"
+  fi
+  # Data and env must be switched under one service lifecycle so a failure in
+  # either artifact rolls both back before cleanup.
+  _vw_restore_archive "$archive"
 }
