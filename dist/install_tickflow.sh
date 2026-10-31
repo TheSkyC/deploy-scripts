@@ -6932,6 +6932,9 @@ i18n_register_many \
   app.tickflow.warn.service_stop_failed \
   "Could not stop %s during uninstall, but it is not active; continuing cleanup. Inspect systemd if this is unexpected: systemctl status %s." \
   "卸载时无法停止 %s，但该服务当前不是 active，继续清理。如不符合预期，请检查：systemctl status %s。" \
+  app.tickflow.warn.restore_stop_failed \
+  "Could not stop %s before rolling back the restored backup; continuing while the service may still be active. Inspect: systemctl status %s" \
+  "回滚已恢复的备份前无法停止 %s；服务可能仍在运行，将继续回滚。请检查：systemctl status %s。" \
   app.tickflow.warn.service_disable_failed \
   "Could not disable %s during uninstall. Remove it manually after fixing systemd: systemctl disable %s" \
   "卸载时无法禁用 %s。请在修复 systemd 问题后手动执行：systemctl disable %s。" \
@@ -7930,7 +7933,9 @@ do_restore() {
   fi
   if ! systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" || ! _health_check; then
     warn "$(t backup.restore.start_failed_rollback)"
-    systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null || true
+    if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
+      warn "$(t app.tickflow.warn.restore_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
+    fi
     local rollback_ok=true
     for target in data tiers.yaml .env; do
       rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}" || rollback_ok=false

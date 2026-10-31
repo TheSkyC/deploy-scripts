@@ -361,8 +361,11 @@ check_tickflow_systemctl_failures_are_reported() {
       saw_stop && /warn "\$\(t app\.tickflow\.warn\.service_stop_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_stop_warn=1; saw_stop=0 }
       /systemctl disable "\$TICKFLOW_SERVICE_NAME"/ { saw_disable=1 }
       saw_disable && /warn "\$\(t app\.tickflow\.warn\.service_disable_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_disable_warn=1; saw_disable=0 }
+      /backup\.restore\.start_failed_rollback/ { in_restore_rollback=1 }
+      in_restore_rollback && /if ! systemctl stop "\$TICKFLOW_SERVICE_NAME" >\/dev\/null 2>&1; then/ { saw_restore_stop=1 }
+      in_restore_rollback && /warn "\$\(t app\.tickflow\.warn\.restore_stop_failed "\$TICKFLOW_SERVICE_NAME" "\$TICKFLOW_SERVICE_NAME"\)"/ { saw_restore_stop_warn=1 }
       END {
-        if (!(saw_docker_warn && saw_enable_warn && saw_stop_warn && saw_disable_warn)) {
+        if (!(saw_docker_warn && saw_enable_warn && saw_stop_warn && saw_disable_warn && saw_restore_stop && saw_restore_stop_warn)) {
           printf "%s TickFlow must warn on nonfatal systemctl failures\n", FILENAME > "/dev/stderr"
           exit 1
         }

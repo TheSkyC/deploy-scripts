@@ -750,7 +750,9 @@ do_restore() {
   fi
   if ! systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" || ! _health_check; then
     warn "$(t backup.restore.start_failed_rollback)"
-    systemctl stop "$TICKFLOW_SERVICE_NAME" 2>/dev/null || true
+    if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
+      warn "$(t app.tickflow.warn.restore_stop_failed "$TICKFLOW_SERVICE_NAME" "$TICKFLOW_SERVICE_NAME")"
+    fi
     local rollback_ok=true
     for target in data tiers.yaml .env; do
       rm -rf "${TICKFLOW_INSTALL_DIR:?}/${target}" || rollback_ok=false
