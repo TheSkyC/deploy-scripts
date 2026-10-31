@@ -173,6 +173,20 @@ check_manager_menu_shortcuts() {
   [[ "$output" == *"s) 全部应用状态"* && "$output" == *"p) 仅查看异常"* && "$output" == *"u) 检查应用更新"* && "$output" == *"f) 检查中控更新"* ]]
 }
 
+check_manager_usage_documents_instances() {
+  local output
+  output="$(DEPLOY_LANG=en "$BASH_BIN" deploy.sh --help 2>&1)"
+  [[ "$output" == *"<app>@<instance>"* ]] || {
+    echo "Manager usage must document the <app>@<instance> syntax." >&2
+    return 1
+  }
+  output="$(DEPLOY_LANG=zh "$BASH_BIN" deploy.sh --help 2>&1)"
+  [[ "$output" == *"<应用>@<实例>"* ]] || {
+    echo "Manager usage must document the <app>@<instance> syntax in Chinese." >&2
+    return 1
+  }
+}
+
 check_no_tty_menu_usage() {
   local output status script
   for script in deploy.sh dist/deploy.sh; do

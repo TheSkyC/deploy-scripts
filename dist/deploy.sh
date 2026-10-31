@@ -221,6 +221,7 @@ i18n_register security_doctor.cron.none "No unmanaged legacy application backup 
 i18n_register manager.usage "Usage: sudo bash %s <app> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]" "用法：sudo bash %s <应用> [install, update, backup, restore, verify, status, status-json, doctor, uninstall]"
 i18n_register manager.usage_central "Central commands: status-all, backup-all, update-all, check-update, doctor security, notify-config, schedule, unschedule, export, import, fleet, list, self-version, self-update" "中央命令：status-all、backup-all、update-all、check-update、doctor security、notify-config、schedule、unschedule、export、import、fleet、list、self-version、self-update"
 i18n_register manager.usage_examples "Examples: sudo bash %s newapi install; sudo bash %s vaultwarden doctor; sudo bash %s list" "示例：sudo bash %s newapi install；sudo bash %s vaultwarden doctor；sudo bash %s list"
+i18n_register manager.usage_instances "Instances: sudo bash %s <app>@<instance> <action> (isolates config and lock paths only)" "实例：sudo bash %s <应用>@<实例> <动作>（仅隔离配置与锁路径）"
 i18n_register status.active "active" "运行中"
 i18n_register status.inactive "inactive" "未运行"
 i18n_register status.unknown "unknown" "未知"
@@ -9470,6 +9471,7 @@ manager_usage() {
   echo "$(t manager.usage "$0")" >&2
   echo "$(t manager.usage_central)" >&2
   echo "$(t manager.usage_examples "$0" "$0" "$0")" >&2
+  echo "$(t manager.usage_instances "$0")" >&2
   echo "$(t manager.available_apps "$(deploy_app_ids | tr '\n' ' ' | sed 's/[[:space:]]*$//')")" >&2
 }
 
