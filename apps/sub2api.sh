@@ -67,11 +67,29 @@ i18n_register_many \
   "After database/Redis setup is complete, visit the Setup Wizard in a browser: http://<IP>:%s/" \
   "完成数据库/Redis 配置后，请在浏览器访问 Setup Wizard：http://<IP>:%s/" \
   app.sub2api.error.database_restore_failed \
-  "Database restore from %s failed. Data and configuration were restored, but database state may be partial; the service was restarted. Inspect PostgreSQL logs and restore the database manually before retrying." \
-  "从 %s 恢复数据库失败。数据和配置已恢复，但数据库状态可能不完整；服务已重新启动。请检查 PostgreSQL 日志，并在重试前手动恢复数据库。" \
+  "Database restore from %s failed inside its transaction; no database changes were committed and live data/configuration remain unchanged. Inspect PostgreSQL logs and retry." \
+  "从 %s 恢复数据库失败，事务已中止，数据库变更未提交，现有数据与配置保持不变。请检查 PostgreSQL 日志后重试。" \
   app.sub2api.error.database_restore_unavailable \
-  "Cannot restore database archive %s because psql or PG_DSN is unavailable. Data and configuration were restored and the service was restarted; configure PostgreSQL access and restore the database manually." \
-  "无法恢复数据库归档 %s，因为 psql 或 PG_DSN 不可用。数据和配置已恢复且服务已重新启动；请配置 PostgreSQL 访问后手动恢复数据库。" \
+  "Cannot perform a transactional database restore from %s because psql, pg_dump, or PG_DSN is unavailable. No live files were changed; configure PostgreSQL access and retry." \
+  "无法以事务方式从 %s 恢复数据库，因为 psql、pg_dump 或 PG_DSN 不可用。现有文件未变更；请配置 PostgreSQL 访问后重试。" \
+  app.sub2api.error.restore_stage_failed \
+  "Cannot stage restore archive %s before stopping the service. No live files were changed." \
+  "停止服务前无法暂存恢复归档 %s。现有文件未变更。" \
+  app.sub2api.error.restore_snapshot_failed \
+  "Cannot snapshot the current database before restore. The restore was aborted and the service was restarted; no live files were changed." \
+  "恢复前无法创建当前数据库快照。恢复已中止并重新启动服务；现有文件未变更。" \
+  app.sub2api.error.restore_transaction_start_failed \
+  "Restored database, data, and configuration, but service %s failed to start or pass its health check. Previous artifacts were restored." \
+  "数据库、数据与配置已恢复，但服务 %s 启动失败或健康检查未通过；已回滚到原有文件。" \
+  app.sub2api.error.restore_rollback_failed \
+  "Restore rollback was incomplete. Recovery copies remain at: %s. Inspect them before retrying or starting the service." \
+  "恢复回滚未完全成功。恢复副本保留在：%s。请在重试或启动服务前检查。" \
+  app.sub2api.warn.restore_rollback_stop_failed \
+  "Could not stop %s while rolling back the restore; live files were left untouched. Inspect: systemctl status %s" \
+  "恢复回滚时无法停止 %s，现有文件未改动。请检查：systemctl status %s。" \
+  app.sub2api.warn.restore_staging_cleanup_failed \
+  "Temporary restore data could not be removed: %s" \
+  "无法删除临时恢复数据：%s。" \
   app.sub2api.info.install_base_deps \
   "Installing base dependencies..." \
   "安装基础依赖..." \

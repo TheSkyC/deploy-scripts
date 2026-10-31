@@ -644,7 +644,9 @@ main() {
       run_isolated_check check_sub2api_codename_resolution
       run_isolated_check check_sub2api_dependency_services_start_before_success
       run_isolated_check check_sub2api_database_restore_fails_closed
+      run_isolated_check check_sub2api_restore_is_transactional
       run_isolated_check check_sub2api_database_restore_failure_is_nonzero
+      run_isolated_check check_sub2api_restore_rolls_back_all_artifacts_on_health_failure
       run_isolated_check check_sub2api_restore_uses_matching_backup_run
       run_isolated_check check_sub2api_e2e_uses_real_dependency_fixture
       run_isolated_check check_sub2api_enable_failures_are_reported

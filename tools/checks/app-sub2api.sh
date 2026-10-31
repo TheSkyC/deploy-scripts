@@ -478,30 +478,32 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
     return 1
   }
   awk '
-      /PG_DUMP_FILE="\$\{BACKUP_DIR\}\/sub2api_db_\$\{TS\}\.sql\.gz"/ { in_script=1; saw_stderr_log=0; saw_archive=0; next }
-      in_script && /pg_dump "\$\{PG_DSN\}" 2> >\(/ { saw_stderr_log=1 }
+      /PG_DUMP_FILE="\$\{BACKUP_DIR\}\/sub2api_db_\$\{TS\}\.sql\.gz"/ { in_script=1; saw_stderr_log=0; saw_archive=0; saw_clean=0; next }
+      in_script && /pg_dump --clean --if-exists "\$\{PG_DSN\}" 2> >\(/ { saw_stderr_log=1; saw_clean=1 }
       in_script && /gzip > "\$\{PG_DUMP_TMP\}"/ { saw_archive=1 }
       in_script && /# ── 2\. Configuration and local data backup/ {
-        if (!(saw_stderr_log && saw_archive)) {
-          printf "%s Sub2API backup script must keep pg_dump stderr separate from SQL archive data\n", FILENAME > "/dev/stderr"
+        if (!(saw_stderr_log && saw_clean && saw_archive)) {
+          printf "%s Sub2API backup script must keep pg_dump stderr separate from SQL archive data and emit a replayable clean dump\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_script=0
       }
-      /do_backup\(\)/ { in_manual=1; saw_manual_archive=0; next }
-      in_manual && /backup_create_gzip_archive "\$PG_ARCHIVE" pg_dump "\$\{PG_DSN\}"/ { saw_manual_archive=1 }
+      /do_backup\(\)/ { in_manual=1; saw_manual_archive=0; saw_manual_clean=0; next }
+      in_manual && /backup_create_gzip_archive "\$PG_ARCHIVE" pg_dump/ { saw_manual_archive=1 }
+      in_manual && /--clean --if-exists "\$\{PG_DSN\}"/ { saw_manual_clean=1 }
       in_manual && /^}/ {
-        if (!saw_manual_archive) {
-          printf "%s Sub2API manual backup must archive only pg_dump stdout\n", FILENAME > "/dev/stderr"
+        if (!(saw_manual_archive && saw_manual_clean)) {
+          printf "%s Sub2API manual backup must archive only a replayable pg_dump stdout stream\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_manual=0
       }
       /_backup_silent\(\)/ { in_silent=1; saw_silent_stderr=0; next }
-      in_silent && /backup_create_gzip_archive "\$pg_archive" _sub2api_pg_dump_prefixed_stderr "\$\{PG_DSN\}"/ { saw_silent_stderr=1 }
+      in_silent && /backup_create_gzip_archive "\$pg_archive" _sub2api_pg_dump_prefixed_stderr/ { saw_silent_stderr=1 }
+      in_silent && /--clean --if-exists "\$\{PG_DSN\}"/ { saw_silent_clean=1 }
       in_silent && /^}/ {
-        if (!saw_silent_stderr) {
-          printf "%s Sub2API silent backup must preserve pg_dump stderr while archiving only stdout\n", FILENAME > "/dev/stderr"
+        if (!(saw_silent_stderr && saw_silent_clean)) {
+          printf "%s Sub2API silent backup must preserve pg_dump stderr while archiving only a replayable stdout stream\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_silent=0
@@ -511,22 +513,82 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
 
 check_sub2api_database_restore_fails_closed() {
   awk '
-      /^do_restore\(\)/ { in_restore=1; saw_gzip=0; saw_psql=0; saw_restart_on_failure=0; saw_failure_error=0; saw_unavailable_error=0; saw_legacy_warn=0; next }
-      in_restore && /gunzip -c "\$db_archive"/ { saw_gzip=1 }
-      in_restore && /psql "\$PG_DSN" -v ON_ERROR_STOP=1/ { saw_psql=1 }
-      in_restore && saw_psql && /systemctl start "\$SERVICE_NAME"/ { saw_restart_on_failure=1 }
+      /^_sub2api_restore_database_file\(\)/ { in_db=1; saw_gzip=0; saw_psql=0; saw_single_tx=0; next }
+      in_db && /gunzip -c "\$archive"/ { saw_gzip=1 }
+      in_db && /psql "\$PG_DSN" -v ON_ERROR_STOP=1 --single-transaction/ { saw_psql=1; saw_single_tx=1 }
+      in_db && /^}/ {
+        if (!(saw_gzip && saw_psql && saw_single_tx)) {
+          printf "%s Sub2API database restore must replay gzip dumps through psql with ON_ERROR_STOP in one transaction\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_db=0
+      }
+      /^_sub2api_restore_rollback_artifacts\(\)/ { in_rollback=1; saw_restart_on_failure=0; next }
+      in_rollback && /systemctl start "\$SERVICE_NAME"/ { saw_restart_on_failure=1 }
+      in_rollback && /^}/ {
+        if (!saw_restart_on_failure) {
+          printf "%s Sub2API restore rollback must restart the service after restoring artifacts\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_rollback=0
+      }
+      /^do_restore\(\)/ { in_restore=1; saw_db_call=0; saw_rollback=0; saw_failure_error=0; saw_unavailable_error=0; next }
+      in_restore && /_sub2api_restore_database_file "\$db_archive"/ { saw_db_call=1 }
+      in_restore && /_sub2api_restore_rollback_artifacts/ { saw_rollback=1 }
       in_restore && /app\.sub2api\.error\.database_restore_failed/ { saw_failure_error=1 }
       in_restore && /app\.sub2api\.error\.database_restore_unavailable/ { saw_unavailable_error=1 }
-      in_restore && /binary_app\.warn\.rollback_start_failed|binary_app\.error\.backup_failed/ { saw_legacy_warn=1 }
       in_restore && /^}/ {
-        if (!(saw_gzip && saw_psql && saw_restart_on_failure && saw_failure_error && saw_unavailable_error) || saw_legacy_warn) {
-          printf "%s Sub2API database restore must use psql ON_ERROR_STOP and fail closed after restarting the service\n", FILENAME > "/dev/stderr"
+        if (!(saw_db_call && saw_rollback && saw_failure_error && saw_unavailable_error)) {
+          printf "%s Sub2API database restore must use the transactional helper and roll back surrounding artifacts\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_restore=0
       }
     ' impl/install_sub2api.sh || return 1
   grep -Fq 'app.sub2api.error.database_restore_failed' apps/sub2api.sh     && grep -Fq 'app.sub2api.error.database_restore_unavailable' apps/sub2api.sh     || { echo "Sub2API database restore failures must have localized guidance." >&2; return 1; }
+}
+
+check_sub2api_restore_is_transactional() {
+  awk '
+      /^do_restore\(\)/ {
+        in_restore=1; data_stage=0; conf_stage=0; stop_line=0
+        snapshot_call=0; snapshot_clean=0; db_line=0; health_line=0; rollback_line=0; next
+      }
+      in_restore && /_sub2api_stage_restore_directory "\$DATA_DIR"/ && !data_stage { data_stage=NR }
+      in_restore && /_sub2api_stage_restore_directory "\$CONFIG_DIR"/ && !conf_stage { conf_stage=NR }
+      in_restore && /systemctl stop "\$SERVICE_NAME"/ && !stop_line { stop_line=NR }
+      in_restore && /backup_create_gzip_archive "\$db_snapshot"/ && !snapshot_call { snapshot_call=NR }
+      in_restore && /--clean --if-exists "\$PG_DSN"/ && !snapshot_clean { snapshot_clean=NR }
+      in_restore && /_sub2api_restore_database_file "\$db_archive"/ && !db_line { db_line=NR }
+      in_restore && /_health_check/ && !health_line { health_line=NR }
+      in_restore && /_sub2api_restore_rollback_artifacts/ && !rollback_line { rollback_line=NR }
+      in_restore && /^}/ {
+        if (!(data_stage && conf_stage && stop_line && snapshot_call && snapshot_clean && db_line && health_line && rollback_line)) {
+          print "Sub2API restore must stage both directories and snapshot the database before mutations, then verify health before rollback cleanup" > "/dev/stderr"
+          exit 1
+        }
+        if (!(data_stage < stop_line && conf_stage < stop_line)) {
+          print "Sub2API restore must finish staging data and config before stopping the service" > "/dev/stderr"
+          exit 1
+        }
+        if (!(stop_line < snapshot_call && snapshot_call < snapshot_clean && snapshot_clean < db_line && db_line < health_line && health_line < rollback_line)) {
+          print "Sub2API restore must snapshot before restoring the database, and keep the transaction open until health verification or rollback" > "/dev/stderr"
+          exit 1
+        }
+        in_restore=0
+      }
+    ' impl/install_sub2api.sh || return 1
+  if grep -Fq 'backup_restore_data_dir "$DATA_DIR"' impl/install_sub2api.sh \
+      || grep -Fq 'backup_restore_directory "$CONFIG_DIR"' impl/install_sub2api.sh; then
+    echo "Sub2API multi-artifact restore must not delegate to helpers that discard rollback copies per directory." >&2
+    return 1
+  fi
+  grep -Fq 'app.sub2api.error.restore_rollback_failed' apps/sub2api.sh \
+    && grep -Fq 'app.sub2api.error.restore_transaction_start_failed' apps/sub2api.sh \
+    || {
+      echo "Sub2API transactional restore failures must have localized rollback guidance." >&2
+      return 1
+    }
 }
 
 # Exercise the restore boundary with a real tar/gzip archive and a failing psql
@@ -553,9 +615,16 @@ printf "%s\n" "$*" >> "$PSQL_ARGS_LOG"
 cat >/dev/null
 exit 1
 PSQL
+    cat > "$tmp/bin/pg_dump" <<'"'"'PGDUMP'"'"'
+#!/usr/bin/env bash
+printf "%s\n" "$*" >> "$PG_DUMP_ARGS_LOG"
+printf "pre-restore snapshot\n"
+PGDUMP
     chmod +x "$tmp/bin/psql"
+    chmod +x "$tmp/bin/pg_dump"
     export PATH="$tmp/bin:$PATH"
     export PSQL_ARGS_LOG="$tmp/psql.args"
+    export PG_DUMP_ARGS_LOG="$tmp/pg_dump.args"
     BACKUP_DIR="$tmp/backups"
     DATA_DIR="$tmp/data"
     CONFIG_DIR="$tmp/config"
@@ -570,6 +639,7 @@ PSQL
     info() { :; }
     success() { :; }
     systemctl() { printf "%s %s\n" "$1" "${2:-}" >> "$tmp/systemctl.log"; return 0; }
+    wait_for_service() { return 0; }
     set +e
     ( do_restore ) >/dev/null 2>&1
     status=$?
@@ -578,7 +648,74 @@ PSQL
     grep -Fxq "stop testsvc" "$tmp/systemctl.log" || exit 12
     grep -Fxq "start testsvc" "$tmp/systemctl.log" || exit 13
     [[ ! -e "$DATA_DIR/restored.txt" && -e "$DATA_DIR/old.txt" ]] || exit 14
-    grep -Fqx "postgresql://example.invalid/sub2api -v ON_ERROR_STOP=1" "$PSQL_ARGS_LOG" || exit 15
+    grep -Fqx "postgresql://example.invalid/sub2api -v ON_ERROR_STOP=1 --single-transaction" "$PSQL_ARGS_LOG" || exit 15
+    grep -Fq -- "--clean --if-exists postgresql://example.invalid/sub2api" "$PG_DUMP_ARGS_LOG" || exit 16
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
+check_sub2api_restore_rolls_back_all_artifacts_on_health_failure() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_sub2api.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin" "$tmp/backups" "$tmp/stage-data/data" \
+      "$tmp/stage-config/config" "$tmp/data" "$tmp/config"
+    printf old-data > "$tmp/data/old.txt"
+    printf old-config > "$tmp/config/old.conf"
+    printf new-data > "$tmp/stage-data/data/new.txt"
+    printf new-config > "$tmp/stage-config/config/new.conf"
+    tar -czf "$tmp/backups/sub2api_data_20261031_000000.tar.gz" -C "$tmp/stage-data" data
+    tar -czf "$tmp/backups/sub2api_conf_20261031_000000.tar.gz" -C "$tmp/stage-config" config
+    printf "ARCHIVED_DB\n" | gzip -c > "$tmp/backups/sub2api_db_20261031_000000.sql.gz"
+    cat > "$tmp/bin/pg_dump" <<'"'"'PGDUMP'"'"'
+#!/usr/bin/env bash
+printf "PRE_DB\n"
+PGDUMP
+    cat > "$tmp/bin/psql" <<'"'"'PSQL'"'"'
+#!/usr/bin/env bash
+body="$(cat)"
+printf "%s\n" "$body" >> "$PSQL_LOG"
+PSQL
+    chmod +x "$tmp/bin/pg_dump" "$tmp/bin/psql"
+    export PATH="$tmp/bin:$PATH"
+    export PSQL_LOG="$tmp/psql.log"
+    BACKUP_DIR="$tmp/backups"
+    DATA_DIR="$tmp/data"
+    CONFIG_DIR="$tmp/config"
+    SERVICE_NAME=testsvc
+    SERVICE_USER=testsvc
+    PG_DSN="postgresql://example.invalid/sub2api"
+    show_banner() { :; }
+    require_root() { :; }
+    app_load_config() { :; }
+    acquire_lock() { :; }
+    step() { :; }
+    require_safe_path() { :; }
+    info() { :; }
+    success() { :; }
+    warn() { :; }
+    systemctl() { return 0; }
+    wait_for_service() { return 0; }
+    chown() { return 0; }
+    _health_check() { return 1; }
+    set +e
+    ( do_restore ) >/dev/null 2>&1
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || exit 21
+    [[ -f "$DATA_DIR/old.txt" && ! -e "$DATA_DIR/new.txt" ]] || exit 22
+    [[ -f "$CONFIG_DIR/old.conf" && ! -e "$CONFIG_DIR/new.conf" ]] || exit 23
+    [[ "$(sed -n "1p" "$PSQL_LOG")" == "ARCHIVED_DB" ]] || exit 24
+    [[ "$(sed -n "2p" "$PSQL_LOG")" == "PRE_DB" ]] || exit 25
+    if find "$tmp" -maxdepth 2 \( -name ".*.restore.*" -o -name ".sub2api-pre-restore.*" \) \
+        -print -quit | grep -q .; then
+      exit 26
+    fi
     echo ok
   ')"
   [[ "$output" == ok ]]

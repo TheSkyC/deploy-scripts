@@ -858,7 +858,7 @@ _log "── ${MSG_START} ──────────────────
 # ── 1. PostgreSQL database backup ─────────────────────────────
 if [[ -n "${PG_DSN}" ]] && command -v pg_dump &>/dev/null; then
   _log "${MSG_PG_DUMP_START}"
-  if pg_dump "${PG_DSN}" 2> >(
+  if pg_dump --clean --if-exists "${PG_DSN}" 2> >(
       while IFS= read -r line; do
         _log "[PG_DUMP] ${line}"
       done
@@ -969,7 +969,8 @@ _backup_silent() {
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive
     pg_archive="${BACKUP_DIR}/sub2api_db_${label}_${backup_ts}.sql.gz"
-    if backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr "${PG_DSN}"; then
+    if backup_create_gzip_archive "$pg_archive" _sub2api_pg_dump_prefixed_stderr \
+        --clean --if-exists "${PG_DSN}"; then
       if ! backup_finalize_archive "$pg_archive" "$APP_ID" "${INSTALLED_VERSION:-}"; then
         warn "$(t app.sub2api.warn.backup_integrity "$pg_archive")"
       fi
@@ -1344,7 +1345,8 @@ do_backup() {
     if command -v pg_dump &>/dev/null; then
       local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_${backup_ts}.sql.gz"
       info "$(t app.sub2api.info.pg_dump)"
-      if backup_create_gzip_archive "$PG_ARCHIVE" pg_dump "${PG_DSN}"; then
+      if backup_create_gzip_archive "$PG_ARCHIVE" pg_dump \
+          --clean --if-exists "${PG_DSN}"; then
         if ! backup_finalize_archive "$PG_ARCHIVE" "$APP_ID" "${INSTALLED_VERSION:-}"; then
           warn "$(t app.sub2api.warn.backup_integrity "$PG_ARCHIVE")"
         fi
@@ -1742,12 +1744,166 @@ do_verify() {
   app_verify_latest_backup "$BACKUP_DIR" 'sub2api_*.tar.gz' 'sub2api_db_*.sql.gz'
 }
 
+# Remove one restore staging path, warning instead of aborting when cleanup
+# itself fails. Restore failures must keep their original diagnostic.
+_sub2api_cleanup_restore_path() {
+  local path="$1"
+  [[ -n "$path" ]] || return 0
+  rm -rf "$path" 2>/dev/null && return 0
+  warn "$(t app.sub2api.warn.restore_staging_cleanup_failed "$path")"
+  return 1
+}
+
+_sub2api_cleanup_restore_paths() {
+  local path
+  for path in "$@"; do
+    _sub2api_cleanup_restore_path "$path" || true
+  done
+}
+
+# Extract a restore archive into a private directory beside its destination and
+# resolve both the archive's top-level layout and legacy bare-payload layout.
+# The caller receives the staging root for cleanup and the payload path to move.
+_sub2api_stage_restore_directory() {
+  local target_dir="$1" archive="$2"
+  local target_parent target_base extract_dir payload
+  SUB2API_RESTORE_STAGE_ROOT=""
+  SUB2API_RESTORE_STAGE_PAYLOAD=""
+  target_parent="$(dirname "$target_dir")"
+  target_base="$(basename "$target_dir")"
+  if ! mkdir -p "$target_parent"; then
+    return 1
+  fi
+  if ! extract_dir="$(mktemp -d "${target_parent}/.${target_base}.restore.XXXXXX")"; then
+    return 1
+  fi
+  if ! tar -xzf "$archive" -C "$extract_dir" >&2; then
+    _sub2api_cleanup_restore_path "$extract_dir" || true
+    return 1
+  fi
+  if [[ -d "${extract_dir}/${target_base}" ]]; then
+    payload="${extract_dir}/${target_base}"
+  elif [[ -e "${extract_dir}/${target_base}" || -L "${extract_dir}/${target_base}" ]]; then
+    _sub2api_cleanup_restore_path "$extract_dir" || true
+    return 1
+  elif [[ -n "$(find "$extract_dir" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+    # Legacy archives stored the directory contents directly at archive root.
+    payload="$extract_dir"
+  else
+    _sub2api_cleanup_restore_path "$extract_dir" || true
+    return 1
+  fi
+  SUB2API_RESTORE_STAGE_ROOT="$extract_dir"
+  SUB2API_RESTORE_STAGE_PAYLOAD="$payload"
+}
+
+# Swap one directory using the already-staged payload. Return 0 after a
+# successful swap, 1 when the existing directory could not be set aside (no
+# live mutation), and 2 when the new payload could not be installed (the old
+# directory may be in the aside path and must be rolled back).
+_sub2api_restore_swap_directory() {
+  local target_dir="$1" payload="$2" aside_path="$3"
+  if [[ -e "$target_dir" || -L "$target_dir" ]]; then
+    [[ -n "$aside_path" ]] || return 1
+    mv "$target_dir" "$aside_path" || return 1
+  fi
+  mv "$payload" "$target_dir" || return 2
+}
+
+_sub2api_restore_rollback_directory() {
+  local target_dir="$1" aside_path="$2" had_old="$3"
+  rm -rf "$target_dir" || return 1
+  if [[ "$had_old" == true ]]; then
+    mv "$aside_path" "$target_dir" || return 1
+  fi
+}
+
+# PostgreSQL restores run in one transaction so a failed dump cannot leave the
+# live database half-updated. Backups created by this installer use
+# --clean --if-exists, which makes replaying a dump idempotent.
+_sub2api_restore_database_file() {
+  local archive="$1"
+  gunzip -c "$archive" \
+    | psql "$PG_DSN" -v ON_ERROR_STOP=1 --single-transaction >&2
+}
+
+# Roll back every artifact changed by do_restore. The service is stopped first;
+# if it cannot be stopped, live paths are left untouched and the caller keeps
+# all recovery copies. Returns nonzero only when a live artifact could not be
+# restored, allowing the caller to point the operator at preserved copies.
+_sub2api_restore_rollback_artifacts() {
+  local db_restored="$1" db_snapshot="$2"
+  local data_swapped="$3" data_aside="$4" data_aside_root="$5" had_data="$6"
+  local conf_swapped="$7" conf_aside="$8" conf_aside_root="$9" had_conf="${10}"
+  local rollback_ok=true can_mutate=true
+  if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null \
+      && ! systemctl stop "$SERVICE_NAME" >/dev/null 2>&1; then
+    warn "$(t app.sub2api.warn.restore_rollback_stop_failed "$SERVICE_NAME" "$SERVICE_NAME")"
+    can_mutate=false
+    rollback_ok=false
+  fi
+  if [[ "$can_mutate" == true ]]; then
+    if [[ "$data_swapped" == true ]]; then
+      if _sub2api_restore_rollback_directory "$DATA_DIR" "$data_aside" "$had_data"; then
+        _sub2api_cleanup_restore_path "$data_aside_root" || true
+      else
+        rollback_ok=false
+      fi
+    elif [[ -n "$data_aside_root" ]]; then
+      rmdir "$data_aside_root" 2>/dev/null || true
+    fi
+    if [[ "$conf_swapped" == true ]]; then
+      if _sub2api_restore_rollback_directory "$CONFIG_DIR" "$conf_aside" "$had_conf"; then
+        _sub2api_cleanup_restore_path "$conf_aside_root" || true
+      else
+        rollback_ok=false
+      fi
+    elif [[ -n "$conf_aside_root" ]]; then
+      rmdir "$conf_aside_root" 2>/dev/null || true
+    fi
+    if [[ "$db_restored" == true ]]; then
+      if _sub2api_restore_database_file "$db_snapshot"; then
+        _sub2api_cleanup_restore_path "$db_snapshot" || true
+      else
+        rollback_ok=false
+      fi
+    fi
+  fi
+  if [[ "$db_restored" != true && -n "$db_snapshot" ]]; then
+    # The database transaction either never started or rolled back on failure.
+    _sub2api_cleanup_restore_path "$db_snapshot" || true
+  fi
+  if systemctl start "$SERVICE_NAME" 2>/dev/null; then
+    wait_for_service "$SERVICE_NAME" 20 \
+      || warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+  else
+    warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+  fi
+  if [[ "$rollback_ok" == true ]]; then
+    success "$(t backup.restore.rollback_done)"
+  fi
+  [[ "$rollback_ok" == true ]]
+}
+
+_sub2api_restore_recovery_paths() {
+  local path output="" entries
+  for path in "$@"; do
+    [[ -n "$path" && -e "$path" ]] || continue
+    if [[ -d "$path" ]]; then
+      entries="$(find "$path" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true)"
+      [[ -n "$entries" ]] || continue
+    fi
+    output+="${output:+, }$path"
+  done
+  printf '%s\n' "$output"
+}
+
 # Restore from the three artifacts do_backup/cron produce: the data tar
 # (sub2api_data_*.tar.gz), the optional config tar (sub2api_conf_*.tar.gz),
-# and the optional pg_dump (sub2api_db_*.sql.gz). The service is stopped
-# while data and config are swapped atomically; the database restore pipes
-# the dump back through psql. Each stage aside-copies its target so a failed
-# extraction or a service that will not restart rolls back cleanly.
+# and the optional pg_dump (sub2api_db_*.sql.gz). Data and config are fully
+# staged before the service stops. The database, directories, and service
+# health are one logical transaction: later failures replay a private
+# pre-restore database snapshot and swap the original directories back.
 do_restore() {
   show_banner
   require_root "restore"
@@ -1783,6 +1939,19 @@ do_restore() {
     warn "$(t app.sub2api.warn.restore_no_matching_db "$run_ts")"
   fi
 
+  if [[ -n "$db_archive" ]] \
+      && { ! command -v psql >/dev/null 2>&1 \
+        || ! command -v pg_dump >/dev/null 2>&1 \
+        || [[ -z "${PG_DSN:-}" ]]; }; then
+    error "$(t app.sub2api.error.database_restore_unavailable "$db_archive")"
+  fi
+  if [[ -f "${data_archive}.sha256" ]] && ! backup_verify_archive "$data_archive"; then
+    error "$(t backup.verify.failed "$(basename "$data_archive")")"
+  fi
+  if [[ -n "$conf_archive" && -f "${conf_archive}.sha256" ]] \
+      && ! backup_verify_archive "$conf_archive"; then
+    error "$(t backup.verify.failed "$(basename "$conf_archive")")"
+  fi
   if ! backup_validate_archive_members "$data_archive"; then
     error "$(t backup.restore.invalid_archive "$data_archive")"
   fi
@@ -1794,48 +1963,114 @@ do_restore() {
   fi
   info "$(t backup.restore.using "$data_archive")"
 
-  systemctl stop "$SERVICE_NAME" \
-    || error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
-
-  # ── database first: psql cannot be rolled back atomically, so restore it
-  # before swapping the data/config directories. A failure here leaves the
-  # directories untouched, so the caller only has to restart the service.
-  if [[ -n "$db_archive" ]]; then
-    if command -v psql >/dev/null 2>&1 && [[ -n "${PG_DSN:-}" ]]; then
-      if ! gunzip -c "$db_archive" | psql "$PG_DSN" -v ON_ERROR_STOP=1 >&2; then
-        if ! systemctl start "$SERVICE_NAME"; then
-          error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-        fi
-        error "$(t app.sub2api.error.database_restore_failed "$db_archive")"
-      fi
-    else
-      if ! systemctl start "$SERVICE_NAME"; then
-        error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-      fi
-      error "$(t app.sub2api.error.database_restore_unavailable "$db_archive")"
-    fi
+  local data_stage_root="" data_payload="" conf_stage_root="" conf_payload=""
+  if ! _sub2api_stage_restore_directory "$DATA_DIR" "$data_archive"; then
+    error "$(t app.sub2api.error.restore_stage_failed "$data_archive")"
   fi
-
-  # ── data directory: atomic swap with aside copy. The empty service argument
-  # tells the shared helper that this caller owns the service lifecycle.
-  if ! backup_restore_data_dir "$DATA_DIR" "" "$data_archive" \
-      "${SERVICE_USER}:${SERVICE_USER}"; then
-    systemctl start "$SERVICE_NAME" || true
-    error "$(t backup.restore.invalid_archive "$data_archive")"
-  fi
-
-  # ── config directory: use the shared directory swap while this caller owns
-  # the service lifecycle. The helper returns failures instead of exiting so
-  # this path can always restart the service before reporting the error.
+  data_stage_root="$SUB2API_RESTORE_STAGE_ROOT"
+  data_payload="$SUB2API_RESTORE_STAGE_PAYLOAD"
   if [[ -n "$conf_archive" ]]; then
-    if ! backup_restore_directory "$CONFIG_DIR" "$conf_archive"; then
-      systemctl start "$SERVICE_NAME" || true
-      error "$(t backup.restore.invalid_archive "$conf_archive")"
+    if ! _sub2api_stage_restore_directory "$CONFIG_DIR" "$conf_archive"; then
+      _sub2api_cleanup_restore_paths "$data_stage_root"
+      error "$(t app.sub2api.error.restore_stage_failed "$conf_archive")"
+    fi
+    conf_stage_root="$SUB2API_RESTORE_STAGE_ROOT"
+    conf_payload="$SUB2API_RESTORE_STAGE_PAYLOAD"
+  fi
+
+  local data_parent data_base conf_parent conf_base
+  data_parent="$(dirname "$DATA_DIR")"
+  data_base="$(basename "$DATA_DIR")"
+  conf_parent="$(dirname "$CONFIG_DIR")"
+  conf_base="$(basename "$CONFIG_DIR")"
+  local data_aside_root="" data_aside="" had_data=false
+  local conf_aside_root="" conf_aside="" had_conf=false
+  if [[ -e "$DATA_DIR" || -L "$DATA_DIR" ]]; then
+    had_data=true
+    if ! data_aside_root="$(mktemp -d "${data_parent}/.${data_base}.restore-aside.XXXXXX")"; then
+      _sub2api_cleanup_restore_paths "$data_stage_root" "$conf_stage_root"
+      error "$(t app.sub2api.error.restore_stage_failed "$data_archive")"
+    fi
+    data_aside="${data_aside_root}/${data_base}"
+  fi
+  if [[ -e "$CONFIG_DIR" || -L "$CONFIG_DIR" ]]; then
+    had_conf=true
+    if ! conf_aside_root="$(mktemp -d "${conf_parent}/.${conf_base}.restore-aside.XXXXXX")"; then
+      _sub2api_cleanup_restore_paths "$data_stage_root" "$conf_stage_root" "$data_aside_root"
+      error "$(t app.sub2api.error.restore_stage_failed "$conf_archive")"
+    fi
+    conf_aside="${conf_aside_root}/${conf_base}"
+  fi
+
+  systemctl stop "$SERVICE_NAME" \
+    || {
+      _sub2api_cleanup_restore_paths \
+        "$data_stage_root" "$conf_stage_root" "$data_aside_root" "$conf_aside_root"
+      error "$(t backup.restore.stop_failed "$SERVICE_NAME")"
+    }
+
+  local db_snapshot="" db_restored=false failure_message=""
+  local data_swapped=false conf_swapped=false swap_status
+  if [[ -n "$db_archive" ]]; then
+    if ! db_snapshot="$(mktemp "${BACKUP_DIR}/.sub2api-pre-restore.XXXXXX.sql.gz")"; then
+      failure_message="$(t app.sub2api.error.restore_snapshot_failed)"
+    elif ! backup_create_gzip_archive "$db_snapshot" _sub2api_pg_dump_prefixed_stderr \
+        --clean --if-exists "$PG_DSN"; then
+      failure_message="$(t app.sub2api.error.restore_snapshot_failed)"
+    elif ! _sub2api_restore_database_file "$db_archive"; then
+      failure_message="$(t app.sub2api.error.database_restore_failed "$db_archive")"
+    else
+      db_restored=true
     fi
   fi
 
-  systemctl start "$SERVICE_NAME" \
-    || error "$(t binary_app.error.install_start_failed "$SERVICE_NAME" "$SERVICE_NAME")"
-  wait_for_service "$SERVICE_NAME" 20 || true
+  if [[ -z "$failure_message" ]]; then
+    if _sub2api_restore_swap_directory "$DATA_DIR" "$data_payload" "$data_aside"; then
+      data_swapped=true
+    else
+      swap_status=$?
+      [[ "$swap_status" -eq 2 ]] && data_swapped=true
+      failure_message="$(t backup.restore.invalid_archive "$data_archive")"
+    fi
+  fi
+  if [[ -z "$failure_message" ]] \
+      && ! chown -R "${SERVICE_USER}:${SERVICE_USER}" "$DATA_DIR"; then
+    failure_message="$(t app.sub2api.error.dir_owner "${SERVICE_USER}:${SERVICE_USER}" "$DATA_DIR")"
+  fi
+  if [[ -z "$failure_message" && -n "$conf_archive" ]]; then
+    if _sub2api_restore_swap_directory "$CONFIG_DIR" "$conf_payload" "$conf_aside"; then
+      conf_swapped=true
+    else
+      swap_status=$?
+      [[ "$swap_status" -eq 2 ]] && conf_swapped=true
+      failure_message="$(t backup.restore.invalid_archive "$conf_archive")"
+    fi
+  fi
+
+  if [[ -z "$failure_message" ]] \
+      && { ! systemctl start "$SERVICE_NAME" \
+        || ! wait_for_service "$SERVICE_NAME" 20 \
+        || ! _health_check; }; then
+    failure_message="$(t app.sub2api.error.restore_transaction_start_failed "$SERVICE_NAME")"
+  fi
+
+  if [[ -n "$failure_message" ]]; then
+    if ! _sub2api_restore_rollback_artifacts \
+        "$db_restored" "$db_snapshot" \
+        "$data_swapped" "$data_aside" "$data_aside_root" "$had_data" \
+        "$conf_swapped" "$conf_aside" "$conf_aside_root" "$had_conf"; then
+      local recovery_paths
+      recovery_paths="$(_sub2api_restore_recovery_paths \
+        "$db_snapshot" "$data_aside_root" "$conf_aside_root")"
+      _sub2api_cleanup_restore_paths "$data_stage_root" "$conf_stage_root"
+      [[ -n "$recovery_paths" ]] || recovery_paths="systemctl status $SERVICE_NAME"
+      error "$(t app.sub2api.error.restore_rollback_failed "$recovery_paths")"
+    fi
+    _sub2api_cleanup_restore_paths "$data_stage_root" "$conf_stage_root"
+    error "$failure_message"
+  fi
+
+  _sub2api_cleanup_restore_paths \
+    "$data_stage_root" "$conf_stage_root" "$data_aside_root" "$conf_aside_root" "$db_snapshot"
   success "$(t backup.restore.restored "$(basename "$data_archive")")"
 }
