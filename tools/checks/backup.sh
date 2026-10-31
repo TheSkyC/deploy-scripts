@@ -450,6 +450,25 @@ check_binary_replacements_handle_failure() {
       }
  ' lib/binary_app.sh
   awk '
+      /bapp_update\(\)/ { in_update=1; saw_reload=0; saw_rollback=0; saw_error=0; next }
+      in_update && /if ! command systemctl daemon-reload; then/ { saw_reload=1; next }
+      in_update && saw_reload && /_bapp_rollback_update_binary "\$bak_path" "\$current"/ { saw_rollback=1 }
+      in_update && saw_reload && /error "\$\(t binary_app\.error\.systemd_reload "\$SERVICE_NAME"\)"/ {
+        if (!saw_rollback) {
+          printf "%s binary-app update must roll back before reporting a daemon-reload failure\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        saw_error=1
+      }
+      in_update && /^}/ {
+        if (!(saw_reload && saw_rollback && saw_error)) {
+          printf "%s binary-app update must handle daemon-reload failure with a verified rollback\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+ ' lib/binary_app.sh
+  awk '
       /_restore_moved_binary_backup\(\)/ { in_func=1; saw_tmp=0; saw_tmp_return=0; saw_cp=0; saw_chmod=0; saw_chown=0; saw_mv=0; saw_cleanup=0; saw_app_helper=0; next }
       in_func && /app_binary_restore_moved_backup "\$1"/ { saw_app_helper=1 }
       in_func && /if ! restore_tmp=\$\(mktemp "\$\{BIN_PATH\}\.restore\.XXXXXX"\); then/ { saw_tmp=1 }

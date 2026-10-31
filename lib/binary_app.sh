@@ -1403,6 +1403,29 @@ _ba_prune_old_bins() {
     binary_app.warn.cleanup_old_failed binary_app.info.cleaned_old 3 f
 }
 
+# Restore the previous binary and wait for it to become active. Callers report
+# the original update failure after this best-effort recovery completes.
+_bapp_rollback_update_binary() {
+  local bak_path="$1" previous_version="$2"
+  if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
+    error "$(t binary_app.error.rollback_stop_failed "$SERVICE_NAME")"
+  fi
+  if ! app_binary_restore_backup "$bak_path"; then
+    warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+    return 1
+  fi
+  if systemctl start "$SERVICE_NAME"; then
+    if wait_for_service "$SERVICE_NAME" 15; then
+      success "$(t binary_app.success.rollback "$previous_version")"
+      return 0
+    fi
+    warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+    return 1
+  fi
+  warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
+  return 1
+}
+
 bapp_update() {
   show_banner
   bapp_preflight "update"
@@ -1478,6 +1501,8 @@ bapp_update() {
   fi
   ba_install_binary "$tmp_bin"
   if ! command systemctl daemon-reload; then
+    _bapp_rollback_update_binary "$bak_path" "$current" \
+      || error "$(t binary_app.error.update_failed "$current")"
     error "$(t binary_app.error.systemd_reload "$SERVICE_NAME")"
   fi
   if systemctl start "$SERVICE_NAME" && wait_for_service "$SERVICE_NAME" 20; then
@@ -1495,22 +1520,8 @@ bapp_update() {
     echo ""
   else
     warn "$(t binary_app.warn.update_start_failed "$current")"
-    if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
-      error "$(t binary_app.error.rollback_stop_failed "$SERVICE_NAME")"
-    fi
-    if ! app_binary_restore_backup "$bak_path"; then
-      warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
-      error "$(t binary_app.error.update_failed "$current")"
-    fi
-    if systemctl start "$SERVICE_NAME"; then
-      if wait_for_service "$SERVICE_NAME" 15; then
-        success "$(t binary_app.success.rollback "$current")"
-      else
-        warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
-      fi
-    else
-      warn "$(t binary_app.warn.rollback_start_failed "$SERVICE_NAME")"
-    fi
+    _bapp_rollback_update_binary "$bak_path" "$current" \
+      || error "$(t binary_app.error.update_failed "$current")"
     error "$(t binary_app.error.update_failed "$current")"
   fi
 }
