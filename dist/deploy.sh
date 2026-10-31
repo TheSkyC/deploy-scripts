@@ -2021,7 +2021,13 @@ backup_restore_data_dir() {
   data_base="$(basename "$data_dir")"
   # A timestamp-only aside path is not collision safe: a leftover directory
   # from a previous failed restore would make mv move the data *inside* it.
-  aside_dir="$(mktemp -d "${data_parent}/.${data_base}.restore-aside.XXXXXX")" || return 1
+  if ! aside_dir="$(mktemp -d "${data_parent}/.${data_base}.restore-aside.XXXXXX")"; then
+    if [[ -n "$service_name" ]]; then
+      systemctl start "$service_name" || true
+      error "$(t backup.restore.invalid_archive "$archive")"
+    fi
+    return 1
+  fi
   staged_aside="${aside_dir}/${data_base}"
   if ! mv "$data_dir" "$staged_aside"; then
     rm -rf "$aside_dir"
