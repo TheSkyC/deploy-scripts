@@ -454,14 +454,15 @@ check_blog_install_summary_matches_local_health() {
       }
     ' apps/blog.sh
   awk '
-      /step "\$\(t app\.blog\.step_health\)"/ { in_health=1; saw_state=0; saw_host_header=0; saw_pending=0; saw_pending_title=0; saw_ready_title=0; next }
+      /step "\$\(t app\.blog\.step_health\)"/ { in_health=1; saw_state=0; saw_probe=0; saw_host_header=0; saw_pending=0; saw_pending_title=0; saw_ready_title=0; next }
       in_health && /local _blog_summary_state="ready"/ { saw_state=1 }
-      in_health && /curl -H "Host: \$\{BLOG_DOMAIN:-localhost\}"/ { saw_host_header=1 }
+      in_health && /app_http_status_code/ && /127\.0\.0\.1/ { saw_probe=1 }
+      in_health && /-H "Host: \$\{BLOG_DOMAIN:-localhost\}"/ { saw_host_header=1 }
       in_health && /_blog_summary_state="pending"/ { saw_pending=1 }
       in_health && /app\.blog\.summary_title_pending/ { saw_pending_title=1 }
       in_health && /app\.blog\.summary_title_ready/ { saw_ready_title=1 }
       in_health && /echo "  ╚══════════════════════════════════════════════════════╝"/ {
-        if (!(saw_state && saw_host_header && saw_pending && saw_pending_title && saw_ready_title)) {
+        if (!(saw_state && saw_probe && saw_host_header && saw_pending && saw_pending_title && saw_ready_title)) {
           printf "%s Blog install summary must track local health state and probe the configured host locally\n", FILENAME > "/dev/stderr"
           exit 1
         }
