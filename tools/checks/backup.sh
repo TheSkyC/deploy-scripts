@@ -414,6 +414,16 @@ check_backup_temp_moves_handle_failure() {
     echo "Backup temporary files must be removed when the final move fails." >&2
     return 1
   fi
+  if grep -R -nE '^[[:space:]]*mv .*&& [A-Za-z_][A-Za-z0-9_]*=(true|1)[[:space:];]*$' \
+      lib impl 2>/dev/null; then
+    echo "Restore staging moves must fail fast instead of flagging partial success on one line." >&2
+    return 1
+  fi
+  if grep -R -nE 'mv .*\|\|[[:space:]]*\{[[:space:]]*rm -rf "\$(aside|restore_bak)_dir"' \
+      lib impl 2>/dev/null; then
+    echo "Failed restore staging moves must preserve aside data for rollback." >&2
+    return 1
+  fi
 }
 
 check_binary_replacements_handle_failure() {
