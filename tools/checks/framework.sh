@@ -170,3 +170,62 @@ check_logging_colors_are_tty_gated() {
       || { echo "TERM=dumb did not override DEPLOY_FORCE_COLOR" >&2; exit 1; }
   ' _ "$ROOT_DIR"
 }
+
+check_binary_app_archive_members_are_validated() {
+  BA_TEST_ROOT="$ROOT_DIR" "$BASH_BIN" <<'MEMBERTEST'
+set -euo pipefail
+source "$BA_TEST_ROOT/lib/core.sh"
+APP_ID="membershiptest"
+APP_NAME="MembershipTest"
+GITHUB_REPO="example/membershiptest"
+BA_ARCH="amd64"
+BA_ASSET_TEMPLATE="membershiptest-ARCH.tar.gz"
+BA_BIN_NAME="membershiptest"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/ba-members.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+python - "$tmp/good.tar.gz" <<'PY'
+import io
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "w:gz") as archive:
+    data = b"payload-bytes"
+    info = tarfile.TarInfo("membershiptest")
+    info.size = len(data)
+    archive.addfile(info, io.BytesIO(data))
+PY
+BA_ARCHIVE_TYPE="tar.gz"
+mkdir "$tmp/good-stage"
+good_bin="$(ba_prepare_binary "$tmp/good.tar.gz" "$tmp/good-stage")"
+[[ -n "$good_bin" && -f "$good_bin" ]] || { echo "clean tar.gz did not stage its binary" >&2; exit 1; }
+
+evil_name="../escaped-$(basename "$tmp")"
+python - "$tmp/evil.tar.gz" "$evil_name" <<'PY'
+import io
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "w:gz") as archive:
+    data = b"evil"
+    info = tarfile.TarInfo(sys.argv[2])
+    info.size = len(data)
+    archive.addfile(info, io.BytesIO(data))
+PY
+mkdir "$tmp/evil-stage"
+if ( BA_ARCHIVE_TYPE="tar.gz" ba_prepare_binary "$tmp/evil.tar.gz" "$tmp/evil-stage" ) >/dev/null 2>&1; then
+  echo "tar.gz with a traversal member was accepted" >&2
+  exit 1
+fi
+[[ ! -e "$(dirname "$tmp")/$(basename "$evil_name")" ]] \
+  || { echo "traversal archive escaped the staging directory" >&2; exit 1; }
+[[ -z "$(find "$tmp/evil-stage" -mindepth 1 -print -quit 2>/dev/null)" ]] \
+  || { echo "traversal archive wrote into the staging directory" >&2; exit 1; }
+
+mkdir "$tmp/missing-stage"
+if ( BA_ARCHIVE_TYPE="tar.gz" ba_prepare_binary "$tmp/missing.tar.gz" "$tmp/missing-stage" ) >/dev/null 2>&1; then
+  echo "unreadable archive was accepted" >&2
+  exit 1
+fi
+MEMBERTEST
+}
