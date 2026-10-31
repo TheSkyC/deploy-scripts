@@ -29,6 +29,7 @@ SELF_UPDATE_MANIFEST_VALID=1
 SELF_UPDATE_MANAGER_LOCK_ACQUIRED=0
 
 self_update_validate_channel() {
+  local LC_ALL=C
   [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]]
 }
 

@@ -1111,9 +1111,9 @@ DEPLOY_OPERATION_HISTORY_FILE="${DEPLOY_OPERATION_HISTORY_DIR}/operations.jsonl"
 # briefly so a completed operation can never wait forever during cleanup.
 DEPLOY_OPERATION_STREAM_DRAIN_SECONDS="${DEPLOY_OPERATION_STREAM_DRAIN_SECONDS:-5}"
 
-operation_is_valid_app_id() { [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; }
+operation_is_valid_app_id() { local LC_ALL=C; [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; }
 operation_is_valid_scope() { case "${1:-}" in app|manager|self_update) return 0;; *) return 1;; esac; }
-operation_is_valid_action() { [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; }
+operation_is_valid_action() { local LC_ALL=C; [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; }
 operation_timestamp() { date '+%Y-%m-%dT%H:%M:%S%:z'; }
 operation_run_timestamp() { date '+%Y%m%dT%H%M%S%z'; }
 
@@ -1431,7 +1431,7 @@ operation_start() {
   operation_set_owner_and_mode "$OPERATION_LOG_PATH" 640 || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }
   operation_write_record || { rm -f "$OPERATION_STEPS_FILE"; operation_reset; return 1; }
 }
-operation_step_start() { local name="$1" now updated; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$name" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 1; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; awk -F '\t' -v name="$name" '$1 != name { print }' "$OPERATION_STEPS_FILE" > "$updated" || return 1; printf '%s\trunning\t%s\t\n' "$name" "$now" >> "$updated"; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
+operation_step_start() { local name="$1" now updated; [[ "${OPERATION_ACTIVE:-0}" == 1 ]] && operation_is_valid_action "$name" || return 1; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; awk -F '\t' -v name="$name" '$1 != name { print }' "$OPERATION_STEPS_FILE" > "$updated" || return 1; printf '%s\trunning\t%s\t\n' "$name" "$now" >> "$updated"; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_step_finish() { local name="$1" state="${2:-succeeded}" now updated found=0 step_name step_state started_at finished_at; [[ "${OPERATION_ACTIVE:-0}" == 1 ]] || return 1; case "$state" in succeeded|failed|skipped) ;; *) return 2;; esac; now="$(operation_timestamp)"; updated="$(mktemp "${OPERATION_STEPS_FILE}.XXXXXX")" || return 1; while IFS=$'\t' read -r step_name step_state started_at finished_at; do [[ -n "$step_name" ]] || continue; if [[ "$step_name" == "$name" ]]; then printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$started_at" "$now" >> "$updated"; found=1; else printf '%s\t%s\t%s\t%s\n' "$step_name" "$step_state" "$started_at" "$finished_at" >> "$updated"; fi; done < "$OPERATION_STEPS_FILE"; [[ "$found" -eq 1 ]] || { rm -f "$updated"; return 1; }; mv -f "$updated" "$OPERATION_STEPS_FILE"; OPERATION_LAST_STEP="$name"; operation_write_record; }
 operation_finish() { local exit_code="${1:-1}" state="${2:-}" summary="${3:-}"; [[ "${OPERATION_ACTIVE:-0}" == 1 && "$exit_code" =~ ^[0-9]+$ ]] || return 1; [[ -n "$state" ]] || { [[ "$exit_code" -eq 0 ]] && state=succeeded || state=failed; }; case "$state" in succeeded|failed|cancelled|interrupted|rolled_back|rollback_failed) ;; *) return 2;; esac; OPERATION_STATE="$state"; OPERATION_EXIT_CODE="$exit_code"; OPERATION_FINISHED_AT="$(operation_timestamp)"; OPERATION_ERROR_SUMMARY="$(operation_safe_summary "$summary")"; operation_write_record || return 1; operation_append_history || return 1; rm -f "$OPERATION_STEPS_FILE"; operation_reset; }
 # Emit the per-app outcome notification (fail-open, redacted, never changes the
@@ -2544,6 +2544,7 @@ version_check_timestamp_for_epoch() {
 
 version_cache_file_for() {
   local app_id="$1"
+  local LC_ALL=C
   [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
   printf '%s/%s.json\n' "${DEPLOY_VERSION_CACHE_ROOT%/}" "$app_id"
 }
@@ -2717,6 +2718,7 @@ version_check_cached_binary_release_json() {
 version_check_binary_release_json() {
   local app_id="$1" repo="$2" installed="$3" refresh="${4:-0}" no_network="${5:-0}"
   local latest checked_at result cache_state=miss
+  local LC_ALL=C
   [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || {
     version_check_emit_json "$installed" "" "" unsupported github_release unsupported "binary release repository is not configured"
@@ -4078,12 +4080,10 @@ app_http_status_code() {
 # APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
 # config file so independent instances do not clobber each other.
 app_conf_file() {
-  if [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
-    echo "$_APP_CONF_LEGACY"
-    return 0
-  fi
   if [[ -n "${APP_INSTANCE:-}" ]]; then
     echo "/etc/${APP_ID:-app}-${APP_INSTANCE}-deploy.conf"
+  elif [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
+    echo "$_APP_CONF_LEGACY"
   else
     echo "/etc/${APP_ID:-app}-deploy.conf"
   fi
@@ -4131,6 +4131,10 @@ app_load_config() {
 # load when the old file still exists on disk.
 app_conf_register_legacy() {
   local legacy="$1"
+  # Legacy paths belong to the default instance. Letting an instance inherit
+  # them would read and overwrite the default instance's config, defeating the
+  # isolation promised by <app>@<instance>.
+  [[ -z "${APP_INSTANCE:-}" ]] || return 0
   if [[ -f "$legacy" ]]; then
     _APP_CONF_LEGACY="$legacy"
   fi
@@ -6575,6 +6579,7 @@ SELF_UPDATE_MANIFEST_VALID=1
 SELF_UPDATE_MANAGER_LOCK_ACQUIRED=0
 
 self_update_validate_channel() {
+  local LC_ALL=C
   [[ "${1:-}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]]
 }
 
@@ -7790,7 +7795,11 @@ deploy_app_index_for() {
 }
 
 deploy_app_id_from_selection() {
-  local selection index=1 id instance
+  local selection index=1 id instance selection_id
+  # Character ranges are collation-dependent: under UTF-8 locales [a-z] can
+  # also match uppercase or accented characters. Pin C so instance names are
+  # validated byte-exactly.
+  local LC_ALL=C
   selection="$(deploy_trim "${1:-}")"
   case "${selection,,}" in
     q|quit|exit) return 2 ;;
@@ -7798,13 +7807,14 @@ deploy_app_id_from_selection() {
   # <app>@<instance>: split off the instance name and validate both halves.
   # Prints "<app_id> <instance>" (instance empty when not specified).
   if [[ "$selection" == *@* ]]; then
-    id="${selection%%@*}"
+    selection_id="${selection%%@*}"
+    id="$selection_id"
     instance="${selection#*@}"
     if ! [[ "$instance" =~ ^[a-z0-9_-]{1,32}$ ]]; then
       return 1
     fi
     for id in "${DEPLOY_APP_IDS[@]}"; do
-      if [[ "${id,,}" == "${selection%%@*}" ]]; then
+      if [[ "${id,,}" == "${selection_id,,}" ]]; then
         printf '%s %s\n' "$id" "$instance"
         return 0
       fi

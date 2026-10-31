@@ -536,6 +536,7 @@ main() {
       run_isolated_check check_config_sanitization_behavior
       run_isolated_check check_config_key_shape_locale_independent
       run_isolated_check check_config_reserved_keys_are_rejected
+      run_isolated_check check_instance_selection_isolates_config_and_lock
       run_isolated_check check_config_save_failures_are_explicit
       run_isolated_check check_config_value_validators
       run_isolated_check check_config_write_failure_cleanup
@@ -630,6 +631,7 @@ main() {
       run_isolated_check check_service_status_label
       run_isolated_check check_wait_for_service_confirms_stable_start
       run_isolated_check check_shared_validators_accept_and_reject
+      run_isolated_check check_ascii_identifier_validators_are_locale_independent
       run_isolated_check check_silent_backup_tar_diagnostics_use_stderr
       run_isolated_check check_status_commands_allow_non_root
       run_isolated_check check_status_port_matches_are_bounded

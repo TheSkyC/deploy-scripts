@@ -241,12 +241,10 @@ app_http_status_code() {
 # APP_INSTANCE set (deploy.sh <app>@<instance>), each instance gets its own
 # config file so independent instances do not clobber each other.
 app_conf_file() {
-  if [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
-    echo "$_APP_CONF_LEGACY"
-    return 0
-  fi
   if [[ -n "${APP_INSTANCE:-}" ]]; then
     echo "/etc/${APP_ID:-app}-${APP_INSTANCE}-deploy.conf"
+  elif [[ -n "${_APP_CONF_LEGACY:-}" ]]; then
+    echo "$_APP_CONF_LEGACY"
   else
     echo "/etc/${APP_ID:-app}-deploy.conf"
   fi
@@ -294,6 +292,10 @@ app_load_config() {
 # load when the old file still exists on disk.
 app_conf_register_legacy() {
   local legacy="$1"
+  # Legacy paths belong to the default instance. Letting an instance inherit
+  # them would read and overwrite the default instance's config, defeating the
+  # isolation promised by <app>@<instance>.
+  [[ -z "${APP_INSTANCE:-}" ]] || return 0
   if [[ -f "$legacy" ]]; then
     _APP_CONF_LEGACY="$legacy"
   fi

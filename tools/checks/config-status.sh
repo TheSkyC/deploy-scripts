@@ -393,6 +393,52 @@ STUB
   return "$status"
 }
 
+check_instance_selection_isolates_config_and_lock() {
+  local tmp_dir status
+  tmp_dir="$(mktemp -d)" || return 1
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/app_registry.sh"
+    source "$1/lib/app.sh"
+
+    [[ "$(deploy_app_id_from_selection "tickflow@blue")" == "tickflow blue" ]]
+    [[ "$(deploy_app_id_from_selection "TICKFLOW@blue")" == "tickflow blue" ]]
+    [[ "$(deploy_app_id_from_selection "tickflow")" == "tickflow" ]]
+    for invalid in "tickflow@BAD" "tickflow@" "@blue" "tickflow@blue@x"; do
+      set +e
+      deploy_app_id_from_selection "$invalid" >/dev/null 2>&1
+      status=$?
+      set -e
+      [[ "$status" -ne 0 ]] || {
+        echo "Instance selection accepted invalid value: $invalid" >&2
+        exit 1
+      }
+    done
+
+    APP_ID=tickflow
+    APP_INSTANCE=blue
+    # A stale global legacy value must never leak into an instance.
+    _APP_CONF_LEGACY=/etc/tickflow-deploy.conf
+    [[ "$(app_conf_file)" == /etc/tickflow-blue-deploy.conf ]]
+    [[ "$(app_lock_file)" == /var/lock/tickflow-blue-deploy.lock ]]
+
+    _APP_CONF_LEGACY=
+    touch "$2/legacy.conf"
+    app_conf_register_legacy "$2/legacy.conf"
+    [[ -z "${_APP_CONF_LEGACY:-}" ]]
+    [[ "$(app_conf_file)" == /etc/tickflow-blue-deploy.conf ]]
+
+    APP_INSTANCE=
+    app_conf_register_legacy "$2/legacy.conf"
+    [[ "$_APP_CONF_LEGACY" == "$2/legacy.conf" ]]
+    [[ "$(app_conf_file)" == "$2/legacy.conf" ]]
+    [[ "$(app_lock_file)" == /var/lock/tickflow-deploy.lock ]]
+  ' _ "$ROOT_DIR" "$tmp_dir"
+  status=$?
+  rm -rf "$tmp_dir"
+  return "$status"
+}
+
 check_config_save_failures_are_explicit() {
   awk '
       /_write_config_file_content\(\)/ { in_func=1; saw_sanitize=0; saw_printf=0; next }

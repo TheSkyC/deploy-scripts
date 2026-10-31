@@ -464,3 +464,50 @@ check_app_json_string_escapes_controls() {
     exit 0
   ' _ "$ROOT_DIR"
 }
+
+# ASCII identifier validators must not depend on the caller's locale: under
+# UTF-8 locales a [a-z] range also matches uppercase letters, so an uppercase
+# app id, action, channel, or instance could slip through. Exercise the
+# validators under C and representative UTF-8 locales.
+check_ascii_identifier_validators_are_locale_independent() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/app_registry.sh"
+    source "$1/lib/operation.sh"
+    source "$1/lib/version_check.sh"
+    source "$1/lib/self_update.sh"
+
+    for lang in C en_US.UTF-8 zh_CN.UTF-8; do
+      export LC_ALL="$lang"
+
+      [[ "$(deploy_app_id_from_selection "tickflow@blue")" == "tickflow blue" ]] \
+        || { echo "instance selection failed under LC_ALL=$lang" >&2; exit 1; }
+      set +e
+      deploy_app_id_from_selection "tickflow@BLUE" >/dev/null 2>&1
+      status=$?
+      set -e
+      [[ "$status" -ne 0 ]] \
+        || { echo "uppercase instance accepted under LC_ALL=$lang" >&2; exit 1; }
+
+      operation_is_valid_app_id newapi \
+        || { echo "valid app id rejected under LC_ALL=$lang" >&2; exit 1; }
+      operation_is_valid_action install \
+        || { echo "valid action rejected under LC_ALL=$lang" >&2; exit 1; }
+      self_update_validate_channel stable \
+        || { echo "valid channel rejected under LC_ALL=$lang" >&2; exit 1; }
+      version_cache_file_for newapi >/dev/null \
+        || { echo "valid cache app id rejected under LC_ALL=$lang" >&2; exit 1; }
+
+      for fn in operation_is_valid_app_id operation_is_valid_action self_update_validate_channel; do
+        if "$fn" NEWAPI 2>/dev/null; then
+          echo "$fn accepted uppercase under LC_ALL=$lang" >&2
+          exit 1
+        fi
+      done
+      if version_cache_file_for NEWAPI >/dev/null 2>&1; then
+        echo "version_cache_file_for accepted uppercase under LC_ALL=$lang" >&2
+        exit 1
+      fi
+    done
+  ' _ "$ROOT_DIR"
+}

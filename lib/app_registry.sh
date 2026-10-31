@@ -121,7 +121,11 @@ deploy_app_index_for() {
 }
 
 deploy_app_id_from_selection() {
-  local selection index=1 id instance
+  local selection index=1 id instance selection_id
+  # Character ranges are collation-dependent: under UTF-8 locales [a-z] can
+  # also match uppercase or accented characters. Pin C so instance names are
+  # validated byte-exactly.
+  local LC_ALL=C
   selection="$(deploy_trim "${1:-}")"
   case "${selection,,}" in
     q|quit|exit) return 2 ;;
@@ -129,13 +133,14 @@ deploy_app_id_from_selection() {
   # <app>@<instance>: split off the instance name and validate both halves.
   # Prints "<app_id> <instance>" (instance empty when not specified).
   if [[ "$selection" == *@* ]]; then
-    id="${selection%%@*}"
+    selection_id="${selection%%@*}"
+    id="$selection_id"
     instance="${selection#*@}"
     if ! [[ "$instance" =~ ^[a-z0-9_-]{1,32}$ ]]; then
       return 1
     fi
     for id in "${DEPLOY_APP_IDS[@]}"; do
-      if [[ "${id,,}" == "${selection%%@*}" ]]; then
+      if [[ "${id,,}" == "${selection_id,,}" ]]; then
         printf '%s %s\n' "$id" "$instance"
         return 0
       fi

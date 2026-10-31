@@ -27,6 +27,7 @@ version_check_timestamp_for_epoch() {
 
 version_cache_file_for() {
   local app_id="$1"
+  local LC_ALL=C
   [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
   printf '%s/%s.json\n' "${DEPLOY_VERSION_CACHE_ROOT%/}" "$app_id"
 }
@@ -200,6 +201,7 @@ version_check_cached_binary_release_json() {
 version_check_binary_release_json() {
   local app_id="$1" repo="$2" installed="$3" refresh="${4:-0}" no_network="${5:-0}"
   local latest checked_at result cache_state=miss
+  local LC_ALL=C
   [[ "$app_id" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 2
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || {
     version_check_emit_json "$installed" "" "" unsupported github_release unsupported "binary release repository is not configured"
