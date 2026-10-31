@@ -837,7 +837,7 @@ BKSH_HEADER
     cat << 'BKSH_BODY_PRE'
 
 LOG="${BACKUP_DIR}/backup.log"
-TS=$(date +%Y%m%d_%H%M%S)
+TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
 ARCHIVE="${BACKUP_DIR}/sub2api_data_${TS}.tar.gz"
 ARCHIVE_TMP="${ARCHIVE}.tmp"
 PG_DUMP_FILE="${BACKUP_DIR}/sub2api_db_${TS}.sql.gz"
@@ -965,7 +965,7 @@ _backup_silent() {
     return 1
   fi
   # One timestamp for the whole run so db and conf artifacts share it.
-  local backup_ts; backup_ts="$(date +%Y%m%d_%H%M%S)"
+  local backup_ts; backup_ts="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   if [[ -n "${PG_DSN:-}" ]] && command -v pg_dump &>/dev/null; then
     local pg_archive
     pg_archive="${BACKUP_DIR}/sub2api_db_${label}_${backup_ts}.sql.gz"
@@ -1136,7 +1136,7 @@ do_install() {
   rm -f "$TMP_ARCHIVE"
   local OLD_BIN_BAK=""
   if [[ -f "$BIN_PATH" ]]; then
-    local OLD_TS; OLD_TS=$(date +%Y%m%d_%H%M%S)
+    local OLD_TS; OLD_TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
     OLD_BIN_BAK="${INSTALL_DIR}/sub2api.bak.${OLD_TS}"
   fi
   if ! _install_binary_candidate "$TMP_BIN" "$OLD_BIN_BAK"; then
@@ -1271,7 +1271,7 @@ do_update() {
   TMP_BIN=$(extract_and_verify "$TMP_ARCHIVE" "$INSTALL_DIR")
   rm -f "$TMP_ARCHIVE"
   step "$(t app.sub2api.step.replace_restart)"
-  local BAK_TS; BAK_TS=$(date +%Y%m%d_%H%M%S)
+  local BAK_TS; BAK_TS="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   local BAK_PATH="${INSTALL_DIR}/sub2api.bak.${BAK_TS}"
   _backup_current_binary "$BAK_PATH" \
     || error "$(t app.sub2api.error.binary_install "$BIN_PATH")"
@@ -1339,7 +1339,7 @@ do_backup() {
   fi
   # One timestamp for the whole run so the db/conf/data artifacts share it and
   # restore can pick a matching set instead of mixing runs.
-  local backup_ts; backup_ts="$(date +%Y%m%d_%H%M%S)"
+  local backup_ts; backup_ts="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   if [[ -n "${PG_DSN:-}" ]]; then
     if command -v pg_dump &>/dev/null; then
       local PG_ARCHIVE; PG_ARCHIVE="${BACKUP_DIR}/sub2api_db_${backup_ts}.sql.gz"
