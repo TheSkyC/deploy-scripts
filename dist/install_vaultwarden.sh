@@ -7171,12 +7171,6 @@ i18n_register_many \
   app.vaultwarden.error.restore_env_file \
   "Environment config file could not be restored from backup: %s" \
   "环境配置文件未能从备份恢复回：%s" \
-  app.vaultwarden.error.restore_env_stop_failed \
-  "Could not stop service %s before restoring the env file; original env file unchanged." \
-  "恢复环境配置文件前停止服务 %s 失败，原环境配置未改动。" \
-  app.vaultwarden.error.restore_env_start_failed \
-  "Restored env file but service %s failed to start; env file rolled back." \
-  "恢复环境配置后服务 %s 启动失败，已回滚环境配置。" \
   app.vaultwarden.error.restore_transaction_start_failed \
   "Restored data and environment but service %s failed to start; previous files were restored." \
   "数据与环境配置已恢复，但服务 %s 启动失败；已回滚到原文件。" \
