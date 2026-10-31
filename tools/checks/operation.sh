@@ -75,10 +75,12 @@ PY
 }
 
 check_operation_logrotate_policy() {
-  local temp_root policy_path
+  local temp_root policy_path operation_root
   temp_root="$(mktemp -d)"
   policy_path="${temp_root}/etc/logrotate.d/deploy-scripts"
-  if ! DEPLOY_OPERATION_LOG_ROOT="${temp_root}/var/log/deploy-scripts" \
+  operation_root="${temp_root}/var/lib/deploy-scripts"
+  if ! DEPLOY_OPERATION_ROOT="$operation_root" \
+    DEPLOY_OPERATION_LOG_ROOT="${temp_root}/var/log/deploy-scripts" \
     DEPLOY_OPERATION_LOGROTATE_FILE="$policy_path" \
     DEPLOY_OPERATION_LOGROTATE_DAYS=30 \
     DEPLOY_OPERATION_LOGROTATE_FILES=20 \
@@ -91,6 +93,12 @@ check_operation_logrotate_policy() {
     return 1
   fi
   if ! grep -Fqx "${temp_root}/var/log/deploy-scripts/*/*.log {" "$policy_path" \
+    || ! grep -Fqx "${operation_root}/history/*.jsonl {" "$policy_path" \
+    || ! awk -v block="${operation_root}/history/*.jsonl {" '
+        $0 == block { in_block=1; next }
+        in_block && $0 == "}" { exit !saw_copytruncate }
+        in_block && $0 == "    copytruncate" { saw_copytruncate=1 }
+      ' "$policy_path" \
     || ! grep -Fqx '    daily' "$policy_path" \
     || ! grep -Fqx '    rotate 20' "$policy_path" \
     || ! grep -Fqx '    maxage 30' "$policy_path" \

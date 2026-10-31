@@ -1207,7 +1207,7 @@ operation_set_owner_and_mode() {
   if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then chown root:root "$path" || return 1; fi
 }
 operation_write_logrotate() {
-  local target="${DEPLOY_OPERATION_LOGROTATE_FILE:-}" owner="" days files log_root
+  local target="${DEPLOY_OPERATION_LOGROTATE_FILE:-}" owner="" days files log_root history_dir
   [[ -n "$target" ]] || return 0
   [[ "$target" != *$'\n'* && "$target" != *$'\r'* ]] || return 1
   days="${DEPLOY_OPERATION_LOGROTATE_DAYS:-30}"
@@ -1215,6 +1215,8 @@ operation_write_logrotate() {
   [[ "$days" =~ ^[1-9][0-9]*$ && "$files" =~ ^[1-9][0-9]*$ ]] || return 1
   log_root="${DEPLOY_OPERATION_LOG_ROOT%/}"
   [[ -n "$log_root" && "$log_root" != *$'\n'* && "$log_root" != *$'\r'* ]] || return 1
+  history_dir="${DEPLOY_OPERATION_HISTORY_DIR%/}"
+  [[ -n "$history_dir" && "$history_dir" != *$'\n'* && "$history_dir" != *$'\r'* ]] || return 1
   # Enforce root ownership only when privileged; the shared atomic writer
   # stages, modes, and replaces the file in one fail-closed publication.
   if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then owner="root:root"; fi
@@ -1228,6 +1230,16 @@ ${log_root}/*/*.log {
     missingok
     notifempty
     create 0640 root root
+}
+${history_dir}/*.jsonl {
+    daily
+    rotate ${files}
+    maxage ${days}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
 }
 LOGROTATE
   then
