@@ -54,10 +54,11 @@ explicitly and maintain an inventory of its runtime names and paths.
 ### Legacy config caution
 
 Some hand-written applications retain compatibility with a legacy config path.
-When such a legacy file exists, it can take precedence during loading. Migrate
-or archive that file deliberately before treating an `@instance` selection as
-independent. Never copy a production config into another instance without
-reviewing its paths, credentials, port, service name, and domain.
+That compatibility path is honored only by the default (unsuffixed) instance; an
+`@instance` selection always uses its own `/etc/<app>-<instance>-deploy.conf`
+even when a legacy global file exists. Never copy a production config into
+another instance without reviewing its paths, credentials, port, service name,
+and domain.
 
 ### Current isolation boundary
 
