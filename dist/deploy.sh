@@ -762,7 +762,18 @@ wait_for_service() {
   local elapsed=0
   while (( elapsed < timeout )); do
     if systemctl is-active --quiet "$service_name"; then
-      return 0
+      # Type=simple units become active before an immediate configuration
+      # failure can stop them again. Confirm the unit is still active after a
+      # short settle instead of trusting the first sample.
+      sleep 1
+      elapsed=$((elapsed + 1))
+      if systemctl is-active --quiet "$service_name"; then
+        return 0
+      fi
+      if systemctl is-failed --quiet "$service_name"; then
+        return 1
+      fi
+      continue
     fi
     if systemctl is-failed --quiet "$service_name"; then
       return 1
