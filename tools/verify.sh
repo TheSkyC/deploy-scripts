@@ -88,6 +88,10 @@ run_checks_parallel() {
     while [[ "$slot" -lt "$max_jobs" && "$i" -lt "${#queue[@]}" ]]; do
       names+=("${queue[$i]}")
       logs+=("${tmp_dir}/${slot}-${queue[$i]}.log")
+      # Each check runs as an asynchronous child with job control off, so it
+      # inherits SIGINT ignored. A check that must observe SIGINT has to reset
+      # the disposition before re-executing (see
+      # check_operation_signal_interruption).
       ( "${queue[$i]}" ) >"${logs[$slot]}" 2>&1 &
       pids+=("$!")
       slot=$((slot + 1))

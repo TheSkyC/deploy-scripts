@@ -385,8 +385,27 @@ PY
 }
 
 check_operation_signal_interruption() {
-  local temp_root signal status expected marker
+  local temp_root signal status expected marker probe_status
+  local -a signal_runner=("$BASH_BIN")
   temp_root="$(mktemp -d)"
+  # `verify.sh all` launches each check from an asynchronous subshell. POSIX
+  # shells ignore SIGINT in asynchronous children when job control is off, and
+  # a non-interactive bash cannot trap a signal that was ignored on entry. The
+  # INT case would then silently skip the operation handler and fail here.
+  # Reset the disposition before re-exec so INT exercises the real
+  # interruption path under both the parallel and isolated runners.
+  set +e
+  "$BASH_BIN" -c 'trap "exit 130" INT; kill -s INT $$; exit 0' >/dev/null 2>&1
+  probe_status=$?
+  set -e
+  if [[ "$probe_status" -ne 130 ]]; then
+    if ! env --default-signal=INT true >/dev/null 2>&1; then
+      echo "check_operation_signal_interruption requires GNU env --default-signal to reset an inherited ignored SIGINT" >&2
+      rm -rf "$temp_root"
+      return 1
+    fi
+    signal_runner=(env --default-signal=INT "$BASH_BIN")
+  fi
   for signal in INT TERM HUP; do
     case "$signal" in
       INT) expected=130 ;;
@@ -395,7 +414,7 @@ check_operation_signal_interruption() {
     esac
     marker="${temp_root}/${signal}.marker"
     set +e
-    DEPLOY_OPERATION_ROOT="${temp_root}/${signal}-state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/${signal}-log" "$BASH_BIN" -c '
+    DEPLOY_OPERATION_ROOT="${temp_root}/${signal}-state" DEPLOY_OPERATION_LOG_ROOT="${temp_root}/${signal}-log" "${signal_runner[@]}" -c '
       set -euo pipefail
       source lib/lock.sh
       source lib/operation.sh
