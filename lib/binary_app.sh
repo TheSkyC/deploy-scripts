@@ -110,11 +110,11 @@ i18n_register_many \
   "HTTPS is live at %s" \
   "HTTPS 已启用：%s" \
   binary_app.error.tls_renewal \
-  "Failed to write the certbot auto-renew cron entry." \
-  "写入 certbot 自动续签 cron 条目失败。" \
+  "Failed to write the certbot auto-renew cron entry: %s" \
+  "写入 certbot 自动续签 cron 条目失败：%s" \
   binary_app.success.tls_renewal \
-  "Certbot auto-renewal scheduled (daily 02:30)." \
-  "Certbot 自动续签已安排（每天 02:30）。" \
+  "Certbot auto-renewal scheduled (%s, daily 02:30)." \
+  "Certbot 自动续签已安排（%s，每天 02:30）。" \
   binary_app.error.download \
   "Failed to download the release from %s." \
   "从 %s 下载发布包失败。" \
@@ -1134,22 +1134,24 @@ EOF
     error "$(t binary_app.error.tls_nginx_test)"
   fi
   success "$(t binary_app.success.tls_live "https://${DOMAIN}")"
-  # Renewal via /etc/cron.d, published by the shared atomic writer.
+  # Renewal via a per-service /etc/cron.d drop-in, published by the shared
+  # atomic writer. Scoping the certificate avoids every app repeating a
+  # global certificate scan on the same schedule.
   local cron_file
   cron_file="$(ba_tls_cron_file)"
-  if ! atomic_write_file "$cron_file" 644 root:root <<'CRON'
-30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'
+  if ! atomic_write_file "$cron_file" 644 root:root <<CRON
+30 2 * * * root certbot renew --quiet --cert-name "${DOMAIN}" --post-hook 'systemctl reload nginx'
 CRON
   then
-    error "$(t binary_app.error.tls_renewal)"
+    error "$(t binary_app.error.tls_renewal "$cron_file")"
   fi
-  success "$(t binary_app.success.tls_renewal)"
+  success "$(t binary_app.success.tls_renewal "$cron_file")"
 }
 
 # Renewal cron entry owned by the shared binary-app layer. Kept in one helper
 # so configuration, rollback and uninstall always agree on the same path.
 ba_tls_cron_file() {
-  printf '/etc/cron.d/certbot-renew\n'
+  app_tls_cron_file "$SERVICE_NAME"
 }
 
 # Best-effort removal of the TLS reverse proxy artifacts created by
@@ -1764,7 +1766,15 @@ bapp_uninstall() {
       fi
     fi
   fi
-  if [[ -e "/etc/cron.d/certbot-renew" ]]; then
+  local tls_cron_file
+  tls_cron_file="$(ba_tls_cron_file)"
+  if [[ -e "$tls_cron_file" || -L "$tls_cron_file" ]]; then
+    ba_remove_file_or_error "$tls_cron_file" "TLS_RENEWAL_CRON"
+  fi
+  # Older releases shared one global renewal entry. Remove it only after the
+  # last managed TLS site is gone; otherwise another app would lose renewal.
+  if [[ -e "/etc/cron.d/certbot-renew" || -L "/etc/cron.d/certbot-renew" ]] \
+      && ! app_other_managed_tls_site_exists "$SERVICE_NAME"; then
     ba_remove_file_or_error "/etc/cron.d/certbot-renew" "TLS_RENEWAL_CRON"
   fi
   if [[ "${BA_USE_ENV_FILE:-0}" == "1" ]]; then

@@ -215,25 +215,125 @@ check_certbot_diagnostics_use_stderr() {
 
 check_binary_app_certbot_cron_is_published_atomically() {
   awk '
-      /# Renewal via \/etc\/cron\.d, published by the shared atomic writer\./ { in_block=1; saw_file=0; saw_atomic=0; saw_error=0; next }
+      /# Renewal via a per-service \/etc\/cron\.d drop-in/ { in_block=1; saw_file=0; saw_atomic=0; saw_cert=0; saw_error=0; next }
       in_block && /cron_file="\$\(ba_tls_cron_file\)"/ { saw_file=1 }
-      in_block && /atomic_write_file "\$cron_file" 644 root:root <<'"'"'CRON'"'"'/ { saw_atomic=1 }
-      in_block && /error "\$\(t binary_app\.error\.tls_renewal\)"/ { saw_error=1 }
-      in_block && /success "\$\(t binary_app\.success\.tls_renewal\)"/ {
-        if (!(saw_file && saw_atomic && saw_error)) {
-          print "binary-app Certbot renewal cron must use atomic_write_file with root-owned mode 0644 and report failures" > "/dev/stderr"
+      in_block && /atomic_write_file "\$cron_file" 644 root:root <<CRON/ { saw_atomic=1 }
+      in_block && /--cert-name "\$\{DOMAIN\}"/ { saw_cert=1 }
+      in_block && /error "\$\(t binary_app\.error\.tls_renewal / { saw_error=1 }
+      in_block && /success "\$\(t binary_app\.success\.tls_renewal / {
+        if (!(saw_file && saw_atomic && saw_cert && saw_error)) {
+          print "binary-app Certbot renewal cron must use an atomic per-service write, pin the certificate, and report failures" > "/dev/stderr"
           exit 1
         }
         exit 0
       }
       END {
-        if (in_block && !(saw_file && saw_atomic && saw_error)) {
+        if (in_block && !(saw_file && saw_atomic && saw_cert && saw_error)) {
           print "binary-app Certbot renewal cron publication block is incomplete" > "/dev/stderr"
           exit 1
         }
       }
     ' lib/binary_app.sh
 }
+
+# Renewal entries are owned per service. Verify the shared path helper and its
+# legacy-cleanup predicate in isolation, then ensure both TLS installers use
+# them from write, rollback, and uninstall paths.
+check_tls_renewal_crons_are_scoped_per_app() {
+  local tmp output
+  tmp="$(mktemp -d)" || return 1
+  if ! output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    sites="$1"
+    [[ "$(app_tls_cron_file ntfy)" == "/etc/cron.d/certbot-renew-ntfy" ]]
+    printf "%s\n" "server { ssl_certificate /etc/letsencrypt/live/ntfy/fullchain.pem; }" >"${sites}/ntfy"
+    printf "%s\n" "server { listen 80; }" >"${sites}/default"
+    if app_other_managed_tls_site_exists ntfy "$sites"; then
+      echo "current service was counted as another TLS site" >&2
+      exit 1
+    fi
+    printf "%s\n" "server { ssl_certificate /etc/letsencrypt/live/other/fullchain.pem; }" >"${sites}/other"
+    app_other_managed_tls_site_exists ntfy "$sites"
+    rm -f "${sites}/other"
+    printf "%s\n" "server { ssl_certificate /etc/letsencrypt/live/backup/fullchain.pem; }" >"${sites}/.restore.deploy-bak"
+    app_other_managed_tls_site_exists ntfy "$sites"
+  ' _ "$tmp" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    rm -rf "$tmp"
+    return 1
+  fi
+  rm -rf "$tmp"
+
+  awk '
+      /^ba_tls_cron_file\(\) \{/ { in_helper=1; next }
+      in_helper && /app_tls_cron_file "\$SERVICE_NAME"/ { saw_helper=1 }
+      in_helper && /^}/ { in_helper=0 }
+      /^bapp_uninstall\(\) \{/ { in_uninstall=1 }
+      in_uninstall && /tls_cron_file="\$\(ba_tls_cron_file\)"/ { saw_uninstall=1 }
+      in_uninstall && /app_other_managed_tls_site_exists "\$SERVICE_NAME"/ { saw_legacy_guard=1 }
+      END {
+        if (!(saw_helper && saw_uninstall && saw_legacy_guard)) {
+          print "binary apps must use per-service Certbot cron files and guard legacy removal" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh || return 1
+
+  awk '
+      /_certbot_cron_file="\$\(app_tls_cron_file vaultwarden\)"/ { saw_write=1 }
+      /_vw_certbot_cron_file="\$\(app_tls_cron_file vaultwarden\)"/ { saw_uninstall=1 }
+      /app_other_managed_tls_site_exists vaultwarden/ { saw_legacy_guard=1 }
+      END {
+        if (!(saw_write && saw_uninstall && saw_legacy_guard)) {
+          print "Vaultwarden must use a per-service Certbot cron file and guard legacy removal" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_vaultwarden.sh
+}
+
+# TLS artifacts must never outlive a failed install: the certbot-failure and
+# nginx-test failure paths clean up after themselves, the install rollback
+# removes the reverse proxy when the service never started, and uninstall
+# removes the per-app renewal drop-in instead of the legacy shared one.
+check_binary_app_tls_failures_roll_back_artifacts() {
+  awk '
+      /^ba_cleanup_tls_artifacts\(\) \{/ { in_helper=1 }
+      in_helper && /cron_file="\$\(ba_tls_cron_file\)"/ { saw_cron_var=1 }
+      in_helper && /rm -f "\$cron_file"/ { saw_cron_rm=1 }
+      in_helper && /rm -f "\$\(ba_tls_cron_file\)"/ { saw_cron_direct=1 }
+      in_helper && /app_nginx_default_site_restore/ { saw_restore=1 }
+      /^ba_configure_tls\(\) \{/ { in_tls=1 }
+      in_tls && /ba_cleanup_tls_artifacts/ { saw_tls_cleanup++ }
+      /^bapp_install\(\) \{/ { in_install=1 }
+      in_install && /warn "\$\(t binary_app\.warn\.start_rollback\)"/ { in_rollback=1 }
+      in_rollback && /"\$\{BA_ENABLE_HTTPS:-0\}" == "1"/ { saw_https_guard=1 }
+      in_rollback && /ba_cleanup_tls_artifacts/ { saw_rollback_cleanup=1 }
+      in_rollback && /fi$/ && saw_rollback_cleanup { in_rollback=0 }
+      /^bapp_uninstall\(\) \{/ { in_uninstall=1 }
+      in_uninstall && /tls_cron_file="\$\(ba_tls_cron_file\)"/ { saw_uninstall_cron=1 }
+      END {
+        if (!(saw_restore && (saw_cron_direct || (saw_cron_var && saw_cron_rm)))) {
+          print "ba_cleanup_tls_artifacts must remove the per-app renewal cron and restore the default nginx site." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_tls_cleanup < 2) {
+          print "ba_configure_tls must clean up artifacts on certbot and final nginx-test failures." > "/dev/stderr"
+          exit 1
+        }
+        if (!(saw_https_guard && saw_rollback_cleanup)) {
+          print "the bapp_install start-failure rollback must remove TLS artifacts for BA_ENABLE_HTTPS=1 installs." > "/dev/stderr"
+          exit 1
+        }
+        if (!saw_uninstall_cron) {
+          print "bapp_uninstall must remove the per-app renewal drop-in." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+}
+
 check_cron_logrotate_are_atomic() {
   if grep -R -nE '^[[:space:]]*cat > (/etc/logrotate\.d/|"\$LOGROTATE_FILE")|^[[:space:]]*> /etc/cron\.d/|^[[:space:]]*cat > "\$CRON_FILE"' impl dist 2>/dev/null; then
     echo "cron and logrotate configs must be written through temporary files before replacement." >&2

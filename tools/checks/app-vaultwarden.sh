@@ -846,14 +846,14 @@ check_vaultwarden_certbot_cron_failures_are_reported() {
   fi
   awk '
       /app\.vaultwarden\.error\.certbot_cron/ { saw_error_key=1 }
-      /30 2 \* \* \* root certbot renew --quiet --post-hook/ { saw_guidance=1 }
-      /_certbot_cron_file="\/etc\/cron\.d\/certbot-renew"/ { saw_file=1 }
+      /30 2 \* \* \* root certbot renew --quiet --cert-name/ { saw_guidance=1 }
+      /_certbot_cron_file="\$\(app_tls_cron_file vaultwarden\)"/ { saw_file=1 }
       /_certbot_cron_tmp=\$\(mktemp "\$\{_certbot_cron_file\}\.XXXXXX"\)/ { saw_tmp=1 }
-      /atomic_write_file "\$_certbot_cron_file" 644 root:root/ { saw_atomic=1 }
-      /error "\$\(t app\.vaultwarden\.error\.certbot_cron\)"/ { saw_error=1 }
-      /success "\$\(t app\.vaultwarden\.success\.certbot_cron\)"/ {
+      /atomic_write_file "\$_certbot_cron_file" 644 root:root <<CRON/ { saw_atomic=1 }
+      /error "\$\(t app\.vaultwarden\.error\.certbot_cron / { saw_error=1 }
+      /success "\$\(t app\.vaultwarden\.success\.certbot_cron / {
         if (!(saw_error_key && saw_guidance && saw_file && (saw_tmp || saw_atomic) && saw_error)) {
-          printf "%s Vaultwarden must write the Certbot renewal cron atomically to /etc/cron.d and fail explicitly with guidance\n", FILENAME > "/dev/stderr"
+          printf "%s Vaultwarden must write a per-service Certbot renewal cron atomically and fail explicitly with guidance\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }

@@ -354,6 +354,33 @@ app_nginx_default_site_restore() {
   fi
 }
 
+# Certbot renewal is owned per managed service. A shared cron file would be
+# removed by the first uninstall even when other TLS-enabled apps still rely on
+# it. The optional directory argument is used by isolated checks.
+app_tls_cron_file() {
+  local service="${1:?service name required}"
+  printf '/etc/cron.d/certbot-renew-%s\n' "$service"
+}
+
+# Return success when another nginx site still has a Let's Encrypt certificate
+# configured. Disabled sites are included deliberately: deleting the legacy
+# renewal entry for a temporarily disabled app would break it once re-enabled.
+app_other_managed_tls_site_exists() {
+  local current_service="${1:?service name required}"
+  local sites_dir="${2:-/etc/nginx/sites-available}"
+  local current_site="${sites_dir%/}/${current_service}"
+  local candidate
+
+  while IFS= read -r -d '' candidate; do
+    [[ "$candidate" == "$current_site" ]] && continue
+    if grep -Eq 'ssl_certificate[[:space:]]+/etc/letsencrypt/live/' \
+        -- "$candidate" 2>/dev/null; then
+      return 0
+    fi
+  done < <(find "$sites_dir" -maxdepth 1 \( -type f -o -type l \) -print0 2>/dev/null)
+  return 1
+}
+
 deploy_value_truthy() {
   case "${1,,}" in
     1|true|yes|y|on) return 0 ;;

@@ -944,15 +944,17 @@ NGINX
       success "$(t app.vaultwarden.success.certbot_timer)"
     else
       # Use an /etc/cron.d file (atomic write) instead of appending to the
-      # root crontab, so an existing crontab is never overwritten non-atomically.
-      local _certbot_cron_file="/etc/cron.d/certbot-renew"
+      # root crontab, so an existing crontab is never overwritten
+      # non-atomically. Keep renewal scoped to this app's certificate.
+      local _certbot_cron_file
+      _certbot_cron_file="$(app_tls_cron_file vaultwarden)"
       if ! atomic_write_file "$_certbot_cron_file" 644 root:root <<CRON
-30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'
+30 2 * * * root certbot renew --quiet --cert-name "${VW_DOMAIN}" --post-hook 'systemctl reload nginx'
 CRON
       then
-        error "$(t app.vaultwarden.error.certbot_cron)"
+        error "$(t app.vaultwarden.error.certbot_cron "$_certbot_cron_file" "$VW_DOMAIN")"
       fi
-      success "$(t app.vaultwarden.success.certbot_cron)"
+      success "$(t app.vaultwarden.success.certbot_cron "$_certbot_cron_file")"
     fi
     local CERT_PATH_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
     local CERT_KEY_FULL="/etc/letsencrypt/live/${VW_DOMAIN}/privkey.pem"
@@ -1811,7 +1813,13 @@ do_uninstall() {
   fi
   success "$(t app.vaultwarden.success.removed_fail2ban)"
   _vw_remove_file_or_error "/etc/cron.d/vaultwarden-backup" "VAULTWARDEN_CRON_FILE"
-  _vw_remove_file_or_error "/etc/cron.d/certbot-renew" "VAULTWARDEN_CERTBOT_CRON_FILE"
+  local _vw_certbot_cron_file
+  _vw_certbot_cron_file="$(app_tls_cron_file vaultwarden)"
+  _vw_remove_file_or_error "$_vw_certbot_cron_file" "VAULTWARDEN_CERTBOT_CRON_FILE"
+  if [[ -e "/etc/cron.d/certbot-renew" || -L "/etc/cron.d/certbot-renew" ]] \
+      && ! app_other_managed_tls_site_exists vaultwarden; then
+    _vw_remove_file_or_error "/etc/cron.d/certbot-renew" "VAULTWARDEN_LEGACY_CERTBOT_CRON_FILE"
+  fi
   _vw_remove_file_or_error "/usr/local/bin/vaultwarden-backup" "VAULTWARDEN_BACKUP_SCRIPT"
   _vw_remove_file_or_error "/etc/logrotate.d/vaultwarden" "VAULTWARDEN_LOGROTATE_FILE"
   success "$(t app.vaultwarden.success.removed_scheduled)"
