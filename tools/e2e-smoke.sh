@@ -56,6 +56,10 @@ work = sys.argv[1]
 payload = b"\x7fELF" + b"\0" * (2 * 1024 * 1024)
 with open(os.path.join(work, "ntfy.bin"), "wb") as fh:
     fh.write(payload)
+# Distinct payload for the update-rollback case so the live binary hash can
+# prove which release survived a failed update.
+with open(os.path.join(work, "ntfy-next.bin"), "wb") as fh:
+    fh.write(b"\x7fELF" + b"\x01" * (2 * 1024 * 1024))
 with open(os.path.join(work, "tickflow.bin"), "wb") as fh:
     fh.write(payload)
 with open(os.path.join(work, "newapi.bin"), "wb") as fh:
@@ -77,6 +81,13 @@ mkdir -p "$WORK/www/ntfy-stage"
 cp "$WORK/ntfy.bin" "$WORK/www/ntfy-stage/ntfy"
 tar -czf "$WORK/www/binwiederhier/ntfy/releases/download/v2.27.0/ntfy_2.27.0_linux_amd64.tar.gz" \
   -C "$WORK/www/ntfy-stage" ntfy
+
+# Fake ntfy v2.28.0 release for the update-rollback scenario.
+mkdir -p "$WORK/www/binwiederhier/ntfy/releases/download/v2.28.0"
+mkdir -p "$WORK/www/ntfy-2.28.0-stage"
+cp "$WORK/ntfy-next.bin" "$WORK/www/ntfy-2.28.0-stage/ntfy"
+tar -czf "$WORK/www/binwiederhier/ntfy/releases/download/v2.28.0/ntfy_2.28.0_linux_amd64.tar.gz" \
+  -C "$WORK/www/ntfy-2.28.0-stage" ntfy
 
 # Fake new-api bare binary asset: new-api-<ver> (amd64).
 mkdir -p "$WORK/www/QuantumNous/new-api/releases/download/v0.6.1"
@@ -237,6 +248,18 @@ cat > /usr/local/bin/apt-get <<APT
 exit 0
 APT
 chmod +x /usr/local/bin/apt-get
+# systemctl can inject a daemon-reload failure for the update-rollback case
+# and otherwise reports success like the shared stub.
+cat > /usr/local/bin/systemctl <<SYS
+#!/bin/bash
+if [[ "\${1:-}" == "daemon-reload" && -f /tmp/fail-daemon-reload ]]; then
+  echo "injected daemon-reload failure" >&2
+  exit 1
+fi
+exit 0
+SYS
+chmod +x /usr/local/bin/systemctl
+export PATH="/usr/local/bin:/stub:$PATH"
 # useradd exists in the image; id/userdel come from passwd/usrbin. The
 # install also calls hostname; the container has it via coreutils.
 # Run the real dist script. bapp_install downloads the stub tarball from
@@ -262,6 +285,46 @@ grep -q "ExecStart=\"/opt/ntfy/ntfy\"" /etc/systemd/system/ntfy.service || { ech
 bash /repo/dist/install_ntfy.sh backup >"$LOG" 2>&1 || { echo "BACKUP_FAILED"; exit 1; }
 test -n "$(ls /opt/ntfy-backups/ntfy_*.tar.gz 2>/dev/null)" || { echo "NO_ARCHIVE"; exit 1; }
 test -n "$(ls /opt/ntfy-backups/ntfy_*.tar.gz.sha256 2>/dev/null)" || { echo "NO_SIDECAR"; exit 1; }
+
+# The shared data-directory restore must swap the archived data back, restore
+# service ownership, and leave no staging/aside directories behind.
+printf "data-old\n" >/var/lib/ntfy/restore-marker.txt
+bash /repo/dist/install_ntfy.sh backup >"$LOG" 2>&1 || { cat "$LOG"; echo "RESTORE_BACKUP_FAILED"; exit 1; }
+NTFY_ARCHIVE="$(ls -1t /opt/ntfy-backups/ntfy_*.tar.gz | head -1)"
+[[ -n "$NTFY_ARCHIVE" ]] || { echo "RESTORE_ARCHIVE_MISSING"; exit 1; }
+printf "data-mutated\n" >/var/lib/ntfy/restore-marker.txt
+NTFY_RESTORE_ARCHIVE="$NTFY_ARCHIVE" bash /repo/dist/install_ntfy.sh restore >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "NTFY_RESTORE_FAILED"
+  exit 1
+}
+[[ "$(cat /var/lib/ntfy/restore-marker.txt)" == "data-old" ]] || { echo "NTFY_DATA_NOT_RESTORED"; exit 1; }
+[[ "$(stat -c %U /var/lib/ntfy/restore-marker.txt)" == "ntfy" ]] || { echo "NTFY_RESTORE_OWNER_BAD"; exit 1; }
+leftover="$(find /var/lib -maxdepth 1 -name ".ntfy.restore*" -print 2>/dev/null)"
+[[ -z "$leftover" ]] || { echo "$leftover"; echo "NTFY_RESTORE_LEFT_OVER"; exit 1; }
+echo "NTFY_RESTORE_SMOKE_OK"
+
+# A daemon-reload failure after the binary swap must restore the previous
+# binary, keep the recorded version, and clean the staged download.
+ORIGINAL_SHA="$(sha256sum /opt/ntfy/ntfy)"
+ORIGINAL_SHA="${ORIGINAL_SHA%% *}"
+touch /tmp/fail-daemon-reload
+if BA_VERSION=v2.28.0 bash /repo/dist/install_ntfy.sh update >"$LOG" 2>&1; then
+  cat "$LOG"
+  echo "NTFY_UPDATE_SHOULD_HAVE_FAILED"
+  exit 1
+fi
+grep -q "Failed to reload systemd" "$LOG" || { cat "$LOG"; echo "NTFY_RELOAD_ERROR_MISSING"; exit 1; }
+grep -q "Rolled back to v2.27.0" "$LOG" || { cat "$LOG"; echo "NTFY_ROLLBACK_MESSAGE_MISSING"; exit 1; }
+CURRENT_SHA="$(sha256sum /opt/ntfy/ntfy)"
+CURRENT_SHA="${CURRENT_SHA%% *}"
+[[ "$CURRENT_SHA" == "$ORIGINAL_SHA" ]] || { echo "NTFY_BINARY_NOT_ROLLED_BACK"; exit 1; }
+source /etc/ntfy-deploy.conf
+[[ "${INSTALLED_VERSION}" == "v2.27.0" ]] || { echo "NTFY_VERSION_ADVANCED"; exit 1; }
+rm -f /tmp/fail-daemon-reload
+leftover="$(find /opt/ntfy -maxdepth 1 -name ".ntfy.tmp.*" -print 2>/dev/null)"
+[[ -z "$leftover" ]] || { echo "$leftover"; echo "NTFY_UPDATE_STAGING_LEFT"; exit 1; }
+echo "NTFY_UPDATE_ROLLBACK_SMOKE_OK"
 echo "BINARY_APP_SMOKE_OK"
 ' || exit 1
 

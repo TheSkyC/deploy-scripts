@@ -748,6 +748,7 @@ main() {
       run_isolated_check check_ntfy_uses_shared_binary_lifecycle
       run_isolated_check check_ntfy_release_asset_mapping
       run_isolated_check check_ntfy_config_is_managed_atomically
+      run_isolated_check check_ntfy_e2e_restore_and_rollback_fixture
       run_isolated_check check_gotify_uses_shared_binary_lifecycle
       run_isolated_check check_gotify_release_asset_mapping
       run_isolated_check check_gotify_env_is_managed_atomically

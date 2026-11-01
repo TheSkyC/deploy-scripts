@@ -103,3 +103,20 @@ check_ntfy_config_is_managed_atomically() {
       return 1
     }
 }
+
+# The shared binary-app lifecycle is exercised for real in Docker: the smoke
+# fixture must keep proving data restore and an update rollback after a
+# daemon-reload failure, not just install and backup.
+check_ntfy_e2e_restore_and_rollback_fixture() {
+  local fixture="tools/e2e-smoke.sh"
+  grep -Fq "ntfy_2.28.0_linux_amd64.tar.gz" "$fixture" \
+    && grep -Fq "fail-daemon-reload" "$fixture" \
+    && grep -Fq 'NTFY_RESTORE_ARCHIVE="$NTFY_ARCHIVE"' "$fixture" \
+    && grep -Fq "NTFY_RESTORE_SMOKE_OK" "$fixture" \
+    && grep -Fq "NTFY_UPDATE_ROLLBACK_SMOKE_OK" "$fixture" \
+    && grep -Fq 'grep -q "Rolled back to v2.27.0" "$LOG"' "$fixture" \
+    || {
+      echo "ntfy e2e must retain its data restore and update rollback proof." >&2
+      return 1
+    }
+}
