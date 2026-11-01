@@ -105,6 +105,7 @@ i18n_register migrate.info.exported "Migration archive written: %s (sha256 sidec
 i18n_register migrate.info.next_steps "Replicate each app's backups to the new machine, then run import there and use per-app restore." "请将各应用备份复制到新机器，在新机器执行 import 后用各应用 restore 恢复数据。"
 i18n_register migrate.info.imported "Imported %s config file(s); notification and schedule settings restored." "已导入 %s 个配置文件；通知与定时设置已恢复。"
 i18n_register migrate.info.manual_steps "Binaries/data are not migrated automatically: install apps, replicate backups, then run restore per app." "二进制与数据不会自动迁移：先安装应用、复制备份，再逐应用执行 restore。"
+i18n_register migrate.warn.impl_missing "Could not load app implementation for backup inventory: %s" "无法加载应用实现以生成备份清单：%s"
 i18n_register compose.error.docker_missing "Docker is not installed; the compose stack cannot run." "未安装 Docker，无法运行 Compose 应用栈。"
 i18n_register compose.error.runtime_missing "Neither 'docker compose' nor 'docker-compose' is available." "'docker compose' 与 'docker-compose' 均不可用。"
 i18n_register compose.error.project_missing "Compose project file not found: %s" "Compose 项目文件不存在：%s"

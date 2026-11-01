@@ -260,3 +260,46 @@ check_schedule_cron_expression_validator() {
     done
   ' _ "$ROOT_DIR"
 }
+
+check_binary_app_download_integrity() {
+  grep -Fq 'bapp_verify_download "$tmp_bin" "$latest"' lib/binary_app.sh \
+    || { echo "lib/binary_app.sh must call bapp_verify_download after downloading a release" >&2; return 1; }
+  local call_sites
+  call_sites="$(grep -cF 'bapp_verify_download "$tmp_bin" "$latest"' lib/binary_app.sh)"
+  [[ "$call_sites" -ge 2 ]] \
+    || { echo "bapp_verify_download must be wired into both bapp_install and bapp_update (found ${call_sites} call sites)" >&2; return 1; }
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    APP_ID="integritytest"
+    APP_NAME="IntegrityTest"
+    GITHUB_REPO="example/integritytest"
+    BA_ARCH="amd64"
+    BA_ASSET_TEMPLATE="integritytest-ARCH.tar.gz"
+    BA_BIN_NAME="integritytest"
+    BA_ARCHIVE_TYPE="none"
+    payload_file="$(mktemp "${TMPDIR:-/tmp}/ba-integrity.XXXXXX")"
+    trap "rm -f \"$payload_file\"" EXIT
+    printf "payload-bytes" > "$payload_file"
+    good_digest="$(sha256sum "$payload_file" | awk "{print \$1}")"
+
+    BA_ASSET_SHA256="$good_digest"
+    bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
+
+    BA_ASSET_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+    if ( bapp_verify_download "$payload_file" "v1.0.0" ) >/dev/null 2>&1; then
+      echo "mismatched pinned digest was accepted" >&2
+      exit 1
+    fi
+
+    BA_ASSET_SHA256="not-a-digest"
+    if ( bapp_verify_download "$payload_file" "v1.0.0" ) >/dev/null 2>&1; then
+      echo "malformed pinned digest was accepted" >&2
+      exit 1
+    fi
+
+    unset BA_ASSET_SHA256
+    bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
+  ' _ "$ROOT_DIR"
+}

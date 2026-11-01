@@ -528,7 +528,10 @@ main() {
       run_isolated_check check_binary_app_systemd_paths_are_validated
       run_isolated_check check_binary_app_pre_backup_hook_is_best_effort
       run_isolated_check check_binary_app_download_supports_pinned_checksum
+      run_isolated_check check_binary_app_download_integrity
       run_isolated_check check_binary_app_health_results_are_surfaced
+      run_isolated_check check_binary_app_local_targets_follow_bind_addr
+      run_isolated_check check_binary_app_summary_management_hints
       run_isolated_check check_binary_app_unpinned_version_notice
       run_isolated_check check_acquire_lock_preserves_file_and_waits
       run_isolated_check check_logging_colors_are_tty_gated
@@ -577,6 +580,7 @@ main() {
       run_isolated_check check_cpa_stack_binary_backups_are_atomic
       run_isolated_check check_cpa_stack_pinned_versions_contract
       run_isolated_check check_cpa_stack_e2e_pinned_fixture
+      run_isolated_check check_cpa_stack_cpamp_asset_resolution
       run_isolated_check check_cpa_stack_update_and_restore_are_recoverable
       run_isolated_check check_cron_logrotate_are_atomic
       run_isolated_check check_binary_app_certbot_cron_is_published_atomically
@@ -712,6 +716,7 @@ main() {
       run_isolated_check check_tickflow_directory_setup_failures_are_explicit
       run_isolated_check check_tickflow_env_rewrites_preserve_existing_secrets
       run_isolated_check check_tickflow_git_commit_version_contract
+      run_isolated_check check_tickflow_generated_files_are_expansion_safe
       run_isolated_check check_tickflow_manual_backup_is_explicit
       run_isolated_check check_tickflow_paths_are_guarded
       run_isolated_check check_tickflow_restore_requires_all_members
@@ -841,6 +846,9 @@ main() {
       run_isolated_check check_backup_validate_gzip_archive
       run_isolated_check check_backup_restore_directory_lifecycle
       run_isolated_check check_backup_restore_data_dir_lifecycle
+      run_isolated_check check_backup_restore_aside_uses_random_suffix
+      run_isolated_check check_binary_app_uninstall_removes_stage_directories
+      run_isolated_check check_migrate_backups_inventory_materializes_impls
       run_isolated_check check_notification_fail_open_and_redaction
       run_isolated_check check_notify_credentials_stay_out_of_argv
       run_isolated_check check_backup_manifest_field_skips_escaped_quotes

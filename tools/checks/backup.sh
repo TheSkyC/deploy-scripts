@@ -2520,6 +2520,86 @@ check_backup_manifest_field_skips_escaped_quotes() {
   rm -rf "$tmp_dir"
 }
 
+check_backup_restore_aside_uses_random_suffix() {
+  local fn
+  fn="$(mktemp)" || return 1
+  sed -n '/^backup_restore_data_dir()/,/^}/p' lib/backup.sh >"$fn"
+  if ! grep -Fq 'aside_dir="$(mktemp -d "${data_parent}/.${data_base}.restore-aside.XXXXXX")"' "$fn"; then
+    echo "backup_restore_data_dir must use a collision-safe random restore-aside directory" >&2
+    rm -f "$fn"
+    return 1
+  fi
+  rm -f "$fn"
+}
+
+check_binary_app_uninstall_removes_stage_directories() {
+  local fn
+  fn="$(mktemp)" || return 1
+  sed -n '/^bapp_uninstall()/,/^}/p' lib/binary_app.sh >"$fn" 2>/dev/null
+  if [[ ! -s "$fn" ]]; then
+    echo "Could not locate the shared binary app uninstall function" >&2
+    rm -f "$fn"
+    return 1
+  fi
+  if grep -q '\.stage\.' "$fn" && grep -A3 -B3 '\.stage\.' "$fn" | grep -q -- '-type f'; then
+    echo "binary app uninstall must clean staging directories as well as files" >&2
+    rm -f "$fn"
+    return 1
+  fi
+  rm -f "$fn"
+}
+
+check_migrate_backups_inventory_materializes_impls() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    repo="$1"
+    cd /
+    source "$repo/lib/core.sh"
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/impl" "$tmp/backups" "$tmp/stage" "$tmp/out"
+    printf payload > "$tmp/stage/payload"
+    tar -czf "$tmp/backups/one_20260101000000.tar.gz" -C "$tmp/stage" .
+    backup_write_sha256 "$tmp/backups/one_20260101000000.tar.gz" >/dev/null
+    cat > "$tmp/impl/one" <<MIGRATE_IMPL
+APP_ID=one
+BACKUP_DIR="$tmp/backups"
+app_load_config() { :; }
+MIGRATE_IMPL
+    DEPLOY_APP_IDS=(one)
+    DEPLOY_ROOT_DIR="$tmp"
+    deploy_app_impl_file_for() { printf "impl/%s" "$1"; }
+    migrate_backups_inventory "$tmp/out"
+    grep -Fq "\"app\":\"one\"" "$tmp/out/backups-inventory.json"
+    grep -Fq "\"state\":\"verified\"" "$tmp/out/backups-inventory.json"
+  ' bash "$ROOT_DIR"
+
+  [[ -f dist/deploy.sh ]] || {
+    echo "dist/deploy.sh is required to verify bundled migration inventory" >&2
+    return 1
+  }
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    repo="$1"
+    cd /
+    source "$repo/lib/core.sh"
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/backups" "$tmp/stage" "$tmp/out"
+    printf payload > "$tmp/stage/payload"
+    tar -czf "$tmp/backups/new-api_20260101000000.tar.gz" -C "$tmp/stage" .
+    backup_write_sha256 "$tmp/backups/new-api_20260101000000.tar.gz" >/dev/null
+    export BACKUP_DIR="$tmp/backups"
+    export DEPLOY_BUNDLED=1
+    export DEPLOY_SCRIPT_PATH="$repo/dist/deploy.sh"
+    DEPLOY_APP_IDS=(newapi)
+    app_load_config() { :; }
+    migrate_backups_inventory "$tmp/out"
+    grep -Fq "\"app\":\"newapi\"" "$tmp/out/backups-inventory.json"
+    grep -Fq "\"state\":\"verified\"" "$tmp/out/backups-inventory.json"
+  ' bash "$ROOT_DIR"
+}
+
 check_notify_config_test_probes_merged_config() {
   # notify-config --test end-to-end: probe the merged values (not stale disk
   # state), fail loudly when delivery fails without persisting anything, and

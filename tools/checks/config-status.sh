@@ -82,6 +82,27 @@ STUB
     rm -rf "$tmp_dir"
     return 1
   }
+
+  output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    PATH=/nonexistent
+    app_http_status_code "http://127.0.0.1:8080/health"
+  ' 2>&1)" || {
+    echo "HTTP probe helper must keep its 000 fallback when curl is missing" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  grep -Fq 'curl is not available; health probe returned 000 for http://127.0.0.1:8080/health.' <<<"$output" || {
+    echo "Missing-curl health probe did not emit an explicit warning" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  grep -Fq '000' <<<"$output" || {
+    echo "Missing-curl health probe did not retain the 000 status marker" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
   rm -rf "$tmp_dir"
 }
 

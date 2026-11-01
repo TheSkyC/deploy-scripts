@@ -780,3 +780,59 @@ check_binary_app_install_temporary_cleanup_helper() {
       }
   ' lib/binary_app.sh
 }
+
+check_binary_app_local_targets_follow_bind_addr() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source lib/binary_app.sh
+    BA_BIND_ADDR=::1
+    [[ "$(ba_local_ip_host)" == "[::1]" ]]
+    BA_BIND_ADDR=0.0.0.0
+    [[ "$(ba_local_ip_host)" == "127.0.0.1" ]]
+
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    systemd_write_unit() { cat > "$tmp/unit"; }
+    SERVICE_NAME=testsvc
+    BIN_PATH=/opt/test/app
+    DATA_DIR=/var/lib/test
+    LOG_DIR=/var/log/test
+    SERVICE_USER=testsvc
+    APP_NAME=Test
+    GITHUB_REPO=example/test
+    BA_SERVICE_ARGS="--listen %p"
+    ba_systemd_unit >/dev/null
+    grep -Fq "ExecStart=\"${BIN_PATH}\" --listen %%p" "$tmp/unit"
+    if (BA_SERVICE_ARGS=$'"'"'--bad\nvalue'"'"' ba_systemd_unit) >/dev/null 2>&1; then
+      echo "control characters accepted in BA_SERVICE_ARGS"
+      exit 21
+    fi
+  '
+}
+
+check_binary_app_summary_management_hints() {
+  awk '
+      /^bapp_management_command_script\(\) \{/ { in_helper=1 }
+      in_helper && /DEPLOY_BUNDLED:-0/ { saw_bundled=1 }
+      in_helper && /DEPLOY_MANAGER_ENTRYPOINT:-0/ { saw_manager=1 }
+      in_helper && /APP_ID:-\}/ { saw_app_id=1 }
+      in_helper && /printf .%q %q./ { saw_app_selector=1 }
+      /^bapp_summary\(\) \{/ { in_summary=1 }
+      in_summary && /bash \$\(bapp_management_command_script\) / { saw_summary_calls++ }
+      END {
+        if (!(saw_bundled && saw_manager && saw_app_id && saw_app_selector)) {
+          print "bapp_management_command_script must distinguish bundled scripts and the central manager, adding APP_ID in manager mode." > "/dev/stderr"
+          exit 1
+        }
+        if (saw_summary_calls < 4) {
+          print "all four bapp_summary management hints must use bapp_management_command_script." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh
+  grep -Fq 'DEPLOY_MANAGER_ENTRYPOINT=1' bin/deploy.sh || {
+    echo "bin/deploy.sh must mark itself as the central manager entrypoint for summary hints." >&2
+    return 1
+  }
+}
