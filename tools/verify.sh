@@ -632,6 +632,8 @@ main() {
       run_isolated_check check_newapi_secret_uses_private_env_file
       run_isolated_check check_newapi_backup_wal_hook_is_best_effort
       run_isolated_check check_newapi_backup_script_is_published_atomically
+      run_isolated_check check_newapi_asset_names_keep_version_prefix
+      run_isolated_check check_newapi_summary_does_not_invent_public_url
       run_isolated_check check_nginx_configs_are_atomic
       run_isolated_check check_nginx_domains_are_validated
       run_isolated_check check_nginx_main_config_edits_are_atomic

@@ -114,10 +114,12 @@ ba_uninstall_extra() {
 # The install summary needs the public/internal URLs and the credential
 # warning (New API ships with a publicly known default admin account).
 ba_summary_extra() {
-  local internal_ip
+  local internal_ip domain="${DOMAIN:-}"
   internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   internal_ip="${internal_ip:-YOUR_SERVER_IP}"
-  echo -e "  $(t app.newapi.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
+  if deploy_value_truthy "${BA_ENABLE_HTTPS:-0}" && [[ -n "$domain" ]]; then
+    echo -e "  $(t app.newapi.summary.public)  ${CYAN}https://${domain}${GREEN}"
+  fi
   echo -e "  $(t app.newapi.summary.internal)  ${CYAN}http://${internal_ip}:${PORT}${GREEN}"
   echo -e "  ${RED}${BOLD}$(t app.newapi.summary.credential_warning)${GREEN}"
   echo -e "  $(t app.newapi.summary.credential_hint)"

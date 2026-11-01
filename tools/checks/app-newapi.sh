@@ -170,3 +170,52 @@ NEWAPITEST
   )"
   [[ "$output" == ok ]]
 }
+
+check_newapi_asset_names_keep_version_prefix() {
+  local output
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_newapi.sh"
+    BA_ARCH=amd64 ba_asset_name v0.13.2
+    BA_ARCH=arm64 ba_asset_name v0.13.2
+  ' bash "$ROOT_DIR")"
+  [[ "$output" == $'new-api-v0.13.2\nnew-api-arm64-v0.13.2' ]] || {
+    echo "Unexpected New API asset names: ${output}" >&2
+    return 1
+  }
+  grep -Fq 'new-api-v0.6.1' tools/e2e-smoke.sh || {
+    echo "NewAPI E2E fixture must use the upstream v-prefixed asset name." >&2
+    return 1
+  }
+}
+
+check_newapi_summary_does_not_invent_public_url() {
+  local plaintext https
+  plaintext="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/apps/newapi.sh"
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_newapi.sh" >/dev/null 2>&1
+    PORT=3000
+    DOMAIN=example.com BA_ENABLE_HTTPS=0 ba_summary_extra
+  ' bash "$ROOT_DIR")" || return 1
+  [[ "$plaintext" != *"https://"* ]] || {
+    echo "NewAPI summary must not advertise HTTPS when TLS is disabled." >&2
+    return 1
+  }
+  https="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/apps/newapi.sh"
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_newapi.sh" >/dev/null 2>&1
+    PORT=3000
+    DOMAIN=example.com BA_ENABLE_HTTPS=1 ba_summary_extra
+  ' bash "$ROOT_DIR")" || return 1
+  [[ "$https" == *"https://example.com"* ]] || {
+    echo "NewAPI summary must show the configured HTTPS endpoint." >&2
+    return 1
+  }
+}
