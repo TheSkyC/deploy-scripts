@@ -671,6 +671,11 @@ check_app_prune_update_backups_behavior() {
   mkdir -p "$dir2/old dir.bak.1"
   mkdir -p "$dir2/keep dir.bak.2"
   mkdir -p "$dir2/keep dir.bak.3"
+  # Pin mtimes explicitly: rapid mkdir calls can land in the same filesystem
+  # timestamp tick, which makes the "oldest" entry ambiguous and flaky.
+  touch -d '2020-01-01 00:00:01' "$dir2/old dir.bak.1"
+  touch -d '2020-01-01 00:00:02' "$dir2/keep dir.bak.2"
+  touch -d '2020-01-01 00:00:03' "$dir2/keep dir.bak.3"
 
   app_prune_update_backups "$dir2" '*.bak.*' test.warn test.info 2 d
   [[ "$(find "$dir2" -name '*.bak.*' | wc -l)" -eq 2 ]] \
