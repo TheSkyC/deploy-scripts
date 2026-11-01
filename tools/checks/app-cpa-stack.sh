@@ -392,6 +392,19 @@ check_cpa_stack_certificate_renewal_is_scoped() {
     echo "CPA Stack uninstall must keep the legacy shared renewal entry while other TLS sites exist." >&2
     return 1
   }
+  local status_body
+  status_body="$(awk '/^do_status\(\) \{/ { capture=1 } capture { print } capture && /^}$/ { exit }' "$file")"
+  local needle
+  for needle in \
+      'app.cpa_stack.status.cert_expiring' \
+      'app.cpa_stack.status.cert_expired' \
+      'app.cpa_stack.status.renewal_missing' \
+      'app_tls_cron_file cpa-stack'; do
+    [[ "$status_body" == *"$needle"* ]] || {
+      echo "CPA Stack status must report certificate expiry and renewal scheduling (missing: ${needle})." >&2
+      return 1
+    }
+  done
 
   output="$($BASH_BIN <<'CPARENEW'
 set -euo pipefail

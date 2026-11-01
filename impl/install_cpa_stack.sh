@@ -1090,6 +1090,36 @@ do_status() {
   printf '\n[%s]\n' "$(t app.cpa_stack.status.local_health)"
   cpa_stack_verify_health CPA http://127.0.0.1:8317/healthz || true
   cpa_stack_verify_health CPAMP http://127.0.0.1:18317/health || true
+  printf '\n[%s]\n' "$(t app.cpa_stack.status.tls)"
+  if ! cpa_stack_truthy "$ENABLE_HTTPS"; then
+    printf '  %s\n' "$(t app.cpa_stack.status.tls_disabled)"
+  else
+    local cert_path="/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem"
+    local cert_expiry="" cert_days=0
+    if [[ -f "$cert_path" ]]; then
+      cert_expiry="$(openssl x509 -enddate -noout -in "$cert_path" 2>/dev/null | sed 's/notAfter=//')"
+      cert_days=$(( ( $(date -d "$cert_expiry" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
+      if (( cert_days > 30 )); then
+        printf '  [ok] %s\n' "$(t app.cpa_stack.status.cert_valid "$cert_days" "$cert_expiry")"
+      elif (( cert_days > 0 )); then
+        printf '  [!] %s\n' "$(t app.cpa_stack.status.cert_expiring "$cert_days")"
+      else
+        printf '  [x] %s\n' "$(t app.cpa_stack.status.cert_expired "$cert_days")"
+      fi
+    else
+      printf '  [!] %s\n' "$(t app.cpa_stack.status.cert_missing "$cert_path")"
+    fi
+    # Renewal visibility matters as much as the expiry date: a valid
+    # certificate that nothing renews is a scheduled outage.
+    if systemctl list-timers 'certbot*' 2>/dev/null | grep -q certbot; then
+      printf '  [ok] %s\n' "$(t app.cpa_stack.status.renewal_timer)"
+    elif [[ -f "$(app_tls_cron_file cpa-stack)" ]]; then
+      printf '  [ok] %s\n' \
+        "$(t app.cpa_stack.status.renewal_cron "$(app_tls_cron_file cpa-stack)")"
+    else
+      printf '  [!] %s\n' "$(t app.cpa_stack.status.renewal_missing)"
+    fi
+  fi
   # The deployment config is root-only, so recorded component versions are
   # reported only when status runs as root and the config is readable.
   if [[ ${EUID:-$(id -u)} -eq 0 ]]; then

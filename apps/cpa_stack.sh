@@ -198,6 +198,33 @@ i18n_register_many \
   app.cpa_stack.status.local_health \
   "Local health" \
   "本地健康检查" \
+  app.cpa_stack.status.tls \
+  "TLS" \
+  "TLS" \
+  app.cpa_stack.status.tls_disabled \
+  "HTTPS is disabled; this stack does not manage a certificate." \
+  "HTTPS 未启用；本栈不管理证书。" \
+  app.cpa_stack.status.cert_valid \
+  "Certificate valid for %s day(s); expires %s." \
+  "证书有效，剩余 %s 天；到期时间 %s。" \
+  app.cpa_stack.status.cert_expiring \
+  "Certificate expires in %s day(s); renewal must run soon." \
+  "证书将在 %s 天后到期，请尽快完成续签。" \
+  app.cpa_stack.status.cert_expired \
+  "Certificate expired %s day(s) ago; renew immediately." \
+  "证书已过期 %s 天，请立即续签。" \
+  app.cpa_stack.status.cert_missing \
+  "Certificate not found at %s." \
+  "未找到证书：%s。" \
+  app.cpa_stack.status.renewal_timer \
+  "Renewal scheduled by the certbot systemd timer." \
+  "续签已由 certbot systemd timer 调度。" \
+  app.cpa_stack.status.renewal_cron \
+  "Renewal scheduled by %s." \
+  "续签由 %s 调度。" \
+  app.cpa_stack.status.renewal_missing \
+  "No certbot timer or per-app renewal cron found; certificates will not renew automatically." \
+  "未发现 certbot timer 或按应用续签 cron，证书不会自动续签。" \
   app.cpa_stack.status.versions \
   "Component versions" \
   "组件版本" \
