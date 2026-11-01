@@ -7386,6 +7386,9 @@ i18n_register_many \
   app.cpa_stack.error.remove_file \
   "Failed to remove %s." \
   "删除 %s 失败。" \
+  app.cpa_stack.error.remove_dir \
+  "Failed to remove directory %s." \
+  "删除目录 %s 失败。" \
   app.cpa_stack.info.uninstall_cancelled \
   "Uninstall cancelled." \
   "已取消卸载。" \
@@ -7470,6 +7473,12 @@ i18n_register_many \
   app.cpa_stack.success.certbot_cron \
   "Scheduled certificate renewal in %s." \
   "已在 %s 中安排证书续签。" \
+  app.cpa_stack.success.deleted_data \
+  "Removed data directory %s." \
+  "已删除数据目录 %s。" \
+  app.cpa_stack.success.deleted_backup \
+  "Removed backup directory %s." \
+  "已删除备份目录 %s。" \
   app.cpa_stack.info.oauth \
   "OAuth is intentionally not automated. Run login commands as the cli-proxy-api user; some providers use localhost callbacks or device-code flows." \
   "OAuth 不会自动执行。请以 cli-proxy-api 用户运行登录命令；部分提供商使用 localhost 回调或设备码流程。" \
@@ -8868,33 +8877,40 @@ do_uninstall() {
     [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]] && delete_data=true
   fi
   systemctl disable --now "$CPAMP_SERVICE_NAME" "$CPA_SERVICE_NAME" >/dev/null 2>&1 || true
-  rm -f "/etc/systemd/system/${CPA_SERVICE_NAME}.service" "/etc/systemd/system/${CPAMP_SERVICE_NAME}.service"
+  app_remove_file_or_error "/etc/systemd/system/${CPA_SERVICE_NAME}.service" \
+    "CPA_SERVICE_FILE" "app.cpa_stack.error.remove_file"
+  app_remove_file_or_error "/etc/systemd/system/${CPAMP_SERVICE_NAME}.service" \
+    "CPAMP_SERVICE_FILE" "app.cpa_stack.error.remove_file"
   systemctl daemon-reload || true
-  rm -f "$NGINX_SITE_LINK" "$NGINX_SITE" "$NGINX_MAP_FILE"
-  rm -f "$CONF_FILE"
+  app_remove_file_or_error "$NGINX_SITE_LINK" "NGINX_SITE_LINK" "app.cpa_stack.error.remove_file"
+  app_remove_file_or_error "$NGINX_SITE" "NGINX_SITE" "app.cpa_stack.error.remove_file"
+  app_remove_file_or_error "$NGINX_MAP_FILE" "NGINX_MAP_FILE" "app.cpa_stack.error.remove_file"
+  app_remove_file_or_error "$CONF_FILE" "CPA_STACK_CONF_FILE" "app.cpa_stack.error.remove_file"
   if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
     systemctl reload nginx || true
   fi
   local certbot_cron_file
   certbot_cron_file="$(app_tls_cron_file cpa-stack)"
-  if [[ -e "$certbot_cron_file" || -L "$certbot_cron_file" ]]; then
-    rm -f "$certbot_cron_file" \
-      || error "$(t app.cpa_stack.error.remove_file "$certbot_cron_file")"
-  fi
+  app_remove_file_or_error "$certbot_cron_file" "TLS_RENEWAL_CRON" "app.cpa_stack.error.remove_file"
   # The legacy shared entry is only safe to drop once no other managed TLS
   # site still relies on it; removing it earlier would disable renewal for
   # apps that are still installed.
   if [[ -e "/etc/cron.d/certbot-renew" || -L "/etc/cron.d/certbot-renew" ]] \
       && ! app_other_managed_tls_site_exists cpa-stack; then
-    rm -f "/etc/cron.d/certbot-renew" \
-      || error "$(t app.cpa_stack.error.remove_file "/etc/cron.d/certbot-renew")"
+    app_remove_file_or_error "/etc/cron.d/certbot-renew" "LEGACY_TLS_RENEWAL_CRON" \
+      "app.cpa_stack.error.remove_file"
   fi
   if $delete_data; then
-    safe_rm_dir "$CPA_DATA_DIR" "CPA_DATA_DIR"
-    safe_rm_dir "$CPAMP_DATA_DIR" "CPAMP_DATA_DIR"
-    safe_rm_dir "$CPA_CONFIG_DIR" "CPA_CONFIG_DIR"
-    safe_rm_dir "$CPAMP_ENV_DIR" "CPAMP_ENV_DIR"
-    safe_rm_dir "$CPA_STACK_BACKUP_DIR" "CPA_STACK_BACKUP_DIR"
+    app_remove_dir_or_error "$CPA_DATA_DIR" "CPA_DATA_DIR" \
+      "$(t app.cpa_stack.success.deleted_data "$CPA_DATA_DIR")" "app.cpa_stack.error.remove_dir"
+    app_remove_dir_or_error "$CPAMP_DATA_DIR" "CPAMP_DATA_DIR" \
+      "$(t app.cpa_stack.success.deleted_data "$CPAMP_DATA_DIR")" "app.cpa_stack.error.remove_dir"
+    app_remove_dir_or_error "$CPA_CONFIG_DIR" "CPA_CONFIG_DIR" \
+      "$(t app.cpa_stack.success.deleted_data "$CPA_CONFIG_DIR")" "app.cpa_stack.error.remove_dir"
+    app_remove_dir_or_error "$CPAMP_ENV_DIR" "CPAMP_ENV_DIR" \
+      "$(t app.cpa_stack.success.deleted_data "$CPAMP_ENV_DIR")" "app.cpa_stack.error.remove_dir"
+    app_remove_dir_or_error "$CPA_STACK_BACKUP_DIR" "CPA_STACK_BACKUP_DIR" \
+      "$(t app.cpa_stack.success.deleted_backup "$CPA_STACK_BACKUP_DIR")" "app.cpa_stack.error.remove_dir"
   else
     info "$(t app.cpa_stack.info.kept_data "$CPA_DATA_DIR")"
     info "$(t app.cpa_stack.info.kept_data "$CPAMP_DATA_DIR")"

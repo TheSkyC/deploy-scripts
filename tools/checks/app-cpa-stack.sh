@@ -442,3 +442,27 @@ CPARENEW
     return 1
   }
 }
+
+check_cpa_stack_uninstall_checks_file_removal_errors() {
+  grep -Fq 'app_remove_file_or_error "$NGINX_SITE" "NGINX_SITE" "app.cpa_stack.error.remove_file"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app_remove_file_or_error "$CONF_FILE" "CPA_STACK_CONF_FILE" "app.cpa_stack.error.remove_file"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app_remove_file_or_error "$certbot_cron_file" "TLS_RENEWAL_CRON" "app.cpa_stack.error.remove_file"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app.cpa_stack.error.remove_file' apps/cpa_stack.sh \
+    && ! grep -Fq 'rm -f "$CONF_FILE"' impl/install_cpa_stack.sh \
+    && ! grep -Fq 'rm -f "$NGINX_SITE_LINK" "$NGINX_SITE" "$NGINX_MAP_FILE"' impl/install_cpa_stack.sh \
+    || {
+      echo "CPA Stack uninstall must surface file removal failures instead of reporting unconditional success." >&2
+      return 1
+    }
+}
+
+check_cpa_stack_uninstall_checks_directory_removal_errors() {
+  grep -Fq 'app_remove_dir_or_error "$CPA_DATA_DIR" "CPA_DATA_DIR"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app_remove_dir_or_error "$CPA_STACK_BACKUP_DIR" "CPA_STACK_BACKUP_DIR"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app.cpa_stack.error.remove_dir' apps/cpa_stack.sh \
+    && ! grep -Fq 'safe_rm_dir "$CPA_DATA_DIR"' impl/install_cpa_stack.sh \
+    || {
+      echo "CPA Stack uninstall must report directory removal failures instead of silently keeping state." >&2
+      return 1
+    }
+}

@@ -81,6 +81,9 @@ i18n_register_many \
   app.cpa_stack.error.remove_file \
   "Failed to remove %s." \
   "删除 %s 失败。" \
+  app.cpa_stack.error.remove_dir \
+  "Failed to remove directory %s." \
+  "删除目录 %s 失败。" \
   app.cpa_stack.info.uninstall_cancelled \
   "Uninstall cancelled." \
   "已取消卸载。" \
@@ -165,6 +168,12 @@ i18n_register_many \
   app.cpa_stack.success.certbot_cron \
   "Scheduled certificate renewal in %s." \
   "已在 %s 中安排证书续签。" \
+  app.cpa_stack.success.deleted_data \
+  "Removed data directory %s." \
+  "已删除数据目录 %s。" \
+  app.cpa_stack.success.deleted_backup \
+  "Removed backup directory %s." \
+  "已删除备份目录 %s。" \
   app.cpa_stack.info.oauth \
   "OAuth is intentionally not automated. Run login commands as the cli-proxy-api user; some providers use localhost callbacks or device-code flows." \
   "OAuth 不会自动执行。请以 cli-proxy-api 用户运行登录命令；部分提供商使用 localhost 回调或设备码流程。" \
