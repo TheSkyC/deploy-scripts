@@ -801,6 +801,9 @@ i18n_register_many \
   app.vaultwarden.status.cert_missing \
   "Certificate was not found (HTTPS is not configured or certificate path is wrong)." \
   "未找到证书（未配置 HTTPS 或证书路径有误）。" \
+  app.vaultwarden.status.cert_unreadable \
+  "Certificate exists at %s but its expiry could not be read; verify openssl and the file permissions." \
+  "证书存在于 %s，但无法读取到期时间；请检查 openssl 与文件权限。" \
   app.vaultwarden.error.bin_empty \
   "VW_BIN is not set. Run install first or confirm the config file exists." \
   "VW_BIN 未设置，请先执行 install 或确认配置文件存在。" \

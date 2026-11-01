@@ -393,6 +393,22 @@ deploy_env_truthy() {
   deploy_value_truthy "${!name:-}"
 }
 
+# Print how many whole days remain before the certificate at PATH expires.
+# Returns non-zero when the file, openssl, or the expiry date cannot be read, so
+# callers can tell "expired" apart from "cannot determine" instead of rendering
+# a bogus negative day count as an expired certificate.
+app_certificate_days_remaining() {
+  local cert_path="$1" expiry epoch
+  [[ -f "$cert_path" ]] || return 1
+  command -v openssl >/dev/null 2>&1 || return 1
+  expiry="$(openssl x509 -enddate -noout -in "$cert_path" 2>/dev/null | sed 's/^notAfter=//')" \
+    || return 1
+  [[ -n "$expiry" ]] || return 1
+  epoch="$(date -d "$expiry" +%s 2>/dev/null)" || return 1
+  [[ "$epoch" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' $(( (epoch - $(date +%s)) / 86400 ))
+}
+
 # Return success when a service binds all IPv4 or IPv6 interfaces. Keep this
 # separate from URL validation: a wildcard listener is valid syntax, but it is
 # a security-sensitive deployment choice.

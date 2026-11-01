@@ -225,6 +225,9 @@ i18n_register_many \
   app.cpa_stack.status.cert_missing \
   "Certificate not found at %s." \
   "未找到证书：%s。" \
+  app.cpa_stack.status.cert_unreadable \
+  "Certificate exists at %s but its expiry could not be read; verify openssl and the file permissions." \
+  "证书存在于 %s，但无法读取到期时间；请检查 openssl 与文件权限。" \
   app.cpa_stack.status.renewal_timer \
   "Renewal scheduled by the certbot systemd timer." \
   "续签已由 certbot systemd timer 调度。" \

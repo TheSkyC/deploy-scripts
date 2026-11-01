@@ -1706,9 +1706,8 @@ do_status() {
     || echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.local_response_warn "$HTTP_CODE")"
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.tls)]${NC}"
   CERT_PATH="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
-  if [[ -f "$CERT_PATH" ]]; then
-    EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_PATH" | sed 's/notAfter=//')
-    DAYS=$(( ( $(date -d "$EXPIRY" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
+  if DAYS="$(app_certificate_days_remaining "$CERT_PATH")"; then
+    EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_PATH" 2>/dev/null | sed 's/notAfter=//')
     if [[ $DAYS -gt 30 ]]; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.cert_valid "$DAYS" "$EXPIRY")"
     elif [[ $DAYS -gt 0 ]]; then
@@ -1716,6 +1715,8 @@ do_status() {
     else
       echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.cert_expired "$DAYS")"
     fi
+  elif [[ -f "$CERT_PATH" ]]; then
+    echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.cert_unreadable "$CERT_PATH")"
   else
     echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.cert_missing)"
   fi

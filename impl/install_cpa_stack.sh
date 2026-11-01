@@ -1096,9 +1096,8 @@ do_status() {
   else
     local cert_path="/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem"
     local cert_expiry="" cert_days=0
-    if [[ -f "$cert_path" ]]; then
+    if cert_days="$(app_certificate_days_remaining "$cert_path")"; then
       cert_expiry="$(openssl x509 -enddate -noout -in "$cert_path" 2>/dev/null | sed 's/notAfter=//')"
-      cert_days=$(( ( $(date -d "$cert_expiry" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
       if (( cert_days > 30 )); then
         printf '  [ok] %s\n' "$(t app.cpa_stack.status.cert_valid "$cert_days" "$cert_expiry")"
       elif (( cert_days > 0 )); then
@@ -1106,6 +1105,8 @@ do_status() {
       else
         printf '  [x] %s\n' "$(t app.cpa_stack.status.cert_expired "$cert_days")"
       fi
+    elif [[ -f "$cert_path" ]]; then
+      printf '  [!] %s\n' "$(t app.cpa_stack.status.cert_unreadable "$cert_path")"
     else
       printf '  [!] %s\n' "$(t app.cpa_stack.status.cert_missing "$cert_path")"
     fi

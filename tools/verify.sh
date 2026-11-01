@@ -502,6 +502,7 @@ main() {
       run_isolated_check check_api_status_directory_sizes_are_nonfatal
       run_isolated_check check_app_json_string_escapes_controls
       run_isolated_check check_app_http_status_code_helper
+      run_isolated_check check_app_certificate_days_remaining_helper
       run_isolated_check check_app_install_executable_file_helper
       run_isolated_check check_app_prune_update_backups_behavior
       run_isolated_check check_atomic_copy_file_strict_helper

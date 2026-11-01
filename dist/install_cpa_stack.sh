@@ -4435,6 +4435,22 @@ deploy_env_truthy() {
   deploy_value_truthy "${!name:-}"
 }
 
+# Print how many whole days remain before the certificate at PATH expires.
+# Returns non-zero when the file, openssl, or the expiry date cannot be read, so
+# callers can tell "expired" apart from "cannot determine" instead of rendering
+# a bogus negative day count as an expired certificate.
+app_certificate_days_remaining() {
+  local cert_path="$1" expiry epoch
+  [[ -f "$cert_path" ]] || return 1
+  command -v openssl >/dev/null 2>&1 || return 1
+  expiry="$(openssl x509 -enddate -noout -in "$cert_path" 2>/dev/null | sed 's/^notAfter=//')" \
+    || return 1
+  [[ -n "$expiry" ]] || return 1
+  epoch="$(date -d "$expiry" +%s 2>/dev/null)" || return 1
+  [[ "$epoch" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' $(( (epoch - $(date +%s)) / 86400 ))
+}
+
 # Return success when a service binds all IPv4 or IPv6 interfaces. Keep this
 # separate from URL validation: a wildcard listener is valid syntax, but it is
 # a security-sensitive deployment choice.
@@ -7530,6 +7546,9 @@ i18n_register_many \
   app.cpa_stack.status.cert_missing \
   "Certificate not found at %s." \
   "未找到证书：%s。" \
+  app.cpa_stack.status.cert_unreadable \
+  "Certificate exists at %s but its expiry could not be read; verify openssl and the file permissions." \
+  "证书存在于 %s，但无法读取到期时间；请检查 openssl 与文件权限。" \
   app.cpa_stack.status.renewal_timer \
   "Renewal scheduled by the certbot systemd timer." \
   "续签已由 certbot systemd timer 调度。" \
@@ -8732,9 +8751,8 @@ do_status() {
   else
     local cert_path="/etc/letsencrypt/live/${CPA_DOMAIN}/fullchain.pem"
     local cert_expiry="" cert_days=0
-    if [[ -f "$cert_path" ]]; then
+    if cert_days="$(app_certificate_days_remaining "$cert_path")"; then
       cert_expiry="$(openssl x509 -enddate -noout -in "$cert_path" 2>/dev/null | sed 's/notAfter=//')"
-      cert_days=$(( ( $(date -d "$cert_expiry" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
       if (( cert_days > 30 )); then
         printf '  [ok] %s\n' "$(t app.cpa_stack.status.cert_valid "$cert_days" "$cert_expiry")"
       elif (( cert_days > 0 )); then
@@ -8742,6 +8760,8 @@ do_status() {
       else
         printf '  [x] %s\n' "$(t app.cpa_stack.status.cert_expired "$cert_days")"
       fi
+    elif [[ -f "$cert_path" ]]; then
+      printf '  [!] %s\n' "$(t app.cpa_stack.status.cert_unreadable "$cert_path")"
     else
       printf '  [!] %s\n' "$(t app.cpa_stack.status.cert_missing "$cert_path")"
     fi

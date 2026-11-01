@@ -4435,6 +4435,22 @@ deploy_env_truthy() {
   deploy_value_truthy "${!name:-}"
 }
 
+# Print how many whole days remain before the certificate at PATH expires.
+# Returns non-zero when the file, openssl, or the expiry date cannot be read, so
+# callers can tell "expired" apart from "cannot determine" instead of rendering
+# a bogus negative day count as an expired certificate.
+app_certificate_days_remaining() {
+  local cert_path="$1" expiry epoch
+  [[ -f "$cert_path" ]] || return 1
+  command -v openssl >/dev/null 2>&1 || return 1
+  expiry="$(openssl x509 -enddate -noout -in "$cert_path" 2>/dev/null | sed 's/^notAfter=//')" \
+    || return 1
+  [[ -n "$expiry" ]] || return 1
+  epoch="$(date -d "$expiry" +%s 2>/dev/null)" || return 1
+  [[ "$epoch" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' $(( (epoch - $(date +%s)) / 86400 ))
+}
+
 # Return success when a service binds all IPv4 or IPv6 interfaces. Keep this
 # separate from URL validation: a wildcard listener is valid syntax, but it is
 # a security-sensitive deployment choice.
@@ -8106,6 +8122,9 @@ i18n_register_many \
   app.vaultwarden.status.cert_missing \
   "Certificate was not found (HTTPS is not configured or certificate path is wrong)." \
   "未找到证书（未配置 HTTPS 或证书路径有误）。" \
+  app.vaultwarden.status.cert_unreadable \
+  "Certificate exists at %s but its expiry could not be read; verify openssl and the file permissions." \
+  "证书存在于 %s，但无法读取到期时间；请检查 openssl 与文件权限。" \
   app.vaultwarden.error.bin_empty \
   "VW_BIN is not set. Run install first or confirm the config file exists." \
   "VW_BIN 未设置，请先执行 install 或确认配置文件存在。" \
@@ -9997,9 +10016,8 @@ do_status() {
     || echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.local_response_warn "$HTTP_CODE")"
   echo -e "\n${BOLD}[$(t app.vaultwarden.status.tls)]${NC}"
   CERT_PATH="/etc/letsencrypt/live/${VW_DOMAIN}/fullchain.pem"
-  if [[ -f "$CERT_PATH" ]]; then
-    EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_PATH" | sed 's/notAfter=//')
-    DAYS=$(( ( $(date -d "$EXPIRY" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
+  if DAYS="$(app_certificate_days_remaining "$CERT_PATH")"; then
+    EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_PATH" 2>/dev/null | sed 's/notAfter=//')
     if [[ $DAYS -gt 30 ]]; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.vaultwarden.status.cert_valid "$DAYS" "$EXPIRY")"
     elif [[ $DAYS -gt 0 ]]; then
@@ -10007,6 +10025,8 @@ do_status() {
     else
       echo -e "  ${RED}[✗]${NC} $(t app.vaultwarden.status.cert_expired "$DAYS")"
     fi
+  elif [[ -f "$CERT_PATH" ]]; then
+    echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.cert_unreadable "$CERT_PATH")"
   else
     echo -e "  ${YELLOW}[!]${NC} $(t app.vaultwarden.status.cert_missing)"
   fi

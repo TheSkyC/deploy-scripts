@@ -303,3 +303,40 @@ check_binary_app_download_integrity() {
     bapp_verify_download "$payload_file" "v1.0.0" >/dev/null 2>&1
   ' _ "$ROOT_DIR"
 }
+
+# Certificate status must distinguish "expired" from "cannot read the expiry".
+# The helper only reports a day count when openssl could actually parse the
+# file, and both TLS-aware status commands delegate to it.
+check_app_certificate_days_remaining_helper() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    cert="$tmp/cert.pem"
+    printf "not a certificate\n" >"$cert"
+    if app_certificate_days_remaining "$cert" >/dev/null 2>&1; then
+      echo "invalid certificate must not produce a day count" >&2
+      exit 1
+    fi
+    if app_certificate_days_remaining "$tmp/missing.pem" >/dev/null 2>&1; then
+      echo "missing certificate must not produce a day count" >&2
+      exit 2
+    fi
+    command -v openssl >/dev/null 2>&1 || { printf ok; exit 0; }
+    openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/key.pem" -out "$cert" \
+      -days 10 -subj "/CN=example.test" >/dev/null 2>&1
+    days="$(app_certificate_days_remaining "$cert")"
+    [[ "$days" =~ ^[0-9]+$ ]] || { echo "readable certificate must yield a day count" >&2; exit 3; }
+    (( days >= 8 && days <= 10 )) || { echo "unexpected day count: $days" >&2; exit 4; }
+    printf ok
+  ' | grep -q ok || return 1
+  grep -Fq "app_certificate_days_remaining \"\$CERT_PATH\"" impl/install_vaultwarden.sh || {
+    echo "Vaultwarden status must use the shared certificate day helper." >&2
+    return 1
+  }
+  grep -Fq "app_certificate_days_remaining \"\$cert_path\"" impl/install_cpa_stack.sh || {
+    echo "CPA Stack status must use the shared certificate day helper." >&2
+    return 1
+  }
+}
