@@ -2438,6 +2438,7 @@ STUB2
     echo ok
   ' | grep -q ok
 }
+check_notify_config_test_probes_merged_config() {
   # notify-config --test end-to-end: probe the merged values (not stale disk
   # state), fail loudly when delivery fails without persisting anything, and
   # persist the tested configuration only on a successful delivery. Run in a
@@ -2480,6 +2481,7 @@ STUB
     grep -q '^NOTIFY_ENABLED="true"$' "$NOTIFY_CONF_FILE" || { echo TEST_OK_NOT_ENABLED; exit 75; }
     grep -q '^NOTIFY_TOPIC="t"$' "$NOTIFY_CONF_FILE" || { echo TEST_OK_NOT_MERGED; exit 76; }
   ) || return 1
+}
 
 # Scheduled-batch invariants: units and runner are written atomically with
 # restrictive modes, cron expressions are validated before use, unschedule

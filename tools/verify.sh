@@ -840,6 +840,7 @@ main() {
       run_isolated_check check_backup_restore_directory_lifecycle
       run_isolated_check check_backup_restore_data_dir_lifecycle
       run_isolated_check check_notification_fail_open_and_redaction
+      run_isolated_check check_notify_config_test_probes_merged_config
       run_isolated_check check_schedule_units_are_atomic_and_cleaned_up
       run_isolated_check check_schedule_retries_are_configurable
       run_isolated_check check_per_app_event_notifications
