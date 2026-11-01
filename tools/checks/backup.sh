@@ -2092,13 +2092,14 @@ check_registry_restore_capability_matches_impl() {
       *) echo "$impl_file implements do_restore but $app does not declare restore capability" >&2; return 1 ;;
     esac
   done
-  # Custom apps restored through the shared data-dir helper, plus the two
-  # bespoke multi-artifact restores (sub2api three artifacts, cpa_stack
-  # root-relative five paths).
-  for app_id in vaultwarden cyberstrikeai; do
-    grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for "$app_id")" \
-      || { echo "$app_id do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
-  done
+  # Custom apps restored through the shared data-dir helper, plus the bespoke
+  # multi-artifact restores (Vaultwarden data+env, Sub2API database+data+config,
+  # and CPA Stack's root-relative five paths).
+  grep -q 'backup_restore_data_dir' "$(deploy_app_impl_file_for cyberstrikeai)" \
+    || { echo "cyberstrikeai do_restore must delegate to backup_restore_data_dir" >&2; return 1; }
+  grep -q '_vw_restore_archive "\$archive"' impl/install_vaultwarden.sh \
+    && grep -q '^_vw_restore_rollback() {' impl/install_vaultwarden.sh \
+    || { echo "vaultwarden do_restore must use the transactional data+env restore path" >&2; return 1; }
   grep -q '^do_restore() {' impl/install_tickflow.sh \
     || { echo "tickflow declares restore capability but has no do_restore" >&2; return 1; }
   awk '
@@ -2128,18 +2129,20 @@ check_registry_restore_capability_matches_impl() {
     }
   ' impl/install_cpa_stack.sh || return 1
   awk '
-    /^do_restore\(\)/ { in_fn=1; saw_data=0; saw_data_restart=0; saw_conf=0; saw_conf_restart=0; saw_db=0; saw_db_validate=0; saw_stop=0; next }
-    in_fn && /if ! backup_restore_data_dir "\$DATA_DIR" ""/ { saw_data=1 }
-    in_fn && saw_data && /systemctl start "\$SERVICE_NAME"/ { saw_data_restart=1 }
-    in_fn && /backup_restore_directory "\$CONFIG_DIR" "\$conf_archive"/ { saw_conf=1 }
-    in_fn && saw_conf && /systemctl start "\$SERVICE_NAME"/ { saw_conf_restart=1 }
+    /^do_restore\(\)/ { in_fn=1; saw_data_stage=0; saw_conf_stage=0; saw_data_swap=0; saw_conf_swap=0; saw_conf_archive=0; saw_db=0; saw_db_validate=0; saw_rollback=0; saw_stop=0; next }
+    in_fn && /_sub2api_stage_restore_directory "\$DATA_DIR"/ { saw_data_stage=1 }
+    in_fn && /_sub2api_stage_restore_directory "\$CONFIG_DIR"/ { saw_conf_stage=1 }
+    in_fn && /_sub2api_restore_swap_directory "\$DATA_DIR"/ { saw_data_swap=1 }
+    in_fn && /_sub2api_restore_swap_directory "\$CONFIG_DIR"/ { saw_conf_swap=1 }
     in_fn && /sub2api_conf_/ { saw_conf_archive=1 }
     in_fn && /sub2api_db_/ { saw_db=1 }
     in_fn && /backup_validate_gzip_archive "\$db_archive"/ { saw_db_validate=1 }
+    in_fn && /_sub2api_restore_rollback_artifacts/ { saw_rollback=1 }
     in_fn && /systemctl stop "\$SERVICE_NAME"/ { saw_stop=1 }
     in_fn && /^}$/ {
-      if (!(saw_data && saw_data_restart && saw_conf && saw_conf_restart && saw_conf_archive && saw_db && saw_db_validate && saw_stop)) {
-        print "sub2api do_restore must use shared directory restore helpers and restart the service after caller-managed failures" > "/dev/stderr"
+      if (!(saw_data_stage && saw_conf_stage && saw_data_swap && saw_conf_swap \
+          && saw_conf_archive && saw_db && saw_db_validate && saw_rollback && saw_stop)) {
+        print "sub2api do_restore must stage data/config, validate the DB archive, and own the multi-artifact rollback" > "/dev/stderr"
         exit 1
       }
       in_fn=0
