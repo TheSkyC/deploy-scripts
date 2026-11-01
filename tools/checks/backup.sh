@@ -280,19 +280,42 @@ check_no_explicit_release_lock_calls() {
 }
 
 check_update_backs_up_before_stop() {
-  local file
-  for file in lib/binary_app.sh impl/install_sub2api.sh; do
-    awk '
-      /local bak_path=/ { seen_bak=1; seen_cp=0 }
-      seen_bak && index($0, "app_binary_backup_current \"$bak_path\"") { seen_cp=1 }
-      seen_bak && index($0, "systemctl stop \"$SERVICE_NAME\"") {
-        if (!seen_cp) {
+  awk '
+      /^bapp_update\(\)/ { in_update=1; saw_backup=0; saw_copy=0; next }
+      in_update && /local bak_path/ { saw_backup=1; saw_copy=0 }
+      in_update && /app_binary_backup_current "\$bak_path"/ { saw_copy=1 }
+      in_update && /systemctl stop "\$SERVICE_NAME"/ {
+        if (!saw_copy) {
           printf "%s stops the service before backing up the current binary\n", FILENAME > "/dev/stderr"
           exit 1
         }
       }
-    ' "$file"
-  done
+      in_update && /^}/ {
+        if (!(saw_backup && saw_copy)) {
+          printf "%s update must create a rollback backup before stopping the service\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' lib/binary_app.sh || return 1
+  awk '
+      /^do_update\(\)/ { in_update=1; saw_backup=0; saw_copy=0; next }
+      in_update && /local BAK_PATH=/ { saw_backup=1; saw_copy=0 }
+      in_update && /_backup_current_binary "\$BAK_PATH"/ { saw_copy=1 }
+      in_update && /systemctl stop "\$SERVICE_NAME"/ {
+        if (!saw_copy) {
+          printf "%s stops the service before backing up the current binary\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+      }
+      in_update && /^}/ {
+        if (!(saw_backup && saw_copy)) {
+          printf "%s update must create a rollback backup before stopping the service\n", FILENAME > "/dev/stderr"
+          exit 1
+        }
+        in_update=0
+      }
+    ' impl/install_sub2api.sh
 }
 
 check_update_binary_backups_are_atomic() {
