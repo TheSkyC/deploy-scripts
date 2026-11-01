@@ -6955,12 +6955,19 @@ compose_health() {
   local -a base_args
   mapfile -t base_args < <(compose_base_args "$work_dir" "$project_file")
   # shellcheck disable=SC2086
-  out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" || return 1
+  if ! out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" \
+      || [[ -z "$out" ]]; then
+    # docker-compose v1 (<1.25) does not understand --format json. Fall back
+    # to its table output; the same state words are present in the State
+    # column and the scan below remains fail-closed when no services exist.
+    # shellcheck disable=SC2086
+    out="$($compose_cmd "${base_args[@]}" ps 2>/dev/null)" || return 1
+  fi
   # Case-insensitive state scan: running/healthy pass; exited, dead, or
   # restarting services fail the check. docker compose uses lowercase
   # values ("running"), docker-compose uses title case ("Running").
-  printf '%s' "$out" | grep -qi '"running"\|"Running"\|"healthy"\|"Healthy"' \
-    && ! printf '%s' "$out" | grep -qi '"exited"\|"Exited"\|"dead"\|"Dead"\|"restarting"\|"Restarting"' \
+  printf '%s' "$out" | grep -Eiq '"?running"?|"?healthy"?' \
+    && ! printf '%s' "$out" | grep -Eiq '"?exited"?|"?dead"?|"?restarting"?' \
     || return 1
 }
 

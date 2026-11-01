@@ -849,6 +849,7 @@ main() {
       run_isolated_check check_per_app_event_notifications
       run_isolated_check check_compose_shared_layer_and_tickflow_delegation
       run_isolated_check check_compose_lifecycle_and_health
+      run_isolated_check check_compose_health_supports_legacy_v1_tables
       run_isolated_check check_fleet_host_validation_and_isolation
       run_isolated_check check_migration_export_import_roundtrip
       run_isolated_check check_batch_target_selection_is_local_only

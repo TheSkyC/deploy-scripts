@@ -2537,6 +2537,43 @@ STUB
   ) || return 1
 }
 
+check_compose_health_supports_legacy_v1_tables() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/bin" "$tmp/project"
+    printf "services: []\n" > "$tmp/project/compose.yml"
+    cat > "$tmp/bin/docker" <<DOCKER
+#!/bin/bash
+exit 1
+DOCKER
+    cat > "$tmp/bin/docker-compose" <<COMPOSE
+#!/bin/bash
+if [[ "\$*" == *--format* ]]; then exit 64; fi
+for a in "\$@"; do
+  if [[ "\$a" == "ps" ]]; then
+    printf "%s" "\$COMPOSE_PS_OUTPUT"
+    exit 0
+  fi
+done
+exit 0
+COMPOSE
+    chmod +x "$tmp/bin/docker" "$tmp/bin/docker-compose"
+    export PATH="$tmp/bin:$PATH"
+    export COMPOSE_PS_OUTPUT="Name Command State Ports
+app app running 8080"
+    compose_health "$tmp/project" "$tmp/project/compose.yml" || { echo LEGACY_HEALTH_FAILED; exit 21; }
+    export COMPOSE_PS_OUTPUT="Name Command State Ports
+app app Exited 8080"
+    if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
+      echo LEGACY_EXITED_ACCEPTED; exit 22
+    fi
+    echo ok
+  ' | grep -q ok
+}
+
 # Scheduled-batch invariants: units and runner are written atomically with
 # restrictive modes, cron expressions are validated before use, unschedule
 # removes both systemd and cron artifacts plus the config, and the runner
