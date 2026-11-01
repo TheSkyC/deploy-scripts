@@ -6,7 +6,7 @@ Reference documentation:
 - [Per-app deployment reference](docs/apps.md) — every app's configuration keys, defaults, and non-obvious operations.
 - [Central commands reference](docs/central-commands.md) — status-all/backup-all/update-all/doctor-all, notify-config, schedule, export/import, fleet.
 - [Instances, TLS, and migration runbook](docs/instances-tls-migration.md) — instance config/lock boundaries, reverse-proxy TLS, and export/import restore rehearsal.
-- `sudo bash deploy.sh doctor security [--json]` — read-only audit for legacy credentials, public listeners, and root backup schedules.
+- `sudo bash deploy.sh doctor security [--json]` — read-only audit for legacy credentials, public listeners, root backup schedules, and TLS sites with no certificate renewal schedule.
 
 ## Requirements
 

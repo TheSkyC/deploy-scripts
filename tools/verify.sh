@@ -883,6 +883,7 @@ main() {
       run_isolated_check check_security_defaults_and_public_bind_guard
       run_isolated_check check_security_bind_keys_follow_registry
       run_isolated_check check_security_audit_contract
+      run_isolated_check check_security_doctor_tls_renewal_audit
       run_isolated_check check_target_groups_cover_all_checks
       run_isolated_check check_feature_proofs
       echo "Guards verification passed"

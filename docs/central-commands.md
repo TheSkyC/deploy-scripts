@@ -46,7 +46,12 @@ Runs a read-only legacy-install security audit. It checks for Vaultwarden
 Admin Token temporary files, plaintext Sub2API PostgreSQL DSNs in legacy
 backup scripts, wildcard listeners recorded in deployment configs, and
 application backup jobs left in root crontab or unmanaged `/etc/cron.d`
-drop-ins. It never prints credential contents and never deletes files.
+drop-ins. It also reports nginx sites whose Let's Encrypt certificate is
+covered by no renewal schedule at all — neither the certbot systemd timer, the
+legacy shared `/etc/cron.d/certbot-renew`, nor a per-app
+`/etc/cron.d/certbot-renew-<service>` entry — because a valid certificate that
+never renews is a scheduled outage. It never prints credential contents and
+never deletes files.
 The exit status is non-zero only when the audit cannot safely inspect a
 security-sensitive path; findings are reported as `ok`, `warning`, `error`, or
 `not_checked`. `--json` emits schema version 1 for automation.

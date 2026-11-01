@@ -200,3 +200,56 @@ PY
   rm -f "$json_file"
   return "$status"
 }
+
+# A valid certificate is only safe if something renews it. The security audit
+# must report TLS sites whose certificate is covered by neither the certbot
+# timer, the legacy shared entry, nor a per-app /etc/cron.d entry.
+check_security_doctor_tls_renewal_audit() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    DEPLOY_SECURITY_AUDIT_ROOT="$tmp"
+    sites="$tmp/etc/nginx/sites-available"
+    cron_dir="$tmp/etc/cron.d"
+    mkdir -p "$sites" "$cron_dir"
+    printf "%s\n" "server { ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem; }" >"$sites/cpa-stack"
+    printf "%s\n" "server { listen 80; }" >"$sites/plain"
+    security_doctor_certbot_timer_active() { return 1; }
+
+    # No schedule at all: the uncovered certificate must be reported.
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == warning ]] || { echo "uncovered TLS certificate was not reported" >&2; exit 1; }
+    [[ "${SECURITY_DOCTOR_MESSAGES[0]}" == *api.example.com* ]] || { echo "uncovered record must name the certificate" >&2; exit 2; }
+    [[ "${SECURITY_DOCTOR_PATHS[0]}" == *cpa-stack ]] || { echo "uncovered record must point at the site file" >&2; exit 3; }
+
+    # A per-app entry naming the certificate covers it.
+    printf "%s\n" "30 2 * * * root certbot renew --quiet --cert-name \"api.example.com\"" >"$cron_dir/certbot-renew-cpa-stack"
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "scoped per-app renewal was not accepted" >&2; exit 4; }
+
+    # A per-app entry for another certificate does not cover this one.
+    printf "%s\n" "30 2 * * * root certbot renew --quiet --cert-name \"other.example.com\"" >"$cron_dir/certbot-renew-cpa-stack"
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == warning ]] || { echo "renewal for a different certificate was accepted" >&2; exit 5; }
+
+    # The legacy shared entry renews everything.
+    rm -f "$cron_dir/certbot-renew-cpa-stack"
+    printf "%s\n" "30 2 * * * root certbot renew --quiet" >"$cron_dir/certbot-renew"
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "shared renewal entry was not accepted" >&2; exit 6; }
+
+    # The system timer on its own is enough.
+    rm -f "$cron_dir/certbot-renew"
+    security_doctor_certbot_timer_active() { return 0; }
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "certbot timer was not accepted as a renewal schedule" >&2; exit 7; }
+    echo ok
+  ' | grep -q ok
+}

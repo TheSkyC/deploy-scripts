@@ -253,6 +253,82 @@ security_doctor_check_cron_residue() {
   fi
 }
 
+# A certificate that nothing renews is a scheduled outage, so treat renewal as
+# part of the security posture: report TLS sites whose certificate is not
+# covered by the certbot timer, the legacy shared entry, or a per-app cron.
+security_doctor_certbot_timer_active() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl list-timers 'certbot*' 2>/dev/null | grep -q certbot
+}
+
+security_doctor_tls_site_certs() {
+  local site="$1"
+  grep -oE 'ssl_certificate[[:space:]]+/etc/letsencrypt/live/[^/]+/fullchain\.pem' "$site" 2>/dev/null \
+    | sed -E 's#.*/live/([^/]+)/fullchain\.pem#\1#' \
+    | LC_ALL=C sort -u
+}
+
+# A cron entry covers a certificate when it renews everything (no --cert-name
+# filter) or when it names that certificate explicitly.
+security_doctor_tls_cert_has_schedule() {
+  local cert="$1" cron_dir="$2" cron_file scheduled_cert
+  if [[ -f "$cron_dir/certbot-renew" ]] \
+      && grep -Eq 'certbot[[:space:]]+renew' "$cron_dir/certbot-renew" 2>/dev/null; then
+    return 0
+  fi
+  shopt -s nullglob
+  for cron_file in "$cron_dir"/certbot-renew-*; do
+    [[ -f "$cron_file" && -r "$cron_file" ]] || continue
+    grep -Eq 'certbot[[:space:]]+renew' "$cron_file" 2>/dev/null || continue
+    scheduled_cert="$(sed -n 's/.*--cert-name[[:space:]]*"\?\([^"[:space:]]*\)"\?.*/\1/p' "$cron_file" | head -n 1)"
+    if [[ -z "$scheduled_cert" || "$scheduled_cert" == "$cert" ]]; then
+      shopt -u nullglob
+      return 0
+    fi
+  done
+  shopt -u nullglob
+  return 1
+}
+
+security_doctor_check_tls_renewal() {
+  local sites_dir cron_dir site cert index timer_active=0
+  local -a certs=() sites=()
+  sites_dir="$(security_doctor_path /etc/nginx/sites-available)"
+  cron_dir="$(security_doctor_path /etc/cron.d)"
+
+  if [[ ! -d "$sites_dir" ]]; then
+    security_doctor_record tls_renewal not_checked "$sites_dir" "$(t security_doctor.tls.no_sites)"
+    return
+  fi
+  if [[ ! -r "$sites_dir" ]]; then
+    security_doctor_record tls_renewal error "$sites_dir" "$(t security_doctor.tls.dir_error)"
+    return
+  fi
+  security_doctor_certbot_timer_active && timer_active=1
+
+  while IFS= read -r -d '' site; do
+    [[ -f "$site" ]] || continue
+    while IFS= read -r cert; do
+      [[ -n "$cert" ]] || continue
+      certs+=("$cert")
+      sites+=("$site")
+    done < <(security_doctor_tls_site_certs "$site")
+  done < <(find "$sites_dir" -maxdepth 1 -type f -print0 2>/dev/null)
+
+  if ((${#certs[@]} == 0)); then
+    security_doctor_record tls_renewal ok "$sites_dir" "$(t security_doctor.tls.none)"
+    return
+  fi
+  for index in "${!certs[@]}"; do
+    cert="${certs[$index]}"
+    ((timer_active)) && continue
+    security_doctor_tls_cert_has_schedule "$cert" "$cron_dir" && continue
+    security_doctor_record tls_renewal warning "${sites[$index]}" "$(t security_doctor.tls.uncovered "$cert")"
+    return
+  done
+  security_doctor_record tls_renewal ok "$sites_dir" "$(t security_doctor.tls.covered "${#certs[@]}")"
+}
+
 security_doctor_print_json() {
   local index first=1
   printf '{"schema_version":1,"generated_at":%s,"summary":{"ok":%s,"warning":%s,"error":%s,"not_checked":%s},"records":[' \
@@ -301,6 +377,7 @@ manager_security_doctor_main() {
   security_doctor_check_sub2api_dsn
   security_doctor_check_public_binds
   security_doctor_check_cron_residue
+  security_doctor_check_tls_renewal
 
   if ((json)); then
     security_doctor_print_json
