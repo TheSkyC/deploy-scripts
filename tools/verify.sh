@@ -392,6 +392,7 @@ main() {
       check_no_color_output
       check_no_argument_menu
       check_menu_surfaces_supported_advanced_actions
+      check_app_dry_run_guards_mutating_actions
       check_install_summaries_avoid_fixed_width_boxes
       check_doctor_strict_returns_on_warnings
       check_manager_list

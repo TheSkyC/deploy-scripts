@@ -739,3 +739,54 @@ check_doctor_strict_returns_on_warnings() {
       return 1
     }
 }
+
+# `--dry-run` must suppress every mutating action, not only
+# install/update/backup/uninstall. An unguarded cert or restore would change the
+# system during what the operator believes is a preview.
+check_app_dry_run_guards_mutating_actions() {
+  local action
+  for action in cert restore token signups; do
+    grep -Fq "app_dry_run_guard ${action}" lib/cli.sh || {
+      echo "lib/cli.sh must guard the mutating ${action} action with app_dry_run_guard" >&2
+      return 1
+    }
+  done
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    APP_NAME="Fixture"
+    APP_ID="fixture"
+    workdir="$(mktemp -d)"
+    trap "rm -rf \"$workdir\"" EXIT
+    do_cert() { : > "$workdir/cert" ; }
+    do_restore() { : > "$workdir/restore" ; }
+    do_token() { : > "$workdir/token" ; }
+    do_signups() { : > "$workdir/signups" ; }
+    for action in cert restore token signups; do
+      output="$( ( dispatch_action --dry-run "$action" ) 2>&1 )" || {
+        echo "dry run of ${action} failed: ${output}" >&2
+        exit 1
+      }
+      if [ -e "$workdir/$action" ]; then
+        echo "--dry-run still executed ${action}" >&2
+        exit 1
+      fi
+      case "$output" in
+        *"$action"*) ;;
+        *)
+          echo "dry run of ${action} printed no preview: ${output}" >&2
+          exit 1
+          ;;
+      esac
+    done
+    # Non-root runs reach the action directly, so the fixture proves the guard is
+    # the only thing standing between --dry-run and a real execution.
+    if [ "$(id -u)" -ne 0 ]; then
+      ( dispatch_action cert ) >/dev/null 2>&1 || true
+      if [ ! -e "$workdir/cert" ]; then
+        echo "fixture for cert never ran without --dry-run; the check is vacuous" >&2
+        exit 1
+      fi
+    fi
+  ' bash "$ROOT_DIR"
+}

@@ -38,9 +38,10 @@ usage() {
   fi
 }
 
-# Application-level dry-run: prints the actions that install/update/backup/
-# uninstall would take and exits without modifying the system. Each do_* and
-# bapp_* entry point honors DEPLOY_DRY_RUN=1.
+# Application-level dry-run: prints what the requested mutating action would do
+# and exits before the do_* entry point runs, so nothing reaches the system.
+# Every action that mutates state must be listed here; a mutating action that is
+# not guarded would really run under `--dry-run`.
 app_dry_run_guard() {
   local action="$1"
   [[ "${DEPLOY_DRY_RUN:-0}" == "1" ]] || return 0
@@ -144,6 +145,7 @@ dispatch_action() {
       backup|3) app_dry_run_guard backup; operation_run_app_action backup do_backup "$@" ;;
       restore|4)
         if declare -f do_restore >/dev/null 2>&1; then
+          app_dry_run_guard restore
           operation_run_app_action restore do_restore "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" restore)"
@@ -151,6 +153,7 @@ dispatch_action() {
         ;;
       cert|https)
         if declare -f do_cert >/dev/null 2>&1; then
+          app_dry_run_guard cert
           operation_run_app_action cert do_cert "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" cert)"
@@ -165,6 +168,7 @@ dispatch_action() {
         ;;
       token)
         if declare -f do_token >/dev/null 2>&1; then
+          app_dry_run_guard token
           operation_run_app_action token do_token "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" token)"
@@ -172,6 +176,7 @@ dispatch_action() {
         ;;
       signups)
         if declare -f do_signups >/dev/null 2>&1; then
+          app_dry_run_guard signups
           operation_run_app_action signups do_signups "$@"
         else
           error "$(t error.unsupported_action "${APP_NAME:-app}" signups)"
