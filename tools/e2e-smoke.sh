@@ -107,11 +107,11 @@ tar -czf "$WORK/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyA
 mkdir -p "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1"
 mkdir -p "$WORK/www/cpamp-stage"
 printf '#!/bin/sh\necho cpamp\n' > "$WORK/www/cpamp-stage/cpa-manager-plus"
-tar -czf "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_0.4.1_linux_amd64.tar.gz" \
+tar -czf "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_v0.4.1_linux_amd64.tar.gz" \
   -C "$WORK/www/cpamp-stage" cpa-manager-plus
 (
   cd "$WORK/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1"
-  sha256sum cpa-manager-plus_0.4.1_linux_amd64.tar.gz > checksums.txt
+  sha256sum cpa-manager-plus_v0.4.1_linux_amd64.tar.gz > checksums.txt
 )
 
 # Fake GitHub API responses per repo path.
@@ -123,7 +123,7 @@ printf '{"tag_name":"v0.1.0"}\n' > "$WORK/www/api/Wei-Shaw-sub2api_latest.json"
 # so the install flow can verify the expected asset exists before download.
 printf '{"tag_name":"v1.2.3","assets":[{"name":"CLIProxyAPI_1.2.3_linux_amd64.tar.gz","browser_download_url":"https://github.com/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"}]}\n' \
   > "$WORK/www/api/router-for-me-CLIProxyAPI_tags_v1.2.3.json"
-printf '{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_0.4.1_linux_amd64.tar.gz","browser_download_url":"https://github.com/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_0.4.1_linux_amd64.tar.gz"}]}\n' \
+printf '{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_v0.4.1_linux_amd64.tar.gz","browser_download_url":"https://github.com/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_v0.4.1_linux_amd64.tar.gz"}]}\n' \
   > "$WORK/www/api/seakee-CPA-Manager-Plus_tags_v0.4.1.json"
 
 # A stub systemctl + a curl shim that serves GitHub requests from the
@@ -446,9 +446,9 @@ test -f /etc/nginx/sites-available/cpa-stack || { echo "NGINX_SITE_MISSING"; exi
 grep -q "proxy_pass http://127.0.0.1:8317;" /etc/nginx/sites-available/cpa-stack || { echo "CPA_PROXY_MISSING"; exit 1; }
 grep -q "proxy_pass http://127.0.0.1:18317;" /etc/nginx/sites-available/cpa-stack || { echo "CPAMP_PROXY_MISSING"; exit 1; }
 test -f /etc/nginx/conf.d/cpa-stack-connection-upgrade.conf || { echo "NGINX_MAP_MISSING"; exit 1; }
-test -f /etc/cpa_stack-deploy.conf || { echo "CONF_MISSING"; exit 1; }
+test -f /etc/cpa-stack-deploy.conf || { echo "CONF_MISSING"; exit 1; }
 # Persisted pins and recorded component versions must survive the real flow.
-source /etc/cpa_stack-deploy.conf
+source /etc/cpa-stack-deploy.conf
 [[ "${CPA_VERSION}" == "v1.2.3" ]] || { echo "CPA_PIN_NOT_SAVED"; exit 1; }
 [[ "${CPAMP_VERSION}" == "v0.4.1" ]] || { echo "CPAMP_PIN_NOT_SAVED"; exit 1; }
 [[ "${INSTALLED_CPA_VERSION}" == "v1.2.3" ]] || { echo "CPA_VERSION_NOT_SAVED"; exit 1; }

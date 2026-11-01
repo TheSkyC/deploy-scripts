@@ -275,7 +275,7 @@ check_cpa_stack_e2e_pinned_fixture() {
     && grep -Fq "router-for-me-CLIProxyAPI_tags_v1.2.3.json" "$fixture" \
     && grep -Fq "seakee-CPA-Manager-Plus_tags_v0.4.1.json" "$fixture" \
     && grep -Fq "sha256sum CLIProxyAPI_1.2.3_linux_amd64.tar.gz > checksums.txt" "$fixture" \
-    && grep -Fq "sha256sum cpa-manager-plus_0.4.1_linux_amd64.tar.gz > checksums.txt" "$fixture" \
+    && grep -Fq "sha256sum cpa-manager-plus_v0.4.1_linux_amd64.tar.gz > checksums.txt" "$fixture" \
     && grep -Fq "CPA_VERSION=v1.2.3 CPAMP_VERSION=v0.4.1" "$fixture" \
     && grep -Fq '"pinned release v1.2.3"' "$fixture" \
     && grep -Fq '"pinned release v0.4.1"' "$fixture" \
