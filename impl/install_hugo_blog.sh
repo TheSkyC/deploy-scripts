@@ -1047,10 +1047,9 @@ do_backup() {
     error "$(t app.blog.backup.error_dir "$BLOG_BACKUP_DIR")"
   fi
 
-  local timestamp archive archive_tmp stage copied=false
+  local timestamp archive stage copied=false
   timestamp="$(date +%Y%m%d_%H%M%S)_${RANDOM}"
   archive="${BLOG_BACKUP_DIR}/blog_${timestamp}.tar.gz"
-  archive_tmp="${archive}.tmp"
   if ! stage=$(mktemp -d "${BLOG_BACKUP_DIR}/.blog-backup.XXXXXX"); then
     error "$(t app.blog.backup.error_dir "$BLOG_BACKUP_DIR")"
   fi
@@ -1062,7 +1061,7 @@ do_backup() {
       return 0
     fi
     if ! mkdir -p "${stage}/${target_name}" || ! cp -a "${source}/." "${stage}/${target_name}/"; then
-      rm -rf "$stage" "$archive_tmp"
+      rm -rf "$stage"
       error "$(t app.blog.backup.error_archive "$archive")"
     fi
     copied=true
@@ -1075,7 +1074,7 @@ do_backup() {
       return 0
     fi
     if ! cp -a "$source" "${stage}/${target_name}"; then
-      rm -rf "$stage" "$archive_tmp"
+      rm -rf "$stage"
       error "$(t app.blog.backup.error_archive "$archive")"
     fi
     copied=true
@@ -1088,21 +1087,16 @@ do_backup() {
   _backup_file_into_stage /usr/local/bin/blog-publish blog-publish
 
   if [[ "$copied" != "true" ]]; then
-    rm -rf "$stage" "$archive_tmp"
+    rm -rf "$stage"
     error "$(t app.blog.backup.error_no_sources)"
   fi
-  if ! tar -czf "$archive_tmp" -C "$stage" .; then
-    rm -rf "$stage" "$archive_tmp"
+  if ! backup_create_tar_archive "$archive" -C "$stage" .; then
+    rm -rf "$stage"
     error "$(t app.blog.backup.error_archive "$archive")"
   fi
   rm -rf "$stage"
-  if ! chmod 600 "$archive_tmp" || ! mv "$archive_tmp" "$archive"; then
-    rm -f "$archive_tmp"
-    error "$(t app.blog.backup.error_archive "$archive")"
-  fi
-  local digest installed_version=""
-  if ! digest="$(backup_write_sha256 "$archive")" \
-     || ! backup_write_manifest "$archive" "blog" 1 "$installed_version"; then
+  local installed_version=""
+  if ! backup_finalize_archive "$archive" "blog" "$installed_version"; then
     warn "$(t app.blog.backup.warn_integrity "$archive")"
   fi
   success "$(t app.blog.backup.success "$archive")"

@@ -1769,12 +1769,12 @@ check_shared_impls_have_restore_delegate() {
 # archive and before reporting success, and must provide its own do_verify.
 check_blog_backup_writes_integrity_metadata() {
   awk '
-    /do_backup\(\)/ { in_backup=1; saw_sidecar=0; saw_manifest=0; next }
-    in_backup && /backup_write_sha256 "\$archive"/ { saw_sidecar=1 }
-    in_backup && /backup_write_manifest "\$archive"/ { saw_manifest=1 }
+    /do_backup\(\)/ { in_backup=1; saw_tar=0; saw_integrity=0; next }
+    in_backup && /backup_create_tar_archive "\$archive"/ { saw_tar=1 }
+    in_backup && /backup_finalize_archive "\$archive" "blog"/ { saw_integrity=1 }
     in_backup && /^}/ {
-      if (!(saw_sidecar && saw_manifest)) {
-        print "blog do_backup must write sha256 sidecar and manifest" > "/dev/stderr"
+      if (!(saw_tar && saw_integrity)) {
+        print "blog do_backup must publish through backup_create_tar_archive and backup_finalize_archive" > "/dev/stderr"
         exit 1
       }
       in_backup=0
