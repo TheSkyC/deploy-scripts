@@ -513,12 +513,13 @@ check_sub2api_pg_dump_errors_stay_out_of_backups() {
 
 check_sub2api_database_restore_fails_closed() {
   awk '
-      /^_sub2api_restore_database_file\(\)/ { in_db=1; saw_gzip=0; saw_psql=0; saw_single_tx=0; next }
+      /^_sub2api_restore_database_file\(\)/ { in_db=1; saw_reset=0; saw_gzip=0; saw_psql=0; saw_single_tx=0; next }
+      in_db && /DROP OWNED BY current_user CASCADE/ { saw_reset=1 }
       in_db && /gunzip -c "\$archive"/ { saw_gzip=1 }
-      in_db && /psql "\$PG_DSN" -v ON_ERROR_STOP=1 --single-transaction/ { saw_psql=1; saw_single_tx=1 }
+      in_db && /psql -X "\$PG_DSN" -v ON_ERROR_STOP=1 --single-transaction/ { saw_psql=1; saw_single_tx=1 }
       in_db && /^}/ {
-        if (!(saw_gzip && saw_psql && saw_single_tx)) {
-          printf "%s Sub2API database restore must replay gzip dumps through psql with ON_ERROR_STOP in one transaction\n", FILENAME > "/dev/stderr"
+        if (!(saw_reset && saw_gzip && saw_psql && saw_single_tx)) {
+          printf "%s Sub2API database restore must reset role-owned objects and replay gzip dumps through psql with ON_ERROR_STOP in one transaction\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_db=0
@@ -648,7 +649,7 @@ PGDUMP
     grep -Fxq "stop testsvc" "$tmp/systemctl.log" || exit 12
     grep -Fxq "start testsvc" "$tmp/systemctl.log" || exit 13
     [[ ! -e "$DATA_DIR/restored.txt" && -e "$DATA_DIR/old.txt" ]] || exit 14
-    grep -Fqx "postgresql://example.invalid/sub2api -v ON_ERROR_STOP=1 --single-transaction" "$PSQL_ARGS_LOG" || exit 15
+    grep -Fqx -- "-X postgresql://example.invalid/sub2api -v ON_ERROR_STOP=1 --single-transaction" "$PSQL_ARGS_LOG" || exit 15
     grep -Fq -- "--clean --if-exists postgresql://example.invalid/sub2api" "$PG_DUMP_ARGS_LOG" || exit 16
     echo ok
   ')"
@@ -710,11 +711,13 @@ PSQL
     [[ "$status" -ne 0 ]] || exit 21
     [[ -f "$DATA_DIR/old.txt" && ! -e "$DATA_DIR/new.txt" ]] || exit 22
     [[ -f "$CONFIG_DIR/old.conf" && ! -e "$CONFIG_DIR/new.conf" ]] || exit 23
-    [[ "$(sed -n "1p" "$PSQL_LOG")" == "ARCHIVED_DB" ]] || exit 24
-    [[ "$(sed -n "2p" "$PSQL_LOG")" == "PRE_DB" ]] || exit 25
+    [[ "$(sed -n "1p" "$PSQL_LOG")" == "DROP OWNED BY current_user CASCADE;" ]] || exit 24
+    [[ "$(sed -n "2p" "$PSQL_LOG")" == "ARCHIVED_DB" ]] || exit 25
+    [[ "$(sed -n "3p" "$PSQL_LOG")" == "DROP OWNED BY current_user CASCADE;" ]] || exit 26
+    [[ "$(sed -n "4p" "$PSQL_LOG")" == "PRE_DB" ]] || exit 27
     if find "$tmp" -maxdepth 2 \( -name ".*.restore.*" -o -name ".sub2api-pre-restore.*" \) \
         -print -quit | grep -q .; then
-      exit 26
+      exit 28
     fi
     echo ok
   ')"

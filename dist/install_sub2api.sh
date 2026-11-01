@@ -9763,12 +9763,15 @@ _sub2api_restore_rollback_directory() {
 }
 
 # PostgreSQL restores run in one transaction so a failed dump cannot leave the
-# live database half-updated. Backups created by this installer use
-# --clean --if-exists, which makes replaying a dump idempotent.
+# live database half-updated. Reset objects owned by the configured role first
+# so both current --clean dumps and older dumps without cleanup statements can
+# rebuild an existing application database deterministically.
 _sub2api_restore_database_file() {
   local archive="$1"
-  gunzip -c "$archive" \
-    | psql "$PG_DSN" -v ON_ERROR_STOP=1 --single-transaction >&2
+  {
+    printf 'DROP OWNED BY current_user CASCADE;\n'
+    gunzip -c "$archive"
+  } | psql -X "$PG_DSN" -v ON_ERROR_STOP=1 --single-transaction >&2
 }
 
 # Roll back every artifact changed by do_restore. The service is stopped first;
