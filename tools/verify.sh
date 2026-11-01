@@ -392,6 +392,7 @@ main() {
       check_no_color_output
       check_no_argument_menu
       check_menu_surfaces_supported_advanced_actions
+      check_install_summaries_avoid_fixed_width_boxes
       check_doctor_strict_returns_on_warnings
       check_manager_list
       check_manager_menu_shortcuts
@@ -535,6 +536,8 @@ main() {
       run_isolated_check check_binary_app_install_rollback_cleans_system_state
       run_isolated_check check_binary_app_install_temporary_cleanup_helper
       run_isolated_check check_ufw_comment_has_fallback
+      run_isolated_check check_fleet_remote_stderr_diagnostics
+      run_isolated_check check_schedule_cron_expression_validator
       run_isolated_check check_blog_config_persistence
       run_isolated_check check_blog_hugo_version_contract
       run_isolated_check check_blog_dependency_failures_are_reported

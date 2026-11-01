@@ -643,6 +643,21 @@ check_no_chinese_comments() {
   fi
 }
 
+check_install_summaries_avoid_fixed_width_boxes() {
+  # Fixed-string matching keeps this locale independent: a bracket expression
+  # of multibyte glyphs is byte-oriented under LC_ALL=C and would also match
+  # unrelated glyphs such as ✓/✗.
+  local glyph hits
+  for glyph in ╔ ╗ ╚ ╝ ╠ ╣ ║; do
+    hits="$(grep -R -n -F "$glyph" impl/*.sh 2>/dev/null | grep -E 'echo|printf')" || true
+    [[ -z "$hits" ]] || { printf '%s\n' "$hits" >&2; break; }
+  done
+  if [[ -n "${hits:-}" ]]; then
+    echo "Install summaries must not use fixed-width box drawing; it breaks with CJK text widths." >&2
+    return 1
+  fi
+}
+
 check_help_masks_sensitive_config_values() {
   local output
   output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
