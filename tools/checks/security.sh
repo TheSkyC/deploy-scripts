@@ -192,6 +192,10 @@ assert checks["sub2api_plaintext_dsn"]["state"] == "warning"
 assert checks["public_listener"]["state"] == "warning"
 assert checks["legacy_root_crontab"]["state"] == "warning"
 assert checks["legacy_cron_file"]["state"] == "warning"
+# The TLS audits must be emitted through the real CLI path, even when the
+# fixture has neither nginx sites nor certificates to inspect.
+assert checks["tls_renewal"]["state"] == "not_checked"
+assert checks["tls_expiry"]["state"] == "not_checked"
 for record in payload["records"]:
     assert "VALUE_ONE" not in record["message"]
     assert "VALUE_TWO" not in record["message"]

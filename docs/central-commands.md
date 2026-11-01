@@ -56,9 +56,11 @@ remaining lifetime (`tls_expiry`): certificates at or below
 `DEPLOY_SECURITY_TLS_WARN_DAYS` (default 14) are `warning`, and a certificate
 whose expiry cannot be read is `not_checked` rather than healthy. It never
 prints credential contents and never deletes files.
-The exit status is non-zero only when the audit cannot safely inspect a
-security-sensitive path; findings are reported as `ok`, `warning`, `error`, or
-`not_checked`. `--json` emits schema version 1 for automation.
+The exit status is non-zero when the audit cannot safely inspect a
+security-sensitive path or when a finding is an `error` (an expired or nearly
+expired certificate, for example), so monitoring can gate on it. Findings are
+reported as `ok`, `warning`, `error`, or `not_checked`. `--json` emits schema
+version 1 for automation.
 
 ### `backup-all`
 
