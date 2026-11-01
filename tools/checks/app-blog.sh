@@ -740,3 +740,52 @@ if generated_safe_rm != fs_safe_rm:
     sys.exit(1)
 PY
 }
+
+# Behavioral proof for the shared tar publisher migration: do_backup must
+# produce one private archive containing the staged paths, plus the sha256
+# sidecar and manifest, and leave no staging or partial files behind.
+check_blog_backup_publishes_private_archive_with_metadata() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    cd "$1"
+    source lib/core.sh
+    source apps/blog.sh >/dev/null 2>&1
+    source impl/install_hugo_blog.sh >/dev/null 2>&1
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/site" "$tmp/public" "$tmp/nginx-root" "$tmp/backups"
+    printf "site-content\n" >"$tmp/site/index.html"
+    printf "public-content\n" >"$tmp/public/app.js"
+    printf "nginx-content\n" >"$tmp/nginx-root/index.html"
+    BLOG_BACKUP_DIR="$tmp/backups"
+    SITE_DIR="$tmp/site"
+    PUBLIC_DIR="$tmp/public"
+    NGINX_ROOT="$tmp/nginx-root"
+    BLOG_BACKUP_KEEP_DAYS=0
+    show_banner() { :; }
+    require_root() { :; }
+    _blog_load_config_if_root() { :; }
+    acquire_lock() { :; }
+    step() { :; }
+    warn() { :; }
+    info() { :; }
+    success() { :; }
+    error() { printf "ERROR: %s\n" "$*" >&2; exit 9; }
+    do_backup
+    archive="$(find "$tmp/backups" -maxdepth 1 -name "blog_*.tar.gz" -type f | head -n 1)"
+    [[ -n "$archive" ]] || { echo "blog backup produced no archive" >&2; exit 1; }
+    [[ "$(stat -c %a "$archive")" == "600" ]] || { echo "blog backup archive must be private" >&2; exit 2; }
+    [[ -f "$archive.sha256" && -f "$archive.manifest.json" ]] || { echo "blog backup must publish integrity metadata" >&2; exit 3; }
+    ( cd "$tmp/backups" && sha256sum -c "$(basename "$archive").sha256" >/dev/null ) \
+      || { echo "blog backup sidecar must match the archive" >&2; exit 4; }
+    python -c "import json,sys; d=json.load(open(sys.argv[1])); assert d[\"app\"]==\"blog\"; assert d[\"sha256\"] and d[\"archive\"]" "$archive.manifest.json" \
+      || { echo "blog backup manifest is incomplete" >&2; exit 5; }
+    listing="$(tar -tzf "$archive")"
+    [[ "$listing" == *"./site/index.html"* ]] || { echo "blog backup must contain the site tree" >&2; exit 6; }
+    [[ "$listing" == *"./public/app.js"* ]] || { echo "blog backup must contain the public tree" >&2; exit 7; }
+    [[ "$listing" == *"./nginx-root/index.html"* ]] || { echo "blog backup must contain the nginx root" >&2; exit 8; }
+    [[ "$(find "$tmp/backups" -maxdepth 1 -type f | wc -l)" -eq 3 ]] \
+      || { echo "blog backup left staging or partial files behind" >&2; exit 10; }
+    echo ok
+  ' _ "$ROOT_DIR" | grep -q ok
+}

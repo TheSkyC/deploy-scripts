@@ -838,6 +838,7 @@ main() {
       run_isolated_check check_custom_impls_have_verify_delegate
       run_isolated_check check_shared_impls_have_restore_delegate
       run_isolated_check check_blog_backup_writes_integrity_metadata
+      run_isolated_check check_blog_backup_publishes_private_archive_with_metadata
       run_isolated_check check_binary_app_backup_writes_integrity_metadata
       run_isolated_check check_runtime_backup_finalizes_integrity_metadata
       run_isolated_check check_generated_backup_scripts_write_sidecars
