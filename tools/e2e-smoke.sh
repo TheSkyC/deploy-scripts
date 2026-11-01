@@ -615,6 +615,30 @@ assert info["components"]["cpamp"]["latest"] == "v0.4.1"
 bash /repo/dist/install_cpa_stack.sh update >"$LOG" 2>&1 || { cat "$LOG"; echo "CPA_STACK_UPDATE_FAILED"; exit 1; }
 updates_skipped="$(grep -c "skipping download" "$LOG")"
 [[ "$updates_skipped" == 2 ]] || { echo "PINNED_UPDATE_NOT_SKIPPED ($updates_skipped)"; cat "$LOG"; exit 1; }
+
+# Restore must swap the archived root-relative paths back, keep the pins, and
+# leave no aside copy behind.
+printf 'marker-old\n' >/etc/cli-proxy-api/restore-marker.txt
+cp /etc/cli-proxy-api/config.yaml /tmp/cpa-config.expected
+bash /repo/dist/install_cpa_stack.sh backup >"$LOG" 2>&1 || { cat "$LOG"; echo "CPA_BACKUP_FAILED"; exit 1; }
+CPA_ARCHIVE="$(ls -1t /opt/cpa-stack-backups/cpa-stack-*.tar.gz | head -1)"
+[[ -n "$CPA_ARCHIVE" ]] || { echo "CPA_BACKUP_ARCHIVE_MISSING"; exit 1; }
+printf 'marker-mutated\n' >/etc/cli-proxy-api/restore-marker.txt
+printf 'mutated: true\n' >/etc/cli-proxy-api/config.yaml
+printf 'mutated=1\n' >/etc/cpa-stack/cpamp.env
+CPA_STACK_RESTORE_ARCHIVE="$CPA_ARCHIVE" bash /repo/dist/install_cpa_stack.sh restore >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "CPA_RESTORE_FAILED"
+  exit 1
+}
+[[ "$(cat /etc/cli-proxy-api/restore-marker.txt)" == "marker-old" ]] || { echo "CPA_RESTORE_MARKER_BAD"; exit 1; }
+cmp -s /etc/cli-proxy-api/config.yaml /tmp/cpa-config.expected || { echo "CPA_RESTORE_CONFIG_BAD"; exit 1; }
+grep -q "CPA_MANAGEMENT_KEY" /etc/cpa-stack/cpamp.env || { echo "CPA_RESTORE_ENV_BAD"; exit 1; }
+leftover="$(find /opt/cpa-stack-backups -maxdepth 1 -name ".restore-aside.*" -print 2>/dev/null)"
+[[ -z "$leftover" ]] || { echo "$leftover"; echo "CPA_RESTORE_LEFT_OVER"; exit 1; }
+source /etc/cpa-stack-deploy.conf
+[[ "${CPA_VERSION}" == "v1.2.3" && "${CPAMP_VERSION}" == "v0.4.1" ]] || { echo "CPA_PINS_LOST_AFTER_RESTORE"; exit 1; }
+echo "CPA_STACK_RESTORE_SMOKE_OK"
 echo "CPA_STACK_PINNED_SMOKE_OK"
 CPA_E2E
 chmod +x "$WORK/cpa-stack-pinned.sh"

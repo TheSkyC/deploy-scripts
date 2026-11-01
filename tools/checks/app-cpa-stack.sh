@@ -281,9 +281,10 @@ check_cpa_stack_e2e_pinned_fixture() {
     && grep -Fq '"pinned release v0.4.1"' "$fixture" \
     && grep -Fq 'info["cache_state"] == "pinned"' "$fixture" \
     && grep -Fq '"skipping download"' "$fixture" \
+    && grep -Fq "CPA_STACK_RESTORE_SMOKE_OK" "$fixture" \
     && grep -Fq "CPA_STACK_PINNED_SMOKE_OK" "$fixture" \
     || {
-      echo "CPA Stack e2e must retain its pinned per-component release scenario with checksum and update-skip assertions." >&2
+      echo "CPA Stack e2e must retain its pinned per-component release scenario with checksum, update-skip, and restore assertions." >&2
       return 1
     }
 }
