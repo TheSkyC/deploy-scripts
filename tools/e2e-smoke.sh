@@ -724,4 +724,45 @@ grep -q "compose" /etc/systemd/system/tickflow-stock-panel.service || { echo "UN
 echo "COMPOSE_PATH_SMOKE_OK"
 ' || exit 1
 
-echo "=== e2e-smoke: done (binary_app + real dependencies + compose paths passed) ==="
+echo "=== e2e-smoke: blog backup/restore (staged tree swap) ==="
+docker run --rm --network none \
+  -v "$ROOT_MOUNT:/repo:ro" \
+  deploy-e2e-smoke bash -c '
+set -euo pipefail
+export SITE_DIR=/opt/blog/site PUBLIC_DIR=/opt/blog/public NGINX_ROOT=/var/www/blog
+export BLOG_BACKUP_DIR=/opt/blog-backups BLOG_BACKUP_KEEP_DAYS=7
+mkdir -p "$SITE_DIR" "$PUBLIC_DIR" "$NGINX_ROOT"
+printf "site-v1\n" >"$SITE_DIR/index.html"
+printf "public-v1\n" >"$PUBLIC_DIR/app.js"
+printf "nginx-v1\n" >"$NGINX_ROOT/index.html"
+bash /repo/dist/install_hugo_blog.sh backup >/tmp/blog-backup.log 2>&1 || {
+  cat /tmp/blog-backup.log
+  echo BLOG_BACKUP_FAILED
+  exit 1
+}
+archive="$(find "$BLOG_BACKUP_DIR" -maxdepth 1 -name "blog_*.tar.gz" -type f | head -n 1)"
+[[ -n "$archive" ]] || { echo BLOG_ARCHIVE_MISSING; exit 1; }
+[[ -f "$archive.sha256" && -f "$archive.manifest.json" ]] || { echo BLOG_METADATA_MISSING; exit 1; }
+( cd "$BLOG_BACKUP_DIR" && sha256sum -c "$(basename "$archive").sha256" >/dev/null ) || {
+  echo BLOG_SIDECAR_MISMATCH
+  exit 1
+}
+printf "site-v2\n" >"$SITE_DIR/index.html"
+printf "public-v2\n" >"$PUBLIC_DIR/app.js"
+printf "nginx-v2\n" >"$NGINX_ROOT/index.html"
+BLOG_RESTORE_ARCHIVE="$archive" bash /repo/dist/install_hugo_blog.sh restore >/tmp/blog-restore.log 2>&1 || {
+  cat /tmp/blog-restore.log
+  echo BLOG_RESTORE_FAILED
+  exit 1
+}
+grep -qx "site-v1" "$SITE_DIR/index.html" || { echo BLOG_SITE_NOT_RESTORED; exit 1; }
+grep -qx "public-v1" "$PUBLIC_DIR/app.js" || { echo BLOG_PUBLIC_NOT_RESTORED; exit 1; }
+grep -qx "nginx-v1" "$NGINX_ROOT/index.html" || { echo BLOG_NGINX_NOT_RESTORED; exit 1; }
+leftovers="$(find /opt/blog /var/www /opt/blog-backups -maxdepth 1 \
+  \( -name ".*.restore-aside.*" -o -name ".*.restore.*" \
+     -o -name ".blog-backup.*" -o -name ".blog-restore.*" \) -print -quit 2>/dev/null || true)"
+[[ -z "$leftovers" ]] || { echo "BLOG_RESTORE_LEFTOVERS: $leftovers"; exit 1; }
+echo BLOG_BACKUP_RESTORE_SMOKE_OK
+' || exit 1
+
+echo "=== e2e-smoke: done (binary_app + real dependencies + compose + blog paths passed) ==="
