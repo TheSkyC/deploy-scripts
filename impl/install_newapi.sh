@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -42,14 +46,14 @@ CONFIG_KEYS=(
   BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
-# The binary asset name embeds the version (without a leading v) and the
-# architecture (arm64 asset uses the "arm64" suffix).
+# Upstream embeds the full release tag (including any leading v) in both the
+# amd64 and arm64 asset names, for example new-api-v1.0.0-rc.47.
 ba_asset_name() {
   local version="$1"
   if [[ "$BA_ARCH" == "amd64" ]]; then
-    printf 'new-api-%s\n' "${version#v}"
+    printf 'new-api-%s\n' "$version"
   else
-    printf 'new-api-arm64-%s\n' "${version#v}"
+    printf 'new-api-arm64-%s\n' "$version"
   fi
 }
 

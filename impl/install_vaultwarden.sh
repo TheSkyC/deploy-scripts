@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 VW_DOMAIN="${VW_DOMAIN:-vault.example.com}"
@@ -607,7 +611,7 @@ do_install() {
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
   fi
-  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     curl wget ca-certificates \
     nginx certbot python3-certbot-nginx \
     sqlite3 argon2 openssl fail2ban \
@@ -828,6 +832,7 @@ LimitNOFILE=1048576
 LimitNPROC=64
 
 # systemd sandboxing for defense in depth.
+NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
@@ -1226,7 +1231,7 @@ CRON
     warn "$(t app.vaultwarden.warn.debug)"
     local _health_state="pending"
   fi
-  local INTERNAL_IP PROTO INSTALLED_VER
+  local INTERNAL_IP PROTO INSTALLED_VER summary_title
   INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
   INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
   if [[ "$ENABLE_HTTPS" == "true" ]]; then PROTO="https"; else PROTO="http"; fi
@@ -1239,12 +1244,10 @@ CRON
     error "$(t app.vaultwarden.error.admin_token_hash)"
   fi
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔═══════════════════════════════════════════════════════════════╗"
   if [[ "$_health_state" == "pending" ]]; then
-    echo "  ║             $(t app.vaultwarden.summary.title_pending)            ║"
+    summary_title="$(t app.vaultwarden.summary.title_pending)"
   else
-    echo "  ║             $(t app.vaultwarden.summary.title_ready)            ║"
+    summary_title="$(t app.vaultwarden.summary.title_ready)"
   fi
   echo "  ╠═══════════════════════════════════════════════════════════════╣"
   echo -e "  ║  $(t app.vaultwarden.summary.url)    ${CYAN}${PROTO}://${VW_DOMAIN}${GREEN}"
@@ -1254,7 +1257,7 @@ CRON
   echo -e "  ║  $(t app.vaultwarden.summary.version)        ${YELLOW}${INSTALLED_VER}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.binary)      ${YELLOW}${VW_BIN}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.data)    ${YELLOW}${VW_DATA_DIR}${GREEN}"
-  echo -e "  ║  Web Vault   ${YELLOW}${VW_WEB_DIR}${GREEN}"
+  echo -e "  ║  $(t app.vaultwarden.summary.web_vault)   ${YELLOW}${VW_WEB_DIR}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.env)    ${YELLOW}${VW_ENV_FILE}${GREEN}  ($(t app.vaultwarden.summary.mode600))"
   echo -e "  ║  $(t app.vaultwarden.summary.log)        ${YELLOW}${VW_LOG_FILE}${GREEN}"
   echo -e "  ║  $(t app.vaultwarden.summary.backup)    ${YELLOW}${VW_BACKUP_DIR}${GREEN}"
@@ -1408,7 +1411,7 @@ do_update() {
       if systemctl start vaultwarden && wait_for_service vaultwarden 20; then
         success "$(t app.vaultwarden.success.rollback "$OLD_VER")"
         local _backup_kept
-        _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f | sort -r | head -1 || t app.vaultwarden.status.not_installed)
+        _backup_kept=$(find "$(dirname "$VW_BIN")" -maxdepth 1 -name "vaultwarden.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d" " -f2-)
         error "$(t app.vaultwarden.error.update_rolled_back "$OLD_VER" "$_backup_kept")"
       else
         error "$(t app.vaultwarden.error.rollback_start_failed)"
@@ -1532,6 +1535,7 @@ BKSH_REST
 _backup_silent() {
   local label="${1:-manual}"
   local backup_log="${VW_BACKUP_DIR}/backup.log"
+  local backup_script="/usr/local/bin/vaultwarden-backup"
   _log_backup_helper() {
     [[ -d "$VW_BACKUP_DIR" ]] || return 1
     printf '%s  %s\n' "$(date '+%F %T')" "$1" >> "$backup_log"
@@ -1574,7 +1578,7 @@ _backup_silent() {
     fi
   else
     _log_backup_helper "$(t app.vaultwarden.backup.script.failed)"
-    warn "$(t app.vaultwarden.warn.backup_failed_continue)"
+    warn "$(t app.vaultwarden.warn.backup_failed_continue "$backup_log" "$backup_script")"
     return 1
   fi
 }
@@ -1584,6 +1588,7 @@ do_backup() {
   app_load_config _VW_DERIVE_PATHS
   acquire_lock
   step "$(t app.vaultwarden.step.manual_backup)"
+  local backup_log="${VW_BACKUP_DIR}/backup.log"
   [[ ! -d "$VW_DATA_DIR" ]] && error "$(t app.vaultwarden.error.data_missing_install "$VW_DATA_DIR")"
   local _backup_failed=0
   if ! _backup_silent "manual"; then
@@ -1614,7 +1619,7 @@ do_backup() {
   _total_size=$(du -sh "${VW_BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "0")
   info "$(t app.vaultwarden.info.backup_total "$_total" "$_total_size")"
   if [[ "$_backup_failed" -ne 0 ]]; then
-    error "$(t app.vaultwarden.error.manual_backup_failed)"
+    error "$(t app.vaultwarden.error.manual_backup_failed "$backup_log")"
   fi
 }
 do_status() {
@@ -1746,7 +1751,7 @@ do_uninstall() {
     prompt "$(t app.vaultwarden.prompt.continue)"
     read -r _c
   fi
-  [[ "$_c" != "YES" ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 2; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true

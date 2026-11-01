@@ -307,8 +307,8 @@ check_tickflow_dependency_failures_are_reported() {
       /step "\$\(t app\.tickflow\.step\.deps\)"/ { in_deps=1; saw_update_if=0; saw_update_warn=0; saw_plugin_if=0; saw_fallback_if=0; saw_install_error=0; next }
       in_deps && /if ! apt-get update -qq; then/ { saw_update_if=1 }
       in_deps && /warn "\$\(t app\.tickflow\.warn\.apt_update\)"/ { saw_update_warn=1 }
-      in_deps && /if ! apt-get install -y -qq git curl ca-certificates docker\.io docker-compose-plugin; then/ { saw_plugin_if=1 }
-      in_deps && /if ! apt-get install -y -qq git curl ca-certificates docker\.io docker-compose; then/ { saw_fallback_if=1 }
+      in_deps && /if ! apt-get install -y -qq( --no-install-recommends)? git curl ca-certificates docker\.io docker-compose-plugin; then/ { saw_plugin_if=1 }
+      in_deps && /if ! apt-get install -y -qq( --no-install-recommends)? git curl ca-certificates docker\.io docker-compose; then/ { saw_fallback_if=1 }
       in_deps && /error "\$\(t app\.tickflow\.error\.deps_install\)"/ { saw_install_error=1 }
       in_deps && /systemctl enable --now docker/ {
         if (!(saw_update_if && saw_update_warn && saw_plugin_if && saw_fallback_if && saw_install_error)) {
@@ -634,4 +634,52 @@ check_tickflow_git_commit_version_contract() {
   grep -Fq 't app.tickflow.status.pin_floating "${TICKFLOW_BRANCH:-main}"' impl/install_tickflow.sh
   grep -Fq 'app.tickflow.status.pin_ok' apps/tickflow.sh
   grep -Fq 'app.tickflow.status.pin_floating' apps/tickflow.sh
+}
+
+check_tickflow_restore_keeps_aside_for_rollback() {
+  awk '
+    /^do_restore\(\) \{/ { in_fn=1; next }
+    in_fn && /^}$/ { in_fn=0; next }
+    in_fn {
+      line=$0
+      if (line ~ /_tickflow_restore_aside_targets/) { helpers++; helper_seen=1; next }
+      if (line ~ /systemctl is-active/) saw_health=1
+      if (line ~ /rm -rf "\$aside_dir"/) {
+        # The aside copy may only be deleted right after a successful
+        # rollback helper or after the restored service passed its health check.
+        if (!helper_seen && !saw_health) {
+          print FILENAME ": aside directory deleted before rollback or health check" > "/dev/stderr"
+          bad=1
+        }
+        helper_seen=0
+      }
+      if (line ~ /[^[:space:]]/) helper_seen=0
+    }
+    END {
+      if (!bad && (!saw_health || helpers < 2)) {
+        print FILENAME ": TickFlow restore must keep the aside copy until rollback or health verification" > "/dev/stderr"
+        exit 1
+      }
+      exit bad
+    }
+  ' impl/install_tickflow.sh
+}
+
+check_tickflow_systemd_unit_is_sandboxed() {
+  awk '
+      /_write_systemd_unit\(\)/ { in_fn=1; next }
+      in_fn {
+        if (/NoNewPrivileges=true/) saw_nnp=1
+        if (/PrivateTmp=true/) saw_tmp=1
+        if (/ProtectSystem=strict/) saw_system=1
+        if (/ReadWritePaths=\$\{TICKFLOW_INSTALL_DIR\}/) saw_rw=1
+        if (/TimeoutStartSec=[1-9][0-9]*/) saw_timeout=1
+      }
+      END {
+        if (!(saw_nnp && saw_tmp && saw_system && saw_rw && saw_timeout)) {
+          print "TickFlow unit must enable systemd sandboxing and a finite start timeout" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_tickflow.sh
 }

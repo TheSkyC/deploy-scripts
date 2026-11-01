@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -336,7 +340,13 @@ WorkingDirectory=${TICKFLOW_INSTALL_DIR}
 ExecStart=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} up -d --build'
 ExecStop=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} down'
 ExecReload=/bin/bash -lc 'cd ${install_dir_literal} && ${compose_cmd} -f ${compose_file_literal} up -d --build'
-TimeoutStartSec=0
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=${TICKFLOW_INSTALL_DIR}
+TimeoutStartSec=600
 TimeoutStopSec=120
 
 [Install]
@@ -382,20 +392,19 @@ _health_check() {
 
 _print_summary() {
   local state="$1"
+  local summary_title
   local internal_ip
   internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   internal_ip="${internal_ip:-YOUR_SERVER_IP}"
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔══════════════════════════════════════════════════════╗"
   if [[ "$state" == "pending" ]]; then
-    printf "  ║               %s                     ║\n" "$(t app.tickflow.summary.title_pending)"
+    summary_title="$(t app.tickflow.summary.title_pending)"
   else
-    printf "  ║               %s                     ║\n" "$(t app.tickflow.summary.title_ready)"
+    summary_title="$(t app.tickflow.summary.title_ready)"
   fi
-  echo "  ╠══════════════════════════════════════════════════════╣"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
   if [[ -n "$TICKFLOW_DOMAIN" ]]; then
-    echo -e "  ║  $(t app.tickflow.summary.public)  ${CYAN}http://${TICKFLOW_DOMAIN}${GREEN}"
+    echo -e "  $(t app.tickflow.summary.public): ${CYAN}http://${TICKFLOW_DOMAIN}${NC}"
   fi
   echo -e "  ║  $(t app.tickflow.summary.internal)  ${CYAN}http://${internal_ip}:${TICKFLOW_PORT}${GREEN}"
   echo "  ╠══════════════════════════════════════════════════════╣"
@@ -431,8 +440,8 @@ do_install() {
   if ! apt-get update -qq; then
     warn "$(t app.tickflow.warn.apt_update)"
   fi
-  if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose-plugin; then
-    if ! apt-get install -y -qq git curl ca-certificates docker.io docker-compose; then
+  if ! apt-get install -y -qq --no-install-recommends git curl ca-certificates docker.io docker-compose-plugin; then
+    if ! apt-get install -y -qq --no-install-recommends git curl ca-certificates docker.io docker-compose; then
       error "$(t app.tickflow.error.deps_install)"
     fi
   fi
@@ -614,7 +623,7 @@ do_uninstall() {
     prompt "$(t app.tickflow.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" != "YES" ]] && { info "$(t app.tickflow.info.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] && { info "$(t app.tickflow.info.cancelled)"; exit 2; }
   local DELETE_INSTALL=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_INSTALL && DELETE_INSTALL=true

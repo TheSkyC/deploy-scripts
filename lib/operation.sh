@@ -70,23 +70,28 @@ operation_json_nullable() {
   fi
 }
 
-operation_safe_summary() {
-  local value="${1:-}" max_bytes="${2:-512}"
-  value="${value//$'\n'/ }"; value="${value//$'\r'/ }"
-  value="$(printf '%s' "$value" | sed -E \
+# Single source of truth for credential redaction. Operation summaries, operation
+# logs, and outgoing notifications must use the same patterns so a secret that is
+# safe in one channel cannot leak through another.
+operation_redact_text() {
+  local value="${1:-}"
+  printf '%s' "$value" | sed -E \
     -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g')"
+    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+}
+
+operation_safe_summary() {
+  local value max_bytes="${2:-512}"
+  value="${1:-}"
+  value="${value//$'\n'/ }"; value="${value//$'\r'/ }"
+  value="$(operation_redact_text "$value")"
   (( ${#value} > max_bytes )) && value="${value:0:max_bytes}"
   printf '%s' "$value"
 }
 
 operation_redact_line() {
-  local line="$1"
-  printf '%s\n' "$line" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
-    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+  printf '%s\n' "$(operation_redact_text "${1:-}")"
 }
 
 operation_log_stream() {
@@ -135,7 +140,9 @@ operation_discard_output_streams() {
   rm -rf -- "$output_dir"
   unset OPERATION_OUTPUT_DIR OPERATION_STDOUT_PID OPERATION_STDERR_PID OPERATION_SAVED_STDOUT_FD OPERATION_SAVED_STDERR_FD
 }
-operation_finish_output_streams() {
+
+operation_close_output_streams() {
+  local mode="${1:-finish}"
   local output_dir="${OPERATION_OUTPUT_DIR:-}" stdout_pid="${OPERATION_STDOUT_PID:-}" stderr_pid="${OPERATION_STDERR_PID:-}" saved_stdout_fd="${OPERATION_SAVED_STDOUT_FD:-}" saved_stderr_fd="${OPERATION_SAVED_STDERR_FD:-}"
   [[ -n "$output_dir" ]] || return 0
   [[ -z "$stdout_pid" ]] || operation_wait_output_stream_reader "$stdout_pid" "${DEPLOY_OPERATION_STREAM_DRAIN_SECONDS:-5}" || true
@@ -376,9 +383,9 @@ operation_action_exit_trap() {
       "${OPERATION_INTERRUPTION_CLEANUP_FN}" "$status" || true
     fi
     if [[ -n "${OPERATION_INTERRUPTED_SIGNAL:-}" ]]; then
-      operation_discard_output_streams || true
+      operation_close_output_streams discard || true
     else
-      operation_finish_output_streams || true
+      operation_close_output_streams finish || true
     fi
     if [[ "$status" -eq 0 ]]; then
       operation_step_finish execute succeeded || true
@@ -466,7 +473,7 @@ operation_run_app_action() {
   # `exit`, errexit termination, and ordinary non-zero returns alike.
   "$function_name" "$@" >"${output_dir}/stdout" 2>"${output_dir}/stderr"
   status=$?
-  operation_finish_output_streams || true
+  operation_close_output_streams finish || true
   operation_restore_signal_traps || true
   operation_restore_exit_trap "$previous_trap" || true
   if [[ "$status" -eq 0 ]]; then

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 BLOG_DOMAIN="${BLOG_DOMAIN:-blog.example.com}"
 BLOG_TITLE="${BLOG_TITLE:-$(t app.blog.site_title)}"
@@ -247,7 +251,9 @@ is_safe_path() {
   local path="\${1:-}"
   [[ -n "\$path" ]] || return 1
   [[ "\$path" = /* ]] || return 1
-  while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
+  while [[ "\$path" != "/" && "\$path" == */ ]]; do
+    path="\${path%/}"
+  done
   case "\$path" in
     /|.|..|*'/../'*|*'/..'|*'/./'*|*'/.')
       return 1
@@ -267,7 +273,9 @@ is_safe_path() {
 }
 safe_rm_dir() {
   local path="\$1"
-  while [[ "\$path" != "/" && "\$path" == */ ]]; do path="\${path%/}"; done
+  while [[ "\$path" != "/" && "\$path" == */ ]]; do
+    path="\${path%/}"
+  done
   is_safe_path "\$path" || return 1
   [[ -e "\$path" || -L "\$path" ]] || return 0
   [[ -d "\$path" || -L "\$path" ]] || return 1
@@ -425,7 +433,7 @@ step "$(t app.blog.step_install_deps)"
 if ! apt-get update -qq; then
   error "$(t app.blog.error.apt_update)"
 fi
-if ! apt-get install -y -qq curl wget git nginx ca-certificates; then
+if ! apt-get install -y -qq --no-install-recommends curl wget git nginx ca-certificates; then
   error "$(t app.blog.error.deps_install)"
 fi
 success "$(t app.blog.deps_installed)"
@@ -860,30 +868,26 @@ fi
 INTERNAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 INTERNAL_IP="${INTERNAL_IP:-YOUR_SERVER_IP}"
 echo ""
-echo -e "${BOLD}${GREEN}"
-echo "  ╔══════════════════════════════════════════════════════╗"
+echo -e "  ${BOLD}${GREEN}$(t app.blog.summary_title_ready)${NC}"
 if [[ "$_blog_summary_state" == "pending" ]]; then
-  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_pending)"
+  _blog_summary_title="$(t app.blog.summary_title_pending)"
 else
-  printf "  ║               %s                     ║\n" "$(t app.blog.summary_title_ready)"
+  _blog_summary_title="$(t app.blog.summary_title_ready)"
 fi
-echo "  ╠══════════════════════════════════════════════════════╣"
+echo -e "  ${BOLD}${GREEN}${_blog_summary_title}${NC}"
 if [[ -n "$BLOG_DOMAIN" ]]; then
-echo -e "  ║  $(t app.blog.public_url)  ${CYAN}http://${BLOG_DOMAIN}${GREEN}"
+echo -e "  $(t app.blog.public_url): ${CYAN}http://${BLOG_DOMAIN}${NC}"
 fi
-echo -e "  ║  $(t app.blog.internal_url)  ${CYAN}http://${INTERNAL_IP}${GREEN}"
+echo -e "  $(t app.blog.internal_url): ${CYAN}http://${INTERNAL_IP}${NC}"
 if [[ "$ENABLE_CMS" == "true" ]]; then
-echo -e "  ║  $(t app.blog.cms_admin)  ${CYAN}http://${INTERNAL_IP}/admin/${GREEN}  ($(t app.blog.oauth_required))"
+echo -e "  $(t app.blog.cms_admin): ${CYAN}http://${INTERNAL_IP}/admin/${NC} ($(t app.blog.oauth_required))"
 fi
-echo "  ╠══════════════════════════════════════════════════════╣"
-echo -e "  ║  $(t app.blog.site_dir)  ${YELLOW}${SITE_DIR}${GREEN}"
-echo -e "  ║  $(t app.blog.posts_dir)  ${YELLOW}${SITE_DIR}/content/post/${GREEN}"
-echo -e "  ║  $(t app.blog.public_dir)  ${YELLOW}${NGINX_ROOT}${GREEN}"
+echo -e "  $(t app.blog.site_dir): ${YELLOW}${SITE_DIR}${NC}"
+echo -e "  $(t app.blog.posts_dir): ${YELLOW}${SITE_DIR}/content/post/${NC}"
+echo -e "  $(t app.blog.public_dir): ${YELLOW}${NGINX_ROOT}${NC}"
 if [[ "$ENABLE_CMS" == "true" ]]; then
-echo -e "  ║  $(t app.blog.cms_config)  ${YELLOW}${SITE_DIR}/static/admin/config.yml${GREEN}"
+echo -e "  $(t app.blog.cms_config): ${YELLOW}${SITE_DIR}/static/admin/config.yml${NC}"
 fi
-echo "  ╚══════════════════════════════════════════════════════╝"
-echo -e "${NC}"
 echo -e "  ${BOLD}$(t app.blog.workflow_title)${NC}"
 echo ""
 echo -e "  ${CYAN}# $(t app.blog.workflow_new_post)${NC}"
@@ -1142,14 +1146,10 @@ do_verify() {
 }
 
 _blog_archive_paths_are_safe() {
-  local archive="$1" member
-  tar -tzf "$archive" | while IFS= read -r member; do
-    case "$member" in
-      ""|/*|*'/../'*|../*|*'/..'|..|*"\\"*)
-        return 1
-        ;;
-    esac
-  done
+  # Delegate to the shared backup guard so handwritten restore paths keep the
+  # same traversal rejection (absolute paths, ../ segments, backslashes) as
+  # every framework restore instead of maintaining a private copy.
+  backup_validate_archive_members "$1"
 }
 
 _blog_restore_dir_from_backup() {
@@ -1322,7 +1322,7 @@ do_uninstall() {
     prompt "$(t app.blog.uninstall.continue_prompt)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] || { info "$(t app.blog.uninstall.cancelled)"; exit 2; }
   if deploy_assume_yes; then
     if deploy_env_truthy DEPLOY_DELETE_BACKUP; then
       delete_backups="yes"

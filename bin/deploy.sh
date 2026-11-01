@@ -7,6 +7,7 @@ if command -v readlink >/dev/null 2>&1 && resolved_script_path="$(readlink -f --
 fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
 DEPLOY_ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DEPLOY_MANAGER_ENTRYPOINT=1
 
 source "${DEPLOY_ROOT_DIR}/lib/core.sh"
 

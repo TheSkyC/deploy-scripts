@@ -759,3 +759,40 @@ check_self_update_smoke_json_interpreter_is_optional() {
     [[ -z "$(PATH="$empty_bin" self_update_json_interpreter)" ]]
   '
 }
+
+check_self_update_manifest_validation_preserves_lock_flag() {
+  awk '
+    /^self_update_validate_manifest_file\(\)/ { in_fn=1; depth=1; next }
+    in_fn {
+      depth += gsub(/\{/, "{") - gsub(/\}/, "}")
+      if (/SELF_UPDATE_MANAGER_LOCK_ACQUIRED/) {
+        print "self_update_validate_manifest_file must not modify SELF_UPDATE_MANAGER_LOCK_ACQUIRED" > "/dev/stderr"
+        exit 1
+      }
+      if (depth <= 0) { in_fn = 0 }
+    }
+  ' lib/self_update.sh || return 1
+}
+
+check_self_update_keep_releases_accepts_all_nonzero_counts() {
+  local value
+  for value in 3 9 10 29 100 30; do
+    [[ "$value" =~ ^([3-9]|[1-9][0-9]+)$ ]] || {
+      echo "KEEP_RELEASES unexpectedly rejected $value" >&2
+      return 1
+    }
+  done
+  for value in 0 1 2 03; do
+    if [[ "$value" =~ ^([3-9]|[1-9][0-9]+)$ ]]; then
+      echo "KEEP_RELEASES unexpectedly accepted $value" >&2
+      return 1
+    fi
+  done
+}
+
+check_self_update_has_no_signature_dead_keys() {
+  if grep -R -nE 'DEPLOY_SELF_UPDATE_(REQUIRE_SIGNATURE|PUBLIC_KEY)' lib apps impl docs; then
+    echo "self-update signature configuration keys must not exist without implementation" >&2
+    return 1
+  fi
+}

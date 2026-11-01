@@ -44,9 +44,15 @@ manager_status_selected_ids() {
 
 manager_status_collect_app_json() {
   local app_id="$1" output_file="$2" error_file="$3" status pid start timeout_seconds
+  local monitor_was_enabled=0
   : >"$output_file"; : >"$error_file"
+  # Job control places the collector and the probes that it starts in their
+  # own process group, so a timeout cannot orphan curl or systemctl children.
+  [[ $- == *m* ]] && monitor_was_enabled=1
+  set -m
   ( manager_load_app "$app_id"; app_status_collect_json ) >"$output_file" 2>"$error_file" &
   pid=$!
+  [[ "$monitor_was_enabled" == 1 ]] || set +m
   timeout_seconds="${DEPLOY_STATUS_TIMEOUT_SECONDS:-8}"
   if [[ ! "$timeout_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] \
       || ! awk "BEGIN { exit !($timeout_seconds > 0) }"; then
@@ -87,8 +93,10 @@ manager_status_json_field() {
 
 manager_status_collect() {
   local include_csv="${1:-}" exclude_csv="${2:-}" only_installed="${3:-0}"
-  local temp_dir app_id output error_file status parsed_ids
-  local -a ids=() json_files=() errors=()
+  local temp_dir app_id output error_file status parsed_ids status_file job_pid job_index max_parallel
+  local -a ids=() json_files=() errors=() job_ids=() job_pids=() job_statuses=()
+  max_parallel="${DEPLOY_STATUS_CONCURRENCY:-5}"
+  [[ "$max_parallel" =~ ^[1-9][0-9]*$ ]] || max_parallel=5
   temp_dir="$(mktemp -d)" || return 1
   chmod 700 "$temp_dir" || { rm -rf "$temp_dir"; return 1; }
   set +e
@@ -98,11 +106,37 @@ manager_status_collect() {
   [[ -n "$parsed_ids" ]] && mapfile -t ids < <(printf '%s\n' "$parsed_ids")
   for app_id in "${ids[@]}"; do
     output="${temp_dir}/${app_id}.json"; error_file="${temp_dir}/${app_id}.err"
-    if manager_status_collect_app_json "$app_id" "$output" "$error_file"; then
+    status_file="${temp_dir}/${app_id}.status"
+    job_ids+=("$app_id")
+    (
+      set +e
+      manager_status_collect_app_json "$app_id" "$output" "$error_file"
+      status=$?
+      printf '%s\n' "$status" >"$status_file"
+      exit "$status"
+    ) &
+    job_pids+=("$!")
+    if ((${#job_pids[@]} >= max_parallel)); then
+      set +e
+      for job_pid in "${job_pids[@]}"; do
+        wait "$job_pid"; job_statuses+=("$?")
+      done
+      set -e
+      job_pids=()
+    fi
+  done
+  set +e
+  for job_pid in "${job_pids[@]}"; do
+    wait "$job_pid"; job_statuses+=("$?")
+  done
+  set -e
+  for ((job_index = 0; job_index < ${#job_ids[@]}; job_index++)); do
+    app_id="${job_ids[job_index]}"; status="${job_statuses[job_index]}"
+    output="${temp_dir}/${app_id}.json"; error_file="${temp_dir}/${app_id}.err"
+    if (( status == 0 )); then
       if [[ "$only_installed" == 1 ]] && [[ "$(manager_status_json_field "$output" install_state)" != installed ]]; then continue; fi
       json_files+=("$output")
     else
-      status=$?
       errors+=("${app_id}:${status}:$(operation_safe_summary "$(tr '\n' ' ' < "$error_file" 2>/dev/null)")")
     fi
   done
@@ -116,11 +150,21 @@ manager_status_collect() {
 }
 
 manager_status_render_json() {
-  local temp_dir="$1" problems="${2:-0}" errors_only="${3:-0}" file first=1 app_count=0 installed=0 healthy=0 degraded=0 unhealthy=0 not_installed=0 updates=0 error_count=0 severity registered
+  local temp_dir="$1" problems="${2:-0}" errors_only="${3:-0}" file first=1 app_count=0 installed=0 healthy=0 degraded=0 unhealthy=0 not_installed=0 updates=0 error_count=0 severity registered app_id code summary
   registered="${MANAGER_STATUS_REGISTERED_COUNT:-0}"
   local selected="${MANAGER_STATUS_SELECTED_COUNT:-0}"
   local framework_mode=checkout framework_version=unknown
   [[ -f "${DEPLOY_ROOT_DIR}/.git/HEAD" ]] || framework_mode=standalone_dist
+  # Managed installs carry RELEASE.json; generated dist scripts carry their
+  # build identity; a checkout falls back to Git describe. Keep the unknown
+  # fallback for direct-library callers where none of these are available.
+  local detected_version
+  detected_version="$(self_update_release_version_from_root "${DEPLOY_ROOT_DIR:-}" 2>/dev/null || true)"
+  [[ -n "$detected_version" ]] || detected_version="${DEPLOY_BUILD_VERSION:-}"
+  if [[ -z "$detected_version" && -n "${DEPLOY_ROOT_DIR:-}" ]] && command -v git >/dev/null 2>&1; then
+    detected_version="$(git -C "$DEPLOY_ROOT_DIR" describe --tags --always 2>/dev/null || true)"
+  fi
+  [[ -n "$detected_version" ]] && framework_version="$detected_version"
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
     severity="$(manager_status_human_field "$file" severity)"
@@ -143,7 +187,7 @@ manager_status_render_json() {
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
     (( first )) || printf ','; first=0
-    local app_id code summary; app_id="${file%%:*}"; code="${file#*:}"; code="${code%%:*}"; summary="${file#*:*:}"
+    app_id="${file%%:*}"; code="${file#*:}"; code="${code%%:*}"; summary="${file#*:*:}"
     printf '{"app_id":%s,"code":%s,"summary":%s}' "$(app_json_string "$app_id")" "$code" "$(app_json_string "$summary")"
   done <"${temp_dir}/errors"
   printf ']}\n'

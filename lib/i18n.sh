@@ -13,9 +13,13 @@ declare -gA __DEPLOY_I18N_EN=()
 declare -gA __DEPLOY_I18N_ZH=()
 
 i18n_register() {
+  if [[ $# -ne 3 ]]; then
+    printf 'i18n_register requires key/en/zh arguments\n' >&2
+    return 1
+  fi
   local key="$1"
   local en="$2"
-  local zh="${3:-$2}"
+  local zh="$3"
   __DEPLOY_I18N_EN["$key"]="$en"
   __DEPLOY_I18N_ZH["$key"]="$zh"
 }
@@ -67,6 +71,7 @@ i18n_register notify.warn.untrusted_config "Notification config failed the trust
 i18n_register notify.warn.no_backend "Notification backend is not set to ntfy or gotify; notification skipped." "通知后端不是 ntfy 或 gotify，已跳过通知。"
 i18n_register notify.warn.no_url "Notification URL is empty; notification skipped." "通知服务地址为空，已跳过通知。"
 i18n_register notify.warn.curl_missing "curl is not available; notification skipped." "curl 不可用，已跳过通知。"
+i18n_register app.warn.curl_missing "curl is not available; health probe returned 000 for %s." "curl 不可用，%s 的健康探测返回 000。"
 i18n_register notify.warn.disabled "Notifications are disabled; test skipped." "通知已禁用，测试已跳过。"
 i18n_register notify.info.sent "Notification sent." "通知已发送。"
 i18n_register notify.warn.send_failed "Notification delivery failed (HTTP %s); continuing." "通知发送失败（HTTP %s），继续主流程。"
@@ -166,9 +171,12 @@ i18n_register menu.backup_desc "create a manual backup" "创建手动备份"
 i18n_register menu.doctor_desc "run non-destructive diagnostics" "执行非破坏性诊断"
 i18n_register menu.install_desc "full install or redeploy" "完整安装或重新部署"
 i18n_register menu.restore_desc "restore from a backup" "从备份恢复"
+i18n_register menu.signups_desc "manage registration toggle" "管理注册开关"
 i18n_register menu.status_desc "show service and runtime status" "查看服务和运行状态"
+i18n_register menu.token_desc "manage application token" "管理应用令牌"
 i18n_register menu.uninstall_desc "remove service and related files" "卸载服务和相关文件"
 i18n_register menu.update_desc "update to the latest available version" "更新到可用的最新版本"
+i18n_register menu.verify_desc "verify the last backup or deployment" "验证最近备份或部署"
 i18n_register manager.app_file_missing "App definition file not found: %s" "应用定义文件不存在：%s"
 i18n_register manager.app_definition_missing "Bundled app definition not found: %s" "内置应用定义不存在：%s"
 i18n_register manager.available_apps "Available apps: %s" "可用应用：%s"
@@ -210,6 +218,7 @@ i18n_register manager.usage_examples "Examples: sudo bash %s newapi install; sud
 i18n_register manager.usage_instances "Instances: sudo bash %s <app>@<instance> <action> (isolates config and lock paths only)" "实例：sudo bash %s <应用>@<实例> <动作>（仅隔离配置与锁路径）"
 i18n_register status.active "active" "运行中"
 i18n_register status.inactive "inactive" "未运行"
+i18n_register status.title "Status" "状态"
 i18n_register status.unknown "unknown" "未知"
 i18n_register warn.config_invalid_key "Ignoring invalid config key: %s" "已忽略非法配置键：%s"
 i18n_register warn.config_reserved_key "Refusing to load reserved config key: %s" "已拒绝加载保留配置键：%s"

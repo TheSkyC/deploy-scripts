@@ -21,6 +21,9 @@ i18n_register_many \
   app.sub2api.warn.github_api \
   "Cannot reach GitHub API." \
   "无法访问 GitHub API。" \
+  app.sub2api.warn.github_api_rate_limit \
+  "GitHub API rate limit reached (HTTP 403/429). Set GITHUB_TOKEN or retry after the rate-limit window resets." \
+  "GitHub API 已达速率限制（HTTP 403/429）。请设置 GITHUB_TOKEN，或在限流窗口结束后重试。" \
   app.sub2api.error.checksum_temp \
   "Cannot create a temporary checksum file; refusing to install an unverified archive." \
   "无法创建临时校验文件，拒绝安装未经校验的归档文件。" \
@@ -42,6 +45,9 @@ i18n_register_many \
   app.sub2api.error.tar_extract \
   "tar extraction failed; the archive may be corrupted." \
   "tar 解压失败，归档文件可能已损坏。" \
+  app.sub2api.error.unsafe_archive \
+  "Archive contains unsafe paths (absolute, .., or backslash members); refusing to extract it." \
+  "归档包含不安全路径（绝对路径、.. 或反斜杠成员），已拒绝解压。" \
   app.sub2api.error.archive_missing_binary \
   "sub2api binary was not found in the tar.gz archive. Confirm the download URL." \
   "tar.gz 中未找到 sub2api 二进制文件，请确认下载 URL 是否正确。" \
@@ -363,6 +369,9 @@ i18n_register_many \
   app.sub2api.summary.version \
   "Version" \
   "版本" \
+  app.sub2api.summary.setup_wizard \
+  "Setup Wizard" \
+  "Setup Wizard" \
   app.sub2api.summary.postgres_title \
   "PostgreSQL account (Setup Wizard -> Database)" \
   "PostgreSQL 账号（Setup Wizard → 数据库配置）" \

@@ -729,8 +729,6 @@ New API、Sub2API、Vaultwarden、CyberStrikeAI、Hugo Blog、TickFlow、CPA Sta
 ```text
 DEPLOY_SELF_UPDATE_URL=https://<trusted-release-endpoint>
 DEPLOY_SELF_UPDATE_CHANNEL=stable
-DEPLOY_SELF_UPDATE_REQUIRE_SIGNATURE=false
-DEPLOY_SELF_UPDATE_PUBLIC_KEY=/etc/deploy-scripts/update.pub
 ```
 
 校验顺序：
@@ -738,7 +736,7 @@ DEPLOY_SELF_UPDATE_PUBLIC_KEY=/etc/deploy-scripts/update.pub
 1. 检查更新配置的 URL 和渠道值是否合法；
 2. HTTPS 下载 manifest 至私有临时目录；拒绝空文件和超过上限的 manifest；
 3. 验证 manifest JSON 的严格字段格式、项目名、版本格式、SHA256 格式和 URL scheme；
-4. 如果要求签名，验证 manifest 的 detached signature；没有验证器、签名缺失或签名无效均失败；
+4. 可选的独立签名校验是未来扩展；当前实现没有签名配置键，也不得让用户误以为已启用；
 5. 比较候选版本与当前版本；拒绝降级，除非显式 `--allow-downgrade`（第一期仅预留，不开放）；
 6. 下载归档到临时文件，限制最大体积，校验字节数（若提供）和 SHA256；
 7. 解压到临时目录，拒绝绝对路径、`..` 路径、设备文件、符号链接逃逸和不符合预期的顶层目录；
@@ -746,7 +744,7 @@ DEPLOY_SELF_UPDATE_PUBLIC_KEY=/etc/deploy-scripts/update.pub
 9. 对关键 `.sh` 文件执行 `bash -n`，并执行发布包离线 smoke check；
 10. 只有全部完成后才允许写入 `releases/<version>`。
 
-注意：哈希只能保证“下载文件符合 manifest”，不能独立建立信任根；生产环境应逐步把 `DEPLOY_SELF_UPDATE_REQUIRE_SIGNATURE=true` 作为默认，公钥由受控安装流程写入且 root-only 管理。具体签名工具建议优先选择发布与服务器端都易安装的 `minisign`；实现应通过适配层支持替换，不把工具名散落在更新逻辑中。
+注意：哈希只能保证“下载文件符合 manifest”，不能独立建立信任根。当前版本尚未实现独立签名校验；未来实现时应通过适配层支持替换，不把工具名散落在更新逻辑中，且必须避免提供“看似启用、实际无效”的配置键。
 
 ### 10.6 更新状态机
 
@@ -810,13 +808,11 @@ activate 后 smoke_check 失败：
 ```bash
 DEPLOY_SELF_UPDATE_URL="https://releases.example.invalid/deploy-scripts"
 DEPLOY_SELF_UPDATE_CHANNEL="stable"
-DEPLOY_SELF_UPDATE_REQUIRE_SIGNATURE="false"
-DEPLOY_SELF_UPDATE_PUBLIC_KEY="/etc/deploy-scripts/update.pub"
 DEPLOY_SELF_UPDATE_KEEP_RELEASES="3"
 DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS="30"
 ```
 
-命令行/环境变量仅可覆盖非安全降级配置。即使环境变量设置 `DEPLOY_SELF_UPDATE_REQUIRE_SIGNATURE=false`，当系统配置要求签名时也不得关闭签名校验。
+命令行/环境变量仅可覆盖非安全降级配置。未来若实现签名校验，当系统配置要求签名时不得被环境变量关闭。
 
 ## 11. 版本检查设计
 
@@ -1019,7 +1015,7 @@ bash tools/verify.sh self-update
 以下决策不阻塞 Phase 1，但会影响 Phase 4 发布流程，应在开始自更新实现前冻结：
 
 1. **发布托管位置**：使用 GitHub Releases、内部对象存储或独立 HTTPS 站点；必须有长期稳定的 manifest URL。
-2. **签名方案**：首发是否强制 minisign；如果不强制，何时将 `REQUIRE_SIGNATURE` 默认设为 true。
+2. **签名方案**：未来是否实现 minisign 等独立签名校验；实现前不得暴露签名配置键。
 3. **框架版本来源**：采用 Git tag（建议 `vX.Y.Z`）还是从构建元数据生成；建议要求每个稳定发布具有不可变 tag。
 4. **受管安装路径**：是否固定 `/opt/deploy-scripts`；建议固定，降低文档和回滚复杂性。
 5. **日志保留策略**：默认 30 天/20 文件是否满足运维需求；建议通过配置可调，且不得无限增长。

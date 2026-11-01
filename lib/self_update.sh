@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Standalone consumers (guards, validators) reach the shared interpreter
+# helper through this relative self-source; the checkout and the bundled
+# release load lib/python.sh (or its emitted copy) before this file.
+if ! declare -F deploy_python_cmd >/dev/null 2>&1; then
+  source "${DEPLOY_FRAMEWORK_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}/python.sh"
+fi
+
 # Framework identity, release-manifest validation, and managed-release activation.
 # Checkout and standalone executions remain strictly read-only.
 
@@ -100,8 +107,7 @@ self_update_load_config() {
     load_config_file "$config_file" \
       DEPLOY_SELF_UPDATE_URL DEPLOY_SELF_UPDATE_CHANNEL \
       DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES \
-      DEPLOY_SELF_UPDATE_MAX_ARTIFACT_BYTES DEPLOY_SELF_UPDATE_KEEP_RELEASES \
-      DEPLOY_SELF_UPDATE_REQUIRE_SIGNATURE DEPLOY_SELF_UPDATE_PUBLIC_KEY || return 1
+      DEPLOY_SELF_UPDATE_MAX_ARTIFACT_BYTES DEPLOY_SELF_UPDATE_KEEP_RELEASES || return 1
   fi
   [[ -z "$configured_url" ]] || DEPLOY_SELF_UPDATE_URL="$configured_url"
   [[ -z "$configured_channel" ]] || DEPLOY_SELF_UPDATE_CHANNEL="$configured_channel"
@@ -113,7 +119,7 @@ self_update_load_config() {
   [[ "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" =~ ^[0-9]+$ && "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" -gt 0 ]] || return 1
   [[ "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" =~ ^[1-9][0-9]*$ ]] || return 1
   [[ "$DEPLOY_SELF_UPDATE_MAX_ARTIFACT_BYTES" =~ ^[1-9][0-9]*$ ]] || return 1
-  [[ "$DEPLOY_SELF_UPDATE_KEEP_RELEASES" =~ ^[3-9][0-9]*$ ]] || return 1
+  [[ "$DEPLOY_SELF_UPDATE_KEEP_RELEASES" =~ ^([3-9]|[1-9][0-9]+)$ ]] || return 1
 }
 
 self_update_detect_mode() {
@@ -208,7 +214,6 @@ self_update_validate_manifest_file() {
   local manifest_file="$1" object schema project channel version artifact_name artifact_url sha256 size_bytes
   SELF_UPDATE_MANIFEST_ERROR=""
   SELF_UPDATE_MANIFEST_VALID=1
-SELF_UPDATE_MANAGER_LOCK_ACQUIRED=0
   [[ -s "$manifest_file" ]] || self_update_manifest_set_error 'manifest is empty'
   object="$(cat "$manifest_file" 2>/dev/null)" || self_update_manifest_set_error 'manifest cannot be read'
   schema="$(state_json_field "$object" schema_version 2>/dev/null || true)"
@@ -254,11 +259,16 @@ self_update_check_json() {
 }
 
 self_update_fetch_file() {
-  local url="$1" output="$2" max_bytes="$3"
+  local url="$1" output="$2" max_bytes="$3" curl_error=""
   self_update_validate_https_url "$url" || return 1
-  curl -fsSL --proto '=https' --proto-redir '=https' \
+  if ! curl_error="$(download_retry curl -fsSL --proto '=https' --proto-redir '=https' \
     --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" \
-    --max-filesize "$max_bytes" -o "$output" "$url" 2>/dev/null
+    --max-filesize "$max_bytes" -o "$output" "$url" 2>&1)"; then
+    # Surface curl's own failure reason (DNS, TLS, timeout, --max-filesize)
+    # so download problems are diagnosable instead of a bare "failed".
+    [[ -n "$curl_error" ]] && printf 'self-update download failed: %s\n' "$curl_error" >&2
+    return 1
+  fi
   [[ -s "$output" ]] || return 1
 }
 
@@ -414,9 +424,10 @@ self_update_check_main() {
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/deploy-scripts-self-check.XXXXXX")" || return 1
   chmod 700 "$temp_dir" || { rm -rf "$temp_dir"; return 1; }
   manifest_file="${temp_dir}/manifest.json"
-  if ! curl -fsSL --proto '=https' --proto-redir '=https' --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" --max-filesize "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" -o "$manifest_file" "$manifest_url" 2>/dev/null; then
+  local curl_error=""
+  if ! curl_error="$(download_retry curl -fsSL --proto '=https' --proto-redir '=https' --max-time "$DEPLOY_SELF_UPDATE_TIMEOUT_SECONDS" --max-filesize "$DEPLOY_SELF_UPDATE_MAX_MANIFEST_BYTES" -o "$manifest_file" "$manifest_url" 2>&1)"; then
     rm -rf "$temp_dir"
-    if [[ "$json" == 1 ]]; then self_update_check_json check_failed 'manifest download failed'; else printf 'manifest download failed\n' >&2; fi
+    if [[ "$json" == 1 ]]; then self_update_check_json check_failed "manifest download failed${curl_error:+: $curl_error}"; else printf 'manifest download failed%s\n' "${curl_error:+: $curl_error}" >&2; fi
     return 1
   fi
   if ! self_update_validate_manifest_file "$manifest_file"; then
@@ -776,7 +787,6 @@ self_update_apply_main() {
     if (( json )); then self_update_apply_json failed 'unable to create self-update operation record'; else printf '%s\n' 'unable to create self-update operation record' >&2; fi
     return 1
   fi
-  operation_started=1
   temp_dir="$(self_update_prepare_activation_root "$SELF_UPDATE_MANAGED_ROOT")" || {
     self_update_operation_finish 1 failed 'unable to create private activation staging directory'
     self_update_release_coordination_locks

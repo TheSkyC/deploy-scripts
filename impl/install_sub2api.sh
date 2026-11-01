@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 PORT="${PORT:-8082}"
@@ -254,6 +258,15 @@ extract_and_verify() {
     fi
     error "$(t app.sub2api.error.tar_extract)"
   fi
+  # Reject path-traversal members before extraction so a compromised or
+  # replaced upstream archive cannot write outside the staging directory.
+  if ! backup_validate_archive_members "$archive"; then
+    if ! rm -f "$archive"; then
+      warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
+    fi
+    rm -rf "$tmp_extract"
+    error "$(t app.sub2api.error.unsafe_archive)"
+  fi
   if ! tar -xzf "$archive" -C "$tmp_extract" >&2; then
     if ! rm -f "$archive"; then
       warn "$(t app.sub2api.warn.tmp_archive_cleanup_failed "$archive")"
@@ -350,7 +363,7 @@ _install_base_deps() {
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
       curl ca-certificates gnupg lsb-release; then
       error "$(t app.sub2api.error.base_deps_install)"
     fi
@@ -420,7 +433,7 @@ EOF
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.postgres_apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-15 postgresql-client-15; then
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends postgresql-15 postgresql-client-15; then
       error "$(t app.sub2api.error.postgres_apt_install)"
     fi
     if ! systemctl enable postgresql 2>/dev/null; then
@@ -522,7 +535,7 @@ EOF
     if ! apt-get update -qq; then
       error "$(t app.sub2api.error.redis_apt_update)"
     fi
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y redis; then
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends redis; then
       error "$(t app.sub2api.error.redis_apt_install)"
     fi
     _ensure_redis_running || error "$(t app.sub2api.error.redis_start)"
@@ -618,7 +631,7 @@ _install_nginx() {
   else
     info "$(t app.sub2api.info.install_nginx)"
     if [[ "$PKG_MANAGER" == "apt" ]]; then
-      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y nginx; then
+      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx; then
         error "$(t app.sub2api.error.nginx_install)"
       fi
     elif [[ "$PKG_MANAGER" == "dnf" ]]; then
@@ -1024,38 +1037,32 @@ _print_install_summary() {
     next_step_two="$(t app.sub2api.summary.next2_ready)"
   fi
   echo ""
-  echo -e "${BOLD}${GREEN}"
-  echo "  ╔════════════════════════════════════════════════════════════════╗"
-  echo "  ║              ${summary_title}                            ║"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  Setup Wizard   ${CYAN}${access_url}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.version)           ${YELLOW}${version}${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${BOLD}$(t app.sub2api.summary.postgres_title)${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.host)         ${CYAN}localhost${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.port)         ${CYAN}5432${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.username)       ${CYAN}${PG_USER}${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.password)         ${YELLOW}$(t app.sub2api.summary.password_written "$CONF_FILE")${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.database)     ${CYAN}${PG_DB}${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.ssl_mode)     ${CYAN}$(t app.sub2api.summary.ssl_disable)${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  ${BOLD}$(t app.sub2api.summary.redis_title)${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.host)         ${CYAN}localhost${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.port)         ${CYAN}6379${GREEN}"
-  echo -e "  ║    $(t app.sub2api.summary.password)         ${CYAN}$(t app.sub2api.summary.empty)${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo -e "  ║  $(t app.sub2api.summary.install_dir)       ${YELLOW}${INSTALL_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.data_dir)       ${YELLOW}${DATA_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.config_dir)       ${YELLOW}${CONFIG_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.log_dir)       ${YELLOW}${LOG_DIR}${GREEN}"
-  echo -e "  ║  $(t app.sub2api.summary.backup_dir)       ${YELLOW}${BACKUP_DIR}${GREEN}"
-  echo "  ╠════════════════════════════════════════════════════════════════╣"
-  echo "  ║  $(t app.sub2api.summary.next_steps)"
-  echo -e "  ║    1) $(t app.sub2api.summary.next1)"
-  echo -e "  ║    2) ${next_step_two}"
-  echo -e "  ║    3) $(t app.sub2api.summary.next3 "$CONF_FILE")"
-  echo "  ╚════════════════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+  echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
+  echo -e "  $(t app.sub2api.summary.setup_wizard): ${CYAN}${access_url}${NC}"
+  echo -e "  $(t app.sub2api.summary.version): ${YELLOW}${version}${NC}"
+  echo ""
+  echo -e "  ${BOLD}$(t app.sub2api.summary.postgres_title)${NC}"
+  echo -e "    $(t app.sub2api.summary.host): ${CYAN}localhost${NC}"
+  echo -e "    $(t app.sub2api.summary.port): ${CYAN}5432${NC}"
+  echo -e "    $(t app.sub2api.summary.username): ${CYAN}${PG_USER}${NC}"
+  echo -e "    $(t app.sub2api.summary.password): ${YELLOW}$(t app.sub2api.summary.password_written "$CONF_FILE")${NC}"
+  echo -e "    $(t app.sub2api.summary.database): ${CYAN}${PG_DB}${NC}"
+  echo -e "    $(t app.sub2api.summary.ssl_mode): ${CYAN}$(t app.sub2api.summary.ssl_disable)${NC}"
+  echo ""
+  echo -e "  ${BOLD}$(t app.sub2api.summary.redis_title)${NC}"
+  echo -e "    $(t app.sub2api.summary.host): ${CYAN}localhost${NC}"
+  echo -e "    $(t app.sub2api.summary.port): ${CYAN}6379${NC}"
+  echo -e "    $(t app.sub2api.summary.password): ${CYAN}$(t app.sub2api.summary.empty)${NC}"
+  echo ""
+  echo -e "  $(t app.sub2api.summary.install_dir): ${YELLOW}${INSTALL_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.data_dir): ${YELLOW}${DATA_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.config_dir): ${YELLOW}${CONFIG_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.log_dir): ${YELLOW}${LOG_DIR}${NC}"
+  echo -e "  $(t app.sub2api.summary.backup_dir): ${YELLOW}${BACKUP_DIR}${NC}"
+  echo -e "  ${BOLD}$(t app.sub2api.summary.next_steps)${NC}"
+  echo -e "    1) $(t app.sub2api.summary.next1)"
+  echo -e "    2) ${next_step_two}"
+  echo -e "    3) $(t app.sub2api.summary.next3 "$CONF_FILE")"
   echo -e "  ${BOLD}$(t app.sub2api.summary.management)${NC}"
   echo -e "    ${CYAN}bash $0 status${NC}      - $(t app.sub2api.summary.cmd_status)"
   echo -e "    ${CYAN}bash $0 update${NC}      - $(t app.sub2api.summary.cmd_update)"
@@ -1080,7 +1087,7 @@ do_install() {
     success "$(t app.sub2api.success.pinned_version "${BOLD}${LATEST}${NC}")"
   else
     info "$(t app.sub2api.info.query_release)"
-    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
+    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api" "app.sub2api.warn.github_api_rate_limit")
     [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.version_lookup)"
     success "$(t app.sub2api.success.latest_version "${BOLD}${LATEST}${NC}")"
     info "$(t app.sub2api.info.unpinned_version "$LATEST")"
@@ -1230,7 +1237,7 @@ do_update() {
     info "$(t app.sub2api.info.pinned_target "${YELLOW}${LATEST}${NC}")"
   else
     info "$(t app.sub2api.info.query_release)"
-    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api")
+    LATEST=$(github_latest_release_tag "$GITHUB_REPO" "app.sub2api.warn.github_api" "app.sub2api.warn.github_api_rate_limit")
     [[ -z "$LATEST" ]] && error "$(t app.sub2api.error.latest_lookup)"
     info "$(t app.sub2api.info.github_latest "${YELLOW}${LATEST}${NC}")"
     info "$(t app.sub2api.info.unpinned_version "$LATEST")"
@@ -1610,7 +1617,7 @@ do_uninstall() {
     prompt "$(t app.sub2api.prompt.continue)"
     read -r _c
   fi
-  [[ "$_c" != "YES" ]] && { info "$(t app.sub2api.info.cancelled)"; exit 0; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.sub2api.info.cancelled)"; exit 2; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true

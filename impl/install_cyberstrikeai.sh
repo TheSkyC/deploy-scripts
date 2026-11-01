@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 CSAI_DOMAIN="${CSAI_DOMAIN:-}"
@@ -208,14 +212,14 @@ apt_install_base() {
   if ! apt-get update -qq; then
     error "$(t app.cyberstrikeai.error.apt_update)"
   fi
-  if ! apt-get install -y -qq \
+  if ! apt-get install -y -qq --no-install-recommends \
     ca-certificates curl git build-essential \
     python3 python3-venv python3-pip \
     sqlite3 tar gzip openssl lsof; then
     error "$(t app.cyberstrikeai.error.deps_install)"
   fi
   if _bool_true "$ENABLE_NGINX"; then
-    if ! apt-get install -y -qq nginx; then
+    if ! apt-get install -y -qq --no-install-recommends nginx; then
       error "$(t app.cyberstrikeai.error.nginx_deps_install)"
     fi
   fi
@@ -240,7 +244,7 @@ install_go_if_needed() {
     return 0
   fi
   step "$(t app.cyberstrikeai.step.install_go)"
-  if ! apt-get install -y -qq golang-go; then
+  if ! apt-get install -y -qq --no-install-recommends golang-go; then
     warn "$(t app.cyberstrikeai.warn.go_repo_install_failed)"
   fi
   if command -v go >/dev/null 2>&1; then
@@ -870,7 +874,7 @@ print_summary() {
     fi
   fi
   echo ""
-  echo "$(t app.cyberstrikeai.summary.commands)"
+  t app.cyberstrikeai.summary.commands
   echo "  systemctl status ${SERVICE_NAME} --no-pager"
   echo "  journalctl -u ${SERVICE_NAME} -n 80 --no-pager"
   echo "  bash $0 status"
@@ -1094,13 +1098,13 @@ do_uninstall() {
   require_safe_path "BACKUP_DIR" "${BACKUP_DIR:-}"
   step "$(t app.cyberstrikeai.step.uninstall)"
   echo -e "${RED}${BOLD}"
-  echo "$(t app.cyberstrikeai.uninstall.removes)"
+  t app.cyberstrikeai.uninstall.removes
   echo "  - $(t app.cyberstrikeai.uninstall.systemd "$SERVICE_NAME")"
   echo "  - $(t app.cyberstrikeai.uninstall.nginx "$NGINX_CONF")"
   echo "  - $(t app.cyberstrikeai.uninstall.logrotate_cron)"
   echo "  - $(t app.cyberstrikeai.uninstall.deploy_config "$CONF_FILE")"
   echo ""
-  echo "$(t app.cyberstrikeai.uninstall.keep_default)"
+  t app.cyberstrikeai.uninstall.keep_default
   echo -e "${NC}"
   local confirm
   if deploy_assume_yes; then
@@ -1109,7 +1113,7 @@ do_uninstall() {
     prompt "$(t app.cyberstrikeai.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] || { info "$(t app.cyberstrikeai.info.cancelled)"; exit 2; }
   local del_install
   if deploy_assume_yes; then
     if deploy_env_truthy DEPLOY_DELETE_INSTALL; then

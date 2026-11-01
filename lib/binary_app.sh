@@ -25,6 +25,9 @@ i18n_register_many \
   binary_app.warn.github_api \
   "Cannot reach GitHub API." \
   "无法访问 GitHub API。" \
+  binary_app.warn.github_api_rate_limit \
+  "GitHub API rate limit reached (HTTP 403/429). Set GITHUB_TOKEN or retry after the rate-limit window resets." \
+  "GitHub API 已达速率限制（HTTP 403/429）。请设置 GITHUB_TOKEN，或在限流窗口结束后重试。" \
   binary_app.error.version_failed \
   "Could not determine the latest release version." \
   "无法获取最新版本号。" \
@@ -43,6 +46,9 @@ i18n_register_many \
   binary_app.error.dir_owner \
   "Failed to set ownership %s on %s." \
   "设置 %s 的所有者为 %s 失败。" \
+  binary_app.error.config_dir_secure \
+  "Failed to restrict access to config directory: %s" \
+  "配置文件目录权限设置失败：%s" \
   binary_app.error.path_whitespace \
   "Path for %s must not contain whitespace: %s" \
   "%s 的路径不能包含空白字符：%s" \
@@ -301,6 +307,9 @@ i18n_register_many \
   binary_app.info.old_binary \
   "Previous binary kept at: %s" \
   "旧二进制保留在：%s" \
+  binary_app.warn.rollback_cleanup \
+  "Failed to clean installation artifact: %s" \
+  "清理安装产物失败：%s。" \
   binary_app.warn.old_binary_backup \
   "Old binary backed up as %s." \
   "旧二进制已备份为 %s。" \
@@ -552,7 +561,10 @@ i18n_register_many \
   "日志轮转已配置（每日轮转，保留 14 天，自动压缩）。" \
   binary_app.error.logrotate \
   "Logrotate config write failed: /etc/logrotate.d/%s" \
-  "日志轮转配置写入失败：/etc/logrotate.d/%s。"
+  "日志轮转配置写入失败：/etc/logrotate.d/%s。" \
+  binary_app.error.service_args_invalid \
+  "BA_SERVICE_ARGS contains invalid control characters." \
+  "BA_SERVICE_ARGS 含有无效的控制字符。"
 
 # Derive standard paths from the app configuration.  Apps may override
 # APP_CONFIG_DERIVE_HOOK before load; this default matches the binary-app
@@ -570,6 +582,16 @@ _binary_app_derive_paths() {
   # backup archives discoverable (e.g. BA_ARCHIVE_PREFIX=new-api).
   BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-${APP_ID}}"
 }
+# Probe and reverse-proxy targets must follow the configured loopback family;
+# a service bound to ::1 is not reachable at 127.0.0.1.
+ba_local_ip_host() {
+  case "${BA_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0) printf '127.0.0.1\n' ;;
+    ::1|::) printf '[::1]\n' ;;
+    *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
+  esac
+}
+
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
 # generated unit file.
@@ -720,7 +742,7 @@ ba_resolve_version() {
 # Echo the latest release tag for GITHUB_REPO, or the empty string.
 ba_latest_version() {
   local tag
-  tag="$(github_latest_release_tag "$GITHUB_REPO" "binary_app.warn.github_api")"
+  tag="$(github_latest_release_tag "$GITHUB_REPO" "binary_app.warn.github_api" "binary_app.warn.github_api_rate_limit")"
   printf '%s\n' "$tag"
 }
 
@@ -838,6 +860,16 @@ bapp_inspect_binary() {
   success "$(t binary_app.success.binary_verified "$size_mb")"
 }
 # Set up the service user, directories, and ownership for a fresh install.
+# Restrict a managed /etc config directory so it is not world-listable while
+# the service account (its primary group) can still traverse it to read the
+# configuration the service needs at runtime.
+ba_secure_config_dir() {
+  local dir="$1"
+  if ! chown "root:${SERVICE_USER}" "$dir" 2>/dev/null || ! chmod 750 "$dir"; then
+    error "$(t binary_app.error.config_dir_secure "$dir")"
+  fi
+}
+
 ba_setup_user_dirs() {
   local dirs=("$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR")
   local d
@@ -908,7 +940,12 @@ ba_remove_dir_or_error() {
 # ExecStart flags, environment, or hardening needs.
 ba_systemd_unit() {
   local unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
-  local env_line=""
+  local env_line="" service_args="${BA_SERVICE_ARGS:-}"
+  if [[ "$service_args" =~ [[:cntrl:]] ]]; then
+    error "$(t binary_app.error.service_args_invalid)"
+  fi
+  # systemd treats an unescaped % as the start of a specifier (for example %i).
+  service_args="${service_args//%/%%}"
   if [[ "${BA_USE_ENV_FILE:-0}" == "1" ]]; then
     env_line="EnvironmentFile=${ENV_FILE}"
   fi
@@ -928,7 +965,7 @@ Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${DATA_DIR}
-ExecStart="${BIN_PATH}"${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}
+ExecStart="${BIN_PATH}"${service_args:+ ${service_args}}
 Restart=always
 RestartSec=5
 StartLimitInterval=60
@@ -970,7 +1007,10 @@ ba_start_service() {
 # Default HTTP health check; apps override bapp_health_probe when the service
 # exposes a different endpoint or requires other status codes.
 bapp_health_probe() {
-  local url="${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}"
+  local default_url host
+  host="$(ba_local_ip_host)"
+  default_url="http://${host}:${PORT}/"
+  local url="${BA_HEALTH_URL:-$default_url}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
   until code="$(app_http_status_code "$url" 5)" \
@@ -1118,7 +1158,11 @@ bapp_summary() {
   fi
   echo "  =========================================================="
   if [[ -n "$DOMAIN" ]]; then
-    echo -e "  $(t binary_app.summary.public)  ${CYAN}http://${DOMAIN}${GREEN}"
+    if deploy_value_truthy "${BA_ENABLE_HTTPS:-0}"; then
+      echo -e "  $(t binary_app.summary.public)  ${CYAN}https://${DOMAIN}${GREEN}"
+    else
+      echo -e "  $(t binary_app.summary.public)  ${CYAN}http://${DOMAIN}${GREEN}"
+    fi
   fi
   echo -e "  $(t binary_app.summary.internal)  ${CYAN}http://${internal_ip}:${PORT}${GREEN}"
   echo -e "  $(t binary_app.summary.version)  ${YELLOW}${version}${GREEN}"
@@ -1140,10 +1184,10 @@ bapp_summary() {
   echo "  =========================================================="
   echo -e "${NC}"
   echo -e "  ${BOLD}$(t binary_app.summary.management)${NC}"
-  echo -e "    ${CYAN}bash $0 status${NC}      - $(t binary_app.summary.status_cmd)"
-  echo -e "    ${CYAN}bash $0 update${NC}      - $(t binary_app.summary.update_cmd)"
-  echo -e "    ${CYAN}bash $0 backup${NC}      - $(t binary_app.summary.backup_cmd)"
-  echo -e "    ${CYAN}bash $0 uninstall${NC}   - $(t binary_app.summary.uninstall_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) status${NC}      - $(t binary_app.summary.status_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) update${NC}      - $(t binary_app.summary.update_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) backup${NC}      - $(t binary_app.summary.backup_cmd)"
+  echo -e "    ${CYAN}bash $(bapp_management_command_script) uninstall${NC}   - $(t binary_app.summary.uninstall_cmd)"
   echo ""
   echo -e "  ${BOLD}$(t binary_app.summary.systemd)${NC}"
   echo -e "    ${CYAN}systemctl status ${SERVICE_NAME}${NC}     $(t binary_app.summary.show_status)"
@@ -1176,7 +1220,7 @@ bapp_install() {
     apt_deps="${apt_deps} ${BA_APT_PACKAGES}"
   fi
   # shellcheck disable=SC2086
-  if ! apt-get install -y -qq $apt_deps; then
+  if ! apt-get install -y -qq --no-install-recommends $apt_deps; then
     error "$(t binary_app.error.deps_install)"
   fi
   success "$(t binary_app.success.deps)"
@@ -1187,6 +1231,8 @@ bapp_install() {
   if ! tmp_bin="$(mktemp "${INSTALL_DIR}/.${BA_BIN_NAME}.tmp.XXXXXX")"; then
     error "$(t binary_app.error.download "$GITHUB_REPO")"
   fi
+  local stage=""
+  trap 'bapp_install_cleanup_temp_files' EXIT
   local download_url
   download_url="$(ba_download_urls "$latest" | head -1)"
   info "$(t binary_app.info.download_url "$download_url")"
@@ -1194,7 +1240,7 @@ bapp_install() {
     rm -f "$tmp_bin" 2>/dev/null || true
     error "$(t binary_app.error.download "$download_url")"
   fi
-  local stage
+  bapp_verify_download "$tmp_bin" "$latest"
   if ! stage="$(mktemp -d "${INSTALL_DIR}/.${BA_BIN_NAME}.stage.XXXXXX")"; then
     rm -f "$tmp_bin" 2>/dev/null || true
     error "$(t binary_app.error.extract)"
@@ -1242,8 +1288,15 @@ bapp_install() {
   if ba_start_service; then
     INSTALLED_VERSION="$latest"
     app_save_config
+    trap - EXIT
   else
     warn "$(t binary_app.warn.start_rollback)"
+    ba_cleanup_install_artifacts
+    if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+      # The nginx site and renewal cron were published before the start
+      # attempt; roll them back so no proxy keeps pointing at a dead port.
+      ba_cleanup_tls_artifacts
+    fi
     if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
       warn "$(t binary_app.warn.stop_failed "$SERVICE_NAME")"
     fi
@@ -1471,6 +1524,7 @@ bapp_update() {
     rm -f "$tmp_bin" 2>/dev/null || true
     error "$(t binary_app.error.download "$download_url")"
   fi
+  bapp_verify_download "$tmp_bin" "$latest"
   local stage candidate
   if ! stage="$(mktemp -d "${INSTALL_DIR}/.${BA_BIN_NAME}.stage.XXXXXX")"; then
     rm -f "$tmp_bin" 2>/dev/null || true
@@ -1612,12 +1666,12 @@ bapp_uninstall() {
   require_safe_path "INSTALL_DIR" "$INSTALL_DIR"
   local cleanup_path
   while IFS= read -r -d '' cleanup_path; do
-    if ! rm -f "$cleanup_path"; then
+    if ! rm -rf "$cleanup_path"; then
       warn "$(t binary_app.warn.cleanup_old_failed "$cleanup_path")"
     fi
   done < <(find "$INSTALL_DIR" -maxdepth 1 \( -name "${BA_BIN_NAME}.bak.*" \
            -o -name ".${BA_BIN_NAME}.tmp.*" -o -name ".${BA_BIN_NAME}.stage.*" \) \
-           -type f -print0 2>/dev/null)
+           -print0 2>/dev/null)
   success "$(t binary_app.success.removed_binary)"
   ba_remove_file_or_error "/etc/logrotate.d/${SERVICE_NAME}" "LOGROTATE_FILE"
   # Clean up the optional TLS reverse proxy (nginx site + certbot renewal)

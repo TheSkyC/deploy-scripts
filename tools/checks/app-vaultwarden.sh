@@ -371,7 +371,7 @@ check_vaultwarden_apt_update_failures_are_reported() {
       /step "\$\(t app\.vaultwarden\.step\.deps\)"/ { in_block=1; saw_update_if=0; saw_warn=0; next }
       in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then/ { saw_update_if=1 }
       in_block && /warn "\$\(t app\.vaultwarden\.warn\.apt_update\)"/ { saw_warn=1 }
-      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \\/ { saw_install_if=1 }
+      in_block && /if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq( --no-install-recommends)? \\/ { saw_install_if=1 }
       in_block && /error "\$\(t app\.vaultwarden\.error\.deps_install\)"/ { saw_install_error=1 }
       in_block && /success "\$\(t app\.vaultwarden\.success\.deps\)"/ {
         if (!(saw_warn_key && saw_guidance && saw_install_key && saw_install_guidance && saw_update_if && saw_warn && saw_install_if && saw_install_error)) {
@@ -532,7 +532,7 @@ check_vaultwarden_backup_failures_include_followup_guidance() {
     ' apps/vaultwarden.sh
   awk '
       /_backup_silent\(\)/ { in_block=1; saw_warn=0; saw_return=0; next }
-      in_block && /warn "\$\(t app\.vaultwarden\.warn\.backup_failed_continue\)"/ { saw_warn=1 }
+      in_block && /warn "\$\(t app\.vaultwarden\.warn\.backup_failed_continue/ { saw_warn=1 }
       in_block && /return 1/ { saw_return=1 }
       in_block && /^}/ {
         if (!(saw_warn && saw_return)) {
@@ -1426,4 +1426,11 @@ check_vaultwarden_fail2ban_configs_use_shared_atomic_write() {
         in_func=0
       }
     ' impl/install_vaultwarden.sh
+}
+
+check_vaultwarden_systemd_displays_no_new_privileges() {
+  grep -Fq 'NoNewPrivileges=true' impl/install_vaultwarden.sh || {
+    echo "Vaultwarden unit must set NoNewPrivileges=true." >&2
+    return 1
+  }
 }

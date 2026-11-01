@@ -34,11 +34,23 @@ state_json_unescape() {
       u)
         hex="${value:i+1:4}"
         [[ "$hex" =~ ^[0-9a-fA-F]{4}$ ]] || return 1
-        [[ "${hex:0:2}" == 00 ]] || return 1
-        code=$((16#${hex:2:2}))
-        printf -v char '%b' "\\$(printf '%03o' "$code")"
+        code=$((16#$hex))
+        if (( code >= 0xd800 && code <= 0xdbff )); then
+          i=$((i + 4))
+          next_escape="${value:i+1:6}"
+          [[ "$next_escape" == "\\u"* ]] || return 1
+          low_hex="${next_escape:2:4}"
+          [[ "$low_hex" =~ ^[0-9a-fA-F]{4}$ ]] || return 1
+          low_code=$((16#$low_hex))
+          (( low_code >= 0xdc00 && low_code <= 0xdfff )) || return 1
+          code=$((0x10000 + ((code - 0xd800) << 10) + (low_code - 0xdc00)))
+          i=$((i + 6))
+        elif (( code >= 0xdc00 && code <= 0xdfff )) || (( code == 0 )); then
+          return 1
+        fi
+        printf -v char '%b' "\\U$(printf '%08x' "$code")"
         result+="$char"
-        i=$((i + 4))
+        (( code >= 0xd800 && code <= 0xdbff )) || i=$((i + 4))
         ;;
       *) return 1 ;;
     esac
@@ -141,7 +153,7 @@ state_json_field() {
   case "$raw" in
     null) printf 'null\n' ;;
     true|false) printf '%s\n' "$raw" ;;
-    '"'*) state_json_unescape "${raw:1:${#raw}-2}"; printf '\n' ;;
+    '"'*) state_json_unescape "${raw:1:${#raw}-2}" || return 1; printf '\n' ;;
     *) printf '%s\n' "$raw" ;;
   esac
 }
@@ -364,7 +376,6 @@ app_status_collect_json() {
   [[ -n "$version_installed_json" ]] || version_installed_json=null
   printf '{"schema_version":%s,"collected_at":%s,"app_id":%s,"app_name":%s,"root":%s,"install_state":%s,"severity":%s,"config":{"path":%s,"exists":%s,"owner":%s,"mode":%s,"safe":%s,"valid":%s},"version":%s,"version_info":%s,"service":{"name":%s,"systemctl_available":%s,"unit_exists":%s,"active":%s,"enabled":%s,"state":%s},"services":%s,"health":%s,"backup":%s,"operation":{"state":%s,"last_action":%s,"last_result":%s,"last_started_at":%s,"last_finished_at":%s,"last_step":%s,"last_error_code":%s,"last_error_summary":%s,"log_path":%s}}\n' "$DEPLOY_STATE_SCHEMA_VERSION" "$(app_json_string "$(state_now)")" "$(app_json_string "${APP_ID:-}")" "$(app_json_string "${APP_NAME:-}")" "$(app_json_bool "$([[ ${EUID:-$(id -u)} -eq 0 ]] && printf true || printf false)")" "$(app_json_string "$install_state")" "$(app_json_string "$severity")" "$(app_json_string "$conf_file")" "$(app_json_bool "$config_exists")" "$(app_json_value "$owner")" "$(app_json_value "$mode")" "$(app_json_value "$config_safe")" "$(app_json_value "$config_valid")" "$version_installed_json" "$version_json" "$(state_json_nullable "$service_name")" "$(app_json_bool "$service_systemctl")" "$(app_json_value "$service_unit_exists")" "$(app_json_value "$service_active")" "$(app_json_value "$service_enabled")" "$(app_json_string "$service_state")" "$services_json" "$health_json" "$backup_json" "$(app_json_string "$operation_state")" "$(state_json_nullable "$last_action")" "$(state_json_nullable "$last_result")" "$(state_json_nullable "$last_started")" "$(state_json_nullable "$last_finished")" "$(state_json_nullable "$last_step")" "$last_error_code_json" "$(state_json_nullable "$last_error_summary")" "$(state_json_nullable "$last_log_path")"
 }
-
 
 
 

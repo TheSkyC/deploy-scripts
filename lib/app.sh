@@ -31,7 +31,10 @@ app_validate_domain() {
 }
 
 app_validate_http_url() {
-  local name="$1" value="$2" scheme host
+  local name="$1" value="$2" scheme host rest addr tail
+  # The IPv6 literal check relies on a hex character range; pin the C locale
+  # so the range stays byte-exact regardless of the server collation.
+  local LC_ALL=C
   case "$value" in
     http://*|https://*) ;;
     *) error "$(t error.url_invalid "$name" "$value")" ;;
@@ -44,6 +47,17 @@ app_validate_http_url() {
   scheme="${value%%://*}"
   host="${value#"${scheme}"://}"
   host="${host%%/*}"
+  if [[ "$host" == "["* ]]; then
+    # Bracketed IPv6 literal authority, for example http://[::1]:8080/ or
+    # http://[2001:db8::1]/path. Unbracketed IPv6 stays rejected because the
+    # colons are ambiguous with the port separator.
+    rest="${host#\[}"
+    addr="${rest%%\]*}"
+    tail="${rest#*\]}"
+    [[ -n "$addr" && "$addr" == *:* && "$addr" != *[!0-9A-Fa-f:]* && "$tail" =~ ^(:[0-9]+)?$ ]] \
+      || error "$(t error.url_invalid "$name" "$value")"
+    return 0
+  fi
   host="${host%%:*}"
   if [[ "$host" != "localhost" && ! "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]] && ! is_valid_dns_name "$host"; then
     error "$(t error.url_invalid "$name" "$value")"
@@ -225,7 +239,12 @@ app_http_status_code() {
     set --
   fi
   [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || timeout=5
-  if [[ -z "$url" ]] || ! command -v curl >/dev/null 2>&1; then
+  if [[ -z "$url" ]]; then
+    printf '000\n'
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "$(t app.warn.curl_missing "$url")"
     printf '000\n'
     return 0
   fi
@@ -701,6 +720,21 @@ app_prune_update_backups() {
     fi
   fi
 }
+# Reverse the port-opening performed by app_configure_firewall. Used only by
+# best-effort rollback cleanup; failures are reported by the caller and never
+# block binary rollback.
+app_remove_firewall() {
+  local port="$1"
+  if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw --force delete allow "${port}/tcp" >/dev/null 2>&1 || true
+  fi
+  if command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null; then
+    firewall-cmd --permanent --remove-port="${port}/tcp" >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+  fi
+  iptables -D INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
+}
+
 # Opens the service port through the active firewall manager: ufw first, then
 # optionally firewalld (opt-in for apps that support it), then iptables with
 # persistence. Localized keys are addressed through the app key prefix and the
@@ -709,7 +743,9 @@ app_configure_firewall() {
   local port="$1" app_prefix="$2" app_label="$3" enable_firewalld="${4:-false}"
   local FW_DONE=false FW_ERROR=false
   if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    if ufw allow "${port}/tcp" comment "$app_label" > /dev/null; then
+    # ufw gained `comment` in 0.34. Older releases would reject the whole
+    # rule, so fall back to the equivalent rule without a comment.
+    if ufw allow "${port}/tcp" comment "$app_label" > /dev/null         || ufw allow "${port}/tcp" > /dev/null; then
       success "$(t "${app_prefix}.success.ufw_port" "$port")"
       FW_DONE=true
     else
@@ -777,6 +813,11 @@ app_doctor_config_diff() {
   for key in "${CONFIG_KEYS[@]}"; do
     saved="$(grep -E "^${key}=" "$conf_file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
     [[ -n "$saved" ]] || continue
+    # Config values are stored quoted but loaded unquoted; compare the same
+    # normalized representation, otherwise every non-empty key looks drifted.
+    if [[ "$saved" =~ ^\"(.*)\"$ ]]; then
+      saved="${BASH_REMATCH[1]}"
+    fi
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
       if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
@@ -792,7 +833,14 @@ app_doctor_config_diff() {
 }
 
 do_doctor() {
-  local failures=0 warnings=0
+  local failures=0 warnings=0 strict="${DEPLOY_DOCTOR_STRICT:-0}"
+  while (($#)); do
+    case "$1" in
+      --strict) strict=1 ;;
+      *) error "$(t common.invalid_choice "$1")" ;;
+    esac
+    shift
+  done
 
   doctor_ok() { success "$*"; }
   doctor_warn() { warnings=$((warnings + 1)); warn "$*"; }
@@ -894,6 +942,7 @@ do_doctor() {
   fi
   if [[ "$warnings" -gt 0 ]]; then
     doctor_warn "$(t doctor.done_warn "$failures" "$warnings")"
+    [[ "$strict" != 1 ]] || return 1
   else
     doctor_ok "$(t doctor.done_ok)"
   fi

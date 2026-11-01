@@ -472,7 +472,7 @@ check_binary_app_systemd_paths_are_validated() {
     grep -Fq 'bapp_validate_no_whitespace' "$file" \
       && grep -Fq 'binary_app.error.path_whitespace' "$file" \
       && grep -Fq 'require_safe_path "BA_READWRITE_PATHS"' "$file" \
-      && grep -Fq 'ExecStart="${BIN_PATH}"${BA_SERVICE_ARGS:+ ${BA_SERVICE_ARGS}}' "$file" \
+      && grep -Fq 'ExecStart="${BIN_PATH}"${service_args:+ ${service_args}}' "$file" \
       || {
         echo "$file must validate binary-app systemd paths (no whitespace) and quote ExecStart." >&2
         return 1
@@ -712,3 +712,71 @@ check_no_flag_chained_error_handlers() {
   done < <(find impl apps lib bin dist -name '*.sh' -type f | sort)
 }
 
+
+# Package installation should avoid recommended packages unless a specific
+# runtime path later proves one is required.
+check_apt_installs_are_minimal() {
+  local file
+  for file in lib/*.sh impl/*.sh; do
+    if grep -nE '^[[:space:]]*(if ! )?(DEBIAN_FRONTEND=noninteractive )?apt-get install -y ' "$file" \
+      | grep -v -- '--no-install-recommends' >/dev/null; then
+      echo "$file has an apt-get install command without --no-install-recommends" >&2
+      return 1
+    fi
+  done
+}
+
+# A failed install must roll back more than the binary: environment/config
+# extras, logrotate state, and firewall rules need best-effort cleanup, and
+# download/stage temporaries need an EXIT safety net.
+check_binary_app_install_rollback_cleans_system_state() {
+  # This behavior test covers the caller-owned paths that can be written in a
+  # non-root sandbox. Logrotate removal is covered by the awk contract below.
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source lib/binary_app.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"\$tmp\"" EXIT
+    ENV_FILE="$tmp/app.env"
+    SERVICE_NAME=appsvc
+    APP_NAME=Test
+    PORT=8080
+    BA_USE_ENV_FILE=1
+    app_remove_firewall() { printf "firewall %s\n" "$1" >> "$tmp/log"; }
+    ba_uninstall_extra() { printf "extra\n" >> "$tmp/log"; }
+    printf config > "$ENV_FILE"
+    ba_cleanup_install_artifacts
+    [[ ! -e "$ENV_FILE" ]]
+    grep -Fq "extra" "$tmp/log"
+    grep -Fq "firewall 8080" "$tmp/log"
+  '
+  awk '
+      /^ba_cleanup_install_artifacts\(\)/ { in_fn=1; saw_uninstall=0; saw_logrotate=0; saw_firewall=0; next }
+      in_fn && /ba_uninstall_extra/ { saw_uninstall=1 }
+      in_fn && /\/etc\/logrotate\.d\/\$\{SERVICE_NAME\}/ { saw_logrotate=1 }
+      in_fn && /app_remove_firewall "\$PORT"/ { saw_firewall=1 }
+      in_fn && /^}/ {
+        if (!(saw_uninstall && saw_logrotate && saw_firewall)) {
+          print "install rollback must clean app config extras, logrotate, and firewall state" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+  ' lib/binary_app.sh
+}
+
+check_binary_app_install_temporary_cleanup_helper() {
+  awk '
+      /^bapp_install_cleanup_temp_files\(\)/ { in_fn=1; saw_tmp=0; saw_stage=0; next }
+      in_fn && /rm -f -- "\$tmp_bin"/ { saw_tmp=1 }
+      in_fn && /safe_rm_dir "\$stage"/ { saw_stage=1 }
+      in_fn && /^}/ {
+        if (!(saw_tmp && saw_stage)) {
+          print "temporary install cleanup must remove both download and staging paths" > "/dev/stderr"
+          exit 1
+        }
+        in_fn=0
+      }
+  ' lib/binary_app.sh
+}

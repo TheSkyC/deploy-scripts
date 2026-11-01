@@ -94,6 +94,28 @@ check_status_json_services_and_version() {
   expect_success_output en install_newapi.sh status-json '"version":null'
 }
 
+check_doctor_config_diff_ignores_saved_quotes() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/lib/logging.sh"
+    source "$1/lib/fs.sh"
+    source "$1/lib/config.sh"
+    source "$1/lib/app.sh"
+    tmp="$(mktemp -d)"
+    trap '"'"'rm -rf "$tmp"'"'"' EXIT
+    _APP_CONF_LEGACY="$tmp/app.conf"
+    CONFIG_KEYS=(PORT)
+    PORT=7000
+    printf '"'"'PORT="7000"\n'"'"' > "$_APP_CONF_LEGACY"
+    output="$(app_doctor_config_diff)"
+    [[ "$output" == *No\ configuration\ drift* ]] || { echo "$output" >&2; exit 1; }
+    PORT=8000
+    output="$(app_doctor_config_diff)"
+    [[ "$output" == *PORT*7000*8000* ]] || { echo "$output" >&2; exit 2; }
+  ' bash "$ROOT_DIR"
+}
+
 check_doctor_validates_saved_config() {
   awk '
       /doctor\.config_parse_ok/ { saw_ok_key=1 }
@@ -157,7 +179,7 @@ check_no_argument_menu() {
 
 check_manager_menu_shortcuts() {
   local output
-  output="$($BASH_BIN -c '
+  output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
     set -euo pipefail
     source lib/core.sh
     manager_status_main() { [[ "$1" == status-all ]]; }
@@ -403,6 +425,178 @@ check_i18n_keys_are_consistent() {
   fi
 }
 
+# Framework i18n keys (everything outside app.<prefix>) must be registered in
+# lib/*.sh, apps/*.sh, or impl/*.sh, and every literal t-call must resolve.
+# check_i18n_keys_are_consistent only covers per-app app.<prefix> keys and
+# previously missed shared keys such as status.title.
+check_framework_i18n_keys_are_consistent() {
+  local tmp_dir fail=0 file
+  tmp_dir="$(mktemp -d)"
+  # Registered keys: i18n_register single lines plus i18n_register_many
+  # continuation tokens (key on its own line, optional trailing backslash).
+  awk '
+      /^[[:space:]]*i18n_register(_many)?[[:space:]]+/ {
+        key = $2
+        if (key ~ /^[a-z][a-z0-9_]*\.[a-z0-9_.]+$/) print key
+      }
+      /^[[:space:]]*[a-z][a-z0-9_]*\.[a-z0-9_.]+[[:space:]]*\\?$/ { print $1 }
+    ' lib/*.sh apps/*.sh impl/*.sh 2>/dev/null | sort -u > "$tmp_dir/reg"
+  while IFS= read -r file; do
+    [[ -f "$file" ]] || continue
+    # Full-line comments are prose, not t-calls; drop them before extraction.
+    grep -vE '^[[:space:]]*#' "$file" 2>/dev/null \
+      | grep -oE '(^|[^A-Za-z0-9_])t[[:space:]]+[a-z][a-z0-9_]*\.[a-z0-9_.]+' \
+      | sed -E 's/.*[^A-Za-z0-9_]t[[:space:]]+//' \
+      >> "$tmp_dir/used" || true
+  done < <(find lib apps impl bin -name '*.sh' -type f; printf '%s\n' deploy.sh tools/verify.sh tools/checks/*.sh)
+  sort -u "$tmp_dir/used" -o "$tmp_dir/used" 2>/dev/null || : > "$tmp_dir/used"
+  while IFS= read -r key; do
+    echo "unregistered i18n key used via t: $key" >&2
+    fail=1
+  done < <(comm -23 "$tmp_dir/used" "$tmp_dir/reg")
+  rm -rf "$tmp_dir"
+  [[ "$fail" -eq 0 ]] || {
+    echo "every literal t-call key must be registered in lib/i18n.sh, lib/*.sh, apps/*.sh, or impl/*.sh." >&2
+    return 1
+  }
+}
+
+# Format-string guard for translations: every registered en/zh pair must use
+# the same number of printf conversions, and neither side may contain a stray
+# % that is not a conversion or an escaped %%. Without this, a translator who
+# adds a literal "%" (for example "100% of disk") while the other language
+# keeps %s placeholders would make printf fail at runtime (i18n_print passes
+# the text as the format string). The existing consistency check only proves
+# t-call keys are registered.
+check_framework_i18n_format_pairs_are_consistent() {
+  python3 - <<'PY'
+import glob, re, shlex, sys
+
+spec = re.compile(r'%(?:[0-9]+\$)?[-+ #0]*[0-9]*(?:\.[0-9]+)?[a-zA-Z]')
+
+def count_specs(text):
+    count = 0
+    invalid = 0
+    i = 0
+    while i < len(text):
+        if text[i] != '%':
+            i += 1
+            continue
+        m = spec.match(text, i)
+        if m:
+            count += 1
+            i = m.end()
+            continue
+        if i + 1 < len(text) and text[i + 1] == '%':
+            i += 2
+            continue
+        invalid += 1
+        i += 1
+    return count, invalid
+
+def logical_lines(path):
+    raw = open(path, encoding='utf-8').read().splitlines()
+    lines = []
+    buf = ''
+    for line in raw:
+        buf = (buf + ' ' + line.lstrip()) if buf else line
+        if buf.rstrip().endswith('\\'):
+            buf = buf.rstrip()[:-1]
+            continue
+        lines.append(buf)
+        buf = ''
+    if buf:
+        lines.append(buf)
+    return lines
+
+failures = 0
+pairs = 0
+for path in sorted(glob.glob('lib/*.sh') + glob.glob('apps/*.sh') + glob.glob('impl/*.sh')):
+    for line in logical_lines(path):
+        m = re.match(r'(i18n_register|i18n_register_many)\s+(.*)', line.strip())
+        if not m:
+            continue
+        kind, rest = m.group(1), m.group(2)
+        try:
+            tokens = shlex.split(rest)
+        except ValueError as exc:
+            print('%s: cannot parse i18n registration: %s' % (path, exc), file=sys.stderr)
+            failures += 1
+            continue
+        groups = [tokens] if kind == 'i18n_register' else [tokens[i:i + 3] for i in range(0, len(tokens), 3)]
+        for group in groups:
+            if len(group) != 3:
+                continue
+            key, en, zh = group
+            pairs += 1
+            en_specs, en_invalid = count_specs(en)
+            zh_specs, zh_invalid = count_specs(zh)
+            if en_specs != zh_specs or en_invalid or zh_invalid:
+                failures += 1
+                print('%s: %s en/zh format mismatch (en specs=%s, zh specs=%s, en stray %%s=%s, zh stray %%s=%s): %r / %r' % (
+                    path, key, en_specs, zh_specs, en_invalid, zh_invalid, en, zh), file=sys.stderr)
+if failures:
+    print('i18n registration pairs must use matching printf conversions with no stray %% characters.', file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+check_i18n_registration_pairs_are_explicit() {
+  python3 - <<'PY'
+import glob
+import re
+import shlex
+import sys
+
+failures = 0
+seen = {}
+for path in sorted(glob.glob('lib/*.sh') + glob.glob('apps/*.sh') + glob.glob('impl/*.sh')):
+    start = 0
+    buf = ''
+    for line_number, raw in enumerate(open(path, encoding='utf-8'), 1):
+        if buf:
+            buf = buf + ' ' + raw.strip()
+        else:
+            start = line_number
+            buf = raw.rstrip()
+        if buf.rstrip().endswith('\\'):
+            buf = buf.rstrip()[:-1]
+            continue
+        line = buf
+        buf = ''
+        match = re.match(r'(i18n_register|i18n_register_many)\s+(.*)', line.strip())
+        if not match:
+            continue
+        kind, rest = match.groups()
+        try:
+            tokens = shlex.split(rest)
+        except ValueError as exc:
+            print('%s:%s: cannot parse i18n registration: %s' % (path, start, exc), file=sys.stderr)
+            failures += 1
+            continue
+        chunks = [tokens] if kind == 'i18n_register' else [
+            tokens[index:index + 3] for index in range(0, len(tokens), 3)
+        ]
+        if any(len(chunk) != 3 for chunk in chunks):
+            print('%s:%s: %s requires explicit key/en/zh triples' % (path, start, kind), file=sys.stderr)
+            failures += 1
+            continue
+        for key, en, zh in chunks:
+            if key in seen:
+                print('%s:%s: duplicate i18n key %s (first registered at %s)' % (
+                    path, start, key, seen[key]), file=sys.stderr)
+                failures += 1
+                continue
+            seen[key] = '%s:%s' % (path, start)
+            if not en or not zh:
+                print('%s:%s: i18n key %s must have non-empty en and zh text' % (path, start, key), file=sys.stderr)
+                failures += 1
+if failures:
+    print('i18n keys must be registered with explicit en/zh pairs exactly once.', file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 check_app_localized_descriptions() {
   expect_app_description cyberstrikeai en "Source build deployment with Go, Python, systemd, Nginx, and backups."
   expect_app_description cyberstrikeai zh "包含 Go、Python、systemd、Nginx 和备份的源码构建部署脚本。"
@@ -447,4 +641,93 @@ check_no_chinese_comments() {
     echo "Comments must be written in English." >&2
     return 1
   fi
+}
+
+check_install_summaries_avoid_fixed_width_boxes() {
+  if grep -R -nE '(echo|printf).*[╔╗╚╝╠╣║]' impl/*.sh; then
+    echo "Install summaries must not use fixed-width box drawing; it breaks with CJK text widths." >&2
+    return 1
+  fi
+}
+
+check_help_masks_sensitive_config_values() {
+  local output
+  output="$(DEPLOY_LANG=en "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    source "$1/lib/logging.sh"
+    source "$1/lib/cli.sh"
+    APP_ID=test
+    CONFIG_KEYS=(PORT API_TOKEN DB_PASSWORD)
+    PORT=8080
+    API_TOKEN=super-secret
+    DB_PASSWORD=another-secret
+    usage --help 2>&1
+  ' bash "$ROOT_DIR")"
+  [[ "$output" == *API_TOKEN* && "$output" == *DB_PASSWORD* && "$output" == *PORT* ]] || {
+    echo "$output" >&2
+    echo "Help output must mask credential-like config values." >&2
+    return 1
+  }
+  [[ "$output" != *super-secret* && "$output" != *another-secret* ]] || {
+    echo "Help output leaked a sensitive config value." >&2
+    return 1
+  }
+}
+
+check_uninstall_cancellations_return_nonzero() {
+  local file
+  for file in impl/install_sub2api.sh impl/install_tickflow.sh \
+              impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
+              impl/install_cyberstrikeai.sh; do
+    grep -Fq 'exit 2' "$file" || {
+      echo "$file: cancelled uninstall must exit nonzero" >&2
+      return 1
+    }
+    grep -Fq '${_c,,}" != y' "$file" && continue
+    grep -Fq '${confirm,,}" != y' "$file" || {
+      echo "$file: cancelled uninstall must accept lowercase y/yes" >&2
+      return 1
+    }
+  done
+}
+
+check_status_framework_version_is_reported() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source "$1/lib/core.sh"
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    DEPLOY_ROOT_DIR="$tmp"
+    DEPLOY_BUILD_VERSION="v9.8.7-test"
+    : > "$tmp/files"
+    : > "$tmp/errors"
+    output="$(manager_status_render_json "$tmp")"
+    grep -Fq "\"version\":\"v9.8.7-test\"" <<< "$output"
+  ' bash "$ROOT_DIR"
+}
+
+# Advanced actions must be discoverable where they exist, without pretending
+# that token/signups controls apply to every application.
+check_menu_surfaces_supported_advanced_actions() {
+  grep -Fq 'if declare -f do_verify >/dev/null 2>&1; then' lib/cli.sh \
+    && grep -Fq 'menu.verify_desc' lib/cli.sh \
+    && grep -Fq 'if declare -f do_token >/dev/null 2>&1; then' lib/cli.sh \
+    && grep -Fq 'menu.token_desc' lib/cli.sh \
+    && grep -Fq 'if declare -f do_signups >/dev/null 2>&1; then' lib/cli.sh \
+    && grep -Fq 'menu.signups_desc' lib/cli.sh || {
+      echo "interactive menu must expose verify/token/signups actions when implemented" >&2
+      return 1
+    }
+}
+
+# Cron and automation need to distinguish warnings from healthy runs without
+# parsing doctor output.
+check_doctor_strict_returns_on_warnings() {
+  grep -Fq 'strict="${DEPLOY_DOCTOR_STRICT:-0}"' lib/app.sh \
+    && grep -Fq -- '--strict' lib/app.sh \
+    && grep -Fq '[[ "$strict" != 1 ]] || return 1' lib/app.sh || {
+      echo "doctor must support --strict/DEPLOY_DOCTOR_STRICT for warning detection" >&2
+      return 1
+    }
 }

@@ -27,7 +27,7 @@ deploy_print_config_values() {
 }
 
 usage() {
-  echo "$(t common.usage "$0")" >&2
+  t common.usage "$0" >&2
   echo "      $(t common.no_argument_menu)" >&2
   if [[ "${1:-}" == "--help" ]] && declare -p CONFIG_KEYS >/dev/null 2>&1; then
     echo "" >&2
@@ -75,7 +75,7 @@ app_dry_run_list_config() {
 
 show_menu() {
   show_banner
-  echo "$(t common.choose_action)"
+  t common.choose_action
   echo
   echo "  1) install    - $(t menu.install_desc)"
   echo "  2) update     - $(t menu.update_desc)"
@@ -84,6 +84,19 @@ show_menu() {
   echo "  5) status     - $(t menu.status_desc)"
   echo "  6) doctor     - $(t menu.doctor_desc)"
   echo "  7) uninstall  - $(t menu.uninstall_desc)"
+  local menu_no=8
+  if declare -f do_verify >/dev/null 2>&1; then
+    echo "  ${menu_no}) verify       - $(t menu.verify_desc)"
+    menu_no=$((menu_no + 1))
+  fi
+  if declare -f do_token >/dev/null 2>&1; then
+    echo "  ${menu_no}) token        - $(t menu.token_desc)"
+    menu_no=$((menu_no + 1))
+  fi
+  if declare -f do_signups >/dev/null 2>&1; then
+    echo "  ${menu_no}) signups      - $(t menu.signups_desc)"
+    menu_no=$((menu_no + 1))
+  fi
   echo "  q) $(t common.quit)"
   echo
   prompt "$(t common.selection_prompt)"
@@ -187,3 +200,4 @@ dispatch_action() {
     *) error "$(t common.invalid_choice "$action")" ;;
   esac
 }
+

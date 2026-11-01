@@ -474,6 +474,9 @@ i18n_register_many \
   app.vaultwarden.summary.data \
   "Data dir" \
   "数据目录" \
+  app.vaultwarden.summary.web_vault \
+  "Web Vault" \
+  "Web Vault" \
   app.vaultwarden.summary.env \
   "Env file" \
   "环境配置" \
@@ -676,11 +679,11 @@ i18n_register_many \
   "Backup created, but integrity metadata could not be written for %s; verify will report the archive as unverified." \
   "备份已创建，但完整性元数据写入失败：%s；verify 将把该归档报告为未验证。" \
   app.vaultwarden.error.manual_backup_failed \
-  "Manual backup did not complete successfully. Inspect /opt/vaultwarden-backups/backup.log, review the existing backups above, and retry after fixing the archive or filesystem issue." \
-  "手动备份未成功完成。请检查 /opt/vaultwarden-backups/backup.log，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
+  "Manual backup did not complete successfully. Inspect %s, review the existing backups above, and retry after fixing the archive or filesystem issue." \
+  "手动备份未成功完成。请检查 %s，核对上方已有备份，并在修复压缩包或文件系统问题后重试。" \
   app.vaultwarden.error.backup_script \
-  "Backup script write failed: /usr/local/bin/vaultwarden-backup" \
-  "备份脚本写入失败：/usr/local/bin/vaultwarden-backup" \
+  "Backup script write failed: %s" \
+  "备份脚本写入失败：%s" \
   app.vaultwarden.step.manual_backup \
   "Manual Vaultwarden backup" \
   "手动备份 Vaultwarden" \

@@ -30,6 +30,18 @@ DEPLOY_APP_NAMES=()
 DEPLOY_APP_FILES=()
 DEPLOY_APP_IMPL_FILES=()
 DEPLOY_APP_CAPABILITIES=()
+# Archive globs are part of the app contract so migration and per-app backup
+# code do not drift when an app keeps a historical prefix (for example new-api).
+declare -A DEPLOY_APP_ARCHIVE_GLOBS=(
+  [newapi]="new-api_*.tar.gz"
+  [sub2api]="sub2api_*.tar.gz"
+  [sub2api_db]="sub2api_db_*.sql.gz"
+  [vaultwarden]="vaultwarden_*.tar.gz"
+  [cyberstrikeai]="cyberstrike-ai_*.tar.gz"
+  [blog]="blog_*.tar.gz"
+  [tickflow]="tickflow-data-*.tar.gz"
+  [cpa-stack]="cpa-stack-*.tar.gz"
+)
 
 for deploy_app_spec in "${DEPLOY_APP_SPECS[@]}"; do
   IFS='|' read -r deploy_app_id deploy_app_name deploy_app_file deploy_app_impl_file deploy_app_caps <<< "$deploy_app_spec"
@@ -84,19 +96,19 @@ deploy_app_impl_file_for() {
 }
 
 deploy_app_script_name_for() {
-  local app_id="$1"
-  case "$app_id" in
-    blog) echo "install_hugo_blog.sh" ;;
-    *) echo "install_${app_id//-/_}.sh" ;;
-  esac
+  local app_id="$1" impl_file
+  # The root wrapper name mirrors the registry implementation file (for
+  # example blog -> install_hugo_blog.sh), so derive it from the spec
+  # instead of maintaining an id-to-name special case.
+  impl_file="$(deploy_app_impl_file_for "$app_id")" || return 1
+  printf '%s\n' "${impl_file##*/}"
 }
 
 deploy_app_bundled_impl_script_name_for() {
-  local app_id="$1"
-  case "$app_id" in
-    blog) echo "install_hugo_blog_impl.sh" ;;
-    *) echo "install_${app_id}_impl.sh" ;;
-  esac
+  local app_id="$1" impl_file base
+  impl_file="$(deploy_app_impl_file_for "$app_id")" || return 1
+  base="${impl_file##*/}"
+  printf '%s\n' "${base%.sh}_impl.sh"
 }
 
 deploy_app_name_for() {
@@ -112,6 +124,16 @@ deploy_app_has_capability() {
     *,"$capability",*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+deploy_app_archive_globs_for() {
+  local app_id="$1" glob
+  if [[ -n "${DEPLOY_APP_ARCHIVE_GLOBS[$app_id]:-}" ]]; then
+    printf '%s\n' "${DEPLOY_APP_ARCHIVE_GLOBS[$app_id]}"
+  fi
+  if [[ -n "${DEPLOY_APP_ARCHIVE_GLOBS[${app_id}_db]:-}" ]]; then
+    printf '%s\n' "${DEPLOY_APP_ARCHIVE_GLOBS[${app_id}_db]}"
+  fi
 }
 
 deploy_app_index_for() {

@@ -34,20 +34,45 @@ jobs:
   # surface faster. The union of these targets covers every check_* function
   # that `all` runs (enforced by check_target_groups_cover_all_checks); the
   # feature proofs run inside the guards target.
+  #
+  # The dispatch target is additionally exercised with LANGUAGE=zh_CN: the
+  # framework reads the ambient locale when DEPLOY_LANG is unset, and menu
+  # assertions must not break on a Chinese desktop locale (regression guard
+  # for the dispatch localization portability fix).
   verify:
     if: github.event_name != 'schedule'
-    name: ${{ matrix.target }}
+    name: ${{ matrix.target }}${{ matrix.locale != '' && format(' ({0})', matrix.locale) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        target: [syntax, release, dispatch, guards, state, operation, update, self-update]
+        include:
+          - target: syntax
+            locale: ''
+          - target: release
+            locale: ''
+          - target: dispatch
+            locale: ''
+          - target: dispatch
+            locale: zh_CN
+          - target: guards
+            locale: ''
+          - target: state
+            locale: ''
+          - target: operation
+            locale: ''
+          - target: update
+            locale: ''
+          - target: self-update
+            locale: ''
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Run ${{ matrix.target }} verification
+        env:
+          LANGUAGE: ${{ matrix.locale }}
         run: bash tools/verify.sh ${{ matrix.target }}
 
   shellcheck:

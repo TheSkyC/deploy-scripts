@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2034
+# Config keys and framework hook variables in this file are consumed by
+# name from lib/app.sh and the shared lifecycle libraries.
 set -euo pipefail
 umask 077
 
@@ -51,6 +55,7 @@ EOF
   then
     error "$(t app.ntfy.error.config_write "$config_file")"
   fi
+  ba_secure_config_dir "$config_dir"
   success "$(t app.ntfy.success.config_written "$config_file")"
 }
 

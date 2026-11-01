@@ -393,7 +393,7 @@ check_cyberstrikeai_repo_go_install_failures_are_reported() {
   awk '
       /app\.cyberstrikeai\.warn\.go_repo_install_failed/ { saw_warn_key=1 }
       /step "\$\(t app\.cyberstrikeai\.step\.install_go\)"/ { in_block=1; saw_install_if=0; saw_warn=0; next }
-      in_block && /if ! apt-get install -y -qq golang-go; then/ { saw_install_if=1 }
+      in_block && /if ! apt-get install -y -qq( --no-install-recommends)? golang-go; then/ { saw_install_if=1 }
       in_block && /warn "\$\(t app\.cyberstrikeai\.warn\.go_repo_install_failed\)"/ { saw_warn=1 }
       in_block && /if command -v go >\/dev\/null 2>&1; then/ {
         if (!(saw_warn_key && saw_install_if && saw_warn)) {
@@ -434,9 +434,9 @@ check_cyberstrikeai_dependency_failures_are_reported() {
       /step "\$\(t app\.cyberstrikeai\.step\.install_deps\)"/ { in_block=1; saw_update_if=0; saw_update_error=0; saw_install_if=0; saw_install_error=0; saw_nginx_if=0; saw_nginx_error=0; next }
       in_block && /if ! apt-get update -qq; then/ { saw_update_if=1 }
       in_block && /error "\$\(t app\.cyberstrikeai\.error\.apt_update\)"/ { saw_update_error=1 }
-      in_block && /if ! apt-get install -y -qq \\/ { saw_install_if=1 }
+      in_block && /if ! apt-get install -y -qq( --no-install-recommends)? \\/ { saw_install_if=1 }
       in_block && /error "\$\(t app\.cyberstrikeai\.error\.deps_install\)"/ { saw_install_error=1 }
-      in_block && /if ! apt-get install -y -qq nginx; then/ { saw_nginx_if=1 }
+      in_block && /if ! apt-get install -y -qq( --no-install-recommends)? nginx; then/ { saw_nginx_if=1 }
       in_block && /error "\$\(t app\.cyberstrikeai\.error\.nginx_deps_install\)"/ { saw_nginx_error=1 }
       in_block && /success "\$\(t app\.cyberstrikeai\.success\.deps\)"/ {
         if (!(saw_update_if && saw_update_error && saw_install_if && saw_install_error && saw_nginx_if && saw_nginx_error)) {

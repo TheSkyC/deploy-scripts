@@ -49,6 +49,25 @@ check_update_version_cache_and_network_failures() {
     rm -rf "$temp_root"
     return 1
   fi
+  # A rate-limited GitHub API (checked helper returns 3) must be reported as a
+  # distinct, actionable error instead of a generic release-check failure.
+  if ! DEPLOY_VERSION_CACHE_ROOT="${temp_root}/cache" DEPLOY_VERSION_CACHE_TTL_SECONDS=60 DEPLOY_VERSION_NOW_EPOCH=300 "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    APP_ID=ntfy
+    BA_BIN_NAME=ntfy
+    GITHUB_REPO=binwiederhier/ntfy
+    github_latest_release_tag_checked() { return 3; }
+    rm -f "${DEPLOY_VERSION_CACHE_ROOT}/ntfy.json"
+
+    result="$(bapp_check_update_json v1.0.0 1 0)"
+    [[ "$(state_json_field "$result" update_state)" == check_failed ]]
+    [[ "$(state_json_field "$result" latest)" == null ]]
+    [[ "$(state_json_field "$result" error)" == *"rate limit"* ]]
+  '; then
+    rm -rf "$temp_root"
+    return 1
+  fi
   rm -rf "$temp_root"
 }
 

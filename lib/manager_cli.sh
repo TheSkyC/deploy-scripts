@@ -15,7 +15,7 @@ show_manager_banner() {
 
 show_manager_menu() {
   show_manager_banner
-  echo "$(t manager.choose_app)"
+  t manager.choose_app
   echo
 
   local index=1 app_id app_name

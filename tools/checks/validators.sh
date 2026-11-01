@@ -274,6 +274,35 @@ check_github_release_tag_behavior() {
     curl() { return 1; }
     tag=$(github_latest_release_tag "owner/repo" "test.warn" 2>/dev/null)
     [[ -z "$tag" ]] || { echo "expected empty tag on failure, got: ${tag}" >&2; exit 1; }
+
+    # A rate-limited API (the --fail request fails, the status probe then
+    # reports 403) must be distinguishable from a transport failure.
+    curl() {
+      case " $* " in
+        *" -w "*) printf 403 ;;
+        *) return 22 ;;
+      esac
+    }
+    github_latest_release_tag_checked "owner/repo" 2>/dev/null && { echo "rate-limited request unexpectedly succeeded" >&2; exit 1; }
+    st=$?
+    [[ "$st" -eq 3 ]] || { echo "expected status 3 for rate limit, got: ${st}" >&2; exit 1; }
+
+    # The warning wrapper must prefer the dedicated rate-limit key when the
+    # checked helper reports the API rate limit.
+    curl() {
+      case " $* " in
+        *" -w "*) printf 403 ;;
+        *) return 22 ;;
+      esac
+    }
+    warn_log="$(mktemp)"
+    warn() { printf "%s\n" "$1" >> "$warn_log"; }
+    github_latest_release_tag "owner/repo" "generic.warn" "rate.warn" >/dev/null
+    grep -Fxq "rate.warn" "$warn_log" || { echo "rate-limit wrapper did not warn with the dedicated key; log=[$(cat "$warn_log")]" >&2; exit 1; }
+    if grep -Fxq "generic.warn" "$warn_log"; then
+      echo "rate-limit wrapper fell back to the generic key" >&2
+      exit 1
+    fi
   ' _ "$ROOT_DIR"
 }
 
@@ -306,9 +335,16 @@ check_shared_validators_accept_and_reject() {
     app_validate_http_url "URL" "http://example.com/path" || { echo "valid http url rejected" >&2; exit 1; }
     app_validate_http_url "URL" "https://api.github.com/v3" || { echo "valid https url rejected" >&2; exit 1; }
     app_validate_http_url "URL" "http://localhost:8080/x" || { echo "localhost url rejected" >&2; exit 1; }
+    app_validate_http_url "URL" "http://[::1]:8080/x" || { echo "bracketed ipv6 literal url rejected" >&2; exit 1; }
+    app_validate_http_url "URL" "http://[2001:db8::1]/path" || { echo "bracketed ipv6 url without port rejected" >&2; exit 1; }
     ( app_validate_http_url "URL" "ftp://example.com" ) 2>/dev/null && { echo "non-http scheme accepted" >&2; exit 1; }
     ( app_validate_http_url "URL" "http://" ) 2>/dev/null && { echo "empty host accepted" >&2; exit 1; }
     ( app_validate_http_url "URL" "http://bad name.com" ) 2>/dev/null && { echo "url with space accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://::1/" ) 2>/dev/null && { echo "unbracketed ipv6 accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[::1" ) 2>/dev/null && { echo "unclosed ipv6 bracket accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[::1]evil/" ) 2>/dev/null && { echo "junk after ipv6 literal accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[]/" ) 2>/dev/null && { echo "empty ipv6 literal accepted" >&2; exit 1; }
+    ( app_validate_http_url "URL" "http://[g::1]/" ) 2>/dev/null && { echo "non-hex ipv6 literal accepted" >&2; exit 1; }
     app_validate_https_url "URL" "https://example.com" || { echo "valid https-only url rejected" >&2; exit 1; }
     ( app_validate_https_url "URL" "http://example.com" ) 2>/dev/null && { echo "http url accepted by https validator" >&2; exit 1; }
     # Go proxy

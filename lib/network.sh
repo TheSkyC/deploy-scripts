@@ -1,5 +1,27 @@
 #!/usr/bin/env bash
 
+# Bounded retry wrapper for download commands. A transient network blip must
+# not abort an install or self-update: re-run the command up to
+# DEPLOY_DOWNLOAD_RETRIES times (default 3) with DEPLOY_DOWNLOAD_RETRY_DELAY
+# seconds (default 2) between attempts, then return the final failure. The
+# command line is re-evaluated per attempt; callers keep their own cleanup and
+# diagnostics (download_retry itself prints nothing).
+download_retry() {
+  local max_attempts="${DEPLOY_DOWNLOAD_RETRIES:-3}" delay="${DEPLOY_DOWNLOAD_RETRY_DELAY:-2}" attempt=1
+  [[ "$max_attempts" =~ ^[0-9]+$ && "$max_attempts" -ge 1 ]] || max_attempts=3
+  [[ "$delay" =~ ^[0-9]+$ ]] || delay=2
+  while :; do
+    if "$@"; then
+      return 0
+    fi
+    if (( attempt >= max_attempts )); then
+      return 1
+    fi
+    sleep "$delay"
+    attempt=$((attempt + 1))
+  done
+}
+
 check_connectivity_urls() {
   local url
   for url in "$@"; do
@@ -28,7 +50,16 @@ json_tag_name() {
   if [[ "${2:-}" == "--strip-v" ]]; then
     strip_v=true
   fi
-  if echo "test" | grep -qP 'test' 2>/dev/null; then
+  # The grep -P probe forks a subshell; cache the result per process so
+  # version lookups that resolve many assets do not re-probe every call.
+  if [[ -z "${__DEPLOY_GREP_P_AVAILABLE:-}" ]]; then
+    if echo "test" | grep -qP 'test' 2>/dev/null; then
+      __DEPLOY_GREP_P_AVAILABLE=1
+    else
+      __DEPLOY_GREP_P_AVAILABLE=0
+    fi
+  fi
+  if [[ "$__DEPLOY_GREP_P_AVAILABLE" == "1" ]]; then
     tag=$(printf '%s' "$json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' 2>/dev/null | head -1 || true)
   fi
   if [[ -z "${tag:-}" ]]; then
@@ -46,8 +77,8 @@ json_tag_name() {
 # handle failures without contaminating stdout. GITHUB_TOKEN, when present,
 # is passed to curl only and is never logged or returned.
 github_latest_release_tag_checked() {
-  local repo="$1" json tag timeout_seconds
-  local -a curl_args
+  local repo="$1" json tag timeout_seconds code url
+  local -a curl_args auth_args
   [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 2
   timeout_seconds="${DEPLOY_GITHUB_API_TIMEOUT_SECONDS:-15}"
   [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -gt 0 ]] || timeout_seconds=15
@@ -56,11 +87,19 @@ github_latest_release_tag_checked() {
   # Keep the token out of /proc/*/cmdline: curl's @file header syntax reads
   # the secret from a process-substitution fd instead of exposing it in argv.
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    json="$(curl "${curl_args[@]}" \
-      -H @<(printf 'Authorization: Bearer %s' "$GITHUB_TOKEN") \
-      "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
-  else
-    json="$(curl "${curl_args[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null)" || return 1
+    auth_args=(-H @<(printf 'Authorization: Bearer %s' "$GITHUB_TOKEN"))
+  fi
+  url="https://api.github.com/repos/${repo}/releases/latest"
+  if ! json="$(curl "${curl_args[@]}" ${auth_args[@]+"${auth_args[@]}"} "$url" 2>/dev/null)"; then
+    # --fail collapses every HTTP error into one exit status, so re-request
+    # without the body to learn the status code. Rate limits (403/429) are
+    # returned as 3 so callers can tell them apart from transport failures.
+    code="$(curl "${curl_args[@]}" ${auth_args[@]+"${auth_args[@]}"} \
+      -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if [[ "$code" == 403 || "$code" == 429 ]]; then
+      return 3
+    fi
+    return 1
   fi
   tag="$(json_tag_name "$json")"
   [[ "${tag:-}" =~ ^v?[0-9] ]] || return 2
@@ -69,15 +108,24 @@ github_latest_release_tag_checked() {
 
 # Compatibility wrapper for existing lifecycle paths. It retains the prior
 # warning-and-empty-output contract while delegating request handling to the
-# silent helper used by the central version checker.
+# silent helper used by the central version checker. When the request fails
+# because the GitHub API rate limit was reached, a dedicated warning key is
+# used so the operator learns the actionable cause instead of a generic
+# reachability message.
 github_latest_release_tag() {
-  local repo="$1" warn_key="$2" tag
-  if ! tag="$(github_latest_release_tag_checked "$repo")"; then
-    warn "$(t "$warn_key")"
-    printf '\n'
+  local repo="$1" warn_key="$2" rate_limit_key="${3:-}" tag status
+  if tag="$(github_latest_release_tag_checked "$repo")"; then
+    printf '%s\n' "$tag"
     return 0
+  else
+    status=$?
+    if [[ "$status" -eq 3 && -n "$rate_limit_key" ]]; then
+      warn "$(t "$rate_limit_key")"
+    else
+      warn "$(t "$warn_key")"
+    fi
+    printf '\n'
   fi
-  printf '%s\n' "$tag"
 }
 
 is_valid_dns_name() {

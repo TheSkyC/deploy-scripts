@@ -343,6 +343,7 @@ main() {
       check_status_json_dispatch
       check_status_json_legacy_contract
       check_status_json_services_and_version
+      check_status_framework_version_is_reported
       check_port_conflict_is_warn_only
       check_port_conflict_strict_mode_aborts
       check_doctor_validates_saved_config
@@ -350,12 +351,14 @@ main() {
       check_newapi_summary_warns_about_default_credentials
       check_sub2api_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
+      check_uninstall_cancellations_return_nonzero
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_uninstall_checks_file_removal_errors
       check_sub2api_uninstall_validates_binary_path_before_removal
       check_sub2api_install_rollback_validates_binary_path_before_removal
       check_sub2api_install_rollback_surfaces_service_file_removal_failures
       check_sub2api_backup_lists_preserve_paths_with_spaces
+      check_sub2api_restore_sets_data_owner
       check_vaultwarden_status_backup_projection
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
@@ -366,15 +369,19 @@ main() {
       check_vaultwarden_install_supports_noninteractive_mode
       check_vaultwarden_install_surfaces_default_nginx_site_removal_failures
       check_vaultwarden_install_summary_is_localized
+      check_vaultwarden_systemd_displays_no_new_privileges
       check_vaultwarden_backup_lists_preserve_paths_with_spaces
       check_blog_status_backup_projection
       check_blog_uninstall_supports_noninteractive_mode
       check_blog_install_surfaces_default_nginx_site_removal_failures
+      check_blog_publish_helpers_match_fs_sh
       check_cyberstrikeai_status_backup_projection
       check_cyberstrikeai_uninstall_supports_noninteractive_mode
       check_cyberstrikeai_uninstall_checks_directory_removal_errors
       check_cyberstrikeai_uninstall_checks_file_removal_errors
       check_tickflow_status_backup_projection
+      check_tickflow_restore_keeps_aside_for_rollback
+      check_tickflow_systemd_unit_is_sandboxed
       check_tickflow_uninstall_supports_noninteractive_mode
       check_tickflow_uninstall_checks_directory_removal_errors
       check_tickflow_uninstall_checks_file_removal_errors
@@ -382,6 +389,8 @@ main() {
       check_blog_status_dispatch
       check_no_color_output
       check_no_argument_menu
+      check_menu_surfaces_supported_advanced_actions
+      check_doctor_strict_returns_on_warnings
       check_manager_list
       check_manager_menu_shortcuts
       check_manager_usage_documents_instances
@@ -390,6 +399,9 @@ main() {
       check_app_registry_capabilities
       check_blog_localized_defaults
       check_app_localized_descriptions
+      check_framework_i18n_keys_are_consistent
+      check_framework_i18n_format_pairs_are_consistent
+      check_i18n_registration_pairs_are_explicit
       echo "Dispatch verification passed"
       return 0
       ;;
@@ -398,11 +410,13 @@ main() {
       check_state_all_registered_apps_enumerated
       check_state_target_selection
       check_state_scalar_parser_and_severity
+      check_state_json_unicode_escapes
       check_state_operation_error_code_projection
       check_state_backup_extension_contract
       check_state_binary_backup_adapter
       check_state_backup_config_trust_gate
       check_state_status_matrix
+      check_state_timeout_kills_process_group
       check_state_load_failure_isolation
       check_state_no_network_locality
       check_state_problems_filtering
@@ -452,6 +466,9 @@ main() {
       check_release_package_artifacts
       check_package_release_rejects_dirty_or_stale_tree
       check_self_version_and_manifest_checks
+      check_self_update_manifest_validation_preserves_lock_flag
+      check_self_update_keep_releases_accepts_all_nonzero_counts
+      check_self_update_has_no_signature_dead_keys
       check_self_update_protects_checkout_and_standalone
       check_self_update_dry_run_validation
       check_self_update_managed_rehearsal
