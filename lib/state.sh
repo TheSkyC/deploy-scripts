@@ -12,7 +12,8 @@ state_json_nullable() { [[ -n "${1:-}" && "${1:-}" != null ]] && app_json_string
 # deliberately small, but handles escaped strings and nested objects without
 # relying on jq or Python at runtime.
 state_json_unescape() {
-  local value="${1:-}" result='' i c next hex code char backslash=\\
+  local value="${1:-}" result='' i c next hex code char byte backslash=\\
+  local low_hex low_code next_escape
   for ((i = 0; i < ${#value}; i++)); do
     c="${value:i:1}"
     if [[ "$c" != "$backslash" ]]; then
@@ -48,7 +49,24 @@ state_json_unescape() {
         elif (( code >= 0xdc00 && code <= 0xdfff )) || (( code == 0 )); then
           return 1
         fi
-        printf -v char '%b' "\\U$(printf '%08x' "$code")"
+          # Encode the code point as UTF-8 bytes by hand: printf's \u/\U
+          # escapes are locale-dependent and degrade to literals under
+          # LC_ALL=C/POSIX, which the status collector must not depend on.
+          if (( code <= 0x7f )); then
+            printf -v byte '\\x%02x' "$code"
+          elif (( code <= 0x7ff )); then
+            printf -v byte '\\x%02x\\x%02x' \
+              $((0xc0 | (code >> 6))) $((0x80 | (code & 0x3f)))
+          elif (( code <= 0xffff )); then
+            printf -v byte '\\x%02x\\x%02x\\x%02x' \
+              $((0xe0 | (code >> 12))) $((0x80 | ((code >> 6) & 0x3f))) \
+              $((0x80 | (code & 0x3f)))
+          else
+            printf -v byte '\\x%02x\\x%02x\\x%02x\\x%02x' \
+              $((0xf0 | (code >> 18))) $((0x80 | ((code >> 12) & 0x3f))) \
+              $((0x80 | ((code >> 6) & 0x3f))) $((0x80 | (code & 0x3f)))
+          fi
+          printf -v char '%b' "$byte"
         result+="$char"
         (( code >= 0xd800 && code <= 0xdbff )) || i=$((i + 4))
         ;;

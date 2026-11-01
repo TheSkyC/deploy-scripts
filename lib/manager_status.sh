@@ -68,7 +68,9 @@ manager_status_collect_app_json() {
   (( timeout_limit > 0 )) || timeout_limit=1
   while kill -0 "$pid" 2>/dev/null; do
     if (( SECONDS - start_seconds >= timeout_limit )); then
-      kill "$pid" 2>/dev/null || true
+        # Kill the whole process group so the probes the collector started
+        # (curl, systemctl, ...) cannot outlive the timeout.
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
       printf 'status collection timed out after %ss' "$timeout_seconds" >>"$error_file"
       return 124
