@@ -659,6 +659,67 @@ check_vaultwarden_restore_env_copy_failure_is_fatal() {
   ' impl/install_vaultwarden.sh
 }
 
+check_vaultwarden_restore_rolls_back_data_and_env_on_health_failure() {
+  local output
+  output="$($BASH_BIN -c '
+    set -euo pipefail
+    source lib/core.sh
+    source apps/vaultwarden.sh
+    source impl/install_vaultwarden.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/backups" "$tmp/stage/vaultwarden" "$tmp/archive-abs" \
+      "$tmp/data-parent/vaultwarden" "$tmp/etc"
+    VW_DATA_DIR="$tmp/data-parent/vaultwarden"
+    VW_ENV_FILE="$tmp/etc/vaultwarden.env"
+    VW_BACKUP_DIR="$tmp/backups"
+    VW_USER=testsvc
+    VW_GROUP=testsvc
+    printf "old-data\n" > "$VW_DATA_DIR/old.txt"
+    printf "OLD_ENV=1\n" > "$VW_ENV_FILE"
+    printf "new-data\n" > "$tmp/stage/vaultwarden/new.txt"
+    env_rel="${VW_ENV_FILE#/}"
+    mkdir -p "$tmp/archive-abs/$(dirname "$env_rel")"
+    printf "NEW_ENV=1\n" > "$tmp/archive-abs/$env_rel"
+    archive="$VW_BACKUP_DIR/vaultwarden_20261101_000000.tar.gz"
+    tar -czf "$archive" \
+      -C "$tmp/stage" vaultwarden \
+      -C "$tmp/archive-abs" "$env_rel"
+    show_banner() { :; }
+    require_root() { :; }
+    app_load_config() { :; }
+    acquire_lock() { :; }
+    step() { :; }
+    require_safe_path() { :; }
+    info() { :; }
+    success() { :; }
+    warn() { :; }
+    systemctl() {
+      case "$1" in
+        stop|start) return 0 ;;
+        is-active) return 1 ;;
+        *) return 0 ;;
+      esac
+    }
+    wait_for_service() { return 0; }
+    chown() { return 0; }
+    atomic_copy_file_strict() { cp "$1" "$2"; }
+    set +e
+    ( _vw_restore_archive "$archive" ) >/dev/null 2>&1
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || exit 31
+    [[ -f "$VW_DATA_DIR/old.txt" && ! -e "$VW_DATA_DIR/new.txt" ]] || exit 32
+    [[ "$(cat "$VW_ENV_FILE")" == "OLD_ENV=1" ]] || exit 33
+    if find "$tmp" \( -name ".*.restore.*" -o -name "*.restore.*" -o -name "*.prev.*" \) \
+        -print -quit | grep -q .; then
+      exit 34
+    fi
+    echo ok
+  ')"
+  [[ "$output" == ok ]]
+}
+
 check_vaultwarden_binary_installs_are_atomic() {
   if grep -R -n 'install -m 755 -o root -g root .* "$VW_BIN"' impl/install_vaultwarden.sh 2>/dev/null; then
     echo "Vaultwarden binary installs must stage to a temporary file before replacing VW_BIN." >&2

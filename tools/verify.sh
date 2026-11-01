@@ -722,6 +722,7 @@ main() {
       run_isolated_check check_vaultwarden_install_webvault_replacement_is_recoverable
       run_isolated_check check_vaultwarden_result_chains_are_explicit
       run_isolated_check check_vaultwarden_restore_env_copy_failure_is_fatal
+      run_isolated_check check_vaultwarden_restore_rolls_back_data_and_env_on_health_failure
       run_isolated_check check_vaultwarden_runtime_dir_failures_are_explicit
       run_isolated_check check_vaultwarden_runtime_service_starts_are_explicit
       run_isolated_check check_vaultwarden_service_start_paths_are_explicit
