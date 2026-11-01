@@ -179,6 +179,15 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ -z "$url" ]]; then
+  # Local health probes must reach a real listener; only GitHub API and
+  # release traffic is served from the fixture tree.
+  for arg in "$@"; do
+    case "$arg" in
+      http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*)
+        exec /usr/bin/curl "$@"
+        ;;
+    esac
+  done
   # Connectivity probes: report success with a minimal body.
   printf 'ok\n'
   exit 0
@@ -394,6 +403,77 @@ assert components["postgresql"]["source"] == "system_runtime"
 assert components["redis"]["installed"].startswith("7.")
 assert components["redis"]["update_state"] == "not_checked"
 ' || { echo "COMPONENT_MANIFEST_BAD"; exit 1; }
+
+# --- transactional restore: data, config, and the real PostgreSQL database
+# must commit or roll back as one unit. ---
+DATA_DIR=/opt/sub2api/data
+CONFIG_DIR=/etc/sub2api
+BACKUP_DIR=/opt/sub2api-backups
+export DEPLOY_LANG=en
+# systemd is stubbed, so nothing would bind PORT. A real listener lets the
+# restore health gate distinguish a committed restore from a rolled-back one.
+python3 -m http.server 18082 --bind 127.0.0.1 --directory /tmp >/tmp/health.log 2>&1 &
+HEALTH_PID=$!
+health_ready=false
+for attempt in $(seq 1 20); do
+  if /usr/bin/curl -fs -o /dev/null "http://127.0.0.1:18082/" 2>/dev/null; then health_ready=true; break; fi
+  sleep 0.5
+done
+[[ "$health_ready" == true ]] || { cat /tmp/health.log; echo "HEALTH_SERVER_NOT_READY"; exit 1; }
+
+printf 'data-old\n' >"${DATA_DIR}/restore-marker.txt"
+printf 'conf-old\n' >"${CONFIG_DIR}/restore-marker.txt"
+psql "$PG_DSN" -v ON_ERROR_STOP=1 -c "UPDATE e2e_fixture SET value='db-old';" >/dev/null
+bash /repo/dist/install_sub2api.sh backup >"$LOG" 2>&1 || { cat "$LOG"; echo "RESTORE_BACKUP_FAILED"; exit 1; }
+RESTORE_ARCHIVE="$(ls -1t "${BACKUP_DIR}"/sub2api_data_*.tar.gz | head -1)"
+[[ -n "$RESTORE_ARCHIVE" ]] || { echo "RESTORE_ARCHIVE_MISSING"; exit 1; }
+
+assert_restore_state() {
+  local expected="$1" label="$2"
+  [[ "$(psql "$PG_DSN" -tAc "SELECT value FROM e2e_fixture")" == "db-${expected}" ]] \
+    || { echo "DB_NOT_${label}"; psql "$PG_DSN" -tAc "SELECT value FROM e2e_fixture"; exit 1; }
+  [[ "$(cat "${DATA_DIR}/restore-marker.txt")" == "data-${expected}" ]] \
+    || { echo "DATA_NOT_${label}"; exit 1; }
+  [[ "$(cat "${CONFIG_DIR}/restore-marker.txt")" == "conf-${expected}" ]] \
+    || { echo "CONFIG_NOT_${label}"; exit 1; }
+}
+assert_no_restore_debris() {
+  local leftover
+  leftover="$(find /opt/sub2api /etc "${BACKUP_DIR}" -maxdepth 1 \
+    \( -name '.data.restore*' -o -name '.sub2api.restore*' -o -name '.sub2api-pre-restore.*' \) \
+    -print 2>/dev/null)"
+  [[ -z "$leftover" ]] || { echo "$leftover"; echo "RESTORE_LEFTOVER_STAGING"; exit 1; }
+}
+
+# Mutate every artifact so a partial restore is visible in the assertions.
+printf 'data-mutated\n' >"${DATA_DIR}/restore-marker.txt"
+printf 'conf-mutated\n' >"${CONFIG_DIR}/restore-marker.txt"
+psql "$PG_DSN" -v ON_ERROR_STOP=1 -c "UPDATE e2e_fixture SET value='db-mutated';" >/dev/null
+SUB2API_RESTORE_ARCHIVE="$RESTORE_ARCHIVE" bash /repo/dist/install_sub2api.sh restore >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "SUB2API_RESTORE_FAILED"
+  exit 1
+}
+assert_restore_state old RESTORED
+assert_no_restore_debris
+echo "SUB2API_RESTORE_COMMIT_OK"
+
+# Health-gate failure: the restore must replay the pre-restore snapshot and
+# swap the original directories back instead of leaving a mixed state.
+kill "$HEALTH_PID" 2>/dev/null || true
+wait "$HEALTH_PID" 2>/dev/null || true
+printf 'data-pre-rollback\n' >"${DATA_DIR}/restore-marker.txt"
+printf 'conf-pre-rollback\n' >"${CONFIG_DIR}/restore-marker.txt"
+psql "$PG_DSN" -v ON_ERROR_STOP=1 -c "UPDATE e2e_fixture SET value='db-pre-rollback';" >/dev/null
+if SUB2API_RESTORE_ARCHIVE="$RESTORE_ARCHIVE" bash /repo/dist/install_sub2api.sh restore >"$LOG" 2>&1; then
+  cat "$LOG"
+  echo "RESTORE_SHOULD_HAVE_FAILED"
+  exit 1
+fi
+grep -q "Rollback complete" "$LOG" || { cat "$LOG"; echo "ROLLBACK_MESSAGE_MISSING"; exit 1; }
+assert_restore_state pre-rollback ROLLED_BACK
+assert_no_restore_debris
+echo "SUB2API_RESTORE_TRANSACTION_SMOKE_OK"
 echo "SUB2API_REAL_DEPENDENCIES_SMOKE_OK"
 SUB2API_E2E
 chmod +x "$WORK/sub2api-real-dependencies.sh"

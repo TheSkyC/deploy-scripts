@@ -85,9 +85,13 @@ check_sub2api_e2e_uses_real_dependency_fixture() {
     && grep -Fq "redis-cli ping" "$fixture" \
     && grep -Fq 'psql "$PG_DSN" -v ON_ERROR_STOP=1' "$fixture" \
     && grep -Fq 'gzip -cd "$DB_ARCHIVE" | grep -Fq "fixture-row"' "$fixture" \
+    && grep -Fq "SUB2API_RESTORE_COMMIT_OK" "$fixture" \
+    && grep -Fq "SUB2API_RESTORE_TRANSACTION_SMOKE_OK" "$fixture" \
+    && grep -Fq 'grep -q "Rollback complete" "$LOG"' "$fixture" \
+    && grep -Fq "assert_no_restore_debris" "$fixture" \
     && grep -Fq "SUB2API_REAL_DEPENDENCIES_SMOKE_OK" "$fixture" \
     || {
-      echo "Sub2API E2E must retain its real PostgreSQL/Redis fixture and pg_dump content assertion." >&2
+      echo "Sub2API E2E must retain its real PostgreSQL/Redis fixture, pg_dump content assertion, and transactional restore commit/rollback proof." >&2
       return 1
     }
 }
