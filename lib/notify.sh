@@ -50,6 +50,23 @@ notify_redact() {
     -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
 }
 
+# Publish the current notification values atomically. Keeping the complete key
+# set and file mode in one helper ensures the probe file and the durable config
+# cannot drift from one another.
+notify_write_config_file() {
+  local conf_file="${1:-}"
+  [[ -n "$conf_file" ]] || return 1
+  atomic_write_file "$conf_file" 600 <<CONF
+NOTIFY_ENABLED="${NOTIFY_ENABLED}"
+NOTIFY_BACKEND="${NOTIFY_BACKEND}"
+NOTIFY_URL="${NOTIFY_URL}"
+NOTIFY_TOPIC="${NOTIFY_TOPIC}"
+NOTIFY_TOKEN="${NOTIFY_TOKEN}"
+NOTIFY_USERNAME="${NOTIFY_USERNAME}"
+NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
+CONF
+}
+
 # Send one notification. Never fails the caller: every error path warns to
 # stderr (or silently no-ops when notifications are disabled/unconfigured)
 # and returns 0 unless explicitly asked to report failure via NOTIFY_STRICT.
@@ -139,23 +156,10 @@ notify_config_main() {
   fi
   # Load current values as the merge base.
   local conf_file="$NOTIFY_CONF_FILE"
-  NOTIFY_ENABLED=false NOTIFY_BACKEND="" NOTIFY_URL="" NOTIFY_TOPIC=""
-  NOTIFY_TOKEN="" NOTIFY_USERNAME="" NOTIFY_PASSWORD=""
-  if [[ -f "$conf_file" ]]; then
-    local line key value
-    while IFS= read -r line; do
-      [[ "$line" =~ ^[A-Z_]+= ]] || continue
-      key="${line%%=*}"
-      value="${line#*=}"
-      value="${value%\"}"
-      value="${value#\"}"
-      case "$key" in
-        NOTIFY_ENABLED|NOTIFY_BACKEND|NOTIFY_URL|NOTIFY_TOPIC|NOTIFY_TOKEN|NOTIFY_USERNAME|NOTIFY_PASSWORD)
-          printf -v "$key" '%s' "$value"
-          ;;
-      esac
-    done < "$conf_file"
-  fi
+  # Refuse to merge an untrusted existing file: notify_send applies the same
+  # root/0600-or-0400 trust gate, and a privileged config command must not
+  # launder weaker permissions into a trusted replacement.
+  notify_load_config || error "$(t notify.warn.untrusted_config)"
   [[ -n "$backend" ]] || true
   case "${backend,,}" in
     ""|ntfy|gotify) : ;;
@@ -174,16 +178,7 @@ notify_config_main() {
     # of claiming success while silently skipping the send.
     local probe_file probe_status
     probe_file="$(mktemp "${TMPDIR:-/tmp}/deploy-notify-probe.XXXXXX")" || error "$(t error.tmpdir)"
-    if ! atomic_write_file "$probe_file" 600 <<PROBE
-NOTIFY_ENABLED="${NOTIFY_ENABLED}"
-NOTIFY_BACKEND="${NOTIFY_BACKEND}"
-NOTIFY_URL="${NOTIFY_URL}"
-NOTIFY_TOPIC="${NOTIFY_TOPIC}"
-NOTIFY_TOKEN="${NOTIFY_TOKEN}"
-NOTIFY_USERNAME="${NOTIFY_USERNAME}"
-NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
-PROBE
-    then
+    if ! notify_write_config_file "$probe_file"; then
       rm -f "$probe_file"
       error "$(t error.config_write "$probe_file")"
     fi
@@ -197,31 +192,13 @@ PROBE
     fi
     # The probe succeeded with the merged values, so persist them so the
     # tested configuration is exactly what later runs will use.
-    if ! atomic_write_file "$conf_file" 600 <<CONF
-NOTIFY_ENABLED="${NOTIFY_ENABLED}"
-NOTIFY_BACKEND="${NOTIFY_BACKEND}"
-NOTIFY_URL="${NOTIFY_URL}"
-NOTIFY_TOPIC="${NOTIFY_TOPIC}"
-NOTIFY_TOKEN="${NOTIFY_TOKEN}"
-NOTIFY_USERNAME="${NOTIFY_USERNAME}"
-NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
-CONF
-    then
+    if ! notify_write_config_file "$conf_file"; then
       error "$(t error.config_write "$conf_file")"
     fi
     success "$(t notify.test.sent_ok)"
     return 0
   fi
-  if ! atomic_write_file "$conf_file" 600 <<CONF
-NOTIFY_ENABLED="${NOTIFY_ENABLED}"
-NOTIFY_BACKEND="${NOTIFY_BACKEND}"
-NOTIFY_URL="${NOTIFY_URL}"
-NOTIFY_TOPIC="${NOTIFY_TOPIC}"
-NOTIFY_TOKEN="${NOTIFY_TOKEN}"
-NOTIFY_USERNAME="${NOTIFY_USERNAME}"
-NOTIFY_PASSWORD="${NOTIFY_PASSWORD}"
-CONF
-  then
+  if ! notify_write_config_file "$conf_file"; then
     error "$(t error.config_write "$conf_file")"
   fi
   success "$(t notify.config.saved "$conf_file")"

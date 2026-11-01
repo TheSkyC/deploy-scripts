@@ -2372,12 +2372,22 @@ check_notification_fail_open_and_redaction() {
       }
       in_send=0
     }
-    /^notify_config_main\(\)/ { in_cfg=1; saw_atomic=0; saw_mode=0; saw_probe=0; next }
-    in_cfg && /atomic_write_file "\$conf_file" 600/ { saw_atomic=1; saw_mode=1 }
+    /^notify_write_config_file\(\)/ { in_write=1; saw_atomic=0; next }
+    in_write && /atomic_write_file "\$conf_file" 600/ { saw_atomic=1 }
+    in_write && /^}$/ {
+      if (!saw_atomic) {
+        print "notify_write_config_file must publish mode-600 config atomically" > "/dev/stderr"
+        exit 1
+      }
+      in_write=0
+    }
+    /^notify_config_main\(\)/ { in_cfg=1; saw_write=0; saw_probe=0; saw_trust=0; next }
+    in_cfg && /notify_load_config \|\| error/ { saw_trust=1 }
+    in_cfg && /notify_write_config_file "\$conf_file"/ { saw_write=1 }
     in_cfg && /NOTIFY_CONF_FILE="\$probe_file"/ { saw_probe=1 }
     in_cfg && /^}$/ {
-      if (!(saw_atomic && saw_probe)) {
-        print "notify_config_main must persist atomically with mode 600 and probe --test against a staged merged config" > "/dev/stderr"
+      if (!(saw_trust && saw_write && saw_probe)) {
+        print "notify_config_main must trust-gate, use the shared mode-600 writer, and probe --test against a staged merged config" > "/dev/stderr"
         exit 1
       }
       in_cfg=0
@@ -2450,7 +2460,7 @@ check_notify_config_test_probes_merged_config() {
     trap 'rm -rf "$tmp"' EXIT
     export NOTIFY_CONF_FILE="$tmp/notify.conf"
     require_root() { :; }
-    app_conf_trusted_value() { return 0; }
+    app_conf_trusted_value() { [[ "${TRUST_NOTIFY_CONF:-0}" == "1" ]]; }
     error() { exit 9; }
     success() { :; }
     info() { :; }
@@ -2467,6 +2477,17 @@ STUB
     chmod +x "$tmp/bin/curl"
     export NOTIFY_COUNT_FILE="$tmp/count"
     : > "$NOTIFY_COUNT_FILE"
+
+    # An existing file with weak ownership/permissions must not be read and
+    # republished as a trusted root config.
+    printf 'NOTIFY_ENABLED="false"\n' >"$NOTIFY_CONF_FILE"
+    chmod 600 "$NOTIFY_CONF_FILE"
+    if ( TRUST_NOTIFY_CONF=0 notify_config_main --enable --backend ntfy --url http://example.invalid --topic t ) >/dev/null 2>&1; then
+      echo UNTRUSTED_CONFIG_ACCEPTED; exit 70
+    fi
+    grep -q '^NOTIFY_ENABLED="false"$' "$NOTIFY_CONF_FILE" || { echo UNTRUSTED_CONFIG_CHANGED; exit 77; }
+    rm -f "$NOTIFY_CONF_FILE"
+    TRUST_NOTIFY_CONF=1
 
     # Fresh config + failing delivery: --test must fail and not persist.
     if ( PATH="$tmp/bin:$PATH" notify_config_main --enable --backend ntfy --url http://example.invalid --topic t --test ) >/dev/null 2>&1; then
