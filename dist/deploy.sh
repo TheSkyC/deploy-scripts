@@ -14125,6 +14125,12 @@ i18n_register_many \
   app.cpa_stack.error.backup \
   "Backup failed: %s." \
   "备份失败：%s。" \
+  app.cpa_stack.error.certbot_cron \
+  "Failed to write the certificate renewal cron file %s for %s." \
+  "写入证书续签 cron 文件 %s（证书 %s）失败。" \
+  app.cpa_stack.error.remove_file \
+  "Failed to remove %s." \
+  "删除 %s 失败。" \
   app.cpa_stack.info.uninstall_cancelled \
   "Uninstall cancelled." \
   "已取消卸载。" \
@@ -14203,6 +14209,12 @@ i18n_register_many \
   app.cpa_stack.success.removed \
   "CPA Stack service and proxy configuration removed. Persistent data was kept unless explicitly selected for deletion." \
   "CPA Stack 服务和反向代理配置已移除。除非明确选择删除，否则持久数据会被保留。" \
+  app.cpa_stack.success.certbot_timer \
+  "certbot systemd timer detected; certificate renewal is already scheduled." \
+  "检测到 certbot systemd timer，证书续签已由系统调度。" \
+  app.cpa_stack.success.certbot_cron \
+  "Scheduled certificate renewal in %s." \
+  "已在 %s 中安排证书续签。" \
   app.cpa_stack.info.oauth \
   "OAuth is intentionally not automated. Run login commands as the cli-proxy-api user; some providers use localhost callbacks or device-code flows." \
   "OAuth 不会自动执行。请以 cli-proxy-api 用户运行登录命令；部分提供商使用 localhost 回调或设备码流程。" \
@@ -23314,6 +23326,25 @@ EOF
   nginx -t && systemctl reload nginx
 }
 
+# Certificate renewal is owned per app. Prefer the system certbot timer;
+# otherwise write a per-app /etc/cron.d entry so uninstalling this stack never
+# disables renewal for other TLS-enabled apps on the same host.
+cpa_stack_ensure_cert_renewal() {
+  local cron_file
+  if systemctl list-timers 'certbot*' 2>/dev/null | grep -q certbot; then
+    success "$(t app.cpa_stack.success.certbot_timer)"
+    return 0
+  fi
+  cron_file="$(app_tls_cron_file cpa-stack)"
+  if ! atomic_write_file "$cron_file" 644 root:root <<CRON
+30 2 * * * root certbot renew --quiet --cert-name "${CPA_DOMAIN}" --post-hook 'systemctl reload nginx'
+CRON
+  then
+    error "$(t app.cpa_stack.error.certbot_cron "$cron_file" "$CPA_DOMAIN")"
+  fi
+  success "$(t app.cpa_stack.success.certbot_cron "$cron_file")"
+}
+
 cpa_stack_configure_https() {
   cpa_stack_truthy "$ENABLE_HTTPS" || return 0
   step "$(t app.cpa_stack.step.https)"
@@ -23324,6 +23355,7 @@ cpa_stack_configure_https() {
     return 0
   fi
   cpa_stack_write_nginx_https || error "$(t app.cpa_stack.error.nginx "$NGINX_SITE")"
+  cpa_stack_ensure_cert_renewal
 }
 
 cpa_stack_install_dependencies() {
@@ -23690,6 +23722,20 @@ do_uninstall() {
   rm -f "$CONF_FILE"
   if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
     systemctl reload nginx || true
+  fi
+  local certbot_cron_file
+  certbot_cron_file="$(app_tls_cron_file cpa-stack)"
+  if [[ -e "$certbot_cron_file" || -L "$certbot_cron_file" ]]; then
+    rm -f "$certbot_cron_file" \
+      || error "$(t app.cpa_stack.error.remove_file "$certbot_cron_file")"
+  fi
+  # The legacy shared entry is only safe to drop once no other managed TLS
+  # site still relies on it; removing it earlier would disable renewal for
+  # apps that are still installed.
+  if [[ -e "/etc/cron.d/certbot-renew" || -L "/etc/cron.d/certbot-renew" ]] \
+      && ! app_other_managed_tls_site_exists cpa-stack; then
+    rm -f "/etc/cron.d/certbot-renew" \
+      || error "$(t app.cpa_stack.error.remove_file "/etc/cron.d/certbot-renew")"
   fi
   if $delete_data; then
     safe_rm_dir "$CPA_DATA_DIR" "CPA_DATA_DIR"

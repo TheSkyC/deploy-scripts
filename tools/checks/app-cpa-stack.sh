@@ -373,3 +373,59 @@ CPAMPASSET
     return 1
   }
 }
+
+# Certificate renewal must be owned per app: CPA Stack prefers the system
+# certbot timer, otherwise it writes /etc/cron.d/certbot-renew-cpa-stack for
+# its own certificate, and uninstall only drops the legacy shared entry when no
+# other managed TLS site still relies on it.
+check_cpa_stack_certificate_renewal_is_scoped() {
+  local file=impl/install_cpa_stack.sh output
+  grep -Fq 'app_tls_cron_file cpa-stack' "$file" || {
+    echo "CPA Stack must derive its renewal cron path from app_tls_cron_file." >&2
+    return 1
+  }
+  grep -Fq 'certbot renew --quiet --cert-name "${CPA_DOMAIN}"' "$file" || {
+    echo "CPA Stack renewal must be scoped to its own certificate." >&2
+    return 1
+  }
+  grep -Fq 'app_other_managed_tls_site_exists cpa-stack' "$file" || {
+    echo "CPA Stack uninstall must keep the legacy shared renewal entry while other TLS sites exist." >&2
+    return 1
+  }
+
+  output="$($BASH_BIN <<'CPARENEW'
+set -euo pipefail
+source lib/core.sh
+export DEPLOY_IMPL_SOURCE_ONLY=1
+source apps/cpa_stack.sh >/dev/null 2>&1
+source impl/install_cpa_stack.sh >/dev/null 2>&1
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+records="$tmp_dir/records"
+: > "$records"
+success() { :; }
+error() { printf 'error: %s\n' "$*" >&2; exit 1; }
+atomic_write_file() {
+  local target="$1" mode="$2" owner="$3"
+  printf '%s|%s|%s\n' "$target" "$mode" "$owner" >> "$records"
+  cat >> "$records"
+}
+CPA_DOMAIN="api.example.com"
+# No system timer: a private per-app cron file with a scoped renewal command.
+systemctl() { return 1; }
+cpa_stack_ensure_cert_renewal
+grep -Fq '/etc/cron.d/certbot-renew-cpa-stack|644|root:root' "$records"
+grep -Fq -- 'certbot renew --quiet --cert-name "api.example.com"' "$records"
+# With the system timer present nothing is written.
+: > "$records"
+systemctl() { printf 'certbot.timer\n'; return 0; }
+cpa_stack_ensure_cert_renewal
+[[ ! -s "$records" ]]
+printf ok
+CPARENEW
+  )"
+  [[ "$output" == ok ]] || {
+    echo "CPA Stack renewal must use the system timer when available and otherwise write a scoped cron file." >&2
+    return 1
+  }
+}

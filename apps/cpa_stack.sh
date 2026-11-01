@@ -75,6 +75,12 @@ i18n_register_many \
   app.cpa_stack.error.backup \
   "Backup failed: %s." \
   "备份失败：%s。" \
+  app.cpa_stack.error.certbot_cron \
+  "Failed to write the certificate renewal cron file %s for %s." \
+  "写入证书续签 cron 文件 %s（证书 %s）失败。" \
+  app.cpa_stack.error.remove_file \
+  "Failed to remove %s." \
+  "删除 %s 失败。" \
   app.cpa_stack.info.uninstall_cancelled \
   "Uninstall cancelled." \
   "已取消卸载。" \
@@ -153,6 +159,12 @@ i18n_register_many \
   app.cpa_stack.success.removed \
   "CPA Stack service and proxy configuration removed. Persistent data was kept unless explicitly selected for deletion." \
   "CPA Stack 服务和反向代理配置已移除。除非明确选择删除，否则持久数据会被保留。" \
+  app.cpa_stack.success.certbot_timer \
+  "certbot systemd timer detected; certificate renewal is already scheduled." \
+  "检测到 certbot systemd timer，证书续签已由系统调度。" \
+  app.cpa_stack.success.certbot_cron \
+  "Scheduled certificate renewal in %s." \
+  "已在 %s 中安排证书续签。" \
   app.cpa_stack.info.oauth \
   "OAuth is intentionally not automated. Run login commands as the cli-proxy-api user; some providers use localhost callbacks or device-code flows." \
   "OAuth 不会自动执行。请以 cli-proxy-api 用户运行登录命令；部分提供商使用 localhost 回调或设备码流程。" \

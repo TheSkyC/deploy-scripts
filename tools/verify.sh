@@ -582,6 +582,7 @@ main() {
       run_isolated_check check_cpa_stack_e2e_pinned_fixture
       run_isolated_check check_cpa_stack_cpamp_asset_resolution
       run_isolated_check check_cpa_stack_update_and_restore_are_recoverable
+      run_isolated_check check_cpa_stack_certificate_renewal_is_scoped
       run_isolated_check check_cron_logrotate_are_atomic
       run_isolated_check check_binary_app_certbot_cron_is_published_atomically
       run_isolated_check check_tls_renewal_crons_are_scoped_per_app
