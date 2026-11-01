@@ -771,6 +771,13 @@ bapp_verify_asset_checksum() {
   [[ "${actual,,}" == "${expected,,}" ]]
 }
 
+# Install/update call sites verify the staged download after fetching it. The
+# helper name is kept separate so the download and verification steps stay
+# explicit in the lifecycle, while the digest policy lives in one place.
+bapp_verify_download() {
+  bapp_verify_asset_checksum "$1"
+}
+
 # Download the first reachable URL for the given version into $1.
 ba_download_release() {
   local version="$1" target="$2" url
@@ -1128,7 +1135,8 @@ EOF
   fi
   success "$(t binary_app.success.tls_live "https://${DOMAIN}")"
   # Renewal via /etc/cron.d, published by the shared atomic writer.
-  local cron_file="/etc/cron.d/certbot-renew"
+  local cron_file
+  cron_file="$(ba_tls_cron_file)"
   if ! atomic_write_file "$cron_file" 644 root:root <<'CRON'
 30 2 * * * root certbot renew --quiet --post-hook 'systemctl reload nginx'
 CRON
@@ -1136,6 +1144,68 @@ CRON
     error "$(t binary_app.error.tls_renewal)"
   fi
   success "$(t binary_app.success.tls_renewal)"
+}
+
+# Renewal cron entry owned by the shared binary-app layer. Kept in one helper
+# so configuration, rollback and uninstall always agree on the same path.
+ba_tls_cron_file() {
+  printf '/etc/cron.d/certbot-renew\n'
+}
+
+# Best-effort removal of the TLS reverse proxy artifacts created by
+# ba_configure_tls: the nginx site files, the renewal cron and the backed-up
+# default site. A failed install must not leave nginx proxying to a dead port.
+ba_cleanup_tls_artifacts() {
+  local nginx_conf="/etc/nginx/sites-available/${SERVICE_NAME}"
+  local cron_file
+  cron_file="$(ba_tls_cron_file)"
+  rm -f "/etc/nginx/sites-enabled/${SERVICE_NAME}" 2>/dev/null || true
+  rm -f "$nginx_conf" 2>/dev/null || true
+  rm -f "$cron_file" 2>/dev/null || true
+  app_nginx_default_site_restore
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+  fi
+}
+
+# Best-effort removal of configuration, log rotation and firewall state
+# published before the service starts. A failed fresh install must not leave
+# the host partially configured while reporting that the app was rolled back.
+# Existing binaries are restored by the caller.
+ba_cleanup_install_artifacts() {
+  if [[ "${BA_USE_ENV_FILE:-0}" == "1" && -e "${ENV_FILE:-}" ]]; then
+    rm -f -- "$ENV_FILE" 2>/dev/null \
+      || warn "$(t binary_app.warn.rollback_cleanup "$ENV_FILE")"
+  fi
+  if declare -f ba_uninstall_extra >/dev/null 2>&1; then
+    if ! ( ba_uninstall_extra ) >/dev/null 2>&1; then
+      warn "$(t binary_app.warn.rollback_cleanup "$APP_NAME")"
+    fi
+  fi
+  if [[ -e "/etc/logrotate.d/${SERVICE_NAME}" ]]; then
+    rm -f -- "/etc/logrotate.d/${SERVICE_NAME}" 2>/dev/null \
+      || warn "$(t binary_app.warn.rollback_cleanup "/etc/logrotate.d/${SERVICE_NAME}")"
+  fi
+  if [[ -n "${PORT:-}" ]]; then
+    app_remove_firewall "$PORT"
+  fi
+}
+
+# Render the command prefix used by the install summary. Bundled scripts are
+# app-specific, while the central manager needs the app selector before the
+# action; per-app development wrappers already point directly at the app.
+bapp_management_command_script() {
+  if [[ "${DEPLOY_BUNDLED:-0}" == "1" ]]; then
+    printf '%q' "$0"
+    return 0
+  fi
+  if [[ "${DEPLOY_MANAGER_ENTRYPOINT:-0}" == "1" && -n "${APP_ID:-}" ]]; then
+    printf '%q %q' "$0" "$APP_ID"
+    return 0
+  fi
+  printf '%q' "$0"
 }
 
 # Print the install summary box (localized, generic fields). The second
@@ -1195,6 +1265,14 @@ bapp_summary() {
   echo -e "    ${CYAN}systemctl restart ${SERVICE_NAME}${NC}    $(t binary_app.summary.restart)"
   echo ""
 }
+
+# Remove download and extraction temporaries when installation exits before
+# they have been moved into their final locations.
+bapp_install_cleanup_temp_files() {
+  [[ -z "${tmp_bin:-}" ]] || rm -f -- "$tmp_bin" 2>/dev/null || true
+  [[ -z "${stage:-}" ]] || safe_rm_dir "$stage" "binary staging directory" 2>/dev/null || true
+}
+
 bapp_install() {
   show_banner
   bapp_preflight "install"

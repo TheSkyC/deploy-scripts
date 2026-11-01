@@ -216,7 +216,7 @@ check_certbot_diagnostics_use_stderr() {
 check_binary_app_certbot_cron_is_published_atomically() {
   awk '
       /# Renewal via \/etc\/cron\.d, published by the shared atomic writer\./ { in_block=1; saw_file=0; saw_atomic=0; saw_error=0; next }
-      in_block && /local cron_file="\/etc\/cron\.d\/certbot-renew"/ { saw_file=1 }
+      in_block && /cron_file="\$\(ba_tls_cron_file\)"/ { saw_file=1 }
       in_block && /atomic_write_file "\$cron_file" 644 root:root <<'"'"'CRON'"'"'/ { saw_atomic=1 }
       in_block && /error "\$\(t binary_app\.error\.tls_renewal\)"/ { saw_error=1 }
       in_block && /success "\$\(t binary_app\.success\.tls_renewal\)"/ {
