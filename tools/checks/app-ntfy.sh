@@ -114,9 +114,10 @@ check_ntfy_e2e_restore_and_rollback_fixture() {
     && grep -Fq 'NTFY_RESTORE_ARCHIVE="$NTFY_ARCHIVE"' "$fixture" \
     && grep -Fq "NTFY_RESTORE_SMOKE_OK" "$fixture" \
     && grep -Fq "NTFY_UPDATE_ROLLBACK_SMOKE_OK" "$fixture" \
+    && grep -Fq "NTFY_UNINSTALL_SMOKE_OK" "$fixture" \
     && grep -Fq 'grep -q "Rolled back to v2.27.0" "$LOG"' "$fixture" \
     || {
-      echo "ntfy e2e must retain its data restore and update rollback proof." >&2
+      echo "ntfy e2e must retain its data restore, update rollback, and uninstall proof." >&2
       return 1
     }
 }

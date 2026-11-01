@@ -325,6 +325,21 @@ rm -f /tmp/fail-daemon-reload
 leftover="$(find /opt/ntfy -maxdepth 1 -name ".ntfy.tmp.*" -print 2>/dev/null)"
 [[ -z "$leftover" ]] || { echo "$leftover"; echo "NTFY_UPDATE_STAGING_LEFT"; exit 1; }
 echo "NTFY_UPDATE_ROLLBACK_SMOKE_OK"
+
+# Uninstall with explicit data/backup deletion must remove every managed
+# artifact and the service account, not just the unit and binary.
+DEPLOY_ASSUME_YES=1 DEPLOY_DELETE_DATA=1 DEPLOY_DELETE_BACKUP=1 \
+  bash /repo/dist/install_ntfy.sh uninstall >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "NTFY_UNINSTALL_FAILED"
+  exit 1
+}
+for path in /opt/ntfy/ntfy /etc/systemd/system/ntfy.service /etc/ntfy-deploy.conf \
+    /etc/ntfy /var/lib/ntfy /opt/ntfy-backups /var/log/ntfy; do
+  [[ ! -e "$path" ]] || { echo "NTFY_UNINSTALL_LEFT: $path"; exit 1; }
+done
+id ntfy >/dev/null 2>&1 && { echo "NTFY_SERVICE_USER_LEFT"; exit 1; }
+echo "NTFY_UNINSTALL_SMOKE_OK"
 echo "BINARY_APP_SMOKE_OK"
 ' || exit 1
 
