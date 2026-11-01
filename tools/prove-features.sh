@@ -64,7 +64,10 @@ bash -c '
   backup_write_sha256 "$tmp/backup/app.tar.gz" >/dev/null
   backup_write_manifest "$tmp/backup/app.tar.gz" testapp 1 9.9.9 >/dev/null
   json="$(backup_verify_latest_json "$tmp/backup" app.tar.gz)"
-  printf "%s" "$json" | grep -Fq "\"state\":\"verified\"" || exit 1
+  # Compare in shell instead of piping into `grep -q`: a short-circuiting
+  # reader can close the pipe early and turn a match into a SIGPIPE failure
+  # under `set -o pipefail`.
+  [[ "$json" == *"\"state\":\"verified\""* ]] || exit 1
   verify_count=$(grep -l "^do_verify() {" impl/install_*.sh | wc -l)
   [[ "$verify_count" -eq 16 ]] || exit 1
   echo OK
@@ -114,7 +117,11 @@ bash -c '
   [[ -e "$DEPLOY_SCHEDULE_CRON_FILE" ]] && exit 1
   schedule_main schedule --enable --mode check-only --at "03:10" >/dev/null 2>&1 || exit 1
   [[ -x "$DEPLOY_SCHEDULE_RUNNER" && -f "$DEPLOY_SCHEDULE_CRON_FILE" ]] || exit 1
-  schedule_main status | grep -q enabled= || exit 1
+  # Capture first: `grep -q` exits on the first match, and schedule_main keeps
+  # printing afterwards. With pipefail that EPIPE would fail an otherwise
+  # successful assertion depending on pipe-buffer timing.
+  status_output="$(schedule_main status)"
+  [[ "$status_output" == *enabled=* ]] || exit 1
   schedule_main unschedule >/dev/null 2>&1
   [[ ! -e "$DEPLOY_SCHEDULE_CRON_FILE" ]] || exit 1
   # A failing batch must surface a non-zero status (with retries disabled so
