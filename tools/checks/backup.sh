@@ -2448,6 +2448,39 @@ STUB2
     echo ok
   ' | grep -q ok
 }
+
+# Notification credentials must never be passed as command-line arguments,
+# where they are visible through ps/proc to other local users.
+check_notify_credentials_stay_out_of_argv() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    export NOTIFY_CONF_FILE="$tmp/notify.conf"
+    export NOTIFY_ARGS_FILE="$tmp/argv"
+    app_conf_trusted_value() { return 0; }
+    mkdir -p "$tmp/bin"
+    cat > "$tmp/bin/curl" <<CURL_STUB
+#!/bin/bash
+printf "%s\n" "\$@" > "\$NOTIFY_ARGS_FILE"
+echo 200
+CURL_STUB
+    chmod +x "$tmp/bin/curl"
+
+    printf "NOTIFY_ENABLED=\"true\"\nNOTIFY_BACKEND=\"ntfy\"\nNOTIFY_URL=\"%s\"\nNOTIFY_TOKEN=\"secret-token\"\n" \
+      "$tmp/server" > "$NOTIFY_CONF_FILE"
+    PATH="$tmp/bin:$PATH" notify_send t b >/dev/null 2>&1
+    ! grep -Fq secret-token "$NOTIFY_ARGS_FILE" || { echo NTFY_TOKEN_IN_ARGV; exit 11; }
+
+    printf "NOTIFY_ENABLED=\"true\"\nNOTIFY_BACKEND=\"gotify\"\nNOTIFY_URL=\"%s\"\nNOTIFY_USERNAME=\"user\"\nNOTIFY_PASSWORD=\"secret-pass\"\n" \
+      "$tmp/server" > "$NOTIFY_CONF_FILE"
+    PATH="$tmp/bin:$PATH" notify_send t b >/dev/null 2>&1
+    ! grep -Fq secret-pass "$NOTIFY_ARGS_FILE" || { echo GOTIFY_PASSWORD_IN_ARGV; exit 12; }
+    echo ok
+  ' | grep -q ok
+}
+
 check_notify_config_test_probes_merged_config() {
   # notify-config --test end-to-end: probe the merged values (not stale disk
   # state), fail loudly when delivery fails without persisting anything, and
