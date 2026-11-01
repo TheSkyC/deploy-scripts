@@ -8164,6 +8164,15 @@ DEPLOY_APP_SPECS=(
   "beszel|Beszel|apps/beszel.sh|impl/install_beszel.sh|backup,restore"
 )
 
+# Applications with a native bind key outside the shared binary lifecycle.
+# Security auditing and future shared tooling consume this list instead of
+# duplicating app-specific keys and silently missing newly added listeners.
+DEPLOY_APP_BIND_CONFIG_KEYS=(
+  BA_BIND_ADDR
+  SUB2API_BIND_ADDR
+  TICKFLOW_BIND_ADDR
+)
+
 DEPLOY_APP_IDS=()
 DEPLOY_APP_NAMES=()
 DEPLOY_APP_FILES=()
@@ -9850,7 +9859,7 @@ security_doctor_check_public_binds() {
       security_doctor_record public_listener error "$conf_file" "Cannot read the managed deployment configuration."
       continue
     fi
-    for key in BA_BIND_ADDR SUB2API_BIND_ADDR TICKFLOW_BIND_ADDR; do
+    for key in "${DEPLOY_APP_BIND_CONFIG_KEYS[@]}"; do
       bind_addr="$(security_doctor_config_value "$conf_file" "$key" 2>/dev/null || true)"
       [[ -n "$bind_addr" ]] || continue
       inspected=$((inspected + 1))

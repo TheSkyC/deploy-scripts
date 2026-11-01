@@ -25,6 +25,15 @@ DEPLOY_APP_SPECS=(
   "beszel|Beszel|apps/beszel.sh|impl/install_beszel.sh|backup,restore"
 )
 
+# Applications with a native bind key outside the shared binary lifecycle.
+# Security auditing and future shared tooling consume this list instead of
+# duplicating app-specific keys and silently missing newly added listeners.
+DEPLOY_APP_BIND_CONFIG_KEYS=(
+  BA_BIND_ADDR
+  SUB2API_BIND_ADDR
+  TICKFLOW_BIND_ADDR
+)
+
 DEPLOY_APP_IDS=()
 DEPLOY_APP_NAMES=()
 DEPLOY_APP_FILES=()
