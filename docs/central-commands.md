@@ -50,8 +50,12 @@ drop-ins. It also reports nginx sites whose Let's Encrypt certificate is
 covered by no renewal schedule at all — neither the certbot systemd timer, the
 legacy shared `/etc/cron.d/certbot-renew`, nor a per-app
 `/etc/cron.d/certbot-renew-<service>` entry — because a valid certificate that
-never renews is a scheduled outage. It never prints credential contents and
-never deletes files.
+never renews is a scheduled outage. The same audit reports each certificate's
+remaining lifetime (`tls_expiry`): certificates at or below
+`DEPLOY_SECURITY_TLS_ERROR_DAYS` (default 3) are `error`, at or below
+`DEPLOY_SECURITY_TLS_WARN_DAYS` (default 14) are `warning`, and a certificate
+whose expiry cannot be read is `not_checked` rather than healthy. It never
+prints credential contents and never deletes files.
 The exit status is non-zero only when the audit cannot safely inspect a
 security-sensitive path; findings are reported as `ok`, `warning`, `error`, or
 `not_checked`. `--json` emits schema version 1 for automation.

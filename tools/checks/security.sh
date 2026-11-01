@@ -237,6 +237,17 @@ check_security_doctor_tls_renewal_audit() {
     security_doctor_check_tls_renewal
     [[ "${SECURITY_DOCTOR_STATES[0]}" == warning ]] || { echo "renewal for a different certificate was accepted" >&2; exit 5; }
 
+    # Single quotes and the --cert-name=NAME form name the certificate too.
+    printf "%s\n" "30 2 * * * root certbot renew --quiet --cert-name '\''api.example.com'\''" >"$cron_dir/certbot-renew-cpa-stack"
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "single-quoted --cert-name was not parsed" >&2; exit 8; }
+
+    printf "%s\n" "30 2 * * * root certbot renew --quiet --cert-name=api.example.com" >"$cron_dir/certbot-renew-cpa-stack"
+    security_doctor_reset
+    security_doctor_check_tls_renewal
+    [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "--cert-name=VALUE was not parsed" >&2; exit 9; }
+
     # The legacy shared entry renews everything.
     rm -f "$cron_dir/certbot-renew-cpa-stack"
     printf "%s\n" "30 2 * * * root certbot renew --quiet" >"$cron_dir/certbot-renew"
@@ -250,6 +261,79 @@ check_security_doctor_tls_renewal_audit() {
     security_doctor_reset
     security_doctor_check_tls_renewal
     [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "certbot timer was not accepted as a renewal schedule" >&2; exit 7; }
+    echo ok
+  ' | grep -q ok
+}
+
+# Coverage alone is not enough: a certificate that lapses on Friday is an outage
+# even when a renewal job is scheduled. Expiry therefore gets its own record,
+# and an unreadable certificate must never look either healthy or expired.
+check_security_doctor_tls_expiry_audit() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    DEPLOY_SECURITY_AUDIT_ROOT="$tmp"
+    sites="$tmp/etc/nginx/sites-available"
+    live="$tmp/etc/letsencrypt/live"
+    mkdir -p "$sites"
+    printf "%s\n" \
+      "server {" \
+      "  ssl_certificate /etc/letsencrypt/live/healthy.example.com/fullchain.pem;" \
+      "  ssl_certificate /etc/letsencrypt/live/soon.example.com/fullchain.pem;" \
+      "  ssl_certificate /etc/letsencrypt/live/critical.example.com/fullchain.pem;" \
+      "  ssl_certificate /etc/letsencrypt/live/missing.example.com/fullchain.pem;" \
+      "}" >"$sites/all"
+
+    state_of() {
+      local needle="$1" index
+      for index in "${!SECURITY_DOCTOR_CHECKS[@]}"; do
+        [[ "${SECURITY_DOCTOR_CHECKS[$index]}" == tls_expiry ]] || continue
+        case "${SECURITY_DOCTOR_MESSAGES[$index]}" in
+          *"$needle"*) printf "%s" "${SECURITY_DOCTOR_STATES[$index]}" ; return 0 ;;
+        esac
+      done
+      return 1
+    }
+
+    if ! command -v openssl >/dev/null 2>&1; then
+      # Without openssl the audit must say so instead of reporting healthy.
+      security_doctor_reset
+      security_doctor_check_tls_expiry
+      [[ "${SECURITY_DOCTOR_STATES[0]}" == not_checked ]] || { echo "missing openssl must be not_checked" >&2; exit 1; }
+      echo ok
+      exit 0
+    fi
+
+    make_cert() {
+      local name="$1" days="$2"
+      mkdir -p "$live/$name"
+      openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
+        -keyout "$live/$name/privkey.pem" -out "$live/$name/cert.pem" \
+        -days "$days" -subj "/CN=$name" >/dev/null 2>&1
+    }
+    make_cert healthy.example.com 60
+    make_cert soon.example.com 10
+    make_cert critical.example.com 2
+
+    security_doctor_reset
+    security_doctor_check_tls_expiry
+    [[ "$(state_of healthy.example.com)" == ok ]] || { echo "healthy certificate must be ok" >&2; exit 2; }
+    [[ "$(state_of soon.example.com)" == warning ]] || { echo "certificate inside the warning window must warn" >&2; exit 3; }
+    [[ "$(state_of critical.example.com)" == error ]] || { echo "certificate inside the error window must fail" >&2; exit 4; }
+    [[ "$(state_of missing.example.com)" == not_checked ]] || { echo "unreadable certificate must be not_checked" >&2; exit 5; }
+
+    # The thresholds are operator-tunable.
+    security_doctor_reset
+    DEPLOY_SECURITY_TLS_WARN_DAYS=5 security_doctor_check_tls_expiry
+    [[ "$(state_of soon.example.com)" == ok ]] || { echo "warning window override was ignored" >&2; exit 6; }
+
+    # An expired certificate is an error even though the file parses.
+    app_certificate_days_remaining() { printf "%s\n" "-1" ; }
+    security_doctor_reset
+    security_doctor_check_tls_expiry
+    [[ "$(state_of healthy.example.com)" == error ]] || { echo "expired certificate must be an error" >&2; exit 7; }
     echo ok
   ' | grep -q ok
 }

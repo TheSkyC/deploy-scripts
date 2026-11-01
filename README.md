@@ -7,7 +7,7 @@ Reference documentation:
 - [Central commands reference](docs/central-commands.md) — status-all/backup-all/update-all/doctor-all, notify-config, schedule, export/import, fleet.
 - [Instances, TLS, and migration runbook](docs/instances-tls-migration.md) — instance config/lock boundaries, reverse-proxy TLS, and export/import restore rehearsal.
 - [Production validation runbook](docs/production-validation.md) — real-host systemd/nginx/certbot drill.
-- `sudo bash deploy.sh doctor security [--json]` — read-only audit for legacy credentials, public listeners, root backup schedules, and TLS sites with no certificate renewal schedule.
+- `sudo bash deploy.sh doctor security [--json]` — read-only audit for legacy credentials, public listeners, root backup schedules, and TLS sites with no certificate renewal schedule or an imminent certificate expiry.
 
 ## Requirements
 

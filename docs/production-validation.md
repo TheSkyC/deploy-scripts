@@ -35,7 +35,8 @@ Expectations:
 
 - `list` shows sixteen apps and the documented actions.
 - `doctor security --json` returns schema version 1, no `error` records, and
-  `tls_renewal` is `ok` or `not_checked` (nothing installed yet).
+  both `tls_renewal` and `tls_expiry` are `ok` or `not_checked` (nothing
+  installed yet).
 - `status-all --json` is valid JSON with no credential values.
 
 Save all three JSON payloads; they are the "before" snapshot.
@@ -130,6 +131,9 @@ Expectations:
   source (certbot timer or `/etc/cron.d/certbot-renew-cpa-stack`).
 - `doctor security --json` reports `tls_renewal` as `ok` and names every
   covered certificate count.
+- `doctor security --json` reports `tls_expiry` as `ok` with the same day count
+  `status` printed; `DEPLOY_SECURITY_TLS_WARN_DAYS` and
+  `DEPLOY_SECURITY_TLS_ERROR_DAYS` move the warning and error thresholds.
 - Renewal is actually scheduled:
 
 ```bash

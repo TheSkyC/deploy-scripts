@@ -268,6 +268,37 @@ security_doctor_tls_site_certs() {
     | LC_ALL=C sort -u
 }
 
+# Print "<certname><TAB><site file>" for every certificate named by a managed
+# TLS site so the renewal and expiry audits walk the same set of certificates.
+security_doctor_tls_cert_sites() {
+  local sites_dir="$1" site cert
+  while IFS= read -r -d '' site; do
+    [[ -f "$site" ]] || continue
+    while IFS= read -r cert; do
+      [[ -n "$cert" ]] || continue
+      printf '%s\t%s\n' "$cert" "$site"
+    done < <(security_doctor_tls_site_certs "$site")
+  done < <(find "$sites_dir" -maxdepth 1 -type f -print0 2>/dev/null)
+}
+
+# Print the certificate each certbot renewal line is scoped to, one per line.
+# `--cert-name NAME`, `--cert-name=NAME`, and single- or double-quoted values are
+# all accepted; an unscoped line renews everything and prints an empty line.
+security_doctor_tls_cron_cert_names() {
+  local line name
+  while IFS= read -r line; do
+    name=""
+    if [[ "$line" =~ --cert-name[[:space:]=]+(\'[^\']*\'|\"[^\"]*\"|[^\'\"[:space:]]+) ]]; then
+      name="${BASH_REMATCH[1]}"
+      case "$name" in
+        \'*\') name="${name#\'}" ; name="${name%\'}" ;;
+        \"*\") name="${name#\"}" ; name="${name%\"}" ;;
+      esac
+    fi
+    printf '%s\n' "$name"
+  done < <(grep -E 'certbot[[:space:]]+renew' "$1" 2>/dev/null)
+}
+
 # A cron entry covers a certificate when it renews everything (no --cert-name
 # filter) or when it names that certificate explicitly.
 security_doctor_tls_cert_has_schedule() {
@@ -280,19 +311,19 @@ security_doctor_tls_cert_has_schedule() {
   for cron_file in "$cron_dir"/certbot-renew-*; do
     [[ -f "$cron_file" && -r "$cron_file" ]] || continue
     grep -Eq 'certbot[[:space:]]+renew' "$cron_file" 2>/dev/null || continue
-    scheduled_cert="$(sed -n 's/.*--cert-name[[:space:]]*"\?\([^"[:space:]]*\)"\?.*/\1/p' "$cron_file" | head -n 1)"
-    if [[ -z "$scheduled_cert" || "$scheduled_cert" == "$cert" ]]; then
-      shopt -u nullglob
-      return 0
-    fi
+    while IFS= read -r scheduled_cert; do
+      if [[ -z "$scheduled_cert" || "$scheduled_cert" == "$cert" ]]; then
+        shopt -u nullglob
+        return 0
+      fi
+    done < <(security_doctor_tls_cron_cert_names "$cron_file")
   done
   shopt -u nullglob
   return 1
 }
 
 security_doctor_check_tls_renewal() {
-  local sites_dir cron_dir site cert index timer_active=0
-  local -a certs=() sites=()
+  local sites_dir cron_dir site cert found=0 timer_active=0
   sites_dir="$(security_doctor_path /etc/nginx/sites-available)"
   cron_dir="$(security_doctor_path /etc/cron.d)"
 
@@ -306,27 +337,69 @@ security_doctor_check_tls_renewal() {
   fi
   security_doctor_certbot_timer_active && timer_active=1
 
-  while IFS= read -r -d '' site; do
-    [[ -f "$site" ]] || continue
-    while IFS= read -r cert; do
-      [[ -n "$cert" ]] || continue
-      certs+=("$cert")
-      sites+=("$site")
-    done < <(security_doctor_tls_site_certs "$site")
-  done < <(find "$sites_dir" -maxdepth 1 -type f -print0 2>/dev/null)
+  while IFS=$'\t' read -r cert site; do
+    [[ -n "$cert" ]] || continue
+    found=$((found + 1))
+    ((timer_active)) && continue
+    security_doctor_tls_cert_has_schedule "$cert" "$cron_dir" && continue
+    security_doctor_record tls_renewal warning "$site" "$(t security_doctor.tls.uncovered "$cert")"
+    return
+  done < <(security_doctor_tls_cert_sites "$sites_dir")
 
-  if ((${#certs[@]} == 0)); then
+  if ((found == 0)); then
     security_doctor_record tls_renewal ok "$sites_dir" "$(t security_doctor.tls.none)"
     return
   fi
-  for index in "${!certs[@]}"; do
-    cert="${certs[$index]}"
-    ((timer_active)) && continue
-    security_doctor_tls_cert_has_schedule "$cert" "$cron_dir" && continue
-    security_doctor_record tls_renewal warning "${sites[$index]}" "$(t security_doctor.tls.uncovered "$cert")"
+  security_doctor_record tls_renewal ok "$sites_dir" "$(t security_doctor.tls.covered "$found")"
+}
+
+# A renewal schedule does not help a certificate that expires this week, so the
+# audit also reports the remaining lifetime of every managed TLS certificate.
+# Unreadable certificates stay not_checked: "cannot tell" must not look healthy,
+# and must not look expired either.
+security_doctor_check_tls_expiry() {
+  local sites_dir live_dir cert site days warn_days error_days found=0
+  sites_dir="$(security_doctor_path /etc/nginx/sites-available)"
+  live_dir="$(security_doctor_path /etc/letsencrypt/live)"
+  warn_days="${DEPLOY_SECURITY_TLS_WARN_DAYS:-14}"
+  error_days="${DEPLOY_SECURITY_TLS_ERROR_DAYS:-3}"
+  [[ "$warn_days" =~ ^[0-9]+$ ]] || warn_days=14
+  [[ "$error_days" =~ ^[0-9]+$ ]] || error_days=3
+
+  if [[ ! -d "$sites_dir" ]]; then
+    security_doctor_record tls_expiry not_checked "$sites_dir" "$(t security_doctor.expiry.no_sites)"
     return
-  done
-  security_doctor_record tls_renewal ok "$sites_dir" "$(t security_doctor.tls.covered "${#certs[@]}")"
+  fi
+  if [[ ! -r "$sites_dir" ]]; then
+    security_doctor_record tls_expiry error "$sites_dir" "$(t security_doctor.expiry.dir_error)"
+    return
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    security_doctor_record tls_expiry not_checked "$sites_dir" "$(t security_doctor.expiry.no_openssl)"
+    return
+  fi
+
+  while IFS=$'\t' read -r cert site; do
+    [[ -n "$cert" ]] || continue
+    found=$((found + 1))
+    if ! days="$(app_certificate_days_remaining "$live_dir/$cert/cert.pem")"; then
+      security_doctor_record tls_expiry not_checked "$site" "$(t security_doctor.expiry.unreadable "$cert")"
+      continue
+    fi
+    if ((days < 0)); then
+      security_doctor_record tls_expiry error "$site" "$(t security_doctor.expiry.expired "$cert")"
+    elif ((days <= error_days)); then
+      security_doctor_record tls_expiry error "$site" "$(t security_doctor.expiry.critical "$cert" "$days")"
+    elif ((days <= warn_days)); then
+      security_doctor_record tls_expiry warning "$site" "$(t security_doctor.expiry.soon "$cert" "$days")"
+    else
+      security_doctor_record tls_expiry ok "$site" "$(t security_doctor.expiry.ok "$cert" "$days")"
+    fi
+  done < <(security_doctor_tls_cert_sites "$sites_dir")
+
+  if ((found == 0)); then
+    security_doctor_record tls_expiry ok "$sites_dir" "$(t security_doctor.expiry.none)"
+  fi
 }
 
 security_doctor_print_json() {
@@ -378,6 +451,7 @@ manager_security_doctor_main() {
   security_doctor_check_public_binds
   security_doctor_check_cron_residue
   security_doctor_check_tls_renewal
+  security_doctor_check_tls_expiry
 
   if ((json)); then
     security_doctor_print_json
