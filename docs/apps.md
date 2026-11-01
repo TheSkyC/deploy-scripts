@@ -7,6 +7,12 @@ Common actions: `install`, `update`, `backup`, `restore`, `status`,
 
 For instance-qualified commands, reverse-proxy TLS, and an export/import restore rehearsal, read the [instances, TLS, and migration runbook](instances-tls-migration.md).
 
+Apps that own a hand-written lifecycle (Sub2API, Vaultwarden, CyberStrikeAI,
+CPA Stack) must still compose the shared primitives; see the
+[hand-written app architecture record](handwritten-apps.md) for the rationale,
+the enforced invariants, and the criteria for folding one into the shared
+binary lifecycle.
+
 Every app supports `--help` (lists configuration keys with current values) and
 `--dry-run <action>` (previews what install/update/backup/uninstall would do
 without touching the system). Configuration keys are environment variables;
