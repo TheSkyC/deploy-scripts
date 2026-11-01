@@ -338,6 +338,8 @@ main() {
       check_dist_is_up_to_date
       check_localized_dispatch
       check_doctor_dispatch
+      check_doctor_config_diff_ignores_saved_quotes
+      check_help_masks_sensitive_config_values
       check_security_audit_contract
       check_app_help_dispatch
       check_status_json_dispatch
@@ -507,6 +509,7 @@ main() {
       run_isolated_check check_custom_executable_installs_use_shared_helper
       run_isolated_check check_update_rollback_cleanup_uses_shared_helper
       run_isolated_check check_apt_sources_are_atomic
+      run_isolated_check check_apt_installs_are_minimal
       run_isolated_check check_atomic_helpers_are_atomic
       run_isolated_check check_backup_retention_cleanup_reports_failures
       run_isolated_check check_backup_script_dir_failures_are_explicit
@@ -530,6 +533,8 @@ main() {
       run_isolated_check check_logging_colors_are_tty_gated
       run_isolated_check check_binary_app_archive_members_are_validated
       run_isolated_check check_binary_app_install_rollback_cleans_system_state
+      run_isolated_check check_binary_app_install_temporary_cleanup_helper
+      run_isolated_check check_ufw_comment_has_fallback
       run_isolated_check check_blog_config_persistence
       run_isolated_check check_blog_hugo_version_contract
       run_isolated_check check_blog_dependency_failures_are_reported

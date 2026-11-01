@@ -6014,7 +6014,7 @@ ba_configure_tls() {
   [[ -n "${DOMAIN:-}" ]] || error "$(t binary_app.error.tls_requires_domain "$APP_NAME")"
   app_validate_email "CERTBOT_EMAIL" "${CERTBOT_EMAIL:-}"
   step "$(t binary_app.step.tls_deps)"
-  if ! apt-get install -y -qq nginx certbot python3-certbot-nginx; then
+  if ! apt-get install -y -qq --no-install-recommends nginx certbot python3-certbot-nginx; then
     error "$(t binary_app.error.tls_deps)"
   fi
   success "$(t binary_app.success.tls_deps)"
