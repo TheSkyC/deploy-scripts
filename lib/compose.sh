@@ -125,15 +125,17 @@ compose_health() {
   if ! out="$($compose_cmd "${base_args[@]}" ps --format json 2>/dev/null)" \
       || [[ -z "$out" ]]; then
     # docker-compose v1 (<1.25) does not understand --format json. Fall back
-    # to its table output; the same state words are present in the State
-    # column and the scan below remains fail-closed when no services exist.
+    # to its table output, whose State column renders "Up"/"Exit N" rather
+    # than the JSON running/exited words; the scan below covers both shapes
+    # and remains fail-closed when no services exist.
     # shellcheck disable=SC2086
     out="$($compose_cmd "${base_args[@]}" ps 2>/dev/null)" || return 1
   fi
-  # Case-insensitive state scan: running/healthy pass; exited, dead, or
-  # restarting services fail the check. docker compose uses lowercase
-  # values ("running"), docker-compose uses title case ("Running").
-  printf '%s' "$out" | grep -Eiq '"?running"?|"?healthy"?' \
-    && ! printf '%s' "$out" | grep -Eiq '"?exited"?|"?dead"?|"?restarting"?' \
+  # Case-insensitive state scan: running/healthy/"Up" pass; exited, dead,
+  # restarting, or unhealthy services fail the check. docker compose emits
+  # lowercase JSON values ("running"), docker-compose title-cases them, and
+  # its legacy table fallback only ever has "Up"/"Exit N" state tokens.
+  printf '%s' "$out" | grep -Eiq '"?running"?|"?healthy"?|(^|[[:space:]])Up([[:space:]]|$)' \
+    && ! printf '%s' "$out" | grep -Eiq '"?exited"?|"?dead"?|"?restarting"?|"?unhealthy"?|(^|[[:space:]])Exit([[:space:]]|$)' \
     || return 1
 }

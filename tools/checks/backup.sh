@@ -2689,6 +2689,16 @@ app app Exited 8080"
     if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
       echo LEGACY_EXITED_ACCEPTED; exit 22
     fi
+    # The docker-compose v1 plain table renderer prints "Up"/"Exit N" rather
+    # than running/exited, so both tokens must pass/fail the check.
+    export COMPOSE_PS_OUTPUT="NAME      COMMAND     STATE     PORTS
+app_1     /entry.sh   Up        0.0.0.0:8080->8080/tcp"
+    compose_health "$tmp/project" "$tmp/project/compose.yml" || { echo LEGACY_TABLE_UP_FAILED; exit 23; }
+    export COMPOSE_PS_OUTPUT="NAME      COMMAND     STATE     PORTS
+app_1     /entry.sh   Exit 137"
+    if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
+      echo LEGACY_TABLE_EXIT_ACCEPTED; exit 24
+    fi
     echo ok
   ' | grep -q ok
 }
@@ -3054,7 +3064,7 @@ check_compose_lifecycle_and_health() {
     in_d && /^}$/ { if (!saw_d) { print "compose_down must delegate to compose_run" > "/dev/stderr"; exit 1 }; in_d=0 }
     /^compose_health\(\)/ { in_h=1; saw_ps=0; saw_fail=0; next }
     in_h && /ps --format json/ { saw_ps=1 }
-    in_h && index($0, "Exited") > 0 { saw_fail=1 }
+    in_h && tolower($0) ~ /exited/ { saw_fail=1 }
     in_h && /^}$/ {
       if (!(saw_ps && saw_fail)) {
         print "compose_health must parse ps json and fail on exited services" > "/dev/stderr"
@@ -3098,6 +3108,16 @@ STUB
     export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"Exited\"}"
     if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
       echo HEALTH_EXITED_ACCEPTED; exit 112
+    fi
+    # docker compose v2 lowercases state values; it must fail just the same.
+    export COMPOSE_PS_OUTPUT="{\"Service\":\"app\",\"State\":\"exited\"}"
+    if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
+      echo HEALTH_LOWERCASE_EXITED_ACCEPTED; exit 113
+    fi
+    # No services at all must fail closed.
+    export COMPOSE_PS_OUTPUT=""
+    if compose_health "$tmp/project" "$tmp/project/compose.yml"; then
+      echo HEALTH_EMPTY_ACCEPTED; exit 116
     fi
     echo ok
   ' | grep -q ok
