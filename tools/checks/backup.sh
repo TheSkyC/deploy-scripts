@@ -2481,6 +2481,45 @@ CURL_STUB
   ' | grep -q ok
 }
 
+check_backup_manifest_field_skips_escaped_quotes() {
+  local tmp_dir manifest field
+  tmp_dir="$(mktemp -d)" || return 1
+  manifest="${tmp_dir}/quoted.json"
+  printf '%s\n' '{"app":"say \"hi\"","version":"a\\b","sha256":"abc"}' >"$manifest" \
+    || { rm -rf "$tmp_dir"; return 1; }
+  field="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    backup_manifest_field "$1" app || exit 1
+  ' _ "$manifest")" || { rm -rf "$tmp_dir"; return 1; }
+  [[ "$field" == 'say \"hi\"' ]] || {
+    echo "app field truncated at escaped quote: ${field}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  field="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    backup_manifest_field "$1" version || exit 1
+  ' _ "$manifest")" || { rm -rf "$tmp_dir"; return 1; }
+  [[ "$field" == 'a\\b' ]] || {
+    echo "version field misparsed around backslashes: ${field}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  field="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    backup_manifest_field "$1" sha256 || exit 1
+  ' _ "$manifest")" || { rm -rf "$tmp_dir"; return 1; }
+  [[ "$field" == abc ]] || {
+    echo "sha256 field misparsed: ${field}" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  }
+  rm -rf "$tmp_dir"
+}
+
 check_notify_config_test_probes_merged_config() {
   # notify-config --test end-to-end: probe the merged values (not stale disk
   # state), fail loudly when delivery fails without persisting anything, and

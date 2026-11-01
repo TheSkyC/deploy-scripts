@@ -2222,18 +2222,29 @@ backup_manifest_field() {
   [[ -f "$manifest" ]] || return 1
   awk -v field="\"$field\":" '
     BEGIN { found = 0 }
-    {
-      line = $0
+    { document = document $0 "\n" }
+    END {
+      line = document
       while ((idx = index(line, field)) > 0) {
         rest = substr(line, idx + length(field))
         sub(/^[[:space:]]*/, "", rest)
         if (substr(rest, 1, 1) == "\"") {
-          value = substr(rest, 2)
-          end = index(value, "\"")
-          if (end > 1 || length(value) == 0) {
-            print substr(value, 1, end - 1)
-            found = 1
-            exit
+          value = ""
+          escaped = 0
+          for (i = 2; i <= length(rest); i++) {
+            c = substr(rest, i, 1)
+            if (escaped) {
+              value = value "\\" c
+              escaped = 0
+            } else if (c == "\\") {
+              escaped = 1
+            } else if (c == "\"") {
+              print value
+              found = 1
+              exit
+            } else {
+              value = value c
+            }
           }
         } else if (substr(rest, 1, 4) == "null") {
           print ""
@@ -2242,8 +2253,8 @@ backup_manifest_field() {
         }
         line = substr(line, idx + length(field))
       }
+      exit found ? 0 : 1
     }
-    END { exit found ? 0 : 1 }
   ' "$manifest"
 }
 
