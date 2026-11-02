@@ -27,13 +27,15 @@ BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
 BA_FIREWALL=0
 BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
+BA_BASE_URL="${BA_BASE_URL:-}"
 BA_SERVICE_DESCRIPTION="ntfy push notification server"
 BA_SERVICE_ARGS="serve --config /etc/ntfy/server.yml"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR BA_BASE_URL BA_VERSION
+  BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
 # Release asset names embed the version without the leading v.
@@ -42,15 +44,43 @@ ba_asset_name() {
   printf 'ntfy_%s_linux_%s.tar.gz\n' "${version#v}" "$BA_ARCH"
 }
 
-# Write the managed ntfy server configuration under /etc/ntfy.
+_ntfy_base_url() {
+  local base_url="${BA_BASE_URL:-}" local_host
+  if [[ -z "$base_url" ]]; then
+    if [[ -n "${DOMAIN:-}" ]]; then
+      if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+        base_url="https://${DOMAIN}"
+      elif [[ "${PORT}" == "80" ]]; then
+        base_url="http://${DOMAIN}"
+      else
+        base_url="http://${DOMAIN}:${PORT}"
+      fi
+    else
+      local_host="$(ba_local_ip_host)"
+      base_url="http://${local_host}:${PORT}"
+    fi
+  fi
+  printf '%s\n' "${base_url%/}"
+}
+
+# Write the managed ntfy server configuration under /etc/ntfy. ntfy requires a
+# base URL whenever attachments are enabled because it embeds that URL in the
+# generated attachment links.
 ba_write_config() {
   local config_dir="/etc/ntfy"
   local config_file="${config_dir}/server.yml"
+  local base_url behind_proxy_line=""
+  base_url="$(_ntfy_base_url)"
+  if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+    behind_proxy_line="behind-proxy: true"
+  fi
   if ! atomic_write_file "$config_file" 644 root:root <<EOF
 # Managed by the ntfy deploy script.
+base-url: "${base_url}"
 listen-http: ${BA_BIND_ADDR}:${PORT}
 cache-file: ${DATA_DIR}/cache.db
 attachment-cache-dir: ${DATA_DIR}/attachments
+${behind_proxy_line}
 EOF
   then
     error "$(t app.ntfy.error.config_write "$config_file")"
@@ -96,6 +126,13 @@ preflight_check() {
 }
 
 _validate_config_values() {
+  local base_url
+  base_url="$(_ntfy_base_url)"
+  if [[ -z "${BA_BASE_URL:-}" && -z "${DOMAIN:-}" ]] \
+      && app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}"; then
+    error "$(t app.ntfy.error.base_url_required)"
+  fi
+  app_validate_http_url "BA_BASE_URL" "$base_url"
   bapp_validate_cfg
 }
 

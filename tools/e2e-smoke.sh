@@ -284,6 +284,8 @@ grep -Fxq "ExecStart=\"/opt/ntfy/ntfy\" serve --config /etc/ntfy/server.yml" /et
   || { echo "UNIT_CONFIG_FLAG_MISSING"; exit 1; }
 test -d /var/lib/ntfy/attachments || { echo "ATTACHMENT_DIR_MISSING"; exit 1; }
 [[ "$(stat -c %U /var/lib/ntfy/attachments)" == "ntfy" ]] || { echo "ATTACHMENT_DIR_OWNER_BAD"; exit 1; }
+grep -Fxq 'base-url: "http://127.0.0.1:2586"' /etc/ntfy/server.yml \
+  || { echo "BASE_URL_MISSING"; cat /etc/ntfy/server.yml; exit 1; }
 grep -q "ExecStart=\"/opt/ntfy/ntfy\"" /etc/systemd/system/ntfy.service || { echo "UNIT_BAD"; exit 1; }
 # Manual backup must produce an archive with integrity metadata.
 bash /repo/dist/install_ntfy.sh backup >"$LOG" 2>&1 || { echo "BACKUP_FAILED"; exit 1; }

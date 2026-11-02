@@ -159,6 +159,66 @@ check_ntfy_publish_hint_respects_bind() {
     ' impl/install_ntfy.sh apps/ntfy.sh
 }
 
+check_ntfy_base_url_derivation_and_validation() {
+  local derived output status
+  derived="$("$BASH_BIN" -c '
+    set -euo pipefail
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_ntfy.sh" >/dev/null 2>&1
+    ba_local_ip_host() {
+      case "${BA_BIND_ADDR:-127.0.0.1}" in
+        127.0.0.1|0.0.0.0) printf "127.0.0.1\n" ;;
+        ::1|::) printf "[::1]\n" ;;
+        *) return 1 ;;
+      esac
+    }
+    DOMAIN="" PORT=2586 BA_BIND_ADDR=127.0.0.1 BA_BASE_URL="" _ntfy_base_url
+    DOMAIN="" PORT=2586 BA_BIND_ADDR=::1 BA_BASE_URL="" _ntfy_base_url
+    DOMAIN=example.com PORT=2586 BA_BIND_ADDR=127.0.0.1 BA_BASE_URL="" _ntfy_base_url
+    DOMAIN=example.com PORT=80 BA_BIND_ADDR=127.0.0.1 BA_BASE_URL="" _ntfy_base_url
+    DOMAIN=example.com PORT=2586 BA_BIND_ADDR=127.0.0.1 BA_ENABLE_HTTPS=1 BA_BASE_URL="" _ntfy_base_url
+    DOMAIN="" PORT=2586 BA_BIND_ADDR=0.0.0.0 BA_BASE_URL="https://ntfy.example.com/" _ntfy_base_url
+  ' bash "$ROOT_DIR")" || return 1
+  [[ "$derived" == $'http://127.0.0.1:2586\nhttp://[::1]:2586\nhttp://example.com:2586\nhttp://example.com\nhttps://example.com\nhttps://ntfy.example.com' ]] || {
+    printf '%s\n' "$derived" >&2
+    echo "ntfy base-url derivation must follow the bind family, domain, TLS, and explicit override." >&2
+    return 1
+  }
+
+  status=0
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_ntfy.sh" >/dev/null 2>&1
+    t() { printf "%s\n" "$1"; }
+    error() { printf "%s\n" "$1"; exit 1; }
+    ba_local_ip_host() { printf "127.0.0.1\n"; }
+    app_public_bind_is_wildcard() {
+      case "$1" in 0.0.0.0|::) return 0 ;; *) return 1 ;; esac
+    }
+    app_validate_http_url() { :; }
+    bapp_validate_cfg() { :; }
+    DOMAIN="" BA_BIND_ADDR=0.0.0.0 BA_BASE_URL="" _validate_config_values
+  ' bash "$ROOT_DIR" 2>&1)" || status=$?
+  [[ "$status" -ne 0 && "$output" == app.ntfy.error.base_url_required ]] || {
+    printf '%s\n' "$output" >&2
+    echo "A public ntfy bind without DOMAIN or BA_BASE_URL must fail closed." >&2
+    return 1
+  }
+
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    binary_app_bootstrap() { :; }
+    DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/install_ntfy.sh" >/dev/null 2>&1
+    app_public_bind_is_wildcard() {
+      case "$1" in 0.0.0.0|::) return 0 ;; *) return 1 ;; esac
+    }
+    app_validate_http_url() { :; }
+    bapp_validate_cfg() { :; }
+    DOMAIN="" BA_BIND_ADDR=0.0.0.0 BA_BASE_URL="https://ntfy.example.com" _validate_config_values
+  ' bash "$ROOT_DIR"
+}
+
 # The shared binary-app lifecycle is exercised for real in Docker: the smoke
 # fixture must keep proving data restore and an update rollback after a
 # daemon-reload failure, not just install and backup.

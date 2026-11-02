@@ -14620,6 +14620,9 @@ i18n_register_many \
   app.ntfy.error.attachment_dir \
   "Failed to prepare the attachment cache directory: %s" \
   "附件缓存目录准备失败：%s。" \
+  app.ntfy.error.base_url_required \
+  "Set BA_BASE_URL to the externally reachable ntfy URL when DOMAIN is empty and BA_BIND_ADDR is public." \
+  "当 DOMAIN 为空且 BA_BIND_ADDR 对外监听时，请将 BA_BASE_URL 设置为外部可访问的 ntfy 地址。" \
   app.ntfy.warn.config_dir_remove \
   "Failed to remove configuration directory %s; clean it manually if needed." \
   "配置目录 %s 删除失败，如需清理请手动删除。" \
@@ -14627,8 +14630,8 @@ i18n_register_many \
   "Server configuration removed." \
   "服务端配置已移除。" \
   app.ntfy.hint.publish \
-  "Test locally: curl -d hello http://%s:%s/ntfy-test. ntfy currently listens on %s; use a reverse proxy or explicitly change BA_BIND_ADDR for remote access." \
-  "本地测试：curl -d hello http://%s:%s/ntfy-test。服务当前监听 %s；如需远程访问，请使用反向代理或显式修改 BA_BIND_ADDR。"
+  "Test locally: curl -d hello http://%s:%s/ntfy-test. ntfy currently listens on %s; use a reverse proxy or explicitly change BA_BIND_ADDR for remote access, and set BA_BASE_URL to the public URL when proxying without DOMAIN." \
+  "本地测试：curl -d hello http://%s:%s/ntfy-test。服务当前监听 %s；如需远程访问，请使用反向代理或显式修改 BA_BIND_ADDR；不使用 DOMAIN 而通过反向代理发布时，请同时设置 BA_BASE_URL。"
 
 APP_DESCRIPTION="$(t app.ntfy.description)"
 APP_IMPL_SCRIPT="impl/install_ntfy.sh"
@@ -24226,13 +24229,15 @@ BA_ARCHIVE_TYPE="tar.gz"
 BA_USE_ENV_FILE=0
 BA_FIREWALL=0
 BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
+BA_BASE_URL="${BA_BASE_URL:-}"
 BA_SERVICE_DESCRIPTION="ntfy push notification server"
 BA_SERVICE_ARGS="serve --config /etc/ntfy/server.yml"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER
-  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR BA_VERSION BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
+  GITHUB_REPO BACKUP_DIR BACKUP_KEEP_DAYS BA_BIND_ADDR BA_BASE_URL BA_VERSION
+  BA_ENABLE_HTTPS CERTBOT_EMAIL INSTALLED_VERSION
 )
 
 # Release asset names embed the version without the leading v.
@@ -24241,15 +24246,43 @@ ba_asset_name() {
   printf 'ntfy_%s_linux_%s.tar.gz\n' "${version#v}" "$BA_ARCH"
 }
 
-# Write the managed ntfy server configuration under /etc/ntfy.
+_ntfy_base_url() {
+  local base_url="${BA_BASE_URL:-}" local_host
+  if [[ -z "$base_url" ]]; then
+    if [[ -n "${DOMAIN:-}" ]]; then
+      if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+        base_url="https://${DOMAIN}"
+      elif [[ "${PORT}" == "80" ]]; then
+        base_url="http://${DOMAIN}"
+      else
+        base_url="http://${DOMAIN}:${PORT}"
+      fi
+    else
+      local_host="$(ba_local_ip_host)"
+      base_url="http://${local_host}:${PORT}"
+    fi
+  fi
+  printf '%s\n' "${base_url%/}"
+}
+
+# Write the managed ntfy server configuration under /etc/ntfy. ntfy requires a
+# base URL whenever attachments are enabled because it embeds that URL in the
+# generated attachment links.
 ba_write_config() {
   local config_dir="/etc/ntfy"
   local config_file="${config_dir}/server.yml"
+  local base_url behind_proxy_line=""
+  base_url="$(_ntfy_base_url)"
+  if [[ "${BA_ENABLE_HTTPS:-0}" == "1" ]]; then
+    behind_proxy_line="behind-proxy: true"
+  fi
   if ! atomic_write_file "$config_file" 644 root:root <<EOF
 # Managed by the ntfy deploy script.
+base-url: "${base_url}"
 listen-http: ${BA_BIND_ADDR}:${PORT}
 cache-file: ${DATA_DIR}/cache.db
 attachment-cache-dir: ${DATA_DIR}/attachments
+${behind_proxy_line}
 EOF
   then
     error "$(t app.ntfy.error.config_write "$config_file")"
@@ -24295,6 +24328,13 @@ preflight_check() {
 }
 
 _validate_config_values() {
+  local base_url
+  base_url="$(_ntfy_base_url)"
+  if [[ -z "${BA_BASE_URL:-}" && -z "${DOMAIN:-}" ]] \
+      && app_public_bind_is_wildcard "${BA_BIND_ADDR:-127.0.0.1}"; then
+    error "$(t app.ntfy.error.base_url_required)"
+  fi
+  app_validate_http_url "BA_BASE_URL" "$base_url"
   bapp_validate_cfg
 }
 

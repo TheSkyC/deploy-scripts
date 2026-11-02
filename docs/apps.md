@@ -53,7 +53,7 @@ App-specific defaults:
 | meilisearch | 7700 | Master key (random) in `/etc/meilisearch.env` (`MEILI_MASTER_KEY`) |
 | navidrome | 4533 | Music folder `MUSIC_DIR` (`/srv/music`) |
 | newapi | 8080 | LLM API gateway (SQLite by default); `SESSION_SECRET` in `/etc/newapi.env`, `BACKUP_CRON` schedule, `BA_ARCHIVE_PREFIX=new-api` keeps historical backup names. Built-in default admin credentials — change on first login |
-| ntfy | 2586 | Config `/etc/ntfy/server.yml`; listens on `BA_BIND_ADDR` |
+| ntfy | 2586 | Config `/etc/ntfy/server.yml`; listens on `BA_BIND_ADDR`. Set `BA_BASE_URL` to the externally reachable URL when binding a wildcard address without `DOMAIN` |
 
 Running `status` as root reports the installed release; a pinned install
 (`BA_VERSION`) confirms a matching release or warns that the installed release
