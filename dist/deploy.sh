@@ -10063,8 +10063,13 @@ security_doctor_check_cron_residue() {
 # part of the security posture: report TLS sites whose certificate is not
 # covered by the certbot timer, the legacy shared entry, or a per-app cron.
 security_doctor_certbot_timer_active() {
+  local timers
   command -v systemctl >/dev/null 2>&1 || return 1
-  systemctl list-timers 'certbot*' 2>/dev/null | grep -q certbot
+  # Consume all output before matching. Under pipefail, grep -q can close the
+  # pipe after the first line, making a large, valid systemctl listing look
+  # like failure via SIGPIPE.
+  timers="$(systemctl list-timers 'certbot*' 2>/dev/null || true)"
+  [[ "$timers" == *certbot* ]]
 }
 
 security_doctor_tls_site_certs() {

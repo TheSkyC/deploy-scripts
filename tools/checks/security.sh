@@ -220,7 +220,13 @@ check_security_doctor_tls_renewal_audit() {
     mkdir -p "$sites" "$cron_dir"
     printf "%s\n" "server { ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem; }" >"$sites/cpa-stack"
     printf "%s\n" "server { listen 80; }" >"$sites/plain"
-    security_doctor_certbot_timer_active() { return 1; }
+    mkdir -p "$tmp/bin"
+    {
+      printf "%s\n" "#!/bin/bash"
+      printf "%s\n" "exit 0"
+    } >"$tmp/bin/systemctl"
+    chmod +x "$tmp/bin/systemctl"
+    PATH="$tmp/bin:$PATH"
 
     # No schedule at all: the uncovered certificate must be reported.
     security_doctor_reset
@@ -261,7 +267,16 @@ check_security_doctor_tls_renewal_audit() {
 
     # The system timer on its own is enough.
     rm -f "$cron_dir/certbot-renew"
-    security_doctor_certbot_timer_active() { return 0; }
+    # A real timer listing can be large enough that grep -q closes the pipe
+    # early. Under pipefail that must not turn a valid certbot timer into a
+    # false "uncovered certificate" warning.
+    {
+      printf "%s\n" "#!/bin/bash"
+      printf "%s\n" "for ((index = 0; index < 20000; index++)); do"
+      printf "%s\n" "  printf \"Mon 2026-11-03 00:40:43 CET 9h left n/a n/a certbot.timer certbot.service\\n\""
+      printf "%s\n" "done"
+    } >"$tmp/bin/systemctl"
+    chmod +x "$tmp/bin/systemctl"
     security_doctor_reset
     security_doctor_check_tls_renewal
     [[ "${SECURITY_DOCTOR_STATES[0]}" == ok ]] || { echo "certbot timer was not accepted as a renewal schedule" >&2; exit 7; }
