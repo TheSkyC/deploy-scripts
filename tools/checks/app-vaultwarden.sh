@@ -218,6 +218,88 @@ check_vaultwarden_install_supports_noninteractive_mode() {
     ' impl/install_vaultwarden.sh
 }
 
+check_vaultwarden_confirmations_accept_yes() {
+  local reinstall answer output status
+  local probe='
+    set -euo pipefail
+    RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; NC=""
+    deploy_env_truthy() { return 1; }
+    deploy_assume_yes() { return 1; }
+    show_banner() { :; }
+    app_load_config() { :; }
+    app_conf_register_legacy() { :; }
+    app_conf_file() { printf "/tmp/probe.conf\n"; }
+    app_lock_file() { printf "/tmp/probe.lock\n"; }
+    acquire_lock() { :; }
+    require_root() { :; }
+    require_safe_path() { :; }
+    step() { :; }
+    prompt() { :; }
+    warn() { :; }
+    error() { printf "ERROR:%s\n" "$1"; exit 1; }
+    apt-get() { return 1; }
+    t() {
+      case "$1" in
+        *config_cancelled*|*install_cancelled_update*)
+          printf "CANCELLED:%s\n" "$1"
+          ;;
+        *) : ;;
+      esac
+    }
+    info() { printf "%s\n" "$1"; }
+    probe_dir="$(mktemp -d)"
+    trap "rm -rf \"$probe_dir\"" EXIT
+    if [[ "${PROBE_REINSTALL:-0}" == 1 ]]; then
+      touch "$probe_dir/vaultwarden"
+      chmod +x "$probe_dir/vaultwarden"
+    fi
+    VW_DOMAIN="vault.probe.test"
+    ENABLE_HTTPS="false"
+    VW_BIN_DIR="$probe_dir"
+    source "$1"
+    show_banner() { :; }
+    preflight_check() { :; }
+    acquire_lock() { :; }
+    check_connectivity() { :; }
+    get_installed_version() { printf "probe\n"; }
+    step() { :; }
+    prompt() { :; }
+    do_install
+  '
+  grep -Fq '[[ "${_c,,}" != "y" && "${_c,,}" != "yes" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }' impl/install_vaultwarden.sh \
+    && grep -Fq '[[ "${_c,,}" != "y" && "${_c,,}" != "yes" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }' impl/install_vaultwarden.sh \
+    || {
+      echo "Vaultwarden install confirmations must accept both y and yes." >&2
+      return 1
+    }
+  for reinstall in 0 1; do
+    status=0
+    answer=n
+    output="$(printf '%s\n' "$answer" \
+      | env PROBE_REINSTALL="$reinstall" "$BASH_BIN" -c "$probe" bash impl/install_vaultwarden.sh 2>&1)" \
+      || status=$?
+    [[ "$status" -eq 0 && "$output" == *CANCELLED:* ]] || {
+      printf '%s\n' "$output" >&2
+      echo "Vaultwarden install cancellation (reinstall=$reinstall) must exit 0." >&2
+      return 1
+    }
+    answer=yes
+    output="$(printf '%s\n' "$answer" \
+      | env PROBE_REINSTALL="$reinstall" "$BASH_BIN" -c "$probe" bash impl/install_vaultwarden.sh 2>&1)" \
+      || :
+    [[ "$output" != *CANCELLED:* ]] || {
+      printf '%s\n' "$output" >&2
+      echo "Vaultwarden install confirmation (reinstall=$reinstall) must accept yes." >&2
+      return 1
+    }
+    if [[ "$reinstall" == 0 && "$output" != *ERROR:* ]]; then
+      printf '%s\n' "$output" >&2
+      echo "Vaultwarden config confirmation must continue to dependency installation after yes." >&2
+      return 1
+    fi
+  done
+}
+
 check_vaultwarden_install_summary_is_localized() {
   awk '
       /app\.vaultwarden\.info\.web_vault/ { saw_web_key=1 }

@@ -280,6 +280,10 @@ bash /repo/dist/install_ntfy.sh install >"$LOG" 2>&1 || {
 grep -qE "Deployment Ready|verify service health before use" "$LOG" || { echo "NO_SUMMARY"; cat "$LOG"; exit 1; }
 test -x /opt/ntfy/ntfy || { echo "BINARY_MISSING"; exit 1; }
 test -f /etc/systemd/system/ntfy.service || { echo "UNIT_MISSING"; exit 1; }
+grep -Fxq 'ExecStart="/opt/ntfy/ntfy" serve --config /etc/ntfy/server.yml' /etc/systemd/system/ntfy.service \
+  || { echo "UNIT_CONFIG_FLAG_MISSING"; exit 1; }
+test -d /var/lib/ntfy/attachments || { echo "ATTACHMENT_DIR_MISSING"; exit 1; }
+[[ "$(stat -c %U /var/lib/ntfy/attachments)" == "ntfy" ]] || { echo "ATTACHMENT_DIR_OWNER_BAD"; exit 1; }
 grep -q "ExecStart=\"/opt/ntfy/ntfy\"" /etc/systemd/system/ntfy.service || { echo "UNIT_BAD"; exit 1; }
 # Manual backup must produce an archive with integrity metadata.
 bash /repo/dist/install_ntfy.sh backup >"$LOG" 2>&1 || { echo "BACKUP_FAILED"; exit 1; }
@@ -308,6 +312,9 @@ echo "NTFY_RESTORE_SMOKE_OK"
 # binary, keep the recorded version, and clean the staged download.
 ORIGINAL_SHA="$(sha256sum /opt/ntfy/ntfy)"
 ORIGINAL_SHA="${ORIGINAL_SHA%% *}"
+# Runtime hooks must also run on update, not only on a fresh install. Remove
+# the attachment directory to prove the update path repairs it before a start.
+rm -rf /var/lib/ntfy/attachments
 touch /tmp/fail-daemon-reload
 if BA_VERSION=v2.28.0 bash /repo/dist/install_ntfy.sh update >"$LOG" 2>&1; then
   cat "$LOG"
@@ -319,6 +326,9 @@ grep -q "Rolled back to v2.27.0" "$LOG" || { cat "$LOG"; echo "NTFY_ROLLBACK_MES
 CURRENT_SHA="$(sha256sum /opt/ntfy/ntfy)"
 CURRENT_SHA="${CURRENT_SHA%% *}"
 [[ "$CURRENT_SHA" == "$ORIGINAL_SHA" ]] || { echo "NTFY_BINARY_NOT_ROLLED_BACK"; exit 1; }
+test -d /var/lib/ntfy/attachments || { echo "NTFY_UPDATE_ATTACHMENT_DIR_MISSING"; exit 1; }
+[[ "$(stat -c %U /var/lib/ntfy/attachments)" == "ntfy" ]] \
+  || { echo "NTFY_UPDATE_ATTACHMENT_DIR_OWNER_BAD"; exit 1; }
 source /etc/ntfy-deploy.conf
 [[ "${INSTALLED_VERSION}" == "v2.27.0" ]] || { echo "NTFY_VERSION_ADVANCED"; exit 1; }
 rm -f /tmp/fail-daemon-reload

@@ -683,21 +683,131 @@ check_help_masks_sensitive_config_values() {
   }
 }
 
-check_uninstall_cancellations_return_nonzero() {
-  local file
+check_uninstall_cancellations_return_success() {
+  local file n_output yes_output n_status
+  local probe='
+    set -euo pipefail
+    RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; NC=""
+    deploy_env_truthy() { return 1; }
+    deploy_assume_yes() { return 1; }
+    show_banner() { :; }
+    app_load_config() { :; }
+    app_conf_register_legacy() { :; }
+    app_conf_file() { printf "/tmp/probe.conf\n"; }
+    app_lock_file() { printf "/tmp/probe.lock\n"; }
+    acquire_lock() { :; }
+    require_root() { :; }
+    require_safe_path() { :; }
+    step() { :; }
+    prompt() { :; }
+    warn() { :; }
+    success() { :; }
+    error() { printf "ERROR:%s\n" "$1"; exit 1; }
+    t() {
+      case "$1" in
+        *cancelled*) printf "CANCELLED:%s\n" "$1" ;;
+        *) : ;;
+      esac
+    }
+    info() { printf "%s\n" "$1"; }
+    source "$1"
+    show_banner() { :; }
+    preflight_check() { :; }
+    app_load_config() { :; }
+    acquire_lock() { :; }
+    require_root() { :; }
+    require_safe_path() { :; }
+    step() { :; }
+    prompt() { :; }
+    do_uninstall
+  '
+  local binary_probe='
+    set -euo pipefail
+    RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; NC=""
+    i18n_register_many() { :; }
+    deploy_assume_yes() { return 1; }
+    show_banner() { :; }
+    bapp_preflight() { :; }
+    app_load_config() { :; }
+    step() { :; }
+    prompt() { :; }
+    t() {
+      case "$1" in
+        *cancelled*) printf "CANCELLED:%s\n" "$1" ;;
+        *) : ;;
+      esac
+    }
+    info() { printf "%s\n" "$1"; }
+    source lib/binary_app.sh
+    show_banner() { :; }
+    bapp_preflight() { :; }
+    app_load_config() { :; }
+    step() { :; }
+    prompt() { :; }
+    APP_NAME=probe
+    SERVICE_NAME=probe
+    DATA_DIR=/tmp/probe-data
+    BACKUP_DIR=/tmp/probe-backup
+    bapp_uninstall
+  '
   for file in impl/install_sub2api.sh impl/install_tickflow.sh \
               impl/install_vaultwarden.sh impl/install_hugo_blog.sh \
               impl/install_cyberstrikeai.sh; do
-    grep -Fq 'exit 2' "$file" || {
-      echo "$file: cancelled uninstall must exit nonzero" >&2
+    awk '
+        /cancelled/ && /exit 0/ { found=1; if ($0 !~ /\]\][[:space:]]*&&/) inverted=1 }
+        END {
+          if (!found || inverted) {
+            print FILENAME ": cancelled uninstall must accept y/yes and exit successfully when declined" > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' "$file" || return 1
+    grep -Eq 'cancelled.*exit 2|exit 2.*cancelled' "$file" && {
+      echo "$file: cancelled uninstall must not be recorded as a failure" >&2
       return 1
     }
-    grep -Fq '${_c,,}" != y' "$file" && continue
-    grep -Fq '${confirm,,}" != y' "$file" || {
-      echo "$file: cancelled uninstall must accept lowercase y/yes" >&2
+    n_status=0
+    n_output="$(printf 'n\n' | "$BASH_BIN" -c "$probe" bash "$file" 2>&1)" || n_status=$?
+    [[ "$n_status" -eq 0 && "$n_output" == *CANCELLED:* ]] || {
+      printf '%s\n' "$n_output" >&2
+      echo "$file: declining uninstall must report cancellation and exit 0" >&2
+      return 1
+    }
+    yes_output="$(printf 'yes\n' | "$BASH_BIN" -c "$probe" bash "$file" 2>&1)" || :
+    [[ "$yes_output" != *CANCELLED:* ]] || {
+      printf '%s\n' "$yes_output" >&2
+      echo "$file: uninstall must accept both y and yes instead of cancelling" >&2
       return 1
     }
   done
+  awk '
+      /^bapp_uninstall\(\) \{/ { in_uninstall=1; next }
+      in_uninstall && /confirm,,/ && /!= y/ && /!= yes/ { saw_confirm=1 }
+      in_uninstall && saw_confirm && /exit 0/ { saw_exit=1 }
+      in_uninstall && /^}/ { in_uninstall=0 }
+      END {
+        if (!(saw_confirm && saw_exit)) {
+          print FILENAME ": binary-app uninstall must accept y/yes and exit successfully when declined" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh || return 1
+  n_status=0
+  n_output="$(printf 'n\n' | "$BASH_BIN" -c "$binary_probe" 2>&1)" || n_status=$?
+  [[ "$n_status" -eq 0 && "$n_output" == *CANCELLED:* ]] || {
+    printf '%s\n' "$n_output" >&2
+    echo "binary-app uninstall must report cancellation and exit 0" >&2
+    return 1
+  }
+  yes_output="$(printf 'yes\n' | "$BASH_BIN" -c "$binary_probe" 2>&1)" || :
+  [[ "$yes_output" != *CANCELLED:* ]] || {
+    printf '%s\n' "$yes_output" >&2
+    echo "binary-app uninstall must accept yes instead of cancelling" >&2
+    return 1
+  }
+  grep -Fq 'if [[ "$confirm" != "YES" ]]; then' impl/install_cpa_stack.sh \
+    && grep -A2 -Fq 'if [[ "$confirm" != "YES" ]]; then' impl/install_cpa_stack.sh \
+    && grep -Fq 'exit 0' impl/install_cpa_stack.sh
 }
 
 check_status_framework_version_is_reported() {

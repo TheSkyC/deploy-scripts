@@ -5262,8 +5262,8 @@ i18n_register_many \
   "Latest version: %s" \
   "最新版本：%s" \
   binary_app.info.unpinned_version \
-  "This deployment follows the moving latest release (v%s); set BA_VERSION to an exact release tag to make future installs and updates reproducible." \
-  "本次部署跟随会移动的 latest 发布（v%s）；如需让后续安装与更新可复现，请设置 BA_VERSION 为精确的发布标签。" \
+  "This deployment follows the moving latest release (%s); set BA_VERSION to an exact release tag to make future installs and updates reproducible." \
+  "本次部署跟随会移动的 latest 发布（%s）；如需让后续安装与更新可复现，请设置 BA_VERSION 为精确的发布标签。" \
   binary_app.success.latest \
   "Latest release: %s" \
   "最新版本：%s" \
@@ -6634,6 +6634,12 @@ bapp_update() {
     success "$(t binary_app.success.already_latest "$latest")"
     exit 0
   fi
+  # Runtime preconditions can change between releases (for example a new
+  # writable cache directory). Prepare them before stopping the healthy
+  # service so a failure leaves the current deployment running.
+  if declare -f ba_pre_start >/dev/null 2>&1; then
+    ba_pre_start "$latest"
+  fi
   local pre_state
   pre_state="$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")"
   if [[ "$pre_state" == "failed" ]]; then
@@ -6765,7 +6771,8 @@ bapp_uninstall() {
     prompt "$(t binary_app.prompt.continue)"
     read -r confirm
   fi
-  [[ "$confirm" == "YES" ]] || { info "$(t binary_app.info.cancelled)"; exit 0; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] \
+    && { info "$(t binary_app.info.cancelled)"; exit 0; }
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && delete_data=true
     deploy_env_truthy DEPLOY_DELETE_BACKUP && delete_backup=true
@@ -8885,7 +8892,7 @@ do_install() {
       prompt "$(t app.vaultwarden.prompt.force_reinstall)"
       read -r _c
     fi
-    [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
+    [[ "${_c,,}" != "y" && "${_c,,}" != "yes" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
   fi
   step "$(t app.vaultwarden.step.wizard)"
   if [[ "$VW_DOMAIN" == "vault.example.com" ]]; then
@@ -8937,7 +8944,7 @@ do_install() {
     prompt "$(t app.vaultwarden.prompt.confirm_config)"
     read -r _c
   fi
-  [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
+  [[ "${_c,,}" != "y" && "${_c,,}" != "yes" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
   step "$(t app.vaultwarden.step.deps)"
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
@@ -10081,7 +10088,7 @@ do_uninstall() {
     prompt "$(t app.vaultwarden.prompt.continue)"
     read -r _c
   fi
-  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 2; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true

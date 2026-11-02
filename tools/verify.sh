@@ -353,7 +353,7 @@ main() {
       check_newapi_summary_warns_about_default_credentials
       check_sub2api_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
-      check_uninstall_cancellations_return_nonzero
+      check_uninstall_cancellations_return_success
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_uninstall_checks_file_removal_errors
       check_sub2api_uninstall_validates_binary_path_before_removal
@@ -365,6 +365,7 @@ main() {
       check_vaultwarden_uninstall_supports_noninteractive_mode
       check_vaultwarden_uninstall_checks_directory_removal_errors
       check_vaultwarden_uninstall_checks_file_removal_errors
+      check_vaultwarden_confirmations_accept_yes
       check_vaultwarden_uninstall_validates_binary_path_before_removal
       check_vaultwarden_install_rollback_validates_binary_path_before_removal
       check_vaultwarden_install_rollback_surfaces_service_file_removal_failures
@@ -791,6 +792,8 @@ main() {
       run_isolated_check check_ntfy_uses_shared_binary_lifecycle
       run_isolated_check check_ntfy_release_asset_mapping
       run_isolated_check check_ntfy_config_is_managed_atomically
+      run_isolated_check check_ntfy_service_args_and_runtime_dirs
+      run_isolated_check check_ntfy_publish_hint_respects_bind
       run_isolated_check check_ntfy_e2e_restore_and_rollback_fixture
       run_isolated_check check_gotify_uses_shared_binary_lifecycle
       run_isolated_check check_gotify_release_asset_mapping

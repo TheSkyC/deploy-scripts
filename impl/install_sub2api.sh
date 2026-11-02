@@ -1617,7 +1617,7 @@ do_uninstall() {
     prompt "$(t app.sub2api.prompt.continue)"
     read -r _c
   fi
-  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.sub2api.info.cancelled)"; exit 2; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.sub2api.info.cancelled)"; exit 0; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true

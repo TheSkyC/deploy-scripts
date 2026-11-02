@@ -554,7 +554,7 @@ do_install() {
       prompt "$(t app.vaultwarden.prompt.force_reinstall)"
       read -r _c
     fi
-    [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
+    [[ "${_c,,}" != "y" && "${_c,,}" != "yes" ]] && { info "$(t app.vaultwarden.info.install_cancelled_update)"; exit 0; }
   fi
   step "$(t app.vaultwarden.step.wizard)"
   if [[ "$VW_DOMAIN" == "vault.example.com" ]]; then
@@ -606,7 +606,7 @@ do_install() {
     prompt "$(t app.vaultwarden.prompt.confirm_config)"
     read -r _c
   fi
-  [[ "${_c,,}" != "y" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
+  [[ "${_c,,}" != "y" && "${_c,,}" != "yes" ]] && { info "$(t app.vaultwarden.info.config_cancelled)"; exit 0; }
   step "$(t app.vaultwarden.step.deps)"
   if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
     warn "$(t app.vaultwarden.warn.apt_update)"
@@ -1750,7 +1750,7 @@ do_uninstall() {
     prompt "$(t app.vaultwarden.prompt.continue)"
     read -r _c
   fi
-  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 2; }
+  [[ "${_c,,}" != y && "${_c,,}" != yes ]] && { info "$(t app.vaultwarden.info.cancelled)"; exit 0; }
   local DELETE_DATA=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_DATA && DELETE_DATA=true

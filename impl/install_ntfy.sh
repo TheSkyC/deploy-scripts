@@ -28,7 +28,7 @@ BA_USE_ENV_FILE=0
 BA_FIREWALL=0
 BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="ntfy push notification server"
-BA_SERVICE_ARGS="serve /etc/ntfy/server.yml"
+BA_SERVICE_ARGS="serve --config /etc/ntfy/server.yml"
 BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
 BA_HEALTH_CODES="^(200|301|302)$"
 CONFIG_KEYS=(
@@ -74,7 +74,20 @@ ba_uninstall_extra() {
 
 # Show a quick publish hint after install.
 ba_summary_extra() {
-  echo -e "  ${BOLD}$(t app.ntfy.hint.publish "$PORT")${NC}"
+  local local_host
+  local_host="$(ba_local_ip_host)"
+  echo -e "  ${BOLD}$(t app.ntfy.hint.publish "$local_host" "$PORT" "$BA_BIND_ADDR")${NC}"
+}
+
+# ntfy creates the database beside the configured cache file, but the service
+# account needs an explicit writable attachment directory before the hardened
+# unit starts.
+ba_pre_start() {
+  local attachment_dir="${DATA_DIR}/attachments"
+  if ! mkdir -p "$attachment_dir" \
+      || ! chown "${SERVICE_USER}:${SERVICE_USER}" "$attachment_dir"; then
+    error "$(t app.ntfy.error.attachment_dir "$attachment_dir")"
+  fi
 }
 
 # Thin lifecycle delegates over the shared binary-app library.

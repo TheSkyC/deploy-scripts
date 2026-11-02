@@ -620,7 +620,7 @@ do_uninstall() {
     prompt "$(t app.tickflow.prompt.continue)"
     read -r confirm
   fi
-  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] && { info "$(t app.tickflow.info.cancelled)"; exit 2; }
+  [[ "${confirm,,}" != y && "${confirm,,}" != yes ]] && { info "$(t app.tickflow.info.cancelled)"; exit 0; }
   local DELETE_INSTALL=false
   if deploy_assume_yes; then
     deploy_env_truthy DEPLOY_DELETE_INSTALL && DELETE_INSTALL=true

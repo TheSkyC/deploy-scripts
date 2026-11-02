@@ -104,6 +104,61 @@ check_ntfy_config_is_managed_atomically() {
     }
 }
 
+check_ntfy_service_args_and_runtime_dirs() {
+  grep -Fq 'BA_SERVICE_ARGS="serve --config /etc/ntfy/server.yml"' impl/install_ntfy.sh \
+    && awk '
+        /^ba_pre_start\(\) \{/ { in_hook=1; saw_dir=0; saw_chown=0; next }
+        in_hook && /attachment_dir="\$\{DATA_DIR\}\/attachments"/ { saw_dir=1 }
+        in_hook && /chown "\$\{SERVICE_USER\}:\$\{SERVICE_USER\}"/ { saw_chown=1 }
+        in_hook && /^}/ {
+          if (!(saw_dir && saw_chown)) {
+            print FILENAME ": ntfy pre-start must create and own the attachment cache directory" > "/dev/stderr"
+            exit 1
+          }
+          in_hook=0
+        }
+      ' impl/install_ntfy.sh \
+    && awk '
+        /^bapp_install\(\) \{/ { lifecycle="install"; next }
+        /^bapp_update\(\) \{/ { lifecycle="update"; next }
+        lifecycle && /ba_pre_start "\$latest"/ { prepared[lifecycle]=1 }
+        lifecycle && /^}/ { lifecycle="" }
+        END {
+          if (!(prepared["install"] && prepared["update"])) {
+            print FILENAME ": binary-app install and update must run ba_pre_start" > "/dev/stderr"
+            exit 1
+          }
+        }
+      ' lib/binary_app.sh \
+    || {
+      echo "ntfy must pass its config with --config and prepare the attachment directory before install/update start." >&2
+      return 1
+    }
+}
+
+check_ntfy_publish_hint_respects_bind() {
+  awk '
+      /^ba_summary_extra\(\) \{/ { in_summary=1; saw_host=0; next }
+      in_summary && /local_host="\$\(ba_local_ip_host\)"/ { saw_host=1 }
+      in_summary && /app\.ntfy\.hint\.publish "\$local_host" "\$PORT" "\$BA_BIND_ADDR"/ { saw_args=1 }
+      in_summary && /^}/ {
+        if (!(saw_host && saw_args)) {
+          print FILENAME ": ntfy publish hint must use the configured bind address" > "/dev/stderr"
+          exit 1
+        }
+        in_summary=0
+      }
+      /currently listens on %s/ { saw_copy=1 }
+      /当前监听 %s/ { saw_zh=1 }
+      END {
+        if (!(saw_copy && saw_zh)) {
+          print FILENAME ": ntfy publish hint must explain the loopback-only default" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' impl/install_ntfy.sh apps/ntfy.sh
+}
+
 # The shared binary-app lifecycle is exercised for real in Docker: the smoke
 # fixture must keep proving data restore and an update rollback after a
 # daemon-reload failure, not just install and backup.

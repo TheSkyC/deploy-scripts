@@ -553,6 +553,10 @@ check_binary_app_unpinned_version_notice() {
         }
       }
     ' lib/binary_app.sh
+  ! grep -Fq 'moving latest release (v%s)' lib/binary_app.sh || {
+    echo "Unpinned version notices must print the release tag once instead of prefixing another v." >&2
+    return 1
+  }
   grep -Fq 'binary_app.info.unpinned_version' lib/binary_app.sh
   grep -Fq 'binary_app.status.pin_set' lib/binary_app.sh
   grep -Fq 'binary_app.status.pin_ok' lib/binary_app.sh
