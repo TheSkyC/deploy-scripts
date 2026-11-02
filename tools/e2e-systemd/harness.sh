@@ -210,4 +210,85 @@ fi
 [[ ! -e /opt/meilisearch ]] || fail INSTALL_DIR_LEFT_BEHIND
 nginx -t >/tmp/nginx-t2.log 2>&1 || { cat /tmp/nginx-t2.log; fail NGINX_BROKEN_AFTER_UNINSTALL; }
 
+# --- hand-written lifecycle: CPA Stack under real systemd -------------------
+# The hand-written apps keep their own install flow, so they get their own
+# rehearsal. Their binaries are shell-script fixtures that never exit, which is
+# enough to prove systemd starts and stops the generated units.
+echo "--- cpa-stack (hand-written lifecycle) ---"
+mkdir -p /e2e/cpa-stage /e2e/cpamp-stage \
+  /e2e/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3 \
+  /e2e/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1
+printf '#!/bin/sh\nexec sleep 2147483647\n' >/e2e/cpa-stage/cli-proxy-api
+printf '#!/bin/sh\nexec sleep 2147483647\n' >/e2e/cpamp-stage/cpa-manager-plus
+tar -czf /e2e/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz \
+  -C /e2e/cpa-stage cli-proxy-api
+tar -czf /e2e/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_v0.4.1_linux_amd64.tar.gz \
+  -C /e2e/cpamp-stage cpa-manager-plus
+(
+  cd /e2e/www/router-for-me/CLIProxyAPI/releases/download/v1.2.3
+  sha256sum CLIProxyAPI_1.2.3_linux_amd64.tar.gz >checksums.txt
+)
+(
+  cd /e2e/www/seakee/CPA-Manager-Plus/releases/download/v0.4.1
+  sha256sum cpa-manager-plus_v0.4.1_linux_amd64.tar.gz >checksums.txt
+)
+printf '{"tag_name":"v1.2.3","assets":[{"name":"CLIProxyAPI_1.2.3_linux_amd64.tar.gz","browser_download_url":"https://github.com/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"}]}\n' \
+  >/e2e/www/api/router-for-me-CLIProxyAPI_tags_v1.2.3.json
+printf '{"tag_name":"v0.4.1","assets":[{"name":"cpa-manager-plus_v0.4.1_linux_amd64.tar.gz","browser_download_url":"https://github.com/seakee/CPA-Manager-Plus/releases/download/v0.4.1/cpa-manager-plus_v0.4.1_linux_amd64.tar.gz"}]}\n' \
+  >/e2e/www/api/seakee-CPA-Manager-Plus_tags_v0.4.1.json
+
+CPA_DOMAIN="api.cpa-e2e.test" CPAMP_DOMAIN="panel.cpa-e2e.test" ENABLE_HTTPS=false \
+CPA_VERSION=v1.2.3 CPAMP_VERSION=v0.4.1 \
+bash /repo/dist/install_cpa_stack.sh install >/tmp/cpa-install.log 2>&1 || {
+  cat /tmp/cpa-install.log
+  fail CPA_STACK_INSTALL_FAILED
+}
+for unit_name in cli-proxy-api cpa-manager-plus; do
+  for _ in $(seq 1 30); do
+    [[ "$(systemctl is-active "$unit_name" 2>/dev/null || true)" == "active" ]] && break
+    sleep 1
+  done
+  [[ "$(systemctl is-active "$unit_name" 2>/dev/null || true)" == "active" ]] || {
+    systemctl status "$unit_name" --no-pager || true
+    journalctl -u "$unit_name" --no-pager | tail -20 || true
+    cat /tmp/cpa-install.log
+    fail "CPA_UNIT_NOT_ACTIVE_${unit_name}"
+  }
+  systemctl is-enabled "$unit_name" >/dev/null 2>&1 || fail "CPA_UNIT_NOT_ENABLED_${unit_name}"
+  systemd-analyze verify "/etc/systemd/system/${unit_name}.service" >/tmp/verify-"$unit_name".log 2>&1 || {
+    cat /tmp/verify-"$unit_name".log
+    fail "CPA_UNIT_INVALID_${unit_name}"
+  }
+done
+nginx -t >/tmp/nginx-cpa.log 2>&1 || { cat /tmp/nginx-cpa.log; fail CPA_NGINX_CONFIG_INVALID; }
+
+printf 'marker-old\n' >/etc/cli-proxy-api/restore-marker.txt
+bash /repo/dist/install_cpa_stack.sh backup >/tmp/cpa-backup.log 2>&1 || {
+  cat /tmp/cpa-backup.log
+  fail CPA_BACKUP_FAILED
+}
+cpa_archive="$(find /opt/cpa-stack-backups -maxdepth 1 -type f -name 'cpa-stack-*.tar.gz' \
+  -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2-)"
+[[ -n "$cpa_archive" ]] || fail CPA_BACKUP_ARCHIVE_MISSING
+printf 'marker-mutated\n' >/etc/cli-proxy-api/restore-marker.txt
+CPA_STACK_RESTORE_ARCHIVE="$cpa_archive" bash /repo/dist/install_cpa_stack.sh restore >/tmp/cpa-restore.log 2>&1 || {
+  cat /tmp/cpa-restore.log
+  fail CPA_RESTORE_FAILED
+}
+[[ "$(cat /etc/cli-proxy-api/restore-marker.txt)" == "marker-old" ]] || fail CPA_RESTORE_DID_NOT_RESTORE_DATA
+[[ "$(systemctl is-active cli-proxy-api 2>/dev/null || true)" == "active" ]] || fail CPA_SERVICE_DOWN_AFTER_RESTORE
+
+DEPLOY_ASSUME_YES=1 DEPLOY_DELETE_DATA=1 bash /repo/dist/install_cpa_stack.sh uninstall >/tmp/cpa-uninstall.log 2>&1 || {
+  cat /tmp/cpa-uninstall.log
+  fail CPA_UNINSTALL_FAILED
+}
+for unit_name in cli-proxy-api cpa-manager-plus; do
+  if systemctl is-active --quiet "$unit_name"; then
+    fail "CPA_SERVICE_STILL_ACTIVE_${unit_name}"
+  fi
+  [[ ! -e "/etc/systemd/system/${unit_name}.service" ]] || fail "CPA_UNIT_LEFT_BEHIND_${unit_name}"
+done
+[[ ! -e /opt/cli-proxy-api && ! -e /opt/cpa-manager-plus ]] || fail CPA_INSTALL_DIR_LEFT_BEHIND
+nginx -t >/tmp/nginx-cpa2.log 2>&1 || { cat /tmp/nginx-cpa2.log; fail CPA_NGINX_BROKEN_AFTER_UNINSTALL; }
+
 echo SYSTEMD_E2E_OK
