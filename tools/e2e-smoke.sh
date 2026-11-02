@@ -280,7 +280,7 @@ bash /repo/dist/install_ntfy.sh install >"$LOG" 2>&1 || {
 grep -qE "Deployment Ready|verify service health before use" "$LOG" || { echo "NO_SUMMARY"; cat "$LOG"; exit 1; }
 test -x /opt/ntfy/ntfy || { echo "BINARY_MISSING"; exit 1; }
 test -f /etc/systemd/system/ntfy.service || { echo "UNIT_MISSING"; exit 1; }
-grep -Fxq 'ExecStart="/opt/ntfy/ntfy" serve --config /etc/ntfy/server.yml' /etc/systemd/system/ntfy.service \
+grep -Fxq "ExecStart=\"/opt/ntfy/ntfy\" serve --config /etc/ntfy/server.yml" /etc/systemd/system/ntfy.service \
   || { echo "UNIT_CONFIG_FLAG_MISSING"; exit 1; }
 test -d /var/lib/ntfy/attachments || { echo "ATTACHMENT_DIR_MISSING"; exit 1; }
 [[ "$(stat -c %U /var/lib/ntfy/attachments)" == "ntfy" ]] || { echo "ATTACHMENT_DIR_OWNER_BAD"; exit 1; }
