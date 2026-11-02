@@ -19838,7 +19838,9 @@ build_binary() {
   if ! tmp_bin=$(mktemp "${BIN_PATH}.tmp.XXXXXX"); then
     error "$(t app.cyberstrikeai.error.binary_build)"
   fi
-  if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" cmd/server/main.go; then
+  # Build the package instead of one source file: cmd/server now contains
+  # multiple files, and compiling main.go alone omits their symbols.
+  if ! go build -trimpath -ldflags="-s -w" -o "$tmp_bin" ./cmd/server; then
     if ! rm -f "$tmp_bin"; then
       warn "$(t app.cyberstrikeai.warn.tmp_binary_cleanup_failed "$tmp_bin")"
     fi
