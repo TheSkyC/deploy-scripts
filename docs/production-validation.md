@@ -8,6 +8,19 @@ VPS accepts the units, firewall entries, and certificates.
 Use a scratch VPS or a disposable snapshot of a real one. Every phase is
 read-only until Phase 2.
 
+The phases below are also executable on the target host:
+
+```bash
+sudo bash tools/production-drill.sh --read-only
+sudo bash tools/production-drill.sh --yes --output-dir /root/drill
+```
+
+It refuses to run when the drill app is already installed, stops at the first
+failing phase, cleans up what it created, and writes `results.md` plus
+`results.json` (one row per phase) for the commit or PR that records the
+evidence. Add `--domain app.example.com --email you@example.com` to include the
+Let's Encrypt phases; those need real DNS.
+
 ## Preconditions
 
 - Debian 12 / Ubuntu 22.04+ with root access.

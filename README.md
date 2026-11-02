@@ -371,6 +371,7 @@ bash tools/verify.sh guards
 bash tools/verify.sh prove   # behavioral feature proofs (backup/restore, notify, schedule, migrate, compose, fleet)
 bash tools/e2e-smoke.sh      # container install matrix (stubbed systemd)
 bash tools/e2e-systemd.sh    # real systemd as PID 1: unit start, nginx, timers, backup/restore
+bash tools/production-drill.sh --read-only   # real-host baseline; --yes for the full drill
 ```
 
 The CI `verify` matrix runs `syntax`, `release`, `dispatch`, `guards`, `state`,

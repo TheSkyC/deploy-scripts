@@ -5624,7 +5624,7 @@ _binary_app_derive_paths() {
   # Backup archive prefix; defaults to APP_ID. Apps migrating from a
   # hand-written lifecycle may pin the historical prefix to keep existing
   # backup archives discoverable (e.g. BA_ARCHIVE_PREFIX=new-api).
-  BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-${APP_ID}}"
+  BA_ARCHIVE_PREFIX="${BA_ARCHIVE_PREFIX:-${APP_ID:-}}"
 }
 # Probe and reverse-proxy targets must follow the configured loopback family;
 # a service bound to ::1 is not reachable at 127.0.0.1.
@@ -5695,8 +5695,15 @@ bapp_validate_cfg() {
 # Wire app_conf_file/app_lock_file once APP_ID is known (called from the
 # impl after configuration defaults and hooks are declared).
 binary_app_bootstrap() {
+  # `migrate`/`export` source implementation files with DEPLOY_IMPL_SOURCE_ONLY=1
+  # just to read their configuration defaults, and no APP_ID is in scope there.
+  # The hook assignments are safe in that process; the config/lock wiring and
+  # path derivation need an app identity, so they are skipped when it is absent.
   APP_CONFIG_DERIVE_HOOK=_binary_app_derive_paths
   APP_STATUS_BACKUP_FN=bapp_status_backup_json
+  if [[ -z "${APP_ID:-}" ]]; then
+    return 0
+  fi
   CONF_FILE="$(app_conf_file)"
   LOCK_FILE="$(app_lock_file)"
   _binary_app_derive_paths

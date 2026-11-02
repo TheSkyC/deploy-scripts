@@ -3203,6 +3203,42 @@ EOF
   ' | grep -q ok
 }
 
+# `deploy.sh export` reads each installed app's implementation to recover its
+# configuration defaults. Those impls call binary_app_bootstrap at file scope,
+# and that used to abort under `set -u` because APP_ID is unset while migrate
+# sources them -- so export failed on any host that had a binary-app config.
+check_export_handles_binary_app_configs() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    # 1. Source-only loading must work with no APP_ID in scope.
+    for impl in impl/install_ntfy.sh impl/install_newapi.sh impl/install_meilisearch.sh; do
+      ( set +e; DEPLOY_IMPL_SOURCE_ONLY=1 source "$impl" >/dev/null 2>&1 ) || {
+        echo "sourcing ${impl} failed in export mode" >&2
+        exit 1
+      }
+    done
+    # 2. A real export with a binary-app config must keep that config.
+    tmp="$(mktemp -d)"
+    trap "rm -rf \"$tmp\"" EXIT
+    mkdir -p "$tmp/etc"
+    printf "PORT=\"7700\"\n" >"$tmp/etc/meilisearch-deploy.conf"
+    MIGRATE_EXPORT_DIR="$tmp/etc"
+    # The check runs as an unprivileged user; export itself only reads the
+    # config tree and writes the archive into the writable temp dir.
+    require_root() { :; }
+    migrate_main export --output "$tmp/export.tar.gz" >"$tmp/log" 2>&1 || {
+      echo "export failed with a binary-app config present:" >&2
+      cat "$tmp/log" >&2
+      exit 1
+    }
+    tar -tzf "$tmp/export.tar.gz" | grep -q "etc/meilisearch-deploy.conf" || {
+      echo "export archive dropped the binary-app config" >&2
+      exit 1
+    }
+  ' bash "$ROOT_DIR"
+}
+
 # Migration invariants: export refuses an empty tree, stamps the archive
 # with a sha256 sidecar, import verifies before touching /etc and installs
 # configs atomically at mode 600, and the manual-steps guidance is printed
