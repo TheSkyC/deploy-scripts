@@ -369,6 +369,8 @@ bash tools/verify.sh release
 bash tools/verify.sh dispatch
 bash tools/verify.sh guards
 bash tools/verify.sh prove   # behavioral feature proofs (backup/restore, notify, schedule, migrate, compose, fleet)
+bash tools/e2e-smoke.sh      # container install matrix (stubbed systemd)
+bash tools/e2e-systemd.sh    # real systemd as PID 1: unit start, nginx, timers, backup/restore
 ```
 
 The CI `verify` matrix runs `syntax`, `release`, `dispatch`, `guards`, `state`,
@@ -377,7 +379,8 @@ separate `shellcheck` job; the union of those targets covers every check that
 `all` runs. The behavioral feature proofs run inside the `guards` target (and
 standalone via `bash tools/verify.sh prove`). A nightly scheduled job runs the
 full `all` suite end-to-end, and an `e2e-smoke` job runs the container install
-matrix.
+matrix while `systemd-e2e` boots a real systemd and exercises the shipped
+install script against it.
 `bash tools/verify.sh` (no target) still runs the full suite. The `all`
 target runs independent checks concurrently (up to `PARALLEL_JOBS`, which
 defaults to the CPU count); set `PARALLEL_JOBS=1` for a serial run.
