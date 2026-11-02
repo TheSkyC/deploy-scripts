@@ -43,6 +43,19 @@ Save all three JSON payloads; they are the "before" snapshot.
 
 ## Phase 1 — dry runs
 
+Before touching a real host, run the containerized systemd rehearsal — it boots
+a real systemd as PID 1 (privileged container) and runs the shipped release
+script against it, so unit enable/start, nginx validation, timer creation,
+backup/restore against a running service, and uninstall cleanup are proven
+without stubs:
+
+```bash
+bash tools/e2e-systemd.sh
+```
+
+It prints `SYSTEMD_E2E_OK` on success. Only systemd, nginx, and cron semantics
+are still unproven after it — a real VPS, DNS, and certbot remain necessary.
+
 Dry runs must not create files, users, units, or containers.
 
 ```bash
