@@ -297,4 +297,56 @@ done
 [[ ! -e /opt/cli-proxy-api && ! -e /opt/cpa-manager-plus ]] || fail CPA_INSTALL_DIR_LEFT_BEHIND
 nginx -t >/tmp/nginx-cpa2.log 2>&1 || { cat /tmp/nginx-cpa2.log; fail CPA_NGINX_BROKEN_AFTER_UNINSTALL; }
 
+# --- production drill end to end ---------------------------------------------
+# LOG_DIR is intentionally exported: production-drill must keep its own state
+# namespaced and pass this application setting through unchanged.
+echo "--- production drill ---"
+rm -rf /e2e/production-drill
+DOMAIN="meili.example.test" PORT=7700 INSTALL_DIR=/opt/meilisearch \
+DATA_DIR=/var/lib/meilisearch LOG_DIR=/var/log/meilisearch \
+SERVICE_NAME=meilisearch SERVICE_USER=meilisearch \
+GITHUB_REPO=meilisearch/meilisearch BACKUP_DIR=/opt/meilisearch-backups \
+BACKUP_KEEP_DAYS=30 BA_ENABLE_HTTPS=0 BA_SERVICE_ARGS="-f /dev/null" BA_VERSION=v1.9.0 \
+bash /repo/tools/production-drill.sh --yes --app meilisearch \
+  --output-dir /e2e/production-drill >/tmp/production-drill.log 2>&1 || {
+  cat /tmp/production-drill.log
+  fail PRODUCTION_DRILL_FAILED
+}
+if command -v python3 >/dev/null 2>&1; then
+  python3 - /e2e/production-drill/results.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+
+states = {phase["name"]: phase["state"] for phase in report["phases"]}
+required = {
+    "baseline-doctor",
+    "dry-run-install",
+    "install",
+    "status-json",
+    "backup",
+    "verify",
+    "central-export",
+    "uninstall",
+    "unit-removed",
+    "final-doctor",
+}
+missing = required - states.keys()
+failed = {name: state for name, state in states.items() if state != "ok"}
+if report.get("app") != "meilisearch" or missing or failed:
+    raise SystemExit(
+        f"invalid production drill report: missing={sorted(missing)} failed={failed}"
+    )
+PY
+else
+  grep -Fq '"app":"meilisearch"' /e2e/production-drill/results.json \
+    || fail PRODUCTION_DRILL_APP_MISMATCH
+  ! grep -Fq '"state":"fail"' /e2e/production-drill/results.json \
+    || fail PRODUCTION_DRILL_PHASE_FAILED
+  grep -Fq '"name":"unit-removed","state":"ok"' /e2e/production-drill/results.json \
+    || fail PRODUCTION_DRILL_UNIT_CHECK_MISSING
+fi
+
 echo SYSTEMD_E2E_OK

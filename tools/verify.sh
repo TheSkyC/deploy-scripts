@@ -663,6 +663,8 @@ main() {
       run_isolated_check check_preupdate_backup_warnings_include_followup_guidance
       run_isolated_check check_random_head_pipelines_handle_sigpipe
       run_isolated_check check_release_build_outputs_are_atomic
+      run_isolated_check check_production_drill_variables_are_namespaced
+      run_isolated_check check_production_drill_cleanup_is_armed_before_install
       run_isolated_check check_remote_fetches_are_https_only
       run_isolated_check check_versioned_pre_commit_checks_release_artifacts
       run_isolated_check check_app_loader_dispatch_matches_cli

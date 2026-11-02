@@ -26,11 +26,11 @@ DEPLOY_CLI="$ROOT_DIR/dist/deploy.sh"
 [[ -f "$DEPLOY_CLI" ]] || DEPLOY_CLI="$ROOT_DIR/deploy.sh"
 
 DRILL_APP="${DRILL_APP:-meilisearch}"
-OUTPUT_DIR=""
-CONFIRM=0
-READ_ONLY=0
-DOMAIN=""
-EMAIL=""
+DRILL_OUTPUT_DIR=""
+DRILL_CONFIRM=0
+DRILL_READ_ONLY=0
+DRILL_DOMAIN=""
+DRILL_EMAIL=""
 
 usage() {
   cat >&2 <<'EOF'
@@ -53,11 +53,11 @@ die() {
 
 while (($#)); do
   case "$1" in
-    --read-only) READ_ONLY=1; shift ;;
-    --yes) CONFIRM=1; shift ;;
-    --output-dir) OUTPUT_DIR="${2:-}"; shift 2 ;;
-    --domain) DOMAIN="${2:-}"; shift 2 ;;
-    --email) EMAIL="${2:-}"; shift 2 ;;
+    --read-only) DRILL_READ_ONLY=1; shift ;;
+    --yes) DRILL_CONFIRM=1; shift ;;
+    --output-dir) DRILL_OUTPUT_DIR="${2:-}"; shift 2 ;;
+    --domain) DRILL_DOMAIN="${2:-}"; shift 2 ;;
+    --email) DRILL_EMAIL="${2:-}"; shift 2 ;;
     --app) DRILL_APP="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "unknown argument: $1" ;;
@@ -69,12 +69,12 @@ command -v systemctl >/dev/null 2>&1 || die "systemd is required"
 systemctl is-system-running >/dev/null 2>&1 || die "systemd is not running as PID 1"
 [[ -f "$DEPLOY_CLI" ]] || die "run from a repository checkout"
 [[ -n "$DRILL_APP" && "$DRILL_APP" =~ ^[a-z0-9-]+$ ]] || die "invalid --app"
-if [[ -n "$DOMAIN" && -z "$EMAIL" ]]; then
+if [[ -n "$DRILL_DOMAIN" && -z "$DRILL_EMAIL" ]]; then
   die "--domain requires --email"
 fi
 
-if ((READ_ONLY == 0)); then
-  ((CONFIRM)) || die "refusing to install without --yes"
+if ((DRILL_READ_ONLY == 0)); then
+  ((DRILL_CONFIRM)) || die "refusing to install without --yes"
   if [[ -e "/etc/systemd/system/${DRILL_APP}.service" ]] \
       || [[ -e "/opt/${DRILL_APP}" ]]; then
     die "${DRILL_APP} already looks installed; use a disposable host"
@@ -82,16 +82,16 @@ if ((READ_ONLY == 0)); then
 fi
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-OUTPUT_DIR="${OUTPUT_DIR:-/root/production-drill-${STAMP}}"
-LOG_DIR="${OUTPUT_DIR}/logs"
-mkdir -p "$LOG_DIR"
-RESULTS_MD="${OUTPUT_DIR}/results.md"
-RESULTS_JSON="${OUTPUT_DIR}/results.json"
+DRILL_OUTPUT_DIR="${DRILL_OUTPUT_DIR:-/root/production-drill-${STAMP}}"
+DRILL_LOG_DIR="${DRILL_OUTPUT_DIR}/logs"
+mkdir -p "$DRILL_LOG_DIR"
+RESULTS_MD="${DRILL_OUTPUT_DIR}/results.md"
+RESULTS_JSON="${DRILL_OUTPUT_DIR}/results.json"
 
 PHASE_NAMES=()
 PHASE_STATES=()
 PHASE_DETAILS=()
-CREATED_INSTALL=0
+DRILL_CREATED_INSTALL=0
 
 record() {
   local name="$1" state="$2" detail="$3"
@@ -106,7 +106,7 @@ record() {
 phase() {
   local name="$1"
   shift
-  local log="${LOG_DIR}/${name}.log"
+  local log="${DRILL_LOG_DIR}/${name}.log"
   if "$@" >"$log" 2>&1; then
     record "$name" ok "see logs/${name}.log"
     return 0
@@ -118,14 +118,14 @@ phase() {
 
 cleanup() {
   local status=$?
-  if ((CREATED_INSTALL)) && [[ "${PHASE_CLEANED:-0}" != 1 ]]; then
+  if ((DRILL_CREATED_INSTALL)) && [[ "${DRILL_PHASE_CLEANED:-0}" != 1 ]]; then
     echo "production-drill: cleaning up ${DRILL_APP}" >&2
     DEPLOY_ASSUME_YES=1 DEPLOY_DELETE_DATA=1 \
-      bash "$DEPLOY_CLI" "$DRILL_APP" uninstall >"${LOG_DIR}/cleanup.log" 2>&1 || true
+      bash "$DEPLOY_CLI" "$DRILL_APP" uninstall >"${DRILL_LOG_DIR}/cleanup.log" 2>&1 || true
   fi
   write_results || true
   if ((status != 0)); then
-    echo "production-drill: failed; see ${OUTPUT_DIR}" >&2
+    echo "production-drill: failed; see ${DRILL_OUTPUT_DIR}" >&2
   fi
 }
 
@@ -171,13 +171,13 @@ json_escape() {
 trap cleanup EXIT
 
 echo "=== production-drill: ${DRILL_APP} on $(uname -srm) ==="
-echo "=== output: ${OUTPUT_DIR} ==="
+echo "=== output: ${DRILL_OUTPUT_DIR} ==="
 
 phase baseline-list bash "$DEPLOY_CLI" list || exit 1
 phase baseline-doctor bash "$DEPLOY_CLI" doctor security --json || exit 1
 phase baseline-status bash "$DEPLOY_CLI" status-all --json --no-network || exit 1
 
-if ((READ_ONLY)); then
+if ((DRILL_READ_ONLY)); then
   echo "=== production-drill: read-only baseline complete ==="
   exit 0
 fi
@@ -190,8 +190,8 @@ if [[ -e "/etc/systemd/system/${DRILL_APP}.service" ]]; then
 fi
 record dry-run-left-artifacts ok "no unit created"
 
+DRILL_CREATED_INSTALL=1
 phase install env DEPLOY_ASSUME_YES=1 bash "$DEPLOY_CLI" "$DRILL_APP" install || exit 1
-CREATED_INSTALL=1
 phase status bash "$DEPLOY_CLI" "$DRILL_APP" status || exit 1
 phase status-json bash "$DEPLOY_CLI" "$DRILL_APP" status-json || exit 1
 phase doctor bash "$DEPLOY_CLI" "$DRILL_APP" doctor || exit 1
@@ -199,8 +199,8 @@ phase service-active systemctl is-active "$DRILL_APP" || exit 1
 phase backup bash "$DEPLOY_CLI" "$DRILL_APP" backup || exit 1
 phase verify bash "$DEPLOY_CLI" "$DRILL_APP" verify || exit 1
 
-if [[ -n "$DOMAIN" ]]; then
-  phase cert env DEPLOY_ASSUME_YES=1 CERTBOT_EMAIL="$EMAIL" DOMAIN="$DOMAIN" \
+if [[ -n "$DRILL_DOMAIN" ]]; then
+  phase cert env DEPLOY_ASSUME_YES=1 CERTBOT_EMAIL="$DRILL_EMAIL" DOMAIN="$DRILL_DOMAIN" \
     bash "$DEPLOY_CLI" "$DRILL_APP" cert || exit 1
   phase tls-renewal-systemd systemctl list-timers 'certbot*' --all || exit 1
   phase tls-renewal-audit bash "$DEPLOY_CLI" doctor security --json || exit 1
@@ -208,12 +208,12 @@ fi
 
 phase central-check-update bash "$DEPLOY_CLI" check-update --json --no-network || exit 1
 phase central-schedule bash "$DEPLOY_CLI" schedule status || exit 1
-phase central-export bash "$DEPLOY_CLI" export --output "${OUTPUT_DIR}/export.tar.gz" || exit 1
+phase central-export bash "$DEPLOY_CLI" export --output "${DRILL_OUTPUT_DIR}/export.tar.gz" || exit 1
 
 phase uninstall env DEPLOY_ASSUME_YES=1 DEPLOY_DELETE_DATA=1 \
   bash "$DEPLOY_CLI" "$DRILL_APP" uninstall || exit 1
-CREATED_INSTALL=0
-PHASE_CLEANED=1
+DRILL_CREATED_INSTALL=0
+DRILL_PHASE_CLEANED=1
 if [[ -e "/etc/systemd/system/${DRILL_APP}.service" ]]; then
   record unit-removed fail "unit still present after uninstall"
   exit 1

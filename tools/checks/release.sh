@@ -45,6 +45,41 @@ check_release_build_outputs_are_atomic() {
     ' tools/build-release.sh
 }
 
+# The drill invokes deploy scripts as child processes. Generic environment names
+# such as LOG_DIR and DOMAIN are application configuration keys, so assigning
+# them at drill scope would silently override the deployment under test.
+check_production_drill_variables_are_namespaced() {
+  local drill="tools/production-drill.sh"
+  if grep -En '^(OUTPUT_DIR|LOG_DIR|DOMAIN|EMAIL|READ_ONLY|CONFIRM)=' "$drill"; then
+    echo "production-drill.sh internal variables must use the DRILL_ prefix so they cannot override app configuration." >&2
+    return 1
+  fi
+  grep -Fq 'DRILL_OUTPUT_DIR=""' "$drill" \
+    && grep -Fq 'DRILL_LOG_DIR="${DRILL_OUTPUT_DIR}/logs"' "$drill" \
+    && grep -Fq 'DRILL_DOMAIN=""' "$drill" \
+    && grep -Fq 'DRILL_EMAIL=""' "$drill" \
+    && grep -Fq 'DRILL_READ_ONLY=0' "$drill" \
+    && grep -Fq 'DRILL_CONFIRM=0' "$drill" \
+    && grep -Fq 'CERTBOT_EMAIL="$DRILL_EMAIL" DOMAIN="$DRILL_DOMAIN"' "$drill" \
+    || {
+      echo "production-drill.sh must keep its control state isolated and pass app configuration under the app's own key names." >&2
+      return 1
+    }
+}
+
+check_production_drill_cleanup_is_armed_before_install() {
+  awk '
+      /^DRILL_CREATED_INSTALL=1$/ { created=NR }
+      /^phase install env DEPLOY_ASSUME_YES=1 bash "\$DEPLOY_CLI" "\$DRILL_APP" install/ { install=NR }
+      END {
+        if (!(created && install && created < install)) {
+          print "production-drill.sh must arm cleanup before invoking install so a partial install is still removed." > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' tools/production-drill.sh
+}
+
 check_bundled_impl_temp_names_are_random() {
   if grep -R -n 'tmp_path="\${script_path}\.\$\$"' lib dist 2>/dev/null; then
     echo "Bundled implementation extraction must use mktemp instead of a pid-derived temporary path." >&2
