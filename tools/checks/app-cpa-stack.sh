@@ -468,3 +468,15 @@ check_cpa_stack_uninstall_checks_directory_removal_errors() {
       return 1
     }
 }
+
+check_cpa_stack_uninstall_removes_service_users() {
+  grep -Fq 'for service_user in "$CPA_SERVICE_USER" "$CPAMP_SERVICE_USER"; do' impl/install_cpa_stack.sh \
+    && grep -Fq 'if userdel "$service_user" 2>/dev/null; then' impl/install_cpa_stack.sh \
+    && grep -Fq 'if groupdel "$service_user" 2>/dev/null; then' impl/install_cpa_stack.sh \
+    && grep -Fq 'app.cpa_stack.warn.delete_user' apps/cpa_stack.sh \
+    && grep -Fq 'app.cpa_stack.warn.delete_group' apps/cpa_stack.sh \
+    || {
+      echo "CPA Stack data-purging uninstall must remove its service users and groups with explicit failure handling." >&2
+      return 1
+    }
+}

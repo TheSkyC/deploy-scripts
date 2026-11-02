@@ -111,6 +111,12 @@ i18n_register_many \
   app.cpa_stack.warn.email_invalid \
   "Email is invalid (%s). Try again." \
   "邮箱格式无效（%s），请重新输入。" \
+  app.cpa_stack.warn.delete_user \
+  "Failed to delete system user %s; it may be referenced elsewhere." \
+  "删除系统用户 %s 失败；该用户可能仍被其他资源引用。" \
+  app.cpa_stack.warn.delete_group \
+  "Failed to delete system group %s; it may be referenced elsewhere." \
+  "删除系统组 %s 失败；该组可能仍被其他资源引用。" \
   app.cpa_stack.step.dependencies \
   "Installing system dependencies" \
   "安装系统依赖" \
@@ -177,6 +183,12 @@ i18n_register_many \
   app.cpa_stack.success.deleted_backup \
   "Removed backup directory %s." \
   "已删除备份目录 %s。" \
+  app.cpa_stack.success.deleted_user \
+  "Removed system user %s." \
+  "已删除系统用户 %s。" \
+  app.cpa_stack.success.deleted_group \
+  "Removed system group %s." \
+  "已删除系统组 %s。" \
   app.cpa_stack.info.oauth \
   "OAuth is intentionally not automated. Run login commands as the cli-proxy-api user; some providers use localhost callbacks or device-code flows." \
   "OAuth 不会自动执行。请以 cli-proxy-api 用户运行登录命令；部分提供商使用 localhost 回调或设备码流程。" \

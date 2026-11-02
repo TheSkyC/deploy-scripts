@@ -14357,6 +14357,12 @@ i18n_register_many \
   app.cpa_stack.warn.email_invalid \
   "Email is invalid (%s). Try again." \
   "邮箱格式无效（%s），请重新输入。" \
+  app.cpa_stack.warn.delete_user \
+  "Failed to delete system user %s; it may be referenced elsewhere." \
+  "删除系统用户 %s 失败；该用户可能仍被其他资源引用。" \
+  app.cpa_stack.warn.delete_group \
+  "Failed to delete system group %s; it may be referenced elsewhere." \
+  "删除系统组 %s 失败；该组可能仍被其他资源引用。" \
   app.cpa_stack.step.dependencies \
   "Installing system dependencies" \
   "安装系统依赖" \
@@ -14423,6 +14429,12 @@ i18n_register_many \
   app.cpa_stack.success.deleted_backup \
   "Removed backup directory %s." \
   "已删除备份目录 %s。" \
+  app.cpa_stack.success.deleted_user \
+  "Removed system user %s." \
+  "已删除系统用户 %s。" \
+  app.cpa_stack.success.deleted_group \
+  "Removed system group %s." \
+  "已删除系统组 %s。" \
   app.cpa_stack.info.oauth \
   "OAuth is intentionally not automated. Run login commands as the cli-proxy-api user; some providers use localhost callbacks or device-code flows." \
   "OAuth 不会自动执行。请以 cli-proxy-api 用户运行登录命令；部分提供商使用 localhost 回调或设备码流程。" \
@@ -23961,7 +23973,7 @@ do_uninstall() {
   cpa_stack_show_banner
   cpa_stack_preflight uninstall
   acquire_lock
-  local confirm delete_data=false
+  local confirm delete_data=false service_user
   if deploy_assume_yes; then
     confirm="YES"
   else
@@ -24020,6 +24032,22 @@ do_uninstall() {
       "$(t app.cpa_stack.success.deleted_data "$CPAMP_ENV_DIR")" "app.cpa_stack.error.remove_dir"
     app_remove_dir_or_error "$CPA_STACK_BACKUP_DIR" "CPA_STACK_BACKUP_DIR" \
       "$(t app.cpa_stack.success.deleted_backup "$CPA_STACK_BACKUP_DIR")" "app.cpa_stack.error.remove_dir"
+    for service_user in "$CPA_SERVICE_USER" "$CPAMP_SERVICE_USER"; do
+      if id "$service_user" >/dev/null 2>&1; then
+        if userdel "$service_user" 2>/dev/null; then
+          success "$(t app.cpa_stack.success.deleted_user "$service_user")"
+        else
+          warn "$(t app.cpa_stack.warn.delete_user "$service_user")"
+        fi
+      fi
+      if getent group "$service_user" >/dev/null 2>&1; then
+        if groupdel "$service_user" 2>/dev/null; then
+          success "$(t app.cpa_stack.success.deleted_group "$service_user")"
+        else
+          warn "$(t app.cpa_stack.warn.delete_group "$service_user")"
+        fi
+      fi
+    done
   else
     info "$(t app.cpa_stack.info.kept_data "$CPA_DATA_DIR")"
     info "$(t app.cpa_stack.info.kept_data "$CPAMP_DATA_DIR")"

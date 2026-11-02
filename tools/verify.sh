@@ -587,6 +587,7 @@ main() {
       run_isolated_check check_cpa_stack_certificate_renewal_is_scoped
       run_isolated_check check_cpa_stack_uninstall_checks_file_removal_errors
       run_isolated_check check_cpa_stack_uninstall_checks_directory_removal_errors
+      run_isolated_check check_cpa_stack_uninstall_removes_service_users
       run_isolated_check check_cron_logrotate_are_atomic
       run_isolated_check check_binary_app_certbot_cron_is_published_atomically
       run_isolated_check check_tls_renewal_crons_are_scoped_per_app

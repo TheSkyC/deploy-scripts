@@ -1221,7 +1221,7 @@ do_uninstall() {
   cpa_stack_show_banner
   cpa_stack_preflight uninstall
   acquire_lock
-  local confirm delete_data=false
+  local confirm delete_data=false service_user
   if deploy_assume_yes; then
     confirm="YES"
   else
@@ -1280,6 +1280,22 @@ do_uninstall() {
       "$(t app.cpa_stack.success.deleted_data "$CPAMP_ENV_DIR")" "app.cpa_stack.error.remove_dir"
     app_remove_dir_or_error "$CPA_STACK_BACKUP_DIR" "CPA_STACK_BACKUP_DIR" \
       "$(t app.cpa_stack.success.deleted_backup "$CPA_STACK_BACKUP_DIR")" "app.cpa_stack.error.remove_dir"
+    for service_user in "$CPA_SERVICE_USER" "$CPAMP_SERVICE_USER"; do
+      if id "$service_user" >/dev/null 2>&1; then
+        if userdel "$service_user" 2>/dev/null; then
+          success "$(t app.cpa_stack.success.deleted_user "$service_user")"
+        else
+          warn "$(t app.cpa_stack.warn.delete_user "$service_user")"
+        fi
+      fi
+      if getent group "$service_user" >/dev/null 2>&1; then
+        if groupdel "$service_user" 2>/dev/null; then
+          success "$(t app.cpa_stack.success.deleted_group "$service_user")"
+        else
+          warn "$(t app.cpa_stack.warn.delete_group "$service_user")"
+        fi
+      fi
+    done
   else
     info "$(t app.cpa_stack.info.kept_data "$CPA_DATA_DIR")"
     info "$(t app.cpa_stack.info.kept_data "$CPAMP_DATA_DIR")"

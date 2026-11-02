@@ -287,6 +287,12 @@ for unit_name in cli-proxy-api cpa-manager-plus; do
     fail "CPA_SERVICE_STILL_ACTIVE_${unit_name}"
   fi
   [[ ! -e "/etc/systemd/system/${unit_name}.service" ]] || fail "CPA_UNIT_LEFT_BEHIND_${unit_name}"
+  if getent passwd "$unit_name" >/dev/null; then
+    fail "CPA_SERVICE_USER_LEFT_BEHIND_${unit_name}"
+  fi
+  if getent group "$unit_name" >/dev/null; then
+    fail "CPA_SERVICE_GROUP_LEFT_BEHIND_${unit_name}"
+  fi
 done
 [[ ! -e /opt/cli-proxy-api && ! -e /opt/cpa-manager-plus ]] || fail CPA_INSTALL_DIR_LEFT_BEHIND
 nginx -t >/tmp/nginx-cpa2.log 2>&1 || { cat /tmp/nginx-cpa2.log; fail CPA_NGINX_BROKEN_AFTER_UNINSTALL; }
