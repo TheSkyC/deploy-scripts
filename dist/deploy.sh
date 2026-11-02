@@ -14417,6 +14417,9 @@ i18n_register_many \
   app.cpa_stack.success.deleted_data \
   "Removed data directory %s." \
   "已删除数据目录 %s。" \
+  app.cpa_stack.success.deleted_install \
+  "Removed installation directory %s." \
+  "已删除安装目录 %s。" \
   app.cpa_stack.success.deleted_backup \
   "Removed backup directory %s." \
   "已删除备份目录 %s。" \
@@ -24003,6 +24006,10 @@ do_uninstall() {
       "app.cpa_stack.error.remove_file"
   fi
   if $delete_data; then
+    app_remove_dir_or_error "$CPA_INSTALL_DIR" "CPA_INSTALL_DIR" \
+      "$(t app.cpa_stack.success.deleted_install "$CPA_INSTALL_DIR")" "app.cpa_stack.error.remove_dir"
+    app_remove_dir_or_error "$CPAMP_INSTALL_DIR" "CPAMP_INSTALL_DIR" \
+      "$(t app.cpa_stack.success.deleted_install "$CPAMP_INSTALL_DIR")" "app.cpa_stack.error.remove_dir"
     app_remove_dir_or_error "$CPA_DATA_DIR" "CPA_DATA_DIR" \
       "$(t app.cpa_stack.success.deleted_data "$CPA_DATA_DIR")" "app.cpa_stack.error.remove_dir"
     app_remove_dir_or_error "$CPAMP_DATA_DIR" "CPAMP_DATA_DIR" \

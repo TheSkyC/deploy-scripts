@@ -457,7 +457,9 @@ check_cpa_stack_uninstall_checks_file_removal_errors() {
 }
 
 check_cpa_stack_uninstall_checks_directory_removal_errors() {
-  grep -Fq 'app_remove_dir_or_error "$CPA_DATA_DIR" "CPA_DATA_DIR"' impl/install_cpa_stack.sh \
+  grep -Fq 'app_remove_dir_or_error "$CPA_INSTALL_DIR" "CPA_INSTALL_DIR"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app_remove_dir_or_error "$CPAMP_INSTALL_DIR" "CPAMP_INSTALL_DIR"' impl/install_cpa_stack.sh \
+    && grep -Fq 'app_remove_dir_or_error "$CPA_DATA_DIR" "CPA_DATA_DIR"' impl/install_cpa_stack.sh \
     && grep -Fq 'app_remove_dir_or_error "$CPA_STACK_BACKUP_DIR" "CPA_STACK_BACKUP_DIR"' impl/install_cpa_stack.sh \
     && grep -Fq 'app.cpa_stack.error.remove_dir' apps/cpa_stack.sh \
     && ! grep -Fq 'safe_rm_dir "$CPA_DATA_DIR"' impl/install_cpa_stack.sh \

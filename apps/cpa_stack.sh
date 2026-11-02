@@ -171,6 +171,9 @@ i18n_register_many \
   app.cpa_stack.success.deleted_data \
   "Removed data directory %s." \
   "已删除数据目录 %s。" \
+  app.cpa_stack.success.deleted_install \
+  "Removed installation directory %s." \
+  "已删除安装目录 %s。" \
   app.cpa_stack.success.deleted_backup \
   "Removed backup directory %s." \
   "已删除备份目录 %s。" \
