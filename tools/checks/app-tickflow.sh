@@ -533,10 +533,10 @@ check_tickflow_status_is_structured() {
       in_status && /local backup_dir="\$\{TICKFLOW_INSTALL_DIR\}-backups"/ { saw_backup=1 }
       in_status && /find "\$backup_dir" -maxdepth 1 -name "tickflow-data-\*\.tar\.gz" -type f/ { saw_backup_count=1 }
       in_status && /command -v curl >\/dev\/null 2>&1/ { saw_curl_guard=1 }
-      in_status && /http:\/\/127\.0\.0\.1:\$\{TICKFLOW_PORT\}\// { saw_health=1 }
+      in_status && /app_http_status_code "\$\(_tickflow_health_url\)"/ { saw_health=1 }
       in_status && /^}/ {
         if (!(saw_active && saw_enabled && saw_status_cmd && saw_limited_status && saw_install_path && saw_env_path && saw_backup && saw_backup_count && saw_curl_guard && saw_health)) {
-          printf "%s TickFlow status must show bounded systemd details, key paths, backup count, and local HTTP health nonfatally\n", FILENAME > "/dev/stderr"
+          printf "%s TickFlow status must show bounded systemd details, key paths, backup count, and bind-aware local HTTP health nonfatally\n", FILENAME > "/dev/stderr"
           exit 1
         }
         in_status=0
@@ -723,4 +723,49 @@ EOF
     grep -Fxq "        BACKEND_EXTRAS: ${malicious}" "$TICKFLOW_COMPOSE_FILE"
     [[ ! -e "$tmp_dir/hacked" ]]
   ' _ "$(mktemp -d)" "$malicious"
+}
+
+check_tickflow_local_targets_follow_bind_addr() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_tickflow.sh
+
+    tmp_dir="$(mktemp -d)"
+    trap '\''rm -rf "$tmp_dir"'\'' EXIT
+    TICKFLOW_INSTALL_DIR="${tmp_dir}/install"
+    TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/docker-compose.yml"
+    TICKFLOW_PORT=4010
+    mkdir -p "$TICKFLOW_INSTALL_DIR"
+    success() { :; }
+
+    TICKFLOW_BIND_ADDR=::1
+    [[ "$(_tickflow_health_url)" == "http://[::1]:4010/" ]]
+    _write_compose_file
+    grep -Fxq '\''      - "[::1]:4010:3018"'\'' "$TICKFLOW_COMPOSE_FILE"
+
+    TICKFLOW_BIND_ADDR=::
+    _write_compose_file
+    grep -Fxq '\''      - "[::]:4010:3018"'\'' "$TICKFLOW_COMPOSE_FILE"
+
+    TICKFLOW_BIND_ADDR=0.0.0.0
+    [[ "$(_tickflow_health_url)" == "http://127.0.0.1:4010/" ]]
+    _write_compose_file
+    grep -Fxq '\''      - "0.0.0.0:4010:3018"'\'' "$TICKFLOW_COMPOSE_FILE"
+
+    app_http_status_code() {
+      printf "%s\n" "$1" >"${tmp_dir}/probe-url"
+      printf "200\n"
+    }
+    TICKFLOW_BIND_ADDR=::1
+    _health_check >/dev/null
+    grep -Fxq "http://[::1]:4010/" "${tmp_dir}/probe-url"
+  '
+
+  local refs
+  refs="$(grep -Fc 'app_http_status_code "$(_tickflow_health_url)"' impl/install_tickflow.sh)"
+  [[ "$refs" -ge 2 ]] || {
+    echo "TickFlow health and status probes must both use the bind-aware local URL." >&2
+    return 1
+  }
 }

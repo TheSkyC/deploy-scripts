@@ -726,6 +726,7 @@ main() {
       run_isolated_check check_tickflow_env_rewrites_preserve_existing_secrets
       run_isolated_check check_tickflow_git_commit_version_contract
       run_isolated_check check_tickflow_generated_files_are_expansion_safe
+      run_isolated_check check_tickflow_local_targets_follow_bind_addr
       run_isolated_check check_tickflow_manual_backup_is_explicit
       run_isolated_check check_tickflow_paths_are_guarded
       run_isolated_check check_tickflow_restore_requires_all_members

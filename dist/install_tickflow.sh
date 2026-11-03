@@ -7836,6 +7836,24 @@ _compose_bin() {
   compose_command
 }
 
+_tickflow_loopback_host() {
+  case "${TICKFLOW_BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1|0.0.0.0) printf '127.0.0.1\n' ;;
+    ::1|::) printf '[::1]\n' ;;
+    *) error "$(t app.tickflow.error.bind_addr "${TICKFLOW_BIND_ADDR:-unset}")" ;;
+  esac
+}
+
+_tickflow_health_url() {
+  printf 'http://%s:%s/\n' "$(_tickflow_loopback_host)" "$TICKFLOW_PORT"
+}
+
+_tickflow_compose_bind_host() {
+  local host="${TICKFLOW_BIND_ADDR:-127.0.0.1}"
+  [[ "$host" != *:* ]] || host="[${host}]"
+  printf '%s\n' "$host"
+}
+
 _require_compose_runtime() {
   compose_require_runtime
 }
@@ -7995,6 +8013,8 @@ EOF
 }
 
 _write_compose_file() {
+  local compose_bind_host
+  compose_bind_host="$(_tickflow_compose_bind_host)"
   atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<EOF \
     || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 services:
@@ -8006,7 +8026,7 @@ services:
         BACKEND_EXTRAS: ${TICKFLOW_BACKEND_EXTRAS:-}
     container_name: TickFlow_Stock_Panel
     ports:
-      - "${TICKFLOW_BIND_ADDR:-127.0.0.1}:${TICKFLOW_PORT}:3018"
+      - "${compose_bind_host}:${TICKFLOW_PORT}:3018"
     env_file:
       - .env
     volumes:
@@ -8071,7 +8091,7 @@ _print_status_path() {
 
 _health_check() {
   local code elapsed=0
-  until code="$(app_http_status_code "http://127.0.0.1:${TICKFLOW_PORT}/" 5)" \
+  until code="$(app_http_status_code "$(_tickflow_health_url)" 5)" \
       && [[ "$code" =~ ^(200|301|302)$ ]]; do
     sleep 1
     elapsed=$((elapsed + 1))
@@ -8283,7 +8303,7 @@ do_status() {
   echo -e "\n${BOLD}[$(t app.tickflow.status.http_health)]${NC}"
   if command -v curl >/dev/null 2>&1; then
     local http_code
-    http_code="$(app_http_status_code "http://127.0.0.1:${TICKFLOW_PORT}/" 5)"
+    http_code="$(app_http_status_code "$(_tickflow_health_url)" 5)"
     if [[ "$http_code" =~ ^(200|301|302)$ ]]; then
       echo -e "  ${GREEN}[✓]${NC} $(t app.tickflow.status.local_response "$http_code")"
     else
