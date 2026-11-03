@@ -720,12 +720,14 @@ chmod +x /usr/local/bin/apt-get
 # systemctl stub cannot start a real TickFlow process, so provide a minimal
 # local listener for the health probe.
 python3 -m http.server 3018 --bind 127.0.0.1 >/tmp/tickflow-health.log 2>&1 &
+mkdir -p /root/.codex
 # Install tickflow with compose stubbed: the shared compose_command must
 # resolve, the env/compose files must be written, and the systemd unit must
 # embed the resolved compose command.
 TICKFLOW_INSTALL_DIR=/opt/tickflow \
 TICKFLOW_DATA_DIR=/var/lib/tickflow-data \
 TICKFLOW_LOG_DIR=/var/log/tickflow \
+TICKFLOW_CODEX_HOME_HOST=/root/.codex \
 TICKFLOW_PORT=3018 \
 TICKFLOW_REPO=shy3130/tickflow-stock-panel \
 TICKFLOW_BRANCH=main \
@@ -743,6 +745,10 @@ grep -Fq "      - \"/var/lib/tickflow-data:/app/data\"" /opt/tickflow/docker-com
   || { echo "CUSTOM_DATA_VOLUME_MISSING"; cat /opt/tickflow/docker-compose.yml; exit 1; }
 grep -Fq "      DATA_DIR: /app/data" /opt/tickflow/docker-compose.yml \
   || { echo "CONTAINER_DATA_DIR_MISSING"; exit 1; }
+grep -Fq "      - \"/root/.codex:/root/.codex:ro\"" /opt/tickflow/docker-compose.yml \
+  || { echo "CODEX_HOME_MOUNT_MISSING"; exit 1; }
+grep -Fq "      - \"./.env:/app/.env:ro\"" /opt/tickflow/docker-compose.yml \
+  || { echo "RAW_ENV_MOUNT_MISSING"; exit 1; }
 printf "custom-data-old\n" >/var/lib/tickflow-data/restore-marker.txt
 bash /repo/dist/install_tickflow.sh backup >"$LOG" 2>&1 || {
   cat "$LOG"

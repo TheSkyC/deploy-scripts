@@ -189,6 +189,12 @@ i18n_register_many \
   app.tickflow.error.data_dir_invalid \
   "TICKFLOW_DATA_DIR contains characters that are unsafe in a Compose volume: %s. Avoid ':', '\$', double quotes, backslashes, and newlines." \
   "TICKFLOW_DATA_DIR 包含不适合 Compose 卷的字符：%s。请避免 ':'、'\$'、双引号、反斜杠和换行符。" \
+  app.tickflow.error.codex_version_invalid \
+  "TICKFLOW_CODEX_CLI_VERSION is invalid: '%s'. Use the upstream version without a 'v' prefix." \
+  "TICKFLOW_CODEX_CLI_VERSION 无效：'%s'。请使用不带 v 前缀的上游版本号。" \
+  app.tickflow.error.codex_home_invalid \
+  "TICKFLOW_CODEX_HOME_HOST must be an existing absolute directory without a trailing symlink or Compose-unsafe characters: %s" \
+  "TICKFLOW_CODEX_HOME_HOST 必须是存在的绝对目录，且不能是符号链接或包含 Compose 不安全字符：%s" \
   app.tickflow.summary.auth_file \
   "Panel password (AUTH_PASSWORD) is in:" \
   "面板密码（AUTH_PASSWORD）位于：" \

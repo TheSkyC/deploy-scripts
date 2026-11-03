@@ -155,6 +155,10 @@ EOF
     ! grep -Eq "BACKEND_EXTRAS:[[:space:]]*$" "$TICKFLOW_COMPOSE_FILE"
     grep -Fq "      DATA_DIR: /app/data" "$TICKFLOW_COMPOSE_FILE"
     grep -Fq "      - \"${TICKFLOW_DATA_DIR}:/app/data\"" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fq "        CODEX_CLI_VERSION: 0.144.3" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fq "    extra_hosts:" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fq "      - \"./.env:/app/.env:ro\"" "$TICKFLOW_COMPOSE_FILE"
+    ! grep -Fq ":/root/.codex:ro" "$TICKFLOW_COMPOSE_FILE"
   '
 }
 
@@ -833,9 +837,10 @@ check_tickflow_custom_data_dir_contract() {
     TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/docker-compose.yml"
     TICKFLOW_ENV_FILE="${TICKFLOW_INSTALL_DIR}/.env"
     TICKFLOW_TIERS_FILE="${TICKFLOW_INSTALL_DIR}/tiers.yaml"
+    TICKFLOW_CODEX_HOME_HOST="${tmp_dir}/codex-home"
     TICKFLOW_PORT=4010
     TICKFLOW_BIND_ADDR=127.0.0.1
-    mkdir -p "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_DATA_DIR"
+    mkdir -p "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_DATA_DIR" "$TICKFLOW_CODEX_HOME_HOST"
     printf "old-data\n" >"${TICKFLOW_DATA_DIR}/state.txt"
     printf "old-env\n" >"$TICKFLOW_ENV_FILE"
     printf "old-tiers\n" >"$TICKFLOW_TIERS_FILE"
@@ -843,6 +848,7 @@ check_tickflow_custom_data_dir_contract() {
     _write_compose_file
     grep -Fxq "      DATA_DIR: /app/data" "$TICKFLOW_COMPOSE_FILE"
     grep -Fxq "      - \"${TICKFLOW_DATA_DIR}:/app/data\"" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fxq "      - \"${TICKFLOW_CODEX_HOME_HOST}:/root/.codex:ro\"" "$TICKFLOW_COMPOSE_FILE"
 
     archive="${tmp_dir}/backup.tar.gz"
     _tickflow_create_backup_archive "$archive"

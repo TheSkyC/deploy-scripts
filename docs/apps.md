@@ -171,6 +171,11 @@ has drifted from the configured pin, while an unpinned install states that
   the Compose bind mount, backup source, and restore target. A custom path may
   live on another filesystem; backup archives preserve the directory basename
   and remain restorable on the same configured path.
+- **AI / Codex**: `TICKFLOW_CODEX_CLI_VERSION` controls the upstream Codex CLI
+  build argument. `TICKFLOW_CODEX_HOME_HOST` is an opt-in, read-only mount of a
+  host Codex login directory; leave it empty for API-key providers. The
+  generated Compose file also mounts the raw `.env` read-only and defines
+  `host.docker.internal` for upstream loopback-provider support.
 - Source: `TICKFLOW_REPO` defaults to `shy3130/tickflow-stock-panel` and
   `TICKFLOW_BRANCH` defaults to `main`. Set `TICKFLOW_COMMIT` to a full
   40-character git SHA to check out that exact source revision. In this pinned

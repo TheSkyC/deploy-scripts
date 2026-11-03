@@ -14119,6 +14119,12 @@ i18n_register_many \
   app.tickflow.error.data_dir_invalid \
   "TICKFLOW_DATA_DIR contains characters that are unsafe in a Compose volume: %s. Avoid ':', '\$', double quotes, backslashes, and newlines." \
   "TICKFLOW_DATA_DIR 包含不适合 Compose 卷的字符：%s。请避免 ':'、'\$'、双引号、反斜杠和换行符。" \
+  app.tickflow.error.codex_version_invalid \
+  "TICKFLOW_CODEX_CLI_VERSION is invalid: '%s'. Use the upstream version without a 'v' prefix." \
+  "TICKFLOW_CODEX_CLI_VERSION 无效：'%s'。请使用不带 v 前缀的上游版本号。" \
+  app.tickflow.error.codex_home_invalid \
+  "TICKFLOW_CODEX_HOME_HOST must be an existing absolute directory without a trailing symlink or Compose-unsafe characters: %s" \
+  "TICKFLOW_CODEX_HOME_HOST 必须是存在的绝对目录，且不能是符号链接或包含 Compose 不安全字符：%s" \
   app.tickflow.summary.auth_file \
   "Panel password (AUTH_PASSWORD) is in:" \
   "面板密码（AUTH_PASSWORD）位于：" \
@@ -22005,6 +22011,11 @@ TICKFLOW_SERVICE_NAME="${TICKFLOW_SERVICE_NAME:-tickflow-stock-panel}"
 TICKFLOW_PORT="${TICKFLOW_PORT:-3018}"
 TICKFLOW_LOG_DIR="${TICKFLOW_LOG_DIR:-${TICKFLOW_INSTALL_DIR}/logs}"
 TICKFLOW_AUTH_PASSWORD="${TICKFLOW_AUTH_PASSWORD:-}"
+TICKFLOW_CODEX_CLI_VERSION="${TICKFLOW_CODEX_CLI_VERSION:-0.144.3}"
+# Optional read-only mount of a host Codex login directory. Empty by default:
+# API-key deployments do not need it, and credentials should only be exposed
+# to the container after an explicit opt-in.
+TICKFLOW_CODEX_HOME_HOST="${TICKFLOW_CODEX_HOME_HOST:-}"
 # Bind address for the container port mapping. 127.0.0.1 by default: the
 # panel has no authentication unless TICKFLOW_AUTH_PASSWORD is set, so
 # publishing it on 0.0.0.0 would expose an unauthenticated stock panel to the
@@ -22016,7 +22027,7 @@ CONFIG_KEYS=(
   TICKFLOW_DOMAIN TICKFLOW_REPO TICKFLOW_BRANCH TICKFLOW_COMMIT INSTALLED_VERSION TICKFLOW_INSTALL_DIR
   TICKFLOW_DATA_DIR TICKFLOW_ENV_FILE TICKFLOW_COMPOSE_FILE TICKFLOW_TIERS_FILE
   TICKFLOW_SERVICE_NAME TICKFLOW_PORT TICKFLOW_LOG_DIR TICKFLOW_AUTH_PASSWORD
-  TICKFLOW_BIND_ADDR
+  TICKFLOW_BIND_ADDR TICKFLOW_CODEX_CLI_VERSION TICKFLOW_CODEX_HOME_HOST
   TICKFLOW_BACKEND_EXTRAS
 )
 
@@ -22124,6 +22135,18 @@ _validate_config_values() {
       || "$TICKFLOW_DATA_DIR" == *'"'* || "$TICKFLOW_DATA_DIR" == *\\* \
       || "$TICKFLOW_DATA_DIR" == *$'\n'* || "$TICKFLOW_DATA_DIR" == *$'\r'* ]]; then
     error "$(t app.tickflow.error.data_dir_invalid "$TICKFLOW_DATA_DIR")"
+  fi
+  if [[ ! "$TICKFLOW_CODEX_CLI_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+    error "$(t app.tickflow.error.codex_version_invalid "$TICKFLOW_CODEX_CLI_VERSION")"
+  fi
+  if [[ -n "$TICKFLOW_CODEX_HOME_HOST" ]]; then
+    if [[ "$TICKFLOW_CODEX_HOME_HOST" != /* || ! -d "$TICKFLOW_CODEX_HOME_HOST" \
+        || -L "$TICKFLOW_CODEX_HOME_HOST" \
+        || "$TICKFLOW_CODEX_HOME_HOST" == *:* || "$TICKFLOW_CODEX_HOME_HOST" == *'$'* \
+        || "$TICKFLOW_CODEX_HOME_HOST" == *'"'* || "$TICKFLOW_CODEX_HOME_HOST" == *\\* \
+        || "$TICKFLOW_CODEX_HOME_HOST" == *$'\n'* || "$TICKFLOW_CODEX_HOME_HOST" == *$'\r'* ]]; then
+      error "$(t app.tickflow.error.codex_home_invalid "$TICKFLOW_CODEX_HOME_HOST")"
+    fi
   fi
   if [[ -n "$TICKFLOW_AUTH_PASSWORD" ]] && [[ ${#TICKFLOW_AUTH_PASSWORD} -lt 6 ]]; then
     error "$(t app.tickflow.error.auth_password_short)"
@@ -22316,8 +22339,11 @@ EOF
 }
 
 _write_compose_file() {
-  local compose_bind_host
+  local compose_bind_host codex_home_volume=""
   compose_bind_host="$(_tickflow_compose_bind_host)"
+  if [[ -n "$TICKFLOW_CODEX_HOME_HOST" ]]; then
+    printf -v codex_home_volume '      - "%s:/root/.codex:ro"' "$TICKFLOW_CODEX_HOME_HOST"
+  fi
   atomic_write_file "$TICKFLOW_COMPOSE_FILE" 644 <<EOF \
     || error "$(t app.tickflow.error.compose_write "$TICKFLOW_COMPOSE_FILE")"
 services:
@@ -22327,9 +22353,13 @@ services:
       dockerfile: Dockerfile
       args:
         BACKEND_EXTRAS: ${TICKFLOW_BACKEND_EXTRAS:-}
+        CODEX_CLI_VERSION: ${TICKFLOW_CODEX_CLI_VERSION}
     container_name: TickFlow_Stock_Panel
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATA_DIR: /app/data
+      CODEX_DOCKER_HOST: host.docker.internal
     ports:
       - "${compose_bind_host}:${TICKFLOW_PORT}:3018"
     env_file:
@@ -22337,6 +22367,8 @@ services:
     volumes:
       - "${TICKFLOW_DATA_DIR}:/app/data"
       - ./tiers.yaml:/app/tiers.yaml:ro
+      - "./.env:/app/.env:ro"
+${codex_home_volume}
     restart: unless-stopped
 EOF
 }
