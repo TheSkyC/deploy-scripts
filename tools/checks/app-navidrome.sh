@@ -31,7 +31,7 @@ check_navidrome_release_asset_mapping() {
       && grep -Fq "printf 'navidrome_%s_linux_%s.tar.gz" "$file" \
       && grep -Fq 'BA_USE_ENV_FILE=1' "$file" \
       && grep -Fq 'ND_MUSICFOLDER=${MUSIC_DIR}' "$file" \
-      && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/ping"' "$file" \
+      && grep -Fq 'BA_HEALTH_PATH="/ping"' "$file" \
       || {
         echo "${file} must map the verified Navidrome release tarball and ND_* env configuration." >&2
         return 1

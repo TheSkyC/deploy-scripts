@@ -473,7 +473,7 @@ APP_DOCTOR_SERVICES_FN=myapp_all_services
 
 ### 7.4 二进制应用接入
 
-`lib/binary_app.sh` 已有 `GITHUB_REPO`、`INSTALLED_VERSION`、`BA_HEALTH_URL`、`BA_HEALTH_CODES`、`bapp_health_probe` 和 `bapp_status`。新增适配器应在公共二进制库中提供：
+`lib/binary_app.sh` 已有 `GITHUB_REPO`、`INSTALLED_VERSION`、`BA_HEALTH_PATH`、`BA_HEALTH_URL`（显式覆盖）、`BA_HEALTH_CODES`、`ba_health_url`、`bapp_health_probe` 和 `bapp_status`。适配器通过 `BA_HEALTH_PATH` 声明端点，公共库会按 `BA_BIND_ADDR` 选择 IPv4 或 IPv6 loopback。新增适配器应在公共二进制库中提供：
 
 - `bapp_status_health_json`：复用健康 URL 和成功码；
 - `bapp_status_version_json`：从配置读取 `INSTALLED_VERSION`；只有 `check-update --refresh` 才调用 `github_latest_release_tag`；

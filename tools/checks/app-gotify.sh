@@ -31,7 +31,7 @@ check_gotify_release_asset_mapping() {
       && grep -Fq 'BA_APT_PACKAGES="unzip"' "$file" \
       && grep -Fq "printf 'gotify-linux-%s.zip" "$file" \
       && grep -Fq 'BA_USE_ENV_FILE=1' "$file" \
-      && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/"' "$file" \
+      && grep -Fq 'BA_HEALTH_PATH="/"' "$file" \
       || {
         echo "${file} must map the verified Gotify release zip and GOTIFY_* env configuration." >&2
         return 1

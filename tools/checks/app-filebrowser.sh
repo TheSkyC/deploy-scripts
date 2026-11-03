@@ -30,7 +30,7 @@ check_filebrowser_release_asset_mapping() {
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
       && grep -Fq "printf 'linux-%s-filebrowser.tar.gz" "$file" \
       && grep -Fq 'BA_READWRITE_PATHS="${FB_ROOT}"' "$file" \
-      && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/"' "$file" \
+      && grep -Fq 'BA_HEALTH_PATH="/"' "$file" \
       || {
         echo "${file} must map the verified Filebrowser release tarball and serve FB_ROOT." >&2
         return 1

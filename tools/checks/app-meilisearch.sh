@@ -38,7 +38,7 @@ check_meilisearch_release_asset_mapping() {
       && grep -Fq 'BA_USE_ENV_FILE=1' "$file" \
       && grep -Fq "printf 'meilisearch-linux-%s" "$file" \
       && grep -Fq '[[ "$arch" == "arm64" ]] && arch="aarch64"' "$file" \
-      && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/health"' "$file" \
+      && grep -Fq 'BA_HEALTH_PATH="/health"' "$file" \
       || {
         echo "${file} must map the verified Meilisearch release binaries (aarch64 naming, env file, health URL)." >&2
         return 1

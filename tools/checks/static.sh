@@ -797,6 +797,23 @@ check_binary_app_local_targets_follow_bind_addr() {
 
     tmp="$(mktemp -d)"
     trap "rm -rf \"$tmp\"" EXIT
+    success() { :; }
+    warn() { :; }
+    t() { printf "%s\n" "$1"; }
+    app_http_status_code() {
+      printf "%s\n" "$1" >"$tmp/probe-url"
+      printf "200\n"
+    }
+    PORT=2586
+    BA_BIND_ADDR=::1
+    BA_HEALTH_PATH=/api/health
+    unset BA_HEALTH_URL
+    [[ "$(ba_health_url)" == "http://[::1]:2586/api/health" ]]
+    bapp_health_probe
+    grep -Fxq "http://[::1]:2586/api/health" "$tmp/probe-url"
+    BA_HEALTH_URL=http://127.0.0.1:9999/custom
+    bapp_health_probe
+    grep -Fxq "http://127.0.0.1:9999/custom" "$tmp/probe-url"
     systemd_write_unit() { cat > "$tmp/unit"; }
     SERVICE_NAME=testsvc
     BIN_PATH=/opt/test/app
@@ -813,6 +830,17 @@ check_binary_app_local_targets_follow_bind_addr() {
       exit 21
     fi
   '
+  awk '
+      /^ba_configure_tls\(\) \{/ { in_tls=1; saw_host=0; saw_proxy=0; next }
+      in_tls && /proxy_host="\$\(ba_local_ip_host\)"/ { saw_host=1 }
+      in_tls && /proxy_pass[[:space:]]+http:\/\/\$\{proxy_host\}:\$\{PORT\}/ { saw_proxy=1 }
+      END {
+        if (!(saw_host && saw_proxy)) {
+          print "HTTPS reverse proxy must follow the configured loopback address family" > "/dev/stderr"
+          exit 1
+        }
+      }
+    ' lib/binary_app.sh || return 1
 }
 
 check_binary_app_summary_management_hints() {

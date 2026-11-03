@@ -5636,6 +5636,15 @@ ba_local_ip_host() {
   esac
 }
 
+# Build the default local health URL from the configured bind family and path.
+# BA_HEALTH_URL remains an explicit override for apps with non-standard needs.
+ba_health_url() {
+  local host path="${BA_HEALTH_PATH:-/}"
+  host="$(ba_local_ip_host)"
+  [[ "$path" == /* ]] || path="/${path}"
+  printf 'http://%s:%s%s\n' "$host" "${PORT}" "$path"
+}
+
 # systemd unit directives (ExecStart, ReadWritePaths) cannot contain
 # whitespace; reject any custom path early so it cannot silently break the
 # generated unit file.
@@ -5680,6 +5689,7 @@ bapp_validate_cfg() {
     127.0.0.1|0.0.0.0|::1|::) : ;;
     *) error "$(t binary_app.error.bind_addr "${BA_BIND_ADDR:-unset}")" ;;
   esac
+  app_validate_http_url "health URL" "${BA_HEALTH_URL:-$(ba_health_url)}"
   # A pinned version must look like a GitHub release tag (vX.Y.Z); anything
   # else would produce a broken download URL.
   if [[ -n "${BA_VERSION:-}" ]] && ! [[ "$BA_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -6065,10 +6075,7 @@ ba_start_service() {
 # Default HTTP health check; apps override bapp_health_probe when the service
 # exposes a different endpoint or requires other status codes.
 bapp_health_probe() {
-  local default_url host
-  host="$(ba_local_ip_host)"
-  default_url="http://${host}:${PORT}/"
-  local url="${BA_HEALTH_URL:-$default_url}"
+  local url="${BA_HEALTH_URL:-$(ba_health_url)}"
   local codes="${BA_HEALTH_CODES:-^(200|301|302)$}"
   local elapsed=0 code
   until code="$(app_http_status_code "$url" 5)" \
@@ -6113,7 +6120,8 @@ ba_configure_tls() {
     error "$(t binary_app.error.tls_deps)"
   fi
   success "$(t binary_app.success.tls_deps)"
-  local nginx_conf="/etc/nginx/sites-available/${SERVICE_NAME}"
+  local nginx_conf="/etc/nginx/sites-available/${SERVICE_NAME}" proxy_host
+  proxy_host="$(ba_local_ip_host)"
   if ! mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /var/www/certbot; then
     error "$(t binary_app.error.tls_nginx_dirs "$nginx_conf")"
   fi
@@ -6171,7 +6179,7 @@ server {
     ssl_session_cache shared:MozTLS:10m;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     location / {
-        proxy_pass         http://127.0.0.1:${PORT};
+        proxy_pass         http://${proxy_host}:${PORT};
         proxy_http_version 1.1;
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
@@ -6740,7 +6748,7 @@ bapp_status() {
         printf '%s\n' "$(t binary_app.status.unpinned)"
       fi
     fi
-    printf '%s\n' "$(t binary_app.status.health_url "${BA_HEALTH_URL:-http://127.0.0.1:${PORT}/}")"
+    printf '%s\n' "$(t binary_app.status.health_url "${BA_HEALTH_URL:-$(ba_health_url)}")"
     printf '\n%s\n' "$(t binary_app.status.paths)"
     local path
     for path in "$BIN_PATH" "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR"; do
@@ -7412,7 +7420,7 @@ BA_FIREWALL=0
 BA_BIND_ADDR="${BA_BIND_ADDR:-127.0.0.1}"
 BA_SERVICE_DESCRIPTION="Gitea git server"
 BA_SERVICE_ARGS="web --config /etc/gitea/app.ini --work-path ${DATA_DIR}"
-BA_HEALTH_URL="http://127.0.0.1:${PORT}/"
+BA_HEALTH_PATH="/"
 BA_HEALTH_CODES="^(200|301|302|403)$"
 CONFIG_KEYS=(
   DOMAIN PORT INSTALL_DIR DATA_DIR LOG_DIR SERVICE_NAME SERVICE_USER

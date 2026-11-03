@@ -30,7 +30,7 @@ check_alist_release_asset_mapping() {
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
       && grep -Fq "printf 'alist-linux-%s.tar.gz" "$file" \
       && grep -Fq 'BA_SERVICE_ARGS="server --data ${DATA_DIR}"' "$file" \
-      && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/"' "$file" \
+      && grep -Fq 'BA_HEALTH_PATH="/"' "$file" \
       || {
         echo "${file} must map the verified Alist release tarball and run the server from DATA_DIR." >&2
         return 1

@@ -89,7 +89,7 @@ check_ntfy_release_asset_mapping() {
       && grep -Fq 'BA_BIN_NAME="ntfy"' "$file" \
       && grep -Fq 'BA_ARCHIVE_TYPE="tar.gz"' "$file" \
       && grep -Fq "printf 'ntfy_%s_linux_%s.tar.gz" "$file" \
-      && grep -Fq 'BA_HEALTH_URL="http://127.0.0.1:${PORT}/"' "$file" \
+      && grep -Fq 'BA_HEALTH_PATH="/"' "$file" \
       || {
         echo "${file} must map the verified GitHub release assets (v-less tarball names, health URL)." >&2
         return 1
