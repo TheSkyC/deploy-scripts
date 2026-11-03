@@ -721,6 +721,7 @@ main() {
       run_isolated_check check_systemd_units_are_atomic
       run_isolated_check check_tar_diagnostics_use_stderr
       run_isolated_check check_tickflow_config_files_are_atomic
+      run_isolated_check check_tickflow_custom_data_dir_contract
       run_isolated_check check_tickflow_dependency_failures_are_reported
       run_isolated_check check_tickflow_directory_setup_failures_are_explicit
       run_isolated_check check_tickflow_env_rewrites_preserve_existing_secrets

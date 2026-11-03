@@ -716,10 +716,16 @@ cat > /usr/local/bin/apt-get <<APT
 exit 0
 APT
 chmod +x /usr/local/bin/apt-get
+# Restore fails closed unless the restarted service becomes healthy. The
+# systemctl stub cannot start a real TickFlow process, so provide a minimal
+# local listener for the health probe.
+python3 -m http.server 3018 --bind 127.0.0.1 >/tmp/tickflow-health.log 2>&1 &
 # Install tickflow with compose stubbed: the shared compose_command must
 # resolve, the env/compose files must be written, and the systemd unit must
 # embed the resolved compose command.
 TICKFLOW_INSTALL_DIR=/opt/tickflow \
+TICKFLOW_DATA_DIR=/var/lib/tickflow-data \
+TICKFLOW_LOG_DIR=/var/log/tickflow \
 TICKFLOW_PORT=3018 \
 TICKFLOW_REPO=shy3130/tickflow-stock-panel \
 TICKFLOW_BRANCH=main \
@@ -733,6 +739,37 @@ test -f /opt/tickflow/.env || { echo "ENV_MISSING"; exit 1; }
 test -f /opt/tickflow/docker-compose.yml || { echo "COMPOSE_MISSING"; exit 1; }
 test -f /etc/systemd/system/tickflow-stock-panel.service || { echo "UNIT_MISSING"; exit 1; }
 grep -q "compose" /etc/systemd/system/tickflow-stock-panel.service || { echo "UNIT_NO_COMPOSE"; exit 1; }
+grep -Fq "      - \"/var/lib/tickflow-data:/app/data\"" /opt/tickflow/docker-compose.yml \
+  || { echo "CUSTOM_DATA_VOLUME_MISSING"; cat /opt/tickflow/docker-compose.yml; exit 1; }
+grep -Fq "      DATA_DIR: /app/data" /opt/tickflow/docker-compose.yml \
+  || { echo "CONTAINER_DATA_DIR_MISSING"; exit 1; }
+printf "custom-data-old\n" >/var/lib/tickflow-data/restore-marker.txt
+bash /repo/dist/install_tickflow.sh backup >"$LOG" 2>&1 || {
+  cat "$LOG"
+  echo "TICKFLOW_BACKUP_FAILED"
+  exit 1
+}
+TICKFLOW_ARCHIVE="$(find /opt/tickflow-backups -maxdepth 1 -name "tickflow-data-*.tar.gz" -type f | head -n 1)"
+[[ -n "$TICKFLOW_ARCHIVE" ]] || { echo "TICKFLOW_ARCHIVE_MISSING"; exit 1; }
+tar -tzf "$TICKFLOW_ARCHIVE" | grep -Fxq "tickflow-data/restore-marker.txt" \
+  || { echo "CUSTOM_DATA_ARCHIVE_MEMBER_MISSING"; exit 1; }
+printf "custom-data-mutated\n" >/var/lib/tickflow-data/restore-marker.txt
+printf "AUTH_PASSWORD=mutated\n" >/opt/tickflow/.env
+TICKFLOW_DATA_DIR=/var/lib/tickflow-data TICKFLOW_RESTORE_ARCHIVE="$TICKFLOW_ARCHIVE" \
+  bash /repo/dist/install_tickflow.sh restore >"$LOG" 2>&1 || {
+    cat "$LOG"
+    echo "TICKFLOW_CUSTOM_DATA_RESTORE_FAILED"
+    exit 1
+  }
+grep -qx "custom-data-old" /var/lib/tickflow-data/restore-marker.txt \
+  || { echo "CUSTOM_DATA_NOT_RESTORED"; exit 1; }
+grep -Fxq "AUTH_PASSWORD=testpass" /opt/tickflow/.env \
+  || { echo "TICKFLOW_ENV_NOT_RESTORED"; exit 1; }
+leftovers="$(find /opt/tickflow /var/lib -maxdepth 1 \
+  \( -name ".restore-stage.*" -o -name ".restore-aside.*" -o -name ".tickflow-data.restore-aside.*" \) \
+  -print -quit 2>/dev/null || true)"
+[[ -z "$leftovers" ]] || { echo "TICKFLOW_RESTORE_LEFTOVERS: $leftovers"; exit 1; }
+echo "TICKFLOW_CUSTOM_DATA_RESTORE_SMOKE_OK"
 echo "COMPOSE_PATH_SMOKE_OK"
 ' || exit 1
 

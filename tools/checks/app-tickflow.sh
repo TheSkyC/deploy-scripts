@@ -110,12 +110,13 @@ check_tickflow_env_rewrites_preserve_existing_secrets() {
     trap '"'"'rm -rf "$tmp_dir"'"'"' EXIT
 
     TICKFLOW_INSTALL_DIR="${tmp_dir}/tickflow"
+    TICKFLOW_DATA_DIR="${tmp_dir}/custom-data"
     TICKFLOW_ENV_FILE="${TICKFLOW_INSTALL_DIR}/.env"
     TICKFLOW_PORT="4010"
     TICKFLOW_AUTH_PASSWORD="newpass123"
     TICKFLOW_BACKEND_EXTRAS="alpha,beta"
 
-    mkdir -p "$TICKFLOW_INSTALL_DIR"
+    mkdir -p "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_DATA_DIR"
     cat > "$TICKFLOW_ENV_FILE" <<'"'"'EOF'"'"'
 TICKFLOW_API_KEY=existing-panel-key
 AI_PROVIDER=anthropic_compat
@@ -152,12 +153,15 @@ EOF
     _write_compose_file
     grep -Fq "BACKEND_EXTRAS: alpha,beta" "$TICKFLOW_COMPOSE_FILE"
     ! grep -Eq "BACKEND_EXTRAS:[[:space:]]*$" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fq "      DATA_DIR: /app/data" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fq "      - \"${TICKFLOW_DATA_DIR}:/app/data\"" "$TICKFLOW_COMPOSE_FILE"
   '
 }
 
-# do_backup always stores data/, .env, and tiers.yaml, so restore must reject an
-# archive that is missing any of them. The previous check compared the "false"
-# sentinels as non-empty strings, which made the guard impossible to trip.
+# do_backup always stores the configured data directory, .env, and tiers.yaml,
+# so restore must reject an archive that is missing any of them. The previous
+# check compared the "false" sentinels as non-empty strings, which made the
+# guard impossible to trip.
 check_tickflow_restore_requires_all_members() {
   grep -Fq 'if [[ "$found_data" != true || "$found_env" != true || "$found_tiers" != true ]]; then' impl/install_tickflow.sh || {
     echo "TickFlow restore must reject an archive missing data, .env, or tiers.yaml" >&2
@@ -177,7 +181,7 @@ check_tickflow_restore_keeps_rollback_until_healthy() {
   awk '
       /do_restore\(\)/ { in_restore=1; next }
       in_restore && /_health_check/ { health_line=NR }
-      in_restore && /^  rm -rf "\$aside_dir"/ {
+      in_restore && /^  rm -rf -- "\$stage_dir" "\$data_aside_dir" "\$install_aside_dir"/ {
         cleanup_line=NR
         if (!health_line) premature_cleanup=1
       }
@@ -197,9 +201,11 @@ check_tickflow_restore_keeps_rollback_until_healthy() {
 # the operator's only copy of the previous data.
 check_tickflow_restore_preserves_failed_rollback() {
   grep -Fq '_tickflow_restore_aside_targets() {' impl/install_tickflow.sh \
-    && grep -Fq 'if _tickflow_restore_aside_targets "$aside_dir" "$stamp" false; then' \
+    && grep -Fq '_tickflow_restore_rollback_failure' \
       impl/install_tickflow.sh \
-    && grep -Fq 'if _tickflow_restore_aside_targets "$aside_dir" "$stamp" true; then' \
+    && grep -Fq '"$data_aside_dir" "$install_aside_dir" "$stage_dir" false' \
+      impl/install_tickflow.sh \
+    && grep -Fq '"$data_aside_dir" "$install_aside_dir" "$stage_dir" true' \
       impl/install_tickflow.sh || {
     echo "TickFlow restore must roll staged targets back through the shared aside helper." >&2
     return 1
@@ -208,7 +214,7 @@ check_tickflow_restore_preserves_failed_rollback() {
     echo "TickFlow restore must not delete staged originals when a target cannot be moved aside." >&2
     return 1
   fi
-  grep -Fq 'warn "$(t backup.restore.rollback_failed "$aside_dir")"' \
+  grep -Fq 'warn "$(t backup.restore.rollback_failed "${data_aside_dir} ${install_aside_dir}")"' \
     impl/install_tickflow.sh || {
     echo "TickFlow restore must warn and keep the aside directory when rollback fails." >&2
     return 1
@@ -561,12 +567,12 @@ check_tickflow_manual_backup_is_explicit() {
       /do_backup\(\)/ { in_backup=1; saw_dir=0; saw_dir_error=0; saw_source_loop=0; saw_source_error=0; saw_tar=0; saw_integrity=0; saw_success=0; next }
       in_backup && /if ! mkdir -p "\$backup_dir"; then/ { saw_dir=1 }
       in_backup && /error "\$\(t app\.tickflow\.backup\.error_dir "\$backup_dir"\)"/ { saw_dir_error=1 }
-      in_backup && /for backup_source in data tiers\.yaml \.env; do/ { saw_source_loop=1 }
-      in_backup && /error "\$\(t app\.tickflow\.backup\.error_source_missing "\$\{TICKFLOW_INSTALL_DIR\}\/\$\{backup_source\}"\)"/ { saw_source_error=1 }
-      in_backup && /if ! backup_create_tar_archive "\$archive"/ { saw_tar=1 }
+      in_backup && /for backup_source in "\$TICKFLOW_DATA_DIR" "\$TICKFLOW_TIERS_FILE" "\$TICKFLOW_ENV_FILE"; do/ { saw_source_loop=1 }
+      in_backup && /error "\$\(t app\.tickflow\.backup\.error_source_missing "\$backup_source"\)"/ { saw_source_error=1 }
+      in_backup && /if ! _tickflow_create_backup_archive "\$archive"/ { saw_tar=1 }
       in_backup && /backup_finalize_archive "\$archive" "\$APP_ID" "\$\{INSTALLED_VERSION:-\}"/ { saw_integrity=1 }
       in_backup && /success "\$\(t app\.tickflow\.backup\.success "\$archive"\)"/ { saw_success=1 }
-      in_backup && /release_lock/ {
+      in_backup && /^}$/ {
         if (!(saw_dir && saw_dir_error && saw_source_loop && saw_source_error && saw_tar && saw_integrity && saw_success)) {
           printf "%s TickFlow manual backup must validate sources, use shared archive/integrity publishers, and report failures explicitly\n", FILENAME > "/dev/stderr"
           exit 1
@@ -642,21 +648,17 @@ check_tickflow_restore_keeps_aside_for_rollback() {
     in_fn && /^}$/ { in_fn=0; next }
     in_fn {
       line=$0
-      if (line ~ /_tickflow_restore_aside_targets/) { helpers++; helper_seen=1; next }
       if (line ~ /systemctl is-active/) saw_health=1
-      if (line ~ /rm -rf "\$aside_dir"/) {
-        # The aside copy may only be deleted right after a successful
-        # rollback helper or after the restored service passed its health check.
-        if (!helper_seen && !saw_health) {
+      if (line ~ /^  rm -rf -- "\$stage_dir" "\$data_aside_dir" "\$install_aside_dir"/) {
+        cleanup_seen=1
+        if (!saw_health) {
           print FILENAME ": aside directory deleted before rollback or health check" > "/dev/stderr"
           bad=1
         }
-        helper_seen=0
       }
-      if (line ~ /[^[:space:]]/) helper_seen=0
     }
     END {
-      if (!bad && (!saw_health || helpers < 2)) {
+      if (!bad && (!saw_health || !cleanup_seen)) {
         print FILENAME ": TickFlow restore must keep the aside copy until rollback or health verification" > "/dev/stderr"
         exit 1
       }
@@ -696,6 +698,7 @@ check_tickflow_generated_files_are_expansion_safe() {
     malicious="$2"
     trap '"'"'rm -rf "$tmp_dir"'"'"' EXIT
     TICKFLOW_INSTALL_DIR="${tmp_dir}/tickflow"
+    TICKFLOW_DATA_DIR="${TICKFLOW_INSTALL_DIR}/data"
     TICKFLOW_ENV_FILE="${TICKFLOW_INSTALL_DIR}/.env"
     TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/docker-compose.yml"
     TICKFLOW_PORT="4010"
@@ -734,6 +737,7 @@ check_tickflow_local_targets_follow_bind_addr() {
     tmp_dir="$(mktemp -d)"
     trap '\''rm -rf "$tmp_dir"'\'' EXIT
     TICKFLOW_INSTALL_DIR="${tmp_dir}/install"
+    TICKFLOW_DATA_DIR="${TICKFLOW_INSTALL_DIR}/data"
     TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/docker-compose.yml"
     TICKFLOW_PORT=4010
     mkdir -p "$TICKFLOW_INSTALL_DIR"
@@ -814,4 +818,51 @@ check_tickflow_summary_reports_reachable_url() {
     echo "TickFlow summary must state that the domain still needs an external reverse proxy." >&2
     return 1
   }
+}
+
+check_tickflow_custom_data_dir_contract() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_tickflow.sh
+
+    tmp_dir="$(mktemp -d)"
+    trap '\''rm -rf "$tmp_dir"'\'' EXIT
+    TICKFLOW_INSTALL_DIR="${tmp_dir}/install"
+    TICKFLOW_DATA_DIR="${tmp_dir}/market-data"
+    TICKFLOW_COMPOSE_FILE="${TICKFLOW_INSTALL_DIR}/docker-compose.yml"
+    TICKFLOW_ENV_FILE="${TICKFLOW_INSTALL_DIR}/.env"
+    TICKFLOW_TIERS_FILE="${TICKFLOW_INSTALL_DIR}/tiers.yaml"
+    TICKFLOW_PORT=4010
+    TICKFLOW_BIND_ADDR=127.0.0.1
+    mkdir -p "$TICKFLOW_INSTALL_DIR" "$TICKFLOW_DATA_DIR"
+    printf "old-data\n" >"${TICKFLOW_DATA_DIR}/state.txt"
+    printf "old-env\n" >"$TICKFLOW_ENV_FILE"
+    printf "old-tiers\n" >"$TICKFLOW_TIERS_FILE"
+
+    _write_compose_file
+    grep -Fxq "      DATA_DIR: /app/data" "$TICKFLOW_COMPOSE_FILE"
+    grep -Fxq "      - \"${TICKFLOW_DATA_DIR}:/app/data\"" "$TICKFLOW_COMPOSE_FILE"
+
+    archive="${tmp_dir}/backup.tar.gz"
+    _tickflow_create_backup_archive "$archive"
+    tar -tzf "$archive" | grep -Fxq "market-data/state.txt"
+    tar -tzf "$archive" | grep -Fxq ".env"
+    tar -tzf "$archive" | grep -Fxq "tiers.yaml"
+    if tar -tzf "$archive" | grep -Fxq "data/state.txt"; then
+      echo "custom TickFlow data must be archived under its configured basename" >&2
+      exit 1
+    fi
+
+    data_aside_dir="$(mktemp -d "$(dirname "$TICKFLOW_DATA_DIR")/.market-data.aside.XXXXXX")"
+    install_aside_dir="$(mktemp -d "${TICKFLOW_INSTALL_DIR}/.restore-aside.XXXXXX")"
+    _tickflow_restore_stage_originals "$data_aside_dir" "$install_aside_dir"
+    printf "new-data\n" >"$TICKFLOW_DATA_DIR"
+    printf "new-env\n" >"$TICKFLOW_ENV_FILE"
+    printf "new-tiers\n" >"$TICKFLOW_TIERS_FILE"
+    _tickflow_restore_aside_targets "$data_aside_dir" "$install_aside_dir" true
+    [[ "$(cat "${TICKFLOW_DATA_DIR}/state.txt")" == "old-data" ]]
+    [[ "$(cat "$TICKFLOW_ENV_FILE")" == "old-env" ]]
+    [[ "$(cat "$TICKFLOW_TIERS_FILE")" == "old-tiers" ]]
+  '
 }

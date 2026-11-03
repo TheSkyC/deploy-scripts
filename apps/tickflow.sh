@@ -183,6 +183,12 @@ i18n_register_many \
   app.tickflow.error.bind_addr \
   "TICKFLOW_BIND_ADDR is invalid: '%s'. Use 127.0.0.1, 0.0.0.0, ::1, or ::." \
   "TICKFLOW_BIND_ADDR 无效：'%s'。请使用 127.0.0.1、0.0.0.0、::1 或 ::" \
+  app.tickflow.error.data_dir_conflict \
+  "TICKFLOW_DATA_DIR must not be the install directory or its parent, and its basename must not be .env or tiers.yaml: %s (install dir: %s)." \
+  "TICKFLOW_DATA_DIR 不能等于安装目录或其父目录，目录名也不能是 .env 或 tiers.yaml：%s（安装目录：%s）。" \
+  app.tickflow.error.data_dir_invalid \
+  "TICKFLOW_DATA_DIR contains characters that are unsafe in a Compose volume: %s. Avoid ':', '\$', double quotes, backslashes, and newlines." \
+  "TICKFLOW_DATA_DIR 包含不适合 Compose 卷的字符：%s。请避免 ':'、'\$'、双引号、反斜杠和换行符。" \
   app.tickflow.summary.auth_file \
   "Panel password (AUTH_PASSWORD) is in:" \
   "面板密码（AUTH_PASSWORD）位于：" \

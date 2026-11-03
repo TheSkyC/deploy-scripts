@@ -167,6 +167,10 @@ has drifted from the configured pin, while an unpinned install states that
 - **Bind**: `TICKFLOW_BIND_ADDR` defaults to `127.0.0.1`; the compose port
   mapping follows it. The install summary reports the actual local URL. Put the
   panel behind an HTTPS reverse proxy to publish it.
+- **Data**: `TICKFLOW_DATA_DIR` defaults to `<install dir>/data` and is used as
+  the Compose bind mount, backup source, and restore target. A custom path may
+  live on another filesystem; backup archives preserve the directory basename
+  and remain restorable on the same configured path.
 - Source: `TICKFLOW_REPO` defaults to `shy3130/tickflow-stock-panel` and
   `TICKFLOW_BRANCH` defaults to `main`. Set `TICKFLOW_COMMIT` to a full
   40-character git SHA to check out that exact source revision. In this pinned
@@ -175,7 +179,7 @@ has drifted from the configured pin, while an unpinned install states that
   `check-update`/`status-json` compare locally with the configured pin
   (`source: git_commit`, `cache_state: pinned`) without a network request.
   Leave `TICKFLOW_COMMIT` empty to retain the moving-branch model. Other keys:
-  `TICKFLOW_BACKEND_EXTRAS`, `TICKFLOW_DOMAIN`. The domain is summary-only: the
+  `TICKFLOW_BACKEND_EXTRAS`, `TICKFLOW_DOMAIN`, `TICKFLOW_DATA_DIR`. The domain is summary-only: the
   installer does not create an Nginx site or obtain a certificate, and the
   summary tells you which local URL the external reverse proxy should target.
 
