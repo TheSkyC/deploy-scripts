@@ -14213,11 +14213,14 @@ i18n_register_many \
   "TickFlow files installed; verify service health before use" \
   "TickFlow 文件已安装；请先确认服务健康后再使用" \
   app.tickflow.summary.public \
-  "Public URL" \
-  "公网访问" \
+  "Configured domain (reverse proxy required)" \
+  "已配置域名（需反向代理）" \
   app.tickflow.summary.internal \
-  "Internal URL" \
-  "内网直连" \
+  "Local URL" \
+  "本地访问" \
+  app.tickflow.summary.domain_hint \
+  "TICKFLOW_DOMAIN only affects this summary. Point your reverse proxy at %s; this installer does not configure Nginx or TLS." \
+  "TICKFLOW_DOMAIN 仅影响安装摘要。请将反向代理指向 %s；本安装脚本不会配置 Nginx 或 TLS。" \
   app.tickflow.summary.repo \
   "Repository" \
   "源码仓库" \
@@ -22387,9 +22390,6 @@ _health_check() {
 _print_summary() {
   local state="$1"
   local summary_title
-  local internal_ip
-  internal_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-  internal_ip="${internal_ip:-YOUR_SERVER_IP}"
   echo ""
   if [[ "$state" == "pending" ]]; then
     summary_title="$(t app.tickflow.summary.title_pending)"
@@ -22398,9 +22398,10 @@ _print_summary() {
   fi
   echo -e "  ${BOLD}${GREEN}${summary_title}${NC}"
   if [[ -n "$TICKFLOW_DOMAIN" ]]; then
-    echo -e "  $(t app.tickflow.summary.public): ${CYAN}http://${TICKFLOW_DOMAIN}${NC}"
+    echo -e "  $(t app.tickflow.summary.public): ${CYAN}${TICKFLOW_DOMAIN}${NC}"
+    echo -e "  ${YELLOW}$(t app.tickflow.summary.domain_hint "$(_tickflow_health_url)")${NC}"
   fi
-  echo -e "  $(t app.tickflow.summary.internal): ${CYAN}http://${internal_ip}:${TICKFLOW_PORT}${NC}"
+  echo -e "  $(t app.tickflow.summary.internal): ${CYAN}$(_tickflow_health_url)${NC}"
   echo -e "  $(t app.tickflow.summary.repo): ${YELLOW}${TICKFLOW_REPO}${NC}"
   echo -e "  $(t app.tickflow.summary.compose): ${YELLOW}${TICKFLOW_INSTALL_DIR}${NC}"
   echo -e "  $(t app.tickflow.summary.data): ${YELLOW}${TICKFLOW_DATA_DIR}${NC}"

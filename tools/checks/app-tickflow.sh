@@ -769,3 +769,49 @@ check_tickflow_local_targets_follow_bind_addr() {
     return 1
   }
 }
+
+check_tickflow_summary_reports_reachable_url() {
+  local output
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source apps/tickflow.sh
+
+    TICKFLOW_DOMAIN=""
+    TICKFLOW_PORT=4010
+    TICKFLOW_BIND_ADDR=127.0.0.1
+    _print_summary ready
+  ' 2>&1)"
+  [[ "$output" == *"http://127.0.0.1:4010/"* ]] || {
+    echo "TickFlow summary must show the actual loopback URL." >&2
+    printf '%s\n' "$output" >&2
+    return 1
+  }
+  [[ "$output" != *"YOUR_SERVER_IP"* && "$output" != *"http://0.0.0.0:"* ]] || {
+    echo "TickFlow summary must not advertise an unreachable wildcard/placeholder URL." >&2
+    return 1
+  }
+
+  output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source apps/tickflow.sh
+
+    TICKFLOW_DOMAIN=panel.example.com
+    TICKFLOW_PORT=4010
+    TICKFLOW_BIND_ADDR=::1
+    _print_summary ready
+  ' 2>&1)"
+  [[ "$output" == *"http://[::1]:4010/"* ]] || {
+    echo "TickFlow summary must follow an IPv6 loopback binding." >&2
+    return 1
+  }
+  [[ "$output" == *"panel.example.com"* ]] || {
+    echo "TickFlow summary must show the configured domain." >&2
+    return 1
+  }
+  [[ "$output" == *"does not configure Nginx or TLS"* ]] || {
+    echo "TickFlow summary must state that the domain still needs an external reverse proxy." >&2
+    return 1
+  }
+}

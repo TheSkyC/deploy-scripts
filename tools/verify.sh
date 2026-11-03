@@ -729,6 +729,7 @@ main() {
       run_isolated_check check_tickflow_local_targets_follow_bind_addr
       run_isolated_check check_tickflow_manual_backup_is_explicit
       run_isolated_check check_tickflow_paths_are_guarded
+      run_isolated_check check_tickflow_summary_reports_reachable_url
       run_isolated_check check_tickflow_restore_requires_all_members
       run_isolated_check check_tickflow_restore_keeps_rollback_until_healthy
       run_isolated_check check_tickflow_restore_preserves_failed_rollback

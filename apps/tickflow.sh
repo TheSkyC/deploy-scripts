@@ -283,11 +283,14 @@ i18n_register_many \
   "TickFlow files installed; verify service health before use" \
   "TickFlow 文件已安装；请先确认服务健康后再使用" \
   app.tickflow.summary.public \
-  "Public URL" \
-  "公网访问" \
+  "Configured domain (reverse proxy required)" \
+  "已配置域名（需反向代理）" \
   app.tickflow.summary.internal \
-  "Internal URL" \
-  "内网直连" \
+  "Local URL" \
+  "本地访问" \
+  app.tickflow.summary.domain_hint \
+  "TICKFLOW_DOMAIN only affects this summary. Point your reverse proxy at %s; this installer does not configure Nginx or TLS." \
+  "TICKFLOW_DOMAIN 仅影响安装摘要。请将反向代理指向 %s；本安装脚本不会配置 Nginx 或 TLS。" \
   app.tickflow.summary.repo \
   "Repository" \
   "源码仓库" \
