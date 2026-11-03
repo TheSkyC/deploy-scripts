@@ -226,6 +226,7 @@ check_ntfy_e2e_restore_and_rollback_fixture() {
   local fixture="tools/e2e-smoke.sh"
   grep -Fq "ntfy_2.28.0_linux_amd64.tar.gz" "$fixture" \
     && grep -Fq "fail-daemon-reload" "$fixture" \
+    && grep -Fq 'grep -Fxq "base-url: \"http://127.0.0.1:2586\"" /etc/ntfy/server.yml' "$fixture" \
     && grep -Fq 'NTFY_RESTORE_ARCHIVE="$NTFY_ARCHIVE"' "$fixture" \
     && grep -Fq "NTFY_RESTORE_SMOKE_OK" "$fixture" \
     && grep -Fq "NTFY_UPDATE_ROLLBACK_SMOKE_OK" "$fixture" \
