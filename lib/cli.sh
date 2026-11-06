@@ -8,9 +8,14 @@ show_banner() {
 # True when a config key names a credential. `--help` and `--dry-run` list
 # every CONFIG_KEYS value for operator convenience; credential-looking values
 # (passwords, tokens, keys, DSNs) must not be echoed into terminal scrollback
-# or support transcripts. Over-matching only hides an extra harmless value.
+# or support transcripts. Values with embedded URL credentials are covered too.
+# Over-matching only hides an extra harmless value.
 deploy_config_value_is_secret() {
-  [[ "${1:-}" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN) ]]
+  local key="${1:-}" value="${2:-}"
+  if (($# < 2)) && [[ -n "$key" ]]; then
+    value="${!key:-}"
+  fi
+  config_value_is_secret "$key" "$value"
 }
 
 # Print "KEY value" for each CONFIG_KEYS entry on stderr, masking secrets.

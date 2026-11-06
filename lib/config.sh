@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# True when a config key's name or value can carry a credential. Values are
+# checked as well as names because package/proxy URLs commonly embed a token
+# in URL userinfo or a query parameter (for example PIP_INDEX_URL).
+config_value_is_secret() {
+  local key="${1:-}" value="${2:-}" lower
+  [[ "$key" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL) ]] && return 0
+  [[ "$value" =~ ://[^/@[:space:]]+@ ]] && return 0
+  lower="${value,,}"
+  [[ "$lower" =~ ([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=) ]] && return 0
+  return 1
+}
+
 sanitize_conf_val() {
   local newline=$'\n'
   local carriage_return=$'\r'

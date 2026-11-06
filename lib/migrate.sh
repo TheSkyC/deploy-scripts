@@ -154,7 +154,10 @@ migrate_main() {
         mkdir -p "$stage/redacted-reference"
         for rf in "$stage"/etc/*.conf; do
           rf_out="$stage/redacted-reference/$(basename "$rf").redacted.txt"
-          sed -E 's/^((TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)[A-Za-z_]*=)".*"/\1"[REDACTED]"/I' \
+          sed -E \
+            -e 's/^((TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)[A-Za-z_]*=)".*"/\1"[REDACTED]"/I' \
+            -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^/"[:space:]]+@#\1[REDACTED]@#g' \
+            -e 's/([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=)[^&"[:space:]]+/\1[REDACTED]/Ig' \
             "$rf" > "$rf_out"
         done
       fi

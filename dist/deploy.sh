@@ -690,6 +690,18 @@ release_lock() {
 
 # ----- lib/config.sh -----
 
+# True when a config key's name or value can carry a credential. Values are
+# checked as well as names because package/proxy URLs commonly embed a token
+# in URL userinfo or a query parameter (for example PIP_INDEX_URL).
+config_value_is_secret() {
+  local key="${1:-}" value="${2:-}" lower
+  [[ "$key" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL) ]] && return 0
+  [[ "$value" =~ ://[^/@[:space:]]+@ ]] && return 0
+  lower="${value,,}"
+  [[ "$lower" =~ ([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=) ]] && return 0
+  return 1
+}
+
 sanitize_conf_val() {
   local newline=$'\n'
   local carriage_return=$'\r'
@@ -4915,7 +4927,7 @@ app_doctor_config_diff() {
     fi
     current="${!key:-}"
     if [[ "$saved" != "$current" ]]; then
-      if [[ "$key" == *PASS* || "$key" == *TOKEN* || "$key" == *SECRET* || "$key" == *KEY* || "$key" == *DSN* ]]; then
+      if config_value_is_secret "$key" "$saved" || config_value_is_secret "$key" "$current"; then
         echo "$(t doctor.config_diff_secret "$key")"
       else
         echo "$(t doctor.config_diff "$key" "$saved" "$current")"
@@ -9240,7 +9252,10 @@ migrate_main() {
         mkdir -p "$stage/redacted-reference"
         for rf in "$stage"/etc/*.conf; do
           rf_out="$stage/redacted-reference/$(basename "$rf").redacted.txt"
-          sed -E 's/^((TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)[A-Za-z_]*=)".*"/\1"[REDACTED]"/I' \
+          sed -E \
+            -e 's/^((TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)[A-Za-z_]*=)".*"/\1"[REDACTED]"/I' \
+            -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^/"[:space:]]+@#\1[REDACTED]@#g' \
+            -e 's/([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=)[^&"[:space:]]+/\1[REDACTED]/Ig' \
             "$rf" > "$rf_out"
         done
       fi
@@ -9613,9 +9628,14 @@ show_banner() {
 # True when a config key names a credential. `--help` and `--dry-run` list
 # every CONFIG_KEYS value for operator convenience; credential-looking values
 # (passwords, tokens, keys, DSNs) must not be echoed into terminal scrollback
-# or support transcripts. Over-matching only hides an extra harmless value.
+# or support transcripts. Values with embedded URL credentials are covered too.
+# Over-matching only hides an extra harmless value.
 deploy_config_value_is_secret() {
-  [[ "${1:-}" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN) ]]
+  local key="${1:-}" value="${2:-}"
+  if (($# < 2)) && [[ -n "$key" ]]; then
+    value="${!key:-}"
+  fi
+  config_value_is_secret "$key" "$value"
 }
 
 # Print "KEY value" for each CONFIG_KEYS entry on stderr, masking secrets.

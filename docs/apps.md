@@ -17,6 +17,8 @@ Every app supports `--help` (lists configuration keys with current values) and
 `--dry-run <action>` (previews what install/update/backup/uninstall would do
 without touching the system). Configuration keys are environment variables;
 export any key to override its default.
+Credential-like key names and credentials embedded in URL values are redacted
+from help, dry-run, doctor drift, and migration reference output.
 
 ## Binary apps (shared lifecycle)
 

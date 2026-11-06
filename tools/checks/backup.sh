@@ -3300,13 +3300,25 @@ PY
     error() { echo "ERROR: $*" >&2; exit 9; }
 
     mkdir -p "$MIGRATE_EXPORT_DIR"
-    printf "PORT=\"1234\"\nAPI_TOKEN=\"sekrit\"\n" > "$MIGRATE_EXPORT_DIR/myapp-deploy.conf"
+    printf "PORT=\"1234\"\nPIP_INDEX_URL=\"https://user:url-sekrit@example.invalid/simple\"\nGOPROXY=\"https://proxy.example.invalid?token=query-sekrit,direct\"\nAPI_TOKEN=\"sekrit\"\n" > "$MIGRATE_EXPORT_DIR/myapp-deploy.conf"
     printf "NOTIFY_ENABLED=\"false\"\nNOTIFY_BACKEND=\"ntfy\"\n" > "$NOTIFY_CONF_FILE"
     migrate_main export --output "$tmp/out.tar.gz" --redact >/dev/null 2>&1 || { echo EXPORT_FAILED; exit 72; }
     [[ -f "$tmp/out.tar.gz" && -f "$tmp/out.tar.gz.sha256" ]] || { echo NO_SIDECAR; exit 73; }
     backup_verify_archive "$tmp/out.tar.gz" || { echo BAD_SIDECAR; exit 74; }
     tar -tzf "$tmp/out.tar.gz" | grep -q "redacted-reference/myapp-deploy.conf.redacted.txt" \
       || { echo NO_REDACTED_REFERENCE; exit 75; }
+    mkdir -p "$tmp/extracted"
+    tar -xzf "$tmp/out.tar.gz" -C "$tmp/extracted" \
+      || { echo NO_REDACTED_FILE; exit 80; }
+    redacted="$tmp/extracted/redacted-reference/myapp-deploy.conf.redacted.txt"
+    [[ -f "$redacted" ]] || { echo NO_REDACTED_FILE; exit 80; }
+    if grep -Eq "url-sekrit|query-sekrit|sekrit" "$redacted"; then
+      echo REDACTED_REFERENCE_LEAKED; exit 81
+    fi
+    grep -q "PIP_INDEX_URL=\"https://user:\\[REDACTED\\]@example.invalid/simple\"" "$redacted" \
+      || { echo URL_CREDENTIAL_NOT_REDACTED; exit 82; }
+    grep -q "GOPROXY=\"https://proxy.example.invalid?token=\\[REDACTED\\],direct\"" "$redacted" \
+      || { echo QUERY_CREDENTIAL_NOT_REDACTED; exit 83; }
 
     rm -f "$MIGRATE_EXPORT_DIR/myapp-deploy.conf" "$NOTIFY_CONF_FILE"
     migrate_main import --input "$tmp/out.tar.gz" >/dev/null 2>&1 || { echo IMPORT_FAILED; exit 76; }

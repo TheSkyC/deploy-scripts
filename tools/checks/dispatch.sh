@@ -105,14 +105,23 @@ check_doctor_config_diff_ignores_saved_quotes() {
     tmp="$(mktemp -d)"
     trap '"'"'rm -rf "$tmp"'"'"' EXIT
     _APP_CONF_LEGACY="$tmp/app.conf"
-    CONFIG_KEYS=(PORT)
+    CONFIG_KEYS=(PORT PIP_INDEX_URL)
     PORT=7000
-    printf '"'"'PORT="7000"\n'"'"' > "$_APP_CONF_LEGACY"
+    PIP_INDEX_URL="https://user:old-token@example.invalid/simple"
+    printf '"'"'PORT="7000"\nPIP_INDEX_URL="https://user:old-token@example.invalid/simple"\n'"'"' > "$_APP_CONF_LEGACY"
     output="$(app_doctor_config_diff)"
     [[ "$output" == *No\ configuration\ drift* ]] || { echo "$output" >&2; exit 1; }
     PORT=8000
     output="$(app_doctor_config_diff)"
     [[ "$output" == *PORT*7000*8000* ]] || { echo "$output" >&2; exit 2; }
+    PIP_INDEX_URL="https://user:new-token@example.invalid/simple"
+    output="$(app_doctor_config_diff)"
+    [[ "$output" == *PIP_INDEX_URL*value\ hidden* ]] || { echo "$output" >&2; exit 3; }
+    [[ "$output" != *old-token* && "$output" != *new-token* ]] || {
+      echo "$output" >&2
+      echo "Config drift must not print credentials embedded in URLs." >&2
+      exit 4
+    }
   ' bash "$ROOT_DIR"
 }
 
@@ -666,18 +675,19 @@ check_help_masks_sensitive_config_values() {
     source "$1/lib/logging.sh"
     source "$1/lib/cli.sh"
     APP_ID=test
-    CONFIG_KEYS=(PORT API_TOKEN DB_PASSWORD)
+    CONFIG_KEYS=(PORT PIP_INDEX_URL API_TOKEN DB_PASSWORD)
     PORT=8080
+    PIP_INDEX_URL=https://user:url-embedded-secret@example.invalid/simple
     API_TOKEN=super-secret
     DB_PASSWORD=another-secret
     usage --help 2>&1
   ' bash "$ROOT_DIR")"
-  [[ "$output" == *API_TOKEN* && "$output" == *DB_PASSWORD* && "$output" == *PORT* ]] || {
+  [[ "$output" == *PIP_INDEX_URL* && "$output" == *API_TOKEN* && "$output" == *DB_PASSWORD* && "$output" == *PORT* ]] || {
     echo "$output" >&2
     echo "Help output must mask credential-like config values." >&2
     return 1
   }
-  [[ "$output" != *super-secret* && "$output" != *another-secret* ]] || {
+  [[ "$output" != *url-embedded-secret* && "$output" != *super-secret* && "$output" != *another-secret* ]] || {
     echo "Help output leaked a sensitive config value." >&2
     return 1
   }
