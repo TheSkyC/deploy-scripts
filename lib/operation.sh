@@ -71,14 +71,15 @@ operation_json_nullable() {
 }
 
 # Single source of truth for credential redaction. Operation summaries, operation
-# logs, and outgoing notifications must use the same patterns so a secret that is
+# logs, and outgoing notifications must use these patterns so a secret that is
 # safe in one channel cannot leak through another.
 operation_redact_text() {
   local value="${1:-}"
   printf '%s' "$value" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|PASSWD|SECRET|API_KEY|PRIVATE_KEY|KEY|AUTH|CREDENTIAL|SIGNATURE)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+    -e 's#([A-Za-z][A-Za-z0-9+.-]*://[^:/@[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g' \
+    -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^:/@[:space:]]+@#\1[REDACTED]@#g'
 }
 
 operation_safe_summary() {

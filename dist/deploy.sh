@@ -698,7 +698,7 @@ config_value_is_secret() {
   [[ "$key" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL) ]] && return 0
   [[ "$value" =~ ://[^/@[:space:]]+@ ]] && return 0
   lower="${value,,}"
-  [[ "$lower" =~ ([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=) ]] && return 0
+  [[ "$lower" =~ ([?&]([[:alnum:]_.-]*(access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth|signature|credential)[[:alnum:]_.-]*)=) ]] && return 0
   return 1
 }
 
@@ -1253,14 +1253,15 @@ operation_json_nullable() {
 }
 
 # Single source of truth for credential redaction. Operation summaries, operation
-# logs, and outgoing notifications must use the same patterns so a secret that is
+# logs, and outgoing notifications must use these patterns so a secret that is
 # safe in one channel cannot leak through another.
 operation_redact_text() {
   local value="${1:-}"
   printf '%s' "$value" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|PASSWD|SECRET|API_KEY|PRIVATE_KEY|KEY|AUTH|CREDENTIAL|SIGNATURE)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+    -e 's#([A-Za-z][A-Za-z0-9+.-]*://[^:/@[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g' \
+    -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^:/@[:space:]]+@#\1[REDACTED]@#g'
 }
 
 operation_safe_summary() {
@@ -8557,13 +8558,10 @@ notify_load_config() {
 }
 
 # Redact anything that looks like a credential from message bodies before
-# they leave the machine. Reuses the operation-log redaction patterns.
+# they leave the machine. Use the operation redactor so the two channels cannot
+# drift onto different credential patterns.
 notify_redact() {
-  local text="$1"
-  printf '%s' "$text" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
-    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+  operation_redact_text "${1:-}"
 }
 
 # Publish the current notification values atomically. Keeping the complete key
@@ -9254,8 +9252,9 @@ migrate_main() {
           rf_out="$stage/redacted-reference/$(basename "$rf").redacted.txt"
           sed -E \
             -e 's/^((TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)[A-Za-z_]*=)".*"/\1"[REDACTED]"/I' \
-            -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^/"[:space:]]+@#\1[REDACTED]@#g' \
-            -e 's/([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=)[^&"[:space:]]+/\1[REDACTED]/Ig' \
+            -e 's#([A-Za-z][A-Za-z0-9+.-]*://[^:/"[:space:]]+):[^@/"[:space:]]+@#\1:[REDACTED]@#g' \
+            -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^:/"[:space:]]+@#\1[REDACTED]@#g' \
+            -e 's/([?&]([[:alnum:]_.-]*(access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth|signature|credential)[[:alnum:]_.-]*)=)[^&"[:space:]]+/\1[REDACTED]/Ig' \
             "$rf" > "$rf_out"
         done
       fi

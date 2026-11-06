@@ -41,13 +41,10 @@ notify_load_config() {
 }
 
 # Redact anything that looks like a credential from message bodies before
-# they leave the machine. Reuses the operation-log redaction patterns.
+# they leave the machine. Use the operation redactor so the two channels cannot
+# drift onto different credential patterns.
 notify_redact() {
-  local text="$1"
-  printf '%s' "$text" | sed -E \
-    -e 's/([[:alnum:]_.-]*(TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY|KEY)[[:alnum:]_.-]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig' \
-    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1[REDACTED]#Ig' \
-    -e 's#(https?://[^:/[:space:]]+):[^@/[:space:]]+@#\1:[REDACTED]@#g'
+  operation_redact_text "${1:-}"
 }
 
 # Publish the current notification values atomically. Keeping the complete key

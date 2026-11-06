@@ -433,6 +433,7 @@ main() {
       check_version_helpers
       check_operation_records
       check_operation_json_escape_matches_app_json_string
+      check_operation_redacts_embedded_url_credentials
       check_operation_logrotate_policy
       check_operation_logrotate_uses_shared_atomic_writer
       check_history_command

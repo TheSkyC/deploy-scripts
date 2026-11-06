@@ -40,6 +40,28 @@ check_operation_json_escape_matches_app_json_string() {
   ' _ "$ROOT_DIR"
 }
 
+check_operation_redacts_embedded_url_credentials() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    text="token-only https://embedded-secret@example.invalid "
+    text+="userinfo https://user:password-secret@example.invalid "
+    text+="auth https://proxy.example.invalid?auth=auth-secret "
+    text+="signed https://bucket.example.invalid/object?X-Amz-Credential=credential-secret&X-Amz-Signature=signature-secret "
+    text+="assignment API_KEY=assignment-secret "
+    text+="bearer Authorization:Bearer"
+    text+=" bearer-secret"
+    output="$(operation_redact_text "$text")"
+    for secret in embedded-secret password-secret auth-secret credential-secret signature-secret assignment-secret bearer-secret; do
+      [[ "$output" != *"$secret"* ]] || {
+        printf "operation redaction leaked %s: %s\n" "$secret" "$output" >&2
+        exit 1
+      }
+    done
+    [[ "$output" == *"[REDACTED]"* ]]
+  '
+}
+
 check_operation_records() {
   local temp_root
   temp_root="$(mktemp -d)"

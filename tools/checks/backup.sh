@@ -2430,11 +2430,15 @@ done
 echo 200
 STUB
     chmod +x "$tmp/bin/curl"
-    PATH="$tmp/bin:$PATH" notify_send "title with API_KEY=supersecret inside" \
-      "body with DB_PASSWORD=hunter2 inside" >/dev/null 2>&1
+    PATH="$tmp/bin:$PATH" notify_send \
+      "title with API_KEY=supersecret and https://title-secret@example.invalid" \
+      "body with DB_PASSWORD=hunter2, https://embedded-secret@example.invalid, and https://bucket.example.invalid/object?X-Amz-Signature=signed-secret&safe=1" \
+      >/dev/null 2>&1
     body="$(cat "$NOTIFY_BODY_FILE")"
     [[ "$body" == *DB_PASSWORD[=]*REDACTED* ]] || { echo BODY_NOT_REDACTED_KEY; echo "$body" >&2; exit 53; }
-    if [[ "$body" == *hunter2* ]]; then echo BODY_LEAKED_PASSWORD; exit 54; fi
+    if [[ "$body" == *hunter2* || "$body" == *title-secret* || "$body" == *embedded-secret* || "$body" == *signed-secret* ]]; then
+      echo BODY_LEAKED_EMBEDDED_CREDENTIAL; echo "$body" >&2; exit 54
+    fi
 
     # Strict delivery failure (curl stub exits non-zero) must fail the send.
     cat > "$tmp/bin/curl" <<STUB2
@@ -3300,7 +3304,7 @@ PY
     error() { echo "ERROR: $*" >&2; exit 9; }
 
     mkdir -p "$MIGRATE_EXPORT_DIR"
-    printf "PORT=\"1234\"\nPIP_INDEX_URL=\"https://user:url-sekrit@example.invalid/simple\"\nGOPROXY=\"https://proxy.example.invalid?token=query-sekrit,direct\"\nAPI_TOKEN=\"sekrit\"\n" > "$MIGRATE_EXPORT_DIR/myapp-deploy.conf"
+    printf "PORT=\"1234\"\nPIP_INDEX_URL=\"https://user:url-sekrit@example.invalid/simple\"\nTOKEN_URL=\"https://token-only-sekrit@example.invalid/simple\"\nGOPROXY=\"https://proxy.example.invalid?token=query-sekrit,direct\"\nSIGNED_URL=\"https://bucket.example.invalid/object?X-Amz-Credential=credential-sekrit&X-Amz-Signature=signature-sekrit&safe=1\"\nAPI_TOKEN=\"sekrit\"\n" > "$MIGRATE_EXPORT_DIR/myapp-deploy.conf"
     printf "NOTIFY_ENABLED=\"false\"\nNOTIFY_BACKEND=\"ntfy\"\n" > "$NOTIFY_CONF_FILE"
     migrate_main export --output "$tmp/out.tar.gz" --redact >/dev/null 2>&1 || { echo EXPORT_FAILED; exit 72; }
     [[ -f "$tmp/out.tar.gz" && -f "$tmp/out.tar.gz.sha256" ]] || { echo NO_SIDECAR; exit 73; }
@@ -3312,13 +3316,17 @@ PY
       || { echo NO_REDACTED_FILE; exit 80; }
     redacted="$tmp/extracted/redacted-reference/myapp-deploy.conf.redacted.txt"
     [[ -f "$redacted" ]] || { echo NO_REDACTED_FILE; exit 80; }
-    if grep -Eq "url-sekrit|query-sekrit|sekrit" "$redacted"; then
+    if grep -Eq "url-sekrit|token-only-sekrit|query-sekrit|credential-sekrit|signature-sekrit|sekrit" "$redacted"; then
       echo REDACTED_REFERENCE_LEAKED; exit 81
     fi
     grep -q "PIP_INDEX_URL=\"https://user:\\[REDACTED\\]@example.invalid/simple\"" "$redacted" \
       || { echo URL_CREDENTIAL_NOT_REDACTED; exit 82; }
+    grep -q "TOKEN_URL=\"https://\\[REDACTED\\]@example.invalid/simple\"" "$redacted" \
+      || { echo TOKEN_URL_CREDENTIAL_NOT_REDACTED; exit 85; }
     grep -q "GOPROXY=\"https://proxy.example.invalid?token=\\[REDACTED\\],direct\"" "$redacted" \
       || { echo QUERY_CREDENTIAL_NOT_REDACTED; exit 83; }
+    grep -q "SIGNED_URL=\"https://bucket.example.invalid/object?X-Amz-Credential=\\[REDACTED\\]&X-Amz-Signature=\\[REDACTED\\]&safe=1\"" "$redacted" \
+      || { echo SIGNED_URL_CREDENTIAL_NOT_REDACTED; exit 84; }
 
     rm -f "$MIGRATE_EXPORT_DIR/myapp-deploy.conf" "$NOTIFY_CONF_FILE"
     migrate_main import --input "$tmp/out.tar.gz" >/dev/null 2>&1 || { echo IMPORT_FAILED; exit 76; }

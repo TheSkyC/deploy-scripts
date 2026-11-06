@@ -8,7 +8,7 @@ config_value_is_secret() {
   [[ "$key" =~ (PASSWORD|PASSWD|PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL) ]] && return 0
   [[ "$value" =~ ://[^/@[:space:]]+@ ]] && return 0
   lower="${value,,}"
-  [[ "$lower" =~ ([?&](access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth)=) ]] && return 0
+  [[ "$lower" =~ ([?&]([[:alnum:]_.-]*(access[_-]?token|token|api[_-]?key|apikey|key|password|passwd|secret|auth|signature|credential)[[:alnum:]_.-]*)=) ]] && return 0
   return 1
 }
 
