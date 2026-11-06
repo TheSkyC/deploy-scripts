@@ -16865,7 +16865,7 @@ do_uninstall() {
   else
     prompt "$(t app.sub2api.prompt.delete_data "$DATA_DIR")"
     local _del_data; read -r _del_data
-    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+    [[ "${_del_data,,}" == "y" || "${_del_data,,}" == "yes" ]] && DELETE_DATA=true
   fi
   local DELETE_CONF=false
   if deploy_assume_yes; then
@@ -16873,7 +16873,7 @@ do_uninstall() {
   else
     prompt "$(t app.sub2api.prompt.delete_config "$CONFIG_DIR")"
     local _del_conf; read -r _del_conf
-    [[ "${_del_conf,,}" == "y" ]] && DELETE_CONF=true
+    [[ "${_del_conf,,}" == "y" || "${_del_conf,,}" == "yes" ]] && DELETE_CONF=true
   fi
   local DELETE_BACKUP=false
   if deploy_assume_yes; then
@@ -16881,7 +16881,7 @@ do_uninstall() {
   else
     prompt "$(t app.sub2api.prompt.delete_backup "$BACKUP_DIR")"
     local _del_bak; read -r _del_bak
-    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+    [[ "${_del_bak,,}" == "y" || "${_del_bak,,}" == "yes" ]] && DELETE_BACKUP=true
   fi
   info "$(t app.sub2api.info.stop_disable "$SERVICE_NAME")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
@@ -19091,7 +19091,7 @@ do_uninstall() {
   else
     prompt "$(t app.vaultwarden.prompt.delete_data "$VW_DATA_DIR")"
     local _del_data; read -r _del_data
-    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+    [[ "${_del_data,,}" == "y" || "${_del_data,,}" == "yes" ]] && DELETE_DATA=true
   fi
   local DELETE_BACKUP=false
   if deploy_assume_yes; then
@@ -19099,7 +19099,7 @@ do_uninstall() {
   else
     prompt "$(t app.vaultwarden.prompt.delete_backup "$VW_BACKUP_DIR")"
     local _del_bak; read -r _del_bak
-    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+    [[ "${_del_bak,,}" == "y" || "${_del_bak,,}" == "yes" ]] && DELETE_BACKUP=true
   fi
   info "$(t app.vaultwarden.info.stop_service)"
   if ! systemctl stop vaultwarden 2>/dev/null; then
@@ -20593,17 +20593,18 @@ do_uninstall() {
   _csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"
   _csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.cyberstrikeai.success.removed_configs)"
-  if [[ "${del_install,,}" == "y" ]]; then
+  if [[ "${del_install,,}" == "y" || "${del_install,,}" == "yes" ]]; then
     _csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"
   else
     info "$(t app.cyberstrikeai.info.kept_install "$INSTALL_DIR")"
   fi
-  if [[ "${del_backup,,}" == "y" ]]; then
+  if [[ "${del_backup,,}" == "y" || "${del_backup,,}" == "yes" ]]; then
     _csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"
   else
     info "$(t app.cyberstrikeai.info.kept_backup "$BACKUP_DIR")"
   fi
-  if [[ "${del_install,,}" == "y" ]] && id "$SERVICE_USER" >/dev/null 2>&1; then
+  if [[ "${del_install,,}" == "y" || "${del_install,,}" == "yes" ]] \
+     && id "$SERVICE_USER" >/dev/null 2>&1; then
     if userdel "$SERVICE_USER" 2>/dev/null; then
       success "$(t app.cyberstrikeai.success.deleted_user "$SERVICE_USER")"
     else
@@ -22730,7 +22731,7 @@ do_uninstall() {
   else
     prompt "$(t app.tickflow.prompt.delete_install "$TICKFLOW_INSTALL_DIR")"
     local delete_install; read -r delete_install
-    [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
+    [[ "${delete_install,,}" == "y" || "${delete_install,,}" == "yes" ]] && DELETE_INSTALL=true
   fi
   local DELETE_BACKUP=false
   if deploy_assume_yes; then
@@ -22738,7 +22739,7 @@ do_uninstall() {
   else
     prompt "$(t app.tickflow.prompt.delete_backup "$backup_dir")"
     local delete_backup; read -r delete_backup
-    [[ "${delete_backup,,}" == "y" ]] && DELETE_BACKUP=true
+    [[ "${delete_backup,,}" == "y" || "${delete_backup,,}" == "yes" ]] && DELETE_BACKUP=true
   fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then

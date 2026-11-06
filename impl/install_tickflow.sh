@@ -701,7 +701,7 @@ do_uninstall() {
   else
     prompt "$(t app.tickflow.prompt.delete_install "$TICKFLOW_INSTALL_DIR")"
     local delete_install; read -r delete_install
-    [[ "${delete_install,,}" == "y" ]] && DELETE_INSTALL=true
+    [[ "${delete_install,,}" == "y" || "${delete_install,,}" == "yes" ]] && DELETE_INSTALL=true
   fi
   local DELETE_BACKUP=false
   if deploy_assume_yes; then
@@ -709,7 +709,7 @@ do_uninstall() {
   else
     prompt "$(t app.tickflow.prompt.delete_backup "$backup_dir")"
     local delete_backup; read -r delete_backup
-    [[ "${delete_backup,,}" == "y" ]] && DELETE_BACKUP=true
+    [[ "${delete_backup,,}" == "y" || "${delete_backup,,}" == "yes" ]] && DELETE_BACKUP=true
   fi
   if ! systemctl stop "$TICKFLOW_SERVICE_NAME" >/dev/null 2>&1; then
     if systemctl is-active --quiet "$TICKFLOW_SERVICE_NAME" 2>/dev/null; then

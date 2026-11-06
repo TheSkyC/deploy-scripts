@@ -9138,17 +9138,18 @@ do_uninstall() {
   _csai_remove_file_or_error "$BACKUP_SCRIPT" "BACKUP_SCRIPT"
   _csai_remove_file_or_error "$CONF_FILE" "CONF_FILE"
   success "$(t app.cyberstrikeai.success.removed_configs)"
-  if [[ "${del_install,,}" == "y" ]]; then
+  if [[ "${del_install,,}" == "y" || "${del_install,,}" == "yes" ]]; then
     _csai_remove_dir_or_error "$INSTALL_DIR" "INSTALL_DIR" "$(t app.cyberstrikeai.success.deleted_install "$INSTALL_DIR")"
   else
     info "$(t app.cyberstrikeai.info.kept_install "$INSTALL_DIR")"
   fi
-  if [[ "${del_backup,,}" == "y" ]]; then
+  if [[ "${del_backup,,}" == "y" || "${del_backup,,}" == "yes" ]]; then
     _csai_remove_dir_or_error "$BACKUP_DIR" "BACKUP_DIR" "$(t app.cyberstrikeai.success.deleted_backup "$BACKUP_DIR")"
   else
     info "$(t app.cyberstrikeai.info.kept_backup "$BACKUP_DIR")"
   fi
-  if [[ "${del_install,,}" == "y" ]] && id "$SERVICE_USER" >/dev/null 2>&1; then
+  if [[ "${del_install,,}" == "y" || "${del_install,,}" == "yes" ]] \
+     && id "$SERVICE_USER" >/dev/null 2>&1; then
     if userdel "$SERVICE_USER" 2>/dev/null; then
       success "$(t app.cyberstrikeai.success.deleted_user "$SERVICE_USER")"
     else

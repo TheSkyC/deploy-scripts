@@ -780,6 +780,12 @@ check_uninstall_cancellations_return_success() {
       echo "$file: cancelled uninstall must not be recorded as a failure" >&2
       return 1
     }
+    awk '
+        /\[\[[[:space:]]+"\$\{[A-Za-z_][A-Za-z0-9_]*,,\}"[[:space:]]*==[[:space:]]*"y"[[:space:]]*\]\]/ {
+          print FILENAME ": destructive confirmations must accept yes as well as y" > "/dev/stderr"
+          exit 1
+        }
+      ' "$file" || return 1
     n_status=0
     n_output="$(printf 'n\n' | "$BASH_BIN" -c "$probe" bash "$file" 2>&1)" || n_status=$?
     [[ "$n_status" -eq 0 && "$n_output" == *CANCELLED:* ]] || {

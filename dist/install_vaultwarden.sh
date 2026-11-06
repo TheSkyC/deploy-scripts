@@ -10134,7 +10134,7 @@ do_uninstall() {
   else
     prompt "$(t app.vaultwarden.prompt.delete_data "$VW_DATA_DIR")"
     local _del_data; read -r _del_data
-    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+    [[ "${_del_data,,}" == "y" || "${_del_data,,}" == "yes" ]] && DELETE_DATA=true
   fi
   local DELETE_BACKUP=false
   if deploy_assume_yes; then
@@ -10142,7 +10142,7 @@ do_uninstall() {
   else
     prompt "$(t app.vaultwarden.prompt.delete_backup "$VW_BACKUP_DIR")"
     local _del_bak; read -r _del_bak
-    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+    [[ "${_del_bak,,}" == "y" || "${_del_bak,,}" == "yes" ]] && DELETE_BACKUP=true
   fi
   info "$(t app.vaultwarden.info.stop_service)"
   if ! systemctl stop vaultwarden 2>/dev/null; then

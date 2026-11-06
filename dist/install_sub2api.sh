@@ -10070,7 +10070,7 @@ do_uninstall() {
   else
     prompt "$(t app.sub2api.prompt.delete_data "$DATA_DIR")"
     local _del_data; read -r _del_data
-    [[ "${_del_data,,}" == "y" ]] && DELETE_DATA=true
+    [[ "${_del_data,,}" == "y" || "${_del_data,,}" == "yes" ]] && DELETE_DATA=true
   fi
   local DELETE_CONF=false
   if deploy_assume_yes; then
@@ -10078,7 +10078,7 @@ do_uninstall() {
   else
     prompt "$(t app.sub2api.prompt.delete_config "$CONFIG_DIR")"
     local _del_conf; read -r _del_conf
-    [[ "${_del_conf,,}" == "y" ]] && DELETE_CONF=true
+    [[ "${_del_conf,,}" == "y" || "${_del_conf,,}" == "yes" ]] && DELETE_CONF=true
   fi
   local DELETE_BACKUP=false
   if deploy_assume_yes; then
@@ -10086,7 +10086,7 @@ do_uninstall() {
   else
     prompt "$(t app.sub2api.prompt.delete_backup "$BACKUP_DIR")"
     local _del_bak; read -r _del_bak
-    [[ "${_del_bak,,}" == "y" ]] && DELETE_BACKUP=true
+    [[ "${_del_bak,,}" == "y" || "${_del_bak,,}" == "yes" ]] && DELETE_BACKUP=true
   fi
   info "$(t app.sub2api.info.stop_disable "$SERVICE_NAME")"
   if ! systemctl stop "$SERVICE_NAME" 2>/dev/null; then
