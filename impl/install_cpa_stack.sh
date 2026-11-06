@@ -239,6 +239,7 @@ cpa_stack_validate_pins() {
 }
 
 _validate_config_values() {
+  local attr
   app_validate_domain "CPA_DOMAIN" "$CPA_DOMAIN"
   app_validate_domain "CPAMP_DOMAIN" "$CPAMP_DOMAIN"
   app_validate_bool "ENABLE_HTTPS" "$ENABLE_HTTPS"
@@ -248,7 +249,11 @@ _validate_config_values() {
   fi
   [[ "$BACKUP_KEEP_DAYS" =~ ^[0-9]+$ ]] || error "$(t app.cpa_stack.error.keep_days)"
   cpa_stack_validate_pins
-  require_safe_path "CPA_STACK_BACKUP_DIR" "$CPA_STACK_BACKUP_DIR"
+  for attr in CPA_INSTALL_DIR CPAMP_INSTALL_DIR CPA_CONFIG_DIR CPA_DATA_DIR \
+      CPAMP_DATA_DIR CPAMP_ENV_DIR CPA_STACK_BACKUP_DIR; do
+    require_safe_path "$attr" "${!attr}"
+    require_path_without_whitespace "$attr" "${!attr}"
+  done
   if [[ -n "$CPA_DOMAIN" && "$CPA_DOMAIN" == "$CPAMP_DOMAIN" ]]; then
     error "$(t app.cpa_stack.error.domains_same)"
   fi

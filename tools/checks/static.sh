@@ -480,6 +480,46 @@ check_binary_app_systemd_paths_are_validated() {
   done
 }
 
+check_handwritten_systemd_paths_are_validated() {
+  local impl variable value output
+  while IFS=$'\t' read -r impl variable value; do
+    if output="$("$BASH_BIN" -c '
+      set -euo pipefail
+      source "$1/lib/core.sh"
+      export "${2}=${3}"
+      DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/${4}"
+      _validate_config_values
+    ' _ "$ROOT_DIR" "$variable" "$value" "$impl" 2>&1)"; then
+      printf '%s accepted a systemd path with whitespace or an unsafe root: %s=%s\n' \
+        "$impl" "$variable" "$value" >&2
+      return 1
+    fi
+  done <<'EOF'
+install_sub2api.sh	INSTALL_DIR	/opt/bad path
+install_cyberstrikeai.sh	INSTALL_DIR	/opt/bad path
+install_vaultwarden.sh	VW_BIN_DIR	/opt/bad path
+install_cpa_stack.sh	CPA_INSTALL_DIR	/opt/bad path
+install_cpa_stack.sh	CPA_CONFIG_DIR	/etc
+EOF
+
+  while IFS= read -r impl; do
+    if ! "$BASH_BIN" -c '
+      set -euo pipefail
+      source "$1/lib/core.sh"
+      DEPLOY_IMPL_SOURCE_ONLY=1 source "$1/impl/${2}"
+      _validate_config_values
+    ' _ "$ROOT_DIR" "$impl" >/dev/null 2>&1; then
+      echo "Default path configuration became invalid for $impl." >&2
+      return 1
+    fi
+  done <<'EOF'
+install_sub2api.sh
+install_cyberstrikeai.sh
+install_vaultwarden.sh
+install_cpa_stack.sh
+EOF
+}
+
 check_binary_app_pre_backup_hook_is_best_effort() {
   local file
   # shellcheck disable=SC2043 # Fixed target; retain the shared per-file guard body.

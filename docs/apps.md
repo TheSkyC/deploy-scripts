@@ -20,6 +20,8 @@ export any key to override its default.
 Credential-like key names and credentials embedded in URL values are redacted
 from help, dry-run, doctor drift, operation logs, notifications, and migration
 reference output.
+Systemd-managed install, data, log, config, and backup paths reject whitespace
+so they cannot silently break generated unit files.
 
 ## Binary apps (shared lifecycle)
 

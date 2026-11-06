@@ -129,6 +129,7 @@ i18n_register error.lock_failed "Another deployment process is running: %s" "已
 i18n_register error.root_required "Please run as root: sudo bash %s %s" "请使用 root 权限运行：sudo bash %s %s"
 i18n_register error.unsupported_action "%s does not support %s yet." "%s 暂不支持 %s。"
 i18n_register error.unsafe_path "Unsafe path for %s: %s" "%s 的路径不安全：%s"
+i18n_register error.path_whitespace "Path for %s must not contain whitespace: %s" "%s 的路径不能包含空白字符：%s"
 i18n_register error.port_invalid "%s is invalid: '%s'. Must be a port between 1 and 65535." "%s 无效：'%s'，请输入 1-65535 之间的端口号。"
 i18n_register error.bool_invalid "%s is invalid: '%s'. Use true/false, yes/no, on/off, or 1/0." "%s 无效：'%s'，请输入 true/false、yes/no、on/off 或 1/0。"
 i18n_register error.domain_invalid "%s is invalid: '%s'. Use a DNS name like app.example.com, or leave it empty." "%s 无效：'%s'，请使用类似 app.example.com 的域名，或留空。"

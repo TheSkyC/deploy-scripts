@@ -171,6 +171,7 @@ _apt_codename() {
   printf '%s\n' "$codename"
 }
 _validate_config_values() {
+  local attr
   app_validate_port "$PORT" "PORT"
   app_validate_domain "SUB2API_DOMAIN" "$SUB2API_DOMAIN"
   app_validate_systemd_name "SERVICE_NAME" "$SERVICE_NAME"
@@ -184,6 +185,9 @@ _validate_config_values() {
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "CONFIG_DIR" "$CONFIG_DIR"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  for attr in INSTALL_DIR BIN_PATH DATA_DIR LOG_DIR CONFIG_DIR BACKUP_DIR; do
+    require_path_without_whitespace "$attr" "${!attr}"
+  done
   # A pinned tag must look like an upstream GitHub release tag (vX.Y.Z);
   # anything else would produce a broken download URL.
   if [[ -n "$SUB2API_VERSION" ]] \

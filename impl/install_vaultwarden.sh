@@ -284,6 +284,7 @@ check_connectivity() {
     "https://api.github.com"
 }
 _validate_config_values() {
+  local attr
   app_validate_port "$VW_PORT" "VW_PORT"
   if ! is_valid_dns_name "$VW_DOMAIN"; then
     error "$(t app.vaultwarden.error.domain_invalid "$VW_DOMAIN")"
@@ -310,6 +311,9 @@ _validate_config_values() {
   require_safe_path "LOG_DIR" "$(dirname "$VW_LOG_FILE")"
   require_safe_path "VW_BACKUP_DIR" "$VW_BACKUP_DIR"
   _require_safe_vw_bin_path
+  for attr in VW_BIN_DIR VW_BIN VW_ENV_FILE VW_DATA_DIR VW_WEB_DIR VW_LOG_FILE VW_BACKUP_DIR; do
+    require_path_without_whitespace "$attr" "${!attr}"
+  done
 }
 get_installed_version() {
   local version

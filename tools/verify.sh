@@ -530,6 +530,7 @@ main() {
       run_isolated_check check_binary_replacements_handle_failure
       run_isolated_check check_binary_restores_validate_permissions
       run_isolated_check check_binary_app_systemd_paths_are_validated
+      run_isolated_check check_handwritten_systemd_paths_are_validated
       run_isolated_check check_binary_app_pre_backup_hook_is_best_effort
       run_isolated_check check_binary_app_download_supports_pinned_checksum
       run_isolated_check check_binary_app_download_integrity

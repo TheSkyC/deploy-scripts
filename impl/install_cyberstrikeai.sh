@@ -101,6 +101,7 @@ app_conf_register_legacy "/etc/cyberstrike-ai-deploy.conf"
 CONF_FILE="$(app_conf_file)"
 LOCK_FILE="$(app_lock_file)"
 _validate_config_values() {
+  local attr
   app_validate_port "$PORT" "PORT"
   app_validate_port "$PUBLIC_PORT" "PUBLIC_PORT"
   app_validate_domain "CSAI_DOMAIN" "$CSAI_DOMAIN"
@@ -122,6 +123,9 @@ _validate_config_values() {
   require_safe_path "VENV_DIR" "$VENV_DIR"
   require_safe_path "LOG_DIR" "$LOG_DIR"
   require_safe_path "BACKUP_DIR" "$BACKUP_DIR"
+  for attr in INSTALL_DIR BIN_PATH CONFIG_FILE VENV_DIR LOG_DIR BACKUP_DIR; do
+    require_path_without_whitespace "$attr" "${!attr}"
+  done
 }
 preflight_check() {
   [[ "${1:-}" == "status" || $EUID -eq 0 ]] || error "$(t error.root_required "$0" "${1:-}")"

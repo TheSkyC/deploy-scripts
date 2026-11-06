@@ -50,6 +50,14 @@ require_safe_path() {
   is_safe_path "$path" || error "$(t error.unsafe_path "$name" "${path:-empty}")"
 }
 
+require_path_without_whitespace() {
+  local name="$1"
+  local path="$2"
+  if [[ "$path" =~ [[:space:]] ]]; then
+    error "$(t error.path_whitespace "$name" "$path")"
+  fi
+}
+
 safe_rm_dir() {
   local path="$1"
   local name="${2:-path}"
