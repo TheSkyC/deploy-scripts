@@ -123,6 +123,101 @@ check_cyberstrikeai_uninstall_supports_noninteractive_mode() {
     ' impl/install_cyberstrikeai.sh
 }
 
+check_cyberstrikeai_uninstall_deletion_choices() {
+  "$BASH_BIN" <<'CYBERTEST'
+set -euo pipefail
+source lib/core.sh
+APP_ID=cyberstrikeai
+APP_NAME=CyberStrikeAI
+source impl/install_cyberstrikeai.sh
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+# Keep the real config validators and directory-removal helpers. Only host
+# service/account management and removal of fixed system files are stubbed.
+show_banner() { :; }
+preflight_check() { _validate_config_values; }
+app_load_config() { _CSAI_DERIVE_PATHS; _validate_config_values; }
+acquire_lock() { :; }
+systemctl() { printf '%s\n' "$*" >> "$case_dir/systemctl"; }
+nginx() { return 0; }
+_csai_remove_file_or_error() { printf '%s\n' "$1" >> "$case_dir/removed-files"; }
+id() { [[ "$1" == "$SERVICE_USER" && -f "$case_dir/user" ]]; }
+userdel() {
+  [[ "$1" == "$SERVICE_USER" ]] || return 1
+  rm -- "$case_dir/user"
+}
+prompt() {
+  [[ "$DEPLOY_ASSUME_YES" == 0 ]] || error "Unattended uninstall prompted for input."
+}
+
+run_case() (
+  local name="$1" assume_yes="$2" delete_install="$3" delete_backup="$4"
+  local expect_install="$5" expect_backup="$6" answer="${7-n}"
+  local case_dir="$tmp_dir/$name"
+  local INSTALL_DIR="$case_dir/install" BACKUP_DIR="$case_dir/backups"
+  local SERVICE_NAME=cyber-uninstall-probe SERVICE_USER=cyber-uninstall-probe
+  local DEPLOY_ASSUME_YES="$assume_yes"
+  local DEPLOY_DELETE_INSTALL="$delete_install" DEPLOY_DELETE_BACKUP="$delete_backup"
+  mkdir -p "$INSTALL_DIR" "$BACKUP_DIR"
+  printf 'installation\n' > "$INSTALL_DIR/marker"
+  printf 'backup\n' > "$BACKUP_DIR/marker"
+  touch "$case_dir/user"
+  _CSAI_DERIVE_PATHS
+
+  if [[ "$assume_yes" == 1 ]]; then
+    if ! do_uninstall </dev/null > "$case_dir/log" 2>&1; then
+      cat "$case_dir/log" >&2
+      exit 1
+    fi
+  else
+    if ! printf 'yes\n%s\n%s\n' "$answer" "$answer" \
+        | do_uninstall > "$case_dir/log" 2>&1; then
+      cat "$case_dir/log" >&2
+      exit 1
+    fi
+  fi
+  grep -Fxq "stop $SERVICE_NAME" "$case_dir/systemctl"
+  grep -Fxq "/etc/systemd/system/${SERVICE_NAME}.service" "$case_dir/removed-files"
+
+  if [[ "$expect_install" == deleted ]]; then
+    [[ ! -e "$INSTALL_DIR" && ! -e "$case_dir/user" ]] || {
+      echo "$name: explicitly purging the installation must remove its directory and service account." >&2
+      exit 1
+    }
+  else
+    [[ "$(cat "$INSTALL_DIR/marker")" == installation && -f "$case_dir/user" ]] || {
+      echo "$name: the installation and service account must be kept without deletion consent." >&2
+      exit 1
+    }
+  fi
+  if [[ "$expect_backup" == deleted ]]; then
+    [[ ! -e "$BACKUP_DIR" ]] || {
+      echo "$name: explicitly purging backups must remove the backup directory." >&2
+      exit 1
+    }
+  else
+    [[ "$(cat "$BACKUP_DIR/marker")" == backup ]] || {
+      echo "$name: backups must be kept without deletion consent." >&2
+      exit 1
+    }
+  fi
+)
+
+run_case auto-keep    1 0 0 kept    kept
+run_case auto-install 1 1 0 deleted kept
+run_case auto-backup  1 0 1 kept    deleted
+run_case auto-all     1 1 1 deleted deleted
+run_case input-y      0 0 0 deleted deleted y
+run_case input-yes    0 0 0 deleted deleted yes
+run_case input-case   0 0 0 deleted deleted YeS
+# Environment deletion flags apply only in unattended mode.
+run_case input-no     0 1 1 kept    kept    n
+run_case input-empty  0 1 1 kept    kept    ''
+CYBERTEST
+}
+
 check_cyberstrikeai_uninstall_checks_directory_removal_errors() {
   grep -Fq '_csai_remove_dir_or_error() {' impl/install_cyberstrikeai.sh \
     && grep -Fq 'app_remove_dir_or_error "$1" "$2" "$3" "app.cyberstrikeai.error.remove_dir"' impl/install_cyberstrikeai.sh \

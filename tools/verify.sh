@@ -354,6 +354,7 @@ main() {
       check_sub2api_status_backup_projection
       check_sub2api_uninstall_supports_noninteractive_mode
       check_uninstall_cancellations_return_success
+      check_cyberstrikeai_uninstall_deletion_choices
       check_sub2api_uninstall_checks_directory_removal_errors
       check_sub2api_uninstall_checks_file_removal_errors
       check_sub2api_uninstall_validates_binary_path_before_removal
