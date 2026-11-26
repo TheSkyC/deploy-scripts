@@ -76,16 +76,17 @@ has drifted from the configured pin, while an unpinned install states that
 - Persists server identity and state in `RUSTDESK_DATA_DIR` (default
   `/var/lib/rustdesk-server`). Do not remove this directory when uninstalling;
   `id_ed25519` is the private server identity.
-- Uses Docker bridge networking by default and publishes only TCP 21115, TCP
-  and UDP 21116, and TCP 21117; `RUSTDESK_BIND_ADDR` controls the published
-  host address. This keeps the WebSocket ports 21118 and 21119 unpublished.
-  The upstream recommends host networking on Linux for the most reliable
-  peer-IP handling; set `RUSTDESK_NETWORK_MODE=host` when needed and explicitly
-  block 21118/21119 in the host/cloud firewalls if web clients are not used.
+- Uses host networking by default on the primary install, as recommended by
+  upstream for Linux peer-IP handling. This binds the server listeners on the
+  host; block TCP 21118/21119 in host and cloud firewalls unless WebSocket
+  clients are intentionally enabled. Set `RUSTDESK_NETWORK_MODE=bridge` to
+  publish only TCP 21115, TCP and UDP 21116, and TCP 21117; in bridge mode,
+  `RUSTDESK_BIND_ADDR` controls the published host address, but clients may
+  see the Docker gateway instead of their actual peer IP.
 - Instance-qualified installs derive unique install, data, backup, and unit
-  names. They must use bridge mode and distinct `RUSTDESK_NAT_PORT`,
-  `RUSTDESK_ID_PORT`, and `RUSTDESK_RELAY_PORT` values; configure clients with
-  the selected external ports.
+  names and default to bridge mode. Concurrent instances need distinct
+  `RUSTDESK_NAT_PORT`, `RUSTDESK_ID_PORT`, and `RUSTDESK_RELAY_PORT` values;
+  configure clients with the selected external ports.
 - `status` prints only `id_ed25519.pub`, never the private key. `backup`,
   `verify`, and `restore` cover the persistent identity/data directory. The
   restore helper validates archive members and keeps an aside copy for rollback

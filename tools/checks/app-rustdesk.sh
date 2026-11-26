@@ -28,7 +28,7 @@ check_rustdesk_host_network_mode_and_instance_paths() {
     set -euo pipefail
     source lib/core.sh
     source impl/install_rustdesk.sh
-    [[ "$RUSTDESK_NETWORK_MODE" == bridge ]]
+    [[ "$RUSTDESK_NETWORK_MODE" == host ]]
     [[ "$RUSTDESK_IMAGE" == rustdesk/rustdesk-server:1.1.16 ]]
     tmp="$(mktemp -d)"
     trap '\''rm -rf "$tmp"'\'' EXIT
@@ -46,6 +46,7 @@ check_rustdesk_host_network_mode_and_instance_paths() {
     set -euo pipefail
     source lib/core.sh
     source impl/install_rustdesk.sh
+    [[ "$RUSTDESK_NETWORK_MODE" == bridge ]]
     [[ "$RUSTDESK_INSTALL_DIR" == /opt/rustdesk-server-blue ]]
     [[ "$RUSTDESK_DATA_DIR" == /var/lib/rustdesk-server-blue ]]
     [[ "$RUSTDESK_SERVICE_NAME" == rustdesk-server-blue ]]
