@@ -76,6 +76,31 @@ check_rustdesk_health_requires_both_components() {
   '
 }
 
+check_rustdesk_update_rollback_preserves_configured_image() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_rustdesk.sh
+    tmp="$(mktemp -d)"
+    trap '\''rm -rf "$tmp"'\'' EXIT
+    RUSTDESK_INSTALL_DIR="$tmp/project"
+    RUSTDESK_DATA_DIR="$tmp/data"
+    RUSTDESK_COMPOSE_FILE="$tmp/project/compose.yaml"
+    RUSTDESK_RELAY_HOST=relay.example.test
+    mkdir -p "$RUSTDESK_INSTALL_DIR"
+    docker() {
+      [[ "$*" == "image tag sha256:previous rustdesk/rustdesk-server:target" ]]
+    }
+    compose_run() {
+      [[ "$3" == up && "$4" == -d ]]
+    }
+    _rustdesk_restore_previous_image sha256:previous rustdesk/rustdesk-server:target
+    [[ "$RUSTDESK_IMAGE" == rustdesk/rustdesk-server:target ]]
+    grep -Fq "image: rustdesk/rustdesk-server:target" "$RUSTDESK_COMPOSE_FILE"
+    ! grep -Fq "rollback:" "$RUSTDESK_COMPOSE_FILE"
+  '
+}
+
 check_rustdesk_public_key_output_never_reads_private_key() {
   grep -Fq 'id_ed25519.pub' impl/install_rustdesk.sh \
     && ! grep -Eq 'cat .*id_ed25519([^.]|$)' impl/install_rustdesk.sh \

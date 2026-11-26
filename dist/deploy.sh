@@ -25903,6 +25903,14 @@ _rustdesk_create_backup() {
   printf '%s\n' "$archive"
 }
 
+_rustdesk_restore_previous_image() {
+  local previous_image="$1" target_image="$2"
+  docker image tag "$previous_image" "$target_image" || return 1
+  RUSTDESK_IMAGE="$target_image"
+  _rustdesk_write_compose || return 1
+  compose_run "$RUSTDESK_INSTALL_DIR" "$RUSTDESK_COMPOSE_FILE" up -d
+}
+
 do_update() {
   acquire_lock; app_load_config; preflight_check update
   _rustdesk_stack_healthy || error "$(t app.rustdesk.error.update_prerequisite)"
@@ -25931,24 +25939,22 @@ do_update() {
   fi
 
   warn "$(t app.rustdesk.warn.update_rollback)"
-  RUSTDESK_IMAGE="$rollback_image"
-  _rustdesk_write_compose
-  if ! compose_run "$RUSTDESK_INSTALL_DIR" "$RUSTDESK_COMPOSE_FILE" up -d; then
+  if ! _rustdesk_restore_previous_image "$previous_image" "$target_image"; then
     RUSTDESK_IMAGE="$target_image"
     _rustdesk_write_compose
     error "$(t app.rustdesk.error.image_rollback "$rollback_image" "$snapshot")"
   fi
   if ! backup_restore_data_dir "$RUSTDESK_DATA_DIR" "$RUSTDESK_SERVICE_NAME" "$snapshot" \
       || ! _rustdesk_wait_healthy; then
-    RUSTDESK_IMAGE="$rollback_image"
+    RUSTDESK_IMAGE="$target_image"
     _rustdesk_write_compose
     app_save_config
-    error "$(t app.rustdesk.error.data_rollback "$rollback_image" "$snapshot")"
+    error "$(t app.rustdesk.error.data_rollback "$target_image" "$snapshot")"
   fi
-  RUSTDESK_IMAGE="$rollback_image"
+  RUSTDESK_IMAGE="$target_image"
   _rustdesk_write_compose
   app_save_config
-  error "$(t app.rustdesk.error.update_rolled_back "$rollback_image" "$snapshot")"
+  error "$(t app.rustdesk.error.update_rolled_back "$target_image" "$snapshot")"
 }
 _rustdesk_show_key() {
   local key="${RUSTDESK_DATA_DIR}/id_ed25519.pub"

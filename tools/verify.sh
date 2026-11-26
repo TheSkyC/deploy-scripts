@@ -818,6 +818,7 @@ main() {
       run_isolated_check check_rustdesk_compose_preserves_identity_and_limits_ports
       run_isolated_check check_rustdesk_host_network_mode_and_instance_paths
       run_isolated_check check_rustdesk_health_requires_both_components
+      run_isolated_check check_rustdesk_update_rollback_preserves_configured_image
       run_isolated_check check_rustdesk_public_key_output_never_reads_private_key
       run_isolated_check check_rustdesk_registration_exposes_backup_restore
       run_isolated_check check_rustdesk_backup_restore_round_trip
