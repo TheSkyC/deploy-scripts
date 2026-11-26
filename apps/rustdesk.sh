@@ -61,6 +61,9 @@ i18n_register_many \
   app.rustdesk.error.backup \
   "Failed to create a verified RustDesk data backup." \
   "无法创建已校验的 RustDesk 数据备份。" \
+  app.rustdesk.error.backup_restart \
+  "Backup is valid at %s, but RustDesk service %s could not be restarted." \
+  "备份已有效保存至 %s，但 RustDesk 服务 %s 未能重启。" \
   app.rustdesk.error.image_retain \
   "Cannot retain the current RustDesk image for rollback." \
   "无法保留当前 RustDesk 镜像用于回滚。" \

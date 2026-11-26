@@ -129,6 +129,55 @@ check_rustdesk_reinstall_restarts_managed_stack() {
   '
 }
 
+check_rustdesk_backup_quiesces_and_restarts_stack() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_rustdesk.sh
+    tmp="$(mktemp -d)"
+    trap '\''rm -rf "$tmp"'\'' EXIT
+    RUSTDESK_DATA_DIR="$tmp/data"
+    RUSTDESK_BACKUP_DIR="$tmp/backups"
+    RUSTDESK_SERVICE_NAME=rustdesk-test
+    TEST_RUNNING=true
+    TEST_FAIL_TAR=false
+    TEST_FAIL_START=false
+    mkdir -p "$RUSTDESK_DATA_DIR"
+    printf identity > "$RUSTDESK_DATA_DIR/id_ed25519"
+    systemctl() {
+      case "$1" in
+        is-active) [[ "$TEST_RUNNING" == true ]] ;;
+        stop) printf "stop\n" >> "$tmp/lifecycle"; TEST_RUNNING=false ;;
+        start)
+          printf "start\n" >> "$tmp/lifecycle"
+          [[ "$TEST_FAIL_START" == false ]] || return 1
+          TEST_RUNNING=true
+          ;;
+      esac
+    }
+    tar() {
+      [[ "$TEST_RUNNING" == false ]] || return 1
+      [[ "$TEST_FAIL_TAR" == false ]] || return 2
+      command tar "$@"
+    }
+    archive="$(_rustdesk_create_backup)"
+    [[ "$TEST_RUNNING" == true ]]
+    [[ "$(<"$tmp/lifecycle")" == $'\''stop\nstart'\'' ]]
+    backup_verify_archive "$archive"
+    TEST_FAIL_TAR=true
+    if _rustdesk_create_backup >/dev/null 2>&1; then exit 1; fi
+    [[ "$TEST_RUNNING" == true ]]
+    [[ "$(<"$tmp/lifecycle")" == $'\''stop\nstart\nstop\nstart'\'' ]]
+    [[ "$(find "$RUSTDESK_BACKUP_DIR" -type f | wc -l)" -eq 3 ]]
+    TEST_FAIL_TAR=false
+    TEST_FAIL_START=true
+    if _rustdesk_create_backup >/dev/null 2>&1; then exit 1; fi
+    [[ "$(find "$RUSTDESK_BACKUP_DIR" -type f | wc -l)" -eq 6 ]]
+    latest="$(find "$RUSTDESK_BACKUP_DIR" -name '\''*.tar.gz'\'' -print | sort | tail -1)"
+    backup_verify_archive "$latest"
+  '
+}
+
 check_rustdesk_public_key_output_never_reads_private_key() {
   grep -Fq 'id_ed25519.pub' impl/install_rustdesk.sh \
     && ! grep -Eq 'cat .*id_ed25519([^.]|$)' impl/install_rustdesk.sh \

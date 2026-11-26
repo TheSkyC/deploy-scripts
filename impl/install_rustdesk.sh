@@ -168,14 +168,37 @@ do_install() {
 }
 
 _rustdesk_create_backup() {
-  local archive stamp
-  mkdir -p "$RUSTDESK_BACKUP_DIR"
+  local archive="" stamp status=0 restart_failed=false was_active=false
+  if systemctl is-active --quiet "$RUSTDESK_SERVICE_NAME"; then
+    was_active=true
+    systemctl stop "$RUSTDESK_SERVICE_NAME" || return 1
+  fi
+  mkdir -p "$RUSTDESK_BACKUP_DIR" || status=1
   stamp="$(date -u +%Y%m%d%H%M%S)-$$"
-  archive="${RUSTDESK_BACKUP_DIR}/rustdesk_${stamp}.tar.gz"
-  backup_create_tar_archive "$archive" -C "$(dirname "$RUSTDESK_DATA_DIR")" "$(basename "$RUSTDESK_DATA_DIR")" \
-    || return 1
-  backup_finalize_archive "$archive" rustdesk "${RUSTDESK_IMAGE##*:}" 1 \
-    || return 1
+  if ((status == 0)); then
+    archive="$(mktemp "${RUSTDESK_BACKUP_DIR}/rustdesk_${stamp}-XXXXXX.tar.gz")" || status=1
+  fi
+  if ((status == 0)); then
+    backup_create_tar_archive "$archive" -C "$(dirname "$RUSTDESK_DATA_DIR")" "$(basename "$RUSTDESK_DATA_DIR")" \
+      || status=1
+  fi
+  if ((status == 0)); then
+    backup_finalize_archive "$archive" rustdesk "${RUSTDESK_IMAGE##*:}" 1 \
+      || status=1
+  fi
+  if [[ "$was_active" == true ]] && ! systemctl start "$RUSTDESK_SERVICE_NAME"; then
+    restart_failed=true
+  fi
+  if ((status != 0)); then
+    if [[ -n "$archive" ]]; then
+      rm -f -- "$archive" "${archive}.sha256" "${archive}.manifest.json"
+    fi
+    return 1
+  fi
+  if [[ "$restart_failed" == true ]]; then
+    warn "$(t app.rustdesk.error.backup_restart "$archive" "$RUSTDESK_SERVICE_NAME")"
+    return 1
+  fi
   printf '%s\n' "$archive"
 }
 

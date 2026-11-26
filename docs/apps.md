@@ -89,8 +89,9 @@ has drifted from the configured pin, while an unpinned install states that
   configure clients with the selected external ports.
 - `status` prints only `id_ed25519.pub`, never the private key. `backup`,
   `verify`, and `restore` cover the persistent identity/data directory. The
-  restore helper validates archive members and keeps an aside copy for rollback
-  if the service cannot restart.
+  backup stops an active stack while archiving its identity and SQLite state;
+  restore validates archive members and keeps an aside copy for rollback if
+  the service cannot restart.
 - Backup files are stored in `RUSTDESK_BACKUP_DIR` (default
   `/opt/rustdesk-server-backups`); manual cleanup is required for old archives.
 
