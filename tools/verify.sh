@@ -42,6 +42,7 @@ source tools/checks/app-cpa-stack.sh
 source tools/checks/app-cyberstrikeai.sh
 source tools/checks/app-filebrowser.sh
 source tools/checks/app-frps.sh
+source tools/checks/app-rustdesk.sh
 source tools/checks/app-gitea.sh
 source tools/checks/app-gotify.sh
 source tools/checks/app-beszel.sh
@@ -814,6 +815,10 @@ main() {
       run_isolated_check check_frps_uses_shared_binary_lifecycle
       run_isolated_check check_frps_release_asset_mapping
       run_isolated_check check_frps_config_is_managed_atomically
+      run_isolated_check check_rustdesk_compose_preserves_identity_and_limits_ports
+      run_isolated_check check_rustdesk_public_key_output_never_reads_private_key
+      run_isolated_check check_rustdesk_registration_exposes_backup_restore
+      run_isolated_check check_rustdesk_backup_restore_round_trip
       run_isolated_check check_navidrome_uses_shared_binary_lifecycle
       run_isolated_check check_navidrome_release_asset_mapping
       run_isolated_check check_navidrome_music_folder_is_prepared

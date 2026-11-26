@@ -46,7 +46,7 @@ sudo bash deploy.sh status-all --json
 
 Expectations:
 
-- `list` shows sixteen apps and the documented actions.
+- `list` shows seventeen apps and the documented actions.
 - `doctor security --json` returns schema version 1, no `error` records, and
   both `tls_renewal` and `tls_expiry` are `ok` or `not_checked` (nothing
   installed yet).

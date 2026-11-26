@@ -23,6 +23,7 @@ DEPLOY_APP_SPECS=(
   "gitea|Gitea|apps/gitea.sh|impl/install_gitea.sh|backup,restore"
   "gotify|Gotify|apps/gotify.sh|impl/install_gotify.sh|backup,restore"
   "beszel|Beszel|apps/beszel.sh|impl/install_beszel.sh|backup,restore"
+  "rustdesk|RustDesk Server OSS|apps/rustdesk.sh|impl/install_rustdesk.sh|backup,restore"
 )
 
 # Applications with a native bind key outside the shared binary lifecycle.
@@ -30,6 +31,7 @@ DEPLOY_APP_SPECS=(
 # duplicating app-specific keys and silently missing newly added listeners.
 DEPLOY_APP_BIND_CONFIG_KEYS=(
   BA_BIND_ADDR
+  RUSTDESK_BIND_ADDR
   SUB2API_BIND_ADDR
   TICKFLOW_BIND_ADDR
 )

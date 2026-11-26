@@ -52,7 +52,7 @@ bash -c '
   echo OK
 '
 
-echo "=== P0: status-json integrity + 16/16 verify/restore ==="
+echo "=== P0: status-json integrity + 17/17 verify/restore ==="
 bash -c '
   set -euo pipefail
   source lib/core.sh
@@ -69,7 +69,7 @@ bash -c '
   # under `set -o pipefail`.
   [[ "$json" == *"\"state\":\"verified\""* ]] || exit 1
   verify_count=$(grep -l "^do_verify() {" impl/install_*.sh | wc -l)
-  [[ "$verify_count" -eq 16 ]] || exit 1
+  [[ "$verify_count" -eq 17 ]] || exit 1
   echo OK
 '
 

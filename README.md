@@ -40,6 +40,8 @@ sudo bash deploy.sh newapi install
 sudo bash deploy.sh vaultwarden status
 sudo bash deploy.sh newapi status-json
 sudo bash deploy.sh sub2api doctor
+sudo RUSTDESK_RELAY_HOST=relay.example.com bash deploy.sh rustdesk install
+sudo bash deploy.sh rustdesk status
 sudo bash deploy.sh list
 sudo CPA_DOMAIN=cpa.example.com CPAMP_DOMAIN=cpamp.example.com CERTBOT_EMAIL=admin@example.com bash deploy.sh cpa-stack install
 sudo bash install_newapi.sh install

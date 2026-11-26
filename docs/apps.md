@@ -67,6 +67,27 @@ has drifted from the configured pin, while an unpinned install states that
 
 ## Hand-written apps
 
+### RustDesk Server OSS (`rustdesk`)
+
+- Runs upstream `hbbs` and `hbbr` containers under one systemd-managed Compose
+  project. Set `RUSTDESK_RELAY_HOST` to the public DNS name or IP clients use
+  to reach the relay before installing. `RUSTDESK_IMAGE` pins the server image
+  (default `rustdesk/rustdesk-server:1.1.14`).
+- Persists server identity and state in `RUSTDESK_DATA_DIR` (default
+  `/var/lib/rustdesk-server`). Do not remove this directory when uninstalling;
+  `id_ed25519` is the private server identity.
+- Publishes TCP 21115, TCP/UDP 21116, and TCP 21117. WebSocket ports 21118 and
+  21119 are not published. `RUSTDESK_BIND_ADDR` defaults to `0.0.0.0` because
+  native RustDesk clients connect directly; set host firewall rules and cloud
+  firewall rules independently. `127.0.0.1` is available for reverse-proxy or
+  private-network deployments.
+- `status` prints only `id_ed25519.pub`, never the private key. `backup`,
+  `verify`, and `restore` cover the persistent identity/data directory. The
+  restore helper validates archive members and keeps an aside copy for rollback
+  if the service cannot restart.
+- Backup files are stored in `RUSTDESK_BACKUP_DIR` (default
+  `/opt/rustdesk-server-backups`); manual cleanup is required for old archives.
+
 ### Vaultwarden (`vaultwarden`, port 8081)
 
 - Web Vault, Nginx reverse proxy, Let's Encrypt (certbot), fail2ban, daily

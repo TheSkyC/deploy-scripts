@@ -28,7 +28,7 @@ import sys
 expected = {
     "newapi", "sub2api", "vaultwarden", "cyberstrikeai", "blog", "tickflow",
     "cpa-stack", "ntfy", "meilisearch", "alist", "filebrowser", "navidrome",
-    "frps", "gitea", "gotify", "beszel",
+    "frps", "gitea", "gotify", "beszel", "rustdesk",
 }
 with open(sys.argv[1], encoding="utf-8") as handle:
     payload = json.load(handle)
@@ -218,7 +218,7 @@ check_state_problems_filtering() {
   output="$(DEPLOY_STATUS_TIMEOUT_SECONDS=30 DEPLOY_STATUS_NO_PROBE=1 "$BASH_BIN" deploy.sh problems --json --include newapi)"
   json_file="$(mktemp)"
   printf '%s' "$output" > "$json_file"
-  python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["apps"] == []; assert x["summary"]["registered"] == 16; assert x["summary"]["selected"] == 1' "$json_file"
+  python -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["apps"] == []; assert x["summary"]["registered"] == 17; assert x["summary"]["selected"] == 1' "$json_file"
   rm -f "$json_file"
 }
 
