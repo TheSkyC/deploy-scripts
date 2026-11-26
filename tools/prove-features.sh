@@ -108,6 +108,8 @@ bash -c '
   tmp="$(mktemp -d)"
   trap "rm -rf \"$tmp\"" EXIT
   export SCHEDULE_CONF_FILE="$tmp/s.conf" DEPLOY_SCHEDULE_CRON_FILE="$tmp/cron" DEPLOY_SCHEDULE_RUNNER="$tmp/run"
+  export DEPLOY_SCHEDULE_SERVICE="deploy-scripts-test-$$"
+  systemctl() { return 1; }
   require_root() { :; }
   error() { exit 9; }
   success() { :; }
