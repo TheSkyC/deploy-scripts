@@ -25883,7 +25883,7 @@ do_install() {
   _rustdesk_write_unit
   app_save_config
   systemctl enable "$RUSTDESK_SERVICE_NAME" || error "$(t app.rustdesk.error.start "$RUSTDESK_SERVICE_NAME")"
-  systemctl start "$RUSTDESK_SERVICE_NAME" || error "$(t app.rustdesk.error.start "$RUSTDESK_SERVICE_NAME")"
+  systemctl restart "$RUSTDESK_SERVICE_NAME" || error "$(t app.rustdesk.error.start "$RUSTDESK_SERVICE_NAME")"
   if ! _rustdesk_wait_healthy; then
     systemctl stop "$RUSTDESK_SERVICE_NAME" >/dev/null 2>&1 || true
     error "$(t app.rustdesk.error.health)"

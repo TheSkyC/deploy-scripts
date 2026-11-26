@@ -101,6 +101,34 @@ check_rustdesk_update_rollback_preserves_configured_image() {
   '
 }
 
+check_rustdesk_reinstall_restarts_managed_stack() {
+  "$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source impl/install_rustdesk.sh
+    tmp="$(mktemp -d)"
+    trap '\''rm -rf "$tmp"'\'' EXIT
+    RUSTDESK_INSTALL_DIR="$tmp/project"
+    RUSTDESK_DATA_DIR="$tmp/data"
+    RUSTDESK_COMPOSE_FILE="$tmp/project/compose.yaml"
+    RUSTDESK_RELAY_HOST=relay.example.test
+    mkdir -p "$RUSTDESK_INSTALL_DIR"
+    preflight_check() { :; }
+    acquire_lock() { :; }
+    compose_command() { printf "docker compose"; }
+    compose_require_runtime() { :; }
+    _rustdesk_write_compose() { :; }
+    _rustdesk_write_unit() { :; }
+    app_save_config() { :; }
+    _rustdesk_wait_healthy() { :; }
+    _rustdesk_show_key() { :; }
+    systemctl() { printf "%s\n" "$*" >> "$tmp/systemctl.log"; }
+    do_install
+    grep -Fxq "restart rustdesk-server" "$tmp/systemctl.log"
+    ! grep -Fxq "start rustdesk-server" "$tmp/systemctl.log"
+  '
+}
+
 check_rustdesk_public_key_output_never_reads_private_key() {
   grep -Fq 'id_ed25519.pub' impl/install_rustdesk.sh \
     && ! grep -Eq 'cat .*id_ed25519([^.]|$)' impl/install_rustdesk.sh \
