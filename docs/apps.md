@@ -94,6 +94,10 @@ has drifted from the configured pin, while an unpinned install states that
   the service cannot restart.
 - Backup files are stored in `RUSTDESK_BACKUP_DIR` (default
   `/opt/rustdesk-server-backups`); manual cleanup is required for old archives.
+- With Docker Compose installed and TCP 21115-21117 available, run
+  `sudo bash tools/test-rustdesk-runtime.sh` to start isolated host/bridge
+  projects, verify both services and their TCP listeners, then remove the
+  test containers and temporary identity data.
 
 ### Vaultwarden (`vaultwarden`, port 8081)
 
