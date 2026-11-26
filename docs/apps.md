@@ -92,6 +92,11 @@ has drifted from the configured pin, while an unpinned install states that
   backup stops an active stack while archiving its identity and SQLite state;
   restore validates archive members and keeps an aside copy for rollback if
   the service cannot restart.
+- Configure native clients with this server's public address as the ID server,
+  the matching public key shown by `status`, and this server as the relay
+  server when a relay address is requested. The default ports are TCP 21116
+  for ID and TCP 21117 for relay; for bridge instances, use the configured
+  externally published ports instead. Leave the API server unset for OSS.
 - Backup files are stored in `RUSTDESK_BACKUP_DIR` (default
   `/opt/rustdesk-server-backups`); manual cleanup is required for old archives.
 - With Docker Compose installed and TCP 21115-21117 available, run
