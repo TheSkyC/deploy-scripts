@@ -2,7 +2,8 @@
 
 Shared deployment framework for application install scripts. The repository keeps the old top-level commands while moving common behavior into reusable framework libraries.
 
-Reference documentation:
+Documentation map:
+- [Documentation index](docs/README.md) — choose a guide by task and audience.
 - [Per-app deployment reference](docs/apps.md) — every app's configuration keys, defaults, and non-obvious operations.
 - [Central commands reference](docs/central-commands.md) — status-all/backup-all/update-all/doctor-all, notify-config, schedule, export/import, fleet.
 - [Instances, TLS, and migration runbook](docs/instances-tls-migration.md) — instance config/lock boundaries, reverse-proxy TLS, and export/import restore rehearsal.
