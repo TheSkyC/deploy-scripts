@@ -214,3 +214,47 @@ check_rustdesk_backup_restore_round_trip() {
     backup_verify_archive "$archive"
   '
 }
+
+check_rustdesk_restore_health_failure_rolls_back_snapshot() {
+  local output status
+  if output="$("$BASH_BIN" -c '
+    set -euo pipefail
+    source lib/core.sh
+    source apps/rustdesk.sh
+    source impl/install_rustdesk.sh
+    tmp="$(mktemp -d)"
+    trap '\''rm -rf "$tmp"'\'' EXIT
+    RUSTDESK_BACKUP_DIR="$tmp/backups"
+    RUSTDESK_DATA_DIR="$tmp/data"
+    RUSTDESK_SERVICE_NAME=rustdesk-test
+    mkdir -p "$RUSTDESK_BACKUP_DIR" "$RUSTDESK_DATA_DIR"
+    archive="$RUSTDESK_BACKUP_DIR/rustdesk_target.tar.gz"
+    : > "$archive"
+    RUSTDESK_RESTORE_ARCHIVE="$archive"
+    app_load_config() { :; }
+    acquire_lock() { :; }
+    preflight_check() { :; }
+    _rustdesk_create_backup() { printf "%s\\n" "$RUSTDESK_BACKUP_DIR/rustdesk_rollback.tar.gz"; }
+    backup_restore_data_dir() { printf "RESTORE:%s\\n" "$3"; }
+    _rustdesk_wait_healthy() {
+      (( HEALTH_CHECKS += 1 ))
+      (( HEALTH_CHECKS == 2 ))
+    }
+    error() { printf "%s\\n" "$*" >&2; exit 42; }
+    HEALTH_CHECKS=0
+    do_restore
+  ' 2>&1)"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  [[ "$status" -eq 42 ]] \
+    && [[ "$output" == *"RESTORE:"*"rustdesk_target.tar.gz"*"RESTORE:"*"rustdesk_rollback.tar.gz"* ]] \
+    && [[ "$output" == *"Restored data failed health checks"* ]] \
+    || {
+      printf 'Expected restore health failure to report a successful rollback (exit 42), got %s:\n%s\n' \
+        "$status" "$output" >&2
+      return 1
+    }
+}

@@ -824,6 +824,7 @@ main() {
       run_isolated_check check_rustdesk_public_key_output_never_reads_private_key
       run_isolated_check check_rustdesk_registration_exposes_backup_restore
       run_isolated_check check_rustdesk_backup_restore_round_trip
+      run_isolated_check check_rustdesk_restore_health_failure_rolls_back_snapshot
       run_isolated_check check_navidrome_uses_shared_binary_lifecycle
       run_isolated_check check_navidrome_release_asset_mapping
       run_isolated_check check_navidrome_music_folder_is_prepared
